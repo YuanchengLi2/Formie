@@ -28,8 +28,10 @@ export function ProgressScreen({ groups, onOpenSession }: ProgressScreenProps) {
           <Text selectable style={[typography.body, { color: colors.textSecondary }]}>Record a set and FORM will organize it by the exercise it detects.</Text>
         </FormCard>
       ) : groups.map((group) => {
-        const latest = group.sessions[0];
         const latestScore = group.scoreTrend[0]?.score ?? null;
+        const chronologicalScores = [...group.scoreTrend].reverse();
+        const firstScore = chronologicalScores[0]?.score;
+        const lastScore = chronologicalScores.at(-1)?.score;
         return (
           <FormCard key={group.key} style={{ gap: spacing.md }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", gap: spacing.md }}>
@@ -41,9 +43,39 @@ export function ProgressScreen({ groups, onOpenSession }: ProgressScreenProps) {
             </View>
             {group.recurringCorrections[0] ? <Text selectable style={[typography.body, { color: colors.textSecondary }]}>Recurring: {group.recurringCorrections[0].title}</Text> : null}
             {group.improvements[0] ? <Text selectable style={[typography.body, { color: colors.gold }]}>{group.improvements[0]}</Text> : null}
-            <Pressable accessibilityRole="button" onPress={() => onOpenSession(latest.sessionId)}>
-              <Text selectable style={[typography.label, { color: colors.gold }]}>View Analysis</Text>
-            </Pressable>
+            {chronologicalScores.length > 0 ? (
+              <View style={{ gap: spacing.sm }}>
+                <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Score trend</Text>
+                <View
+                  accessibilityLabel={`Movement quality trend from ${firstScore} to ${lastScore}`}
+                  style={{ height: 72, flexDirection: "row", alignItems: "flex-end", gap: spacing.xs, paddingTop: spacing.sm }}
+                >
+                  {chronologicalScores.map((point) => (
+                    <View key={point.sessionId} style={{ flex: 1, alignItems: "center", justifyContent: "flex-end", gap: spacing.xs }}>
+                      <Text selectable style={[typography.caption, { color: colors.gold }]}>{point.score}</Text>
+                      <View style={{ width: "100%", minWidth: 12, height: Math.max(4, point.score * 0.42), borderRadius: 4, backgroundColor: colors.gold }} />
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ) : null}
+            <View style={{ gap: spacing.sm }}>
+              <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Saved analyses</Text>
+              {group.sessions.map((session) => (
+                <Pressable
+                  accessibilityRole="button"
+                  key={session.sessionId}
+                  onPress={() => onOpenSession(session.sessionId)}
+                  style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md, paddingVertical: spacing.sm }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text selectable style={[typography.body, { color: colors.text }]}>{new Date(session.createdAt).toLocaleDateString()}</Text>
+                    <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{session.score === null ? "Visible feedback" : `${session.score} / 100`}</Text>
+                  </View>
+                  <Text selectable style={[typography.label, { color: colors.gold }]}>View Analysis</Text>
+                </Pressable>
+              ))}
+            </View>
           </FormCard>
         );
       })}

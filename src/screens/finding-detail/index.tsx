@@ -2,6 +2,7 @@ import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { EvidenceVideo } from "@/components/evidence-video";
+import { FormButton } from "@/components/form-button";
 import { FormCard } from "@/components/form-card";
 import type { CoachingFinding } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
@@ -18,9 +19,10 @@ function timestamp(milliseconds: number): string {
 type FindingDetailScreenProps = {
   finding: CoachingFinding;
   videoUrl: string | null;
+  onRecordAnother: () => void;
 };
 
-export function FindingDetailScreen({ finding, videoUrl }: FindingDetailScreenProps) {
+export function FindingDetailScreen({ finding, videoUrl, onRecordAnother }: FindingDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const evidence = finding.evidence[0];
   const context = [evidence.repNumber ? `Rep ${evidence.repNumber}` : null, evidence.phase, `${timestamp(evidence.startMs)}–${timestamp(evidence.endMs)}`].filter(Boolean).join(" · ");
@@ -56,6 +58,7 @@ export function FindingDetailScreen({ finding, videoUrl }: FindingDetailScreenPr
           <Text selectable style={[typography.heading, { color: colors.text }]}>{finding.cue}</Text>
         </FormCard>
       ) : null}
+      <FormButton label="Record Another Set" onPress={onRecordAnother} />
     </ScrollView>
   );
 }

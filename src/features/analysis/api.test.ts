@@ -1,4 +1,4 @@
-import { AnalysisApiError, correctAnalysisLabel, createAnalysisSession } from "./api";
+import { AnalysisApiError, correctAnalysisLabel, createAnalysisSession, uploadAnalysisVideo } from "./api";
 
 describe("analysis API", () => {
   it("creates a session without requiring exercise selection", async () => {
@@ -87,5 +87,25 @@ describe("analysis API", () => {
       "https://example.supabase.co/functions/v1/correct-analysis-label",
       expect.objectContaining({ body: JSON.stringify({ sessionId: "session-123", label: "FreeMotion high-to-low row" }) }),
     );
+  });
+
+  it("uploads the original bytes through the signed URL token", async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "Content-Type": "video/mp4" } }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+
+    await uploadAnalysisVideo({
+      localUri: "file:///recording.mp4",
+      signedUrl: "https://storage.example/object/upload/sign/analysis-videos/user/session/original.mp4",
+      uploadToken: "signed-upload-token",
+      fetcher,
+    });
+
+    const [uploadUrl, uploadRequest] = fetcher.mock.calls[1];
+    expect(uploadUrl).toBe("https://storage.example/object/upload/sign/analysis-videos/user/session/original.mp4?token=signed-upload-token");
+    expect(uploadRequest).toEqual(expect.objectContaining({ method: "PUT", body: expect.any(ArrayBuffer) }));
+    expect(uploadRequest.headers).toEqual(expect.objectContaining({ "Content-Type": "video/mp4", "x-upsert": "false" }));
+    expect(uploadRequest.headers.Authorization).toBeUndefined();
   });
 });

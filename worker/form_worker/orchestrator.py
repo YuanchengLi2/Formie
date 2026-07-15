@@ -15,7 +15,7 @@ class AnalysisWorkerDependencies:
     extract_pose: Callable[[Path], PoseEvidence]
     save_pose_evidence: Callable[[dict[str, Any], PoseEvidence], None]
     extract_frames: Callable[[Path, PoseEvidence, Path], list[Path]]
-    analyze: Callable[[Path, list[Path], PoseEvidence, dict[str, Any] | None], dict[str, Any]]
+    analyze: Callable[[Path, list[Path], PoseEvidence, dict[str, Any] | None, Callable[[str], None]], dict[str, Any]]
     verify: Callable[[dict[str, Any], int, dict[str, float]], dict[str, Any]]
     save_result: Callable[[dict[str, Any], dict[str, Any]], None]
 
@@ -39,10 +39,14 @@ class AnalysisOrchestrator:
         self.dependencies.update_stage(session_id, "rep_detection")
         frames = self.dependencies.extract_frames(video_path, pose_evidence, workspace_path / "evidence")
 
-        self.dependencies.update_stage(session_id, "recognition")
-        self.dependencies.update_stage(session_id, "technique_review")
+        candidate = self.dependencies.analyze(
+            video_path,
+            frames,
+            pose_evidence,
+            job.get("previous_result"),
+            lambda stage: self.dependencies.update_stage(session_id, stage),
+        )
         self.dependencies.update_stage(session_id, "coaching")
-        candidate = self.dependencies.analyze(video_path, frames, pose_evidence, job.get("previous_result"))
         verified = self.dependencies.verify(candidate, metadata.duration_ms, pose_evidence.visibility)
         self.dependencies.save_result(job, verified)
         return verified

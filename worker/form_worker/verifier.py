@@ -20,9 +20,10 @@ def _verified_finding(
             continue
         if confidence < 0.75 or not str(evidence.get("visualEvidence", "")).strip() or not landmarks:
             continue
+        accepted_moment = deepcopy(evidence)
         if any(landmark_visibility.get(name, 0.0) < 0.75 for name in landmarks):
-            continue
-        accepted_evidence.append(evidence)
+            accepted_moment["mediaPipeEvidence"] = None
+        accepted_evidence.append(accepted_moment)
     if not accepted_evidence:
         return None
     accepted = deepcopy(finding)

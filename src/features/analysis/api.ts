@@ -117,15 +117,17 @@ export async function uploadAnalysisVideo(input: {
   if (!localResponse.ok) {
     throw new AnalysisApiError("Recorded video could not be read", localResponse.status, "VIDEO_READ_FAILED");
   }
-  const body = await localResponse.blob();
-  const uploadResponse = await fetcher(input.signedUrl, {
+  const body = await localResponse.arrayBuffer();
+  const contentType = localResponse.headers.get("Content-Type") || "video/mp4";
+  const uploadUrl = new URL(input.signedUrl);
+  if (!uploadUrl.searchParams.has("token")) uploadUrl.searchParams.set("token", input.uploadToken);
+  const uploadResponse = await fetcher(uploadUrl.toString(), {
     method: "PUT",
     body,
     signal: input.signal,
     headers: {
-      "Content-Type": body.type || "video/mp4",
+      "Content-Type": contentType,
       "x-upsert": "false",
-      Authorization: `Bearer ${input.uploadToken}`,
     },
   });
   if (!uploadResponse.ok) {

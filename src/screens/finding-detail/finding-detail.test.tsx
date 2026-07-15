@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import type { CoachingFinding } from "@/features/analysis/result-schema";
@@ -18,9 +18,10 @@ const finding: CoachingFinding = {
 
 describe("FindingDetailScreen", () => {
   it("explains what happened, why it matters, and what to change", async () => {
+    const onRecordAnother = jest.fn();
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-        <FindingDetailScreen finding={finding} videoUrl={null} />
+        <FindingDetailScreen finding={finding} videoUrl={null} onRecordAnother={onRecordAnother} />
       </SafeAreaProvider>,
     );
     expect(screen.getByText("Your right elbow accelerated ahead of the left during rep 3.")).toBeTruthy();
@@ -28,5 +29,7 @@ describe("FindingDetailScreen", () => {
     expect(screen.getByText("Reduce the load slightly and match both elbows.")).toBeTruthy();
     expect(screen.getByText("Pull both handles through the same finish line.")).toBeTruthy();
     expect(screen.getByText("Rep 3 · concentric · 00:07.2–00:08.1")).toBeTruthy();
+    await fireEvent.press(screen.getByText("Record Another Set"));
+    expect(onRecordAnother).toHaveBeenCalledTimes(1);
   });
 });

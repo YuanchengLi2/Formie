@@ -62,17 +62,21 @@ class GeminiAnalyzer:
         evidence_frames: list[str | Path],
         pose_evidence: PoseEvidence,
         previous_result: dict[str, Any] | None = None,
+        on_stage: Callable[[str], None] | None = None,
     ) -> dict[str, Any]:
+        report_stage = on_stage or (lambda _stage: None)
         video_path = Path(original_video)
         video_file = self._upload(video_path, "video/mp4")
         image_files = [self._upload(Path(path), "image/jpeg") for path in evidence_frames]
 
+        report_stage("recognition")
         recognition = self._generate_json([recognition_prompt(), video_file], RECOGNITION_SCHEMA)
         recognition.setdefault("catalogExerciseId", None)
         profile = self.profile_provider(recognition) if self.profile_provider else None
 
         evidence_json = json.dumps(pose_evidence.to_dict(), separators=(",", ":"))
         previous_json = json.dumps(previous_result, separators=(",", ":")) if previous_result else "No previous result."
+        report_stage("technique_review")
         result = self._generate_json(
             [
                 coaching_prompt(recognition),

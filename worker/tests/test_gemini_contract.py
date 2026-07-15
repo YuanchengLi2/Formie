@@ -75,3 +75,13 @@ def test_invalid_structured_output_is_retried_once(tmp_path) -> None:
     assert result["recognition"]["label"] == "High-to-low cable row"
     assert len(client.models.calls) == 3
     assert "failed validation" in str(client.models.calls[1]["contents"][-1]).lower()
+
+
+def test_analysis_reports_stages_when_the_work_really_begins(tmp_path) -> None:
+    video = tmp_path / "original.mp4"
+    video.write_bytes(b"video")
+    stages = []
+
+    GeminiAnalyzer(FakeClient()).analyze(video, [], PoseEvidence(), on_stage=stages.append)
+
+    assert stages == ["recognition", "technique_review"]

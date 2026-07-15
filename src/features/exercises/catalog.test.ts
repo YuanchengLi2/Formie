@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { EXERCISES, findExercise } from "./catalog";
 
 const EXPECTED_NAMES = [
@@ -73,5 +76,24 @@ describe("exercise catalog", () => {
   it("finds an exercise by slug", () => {
     expect(findExercise("standing-dumbbell-curl")?.name).toBe("Standing Dumbbell Curl");
     expect(findExercise("missing-exercise")).toBeUndefined();
+  });
+
+  it("ships all 50 optional profiles in the Supabase migration and seed", () => {
+    const paths = [
+      resolve(__dirname, "../../../supabase/migrations/202607150003_exercise_profiles.sql"),
+      resolve(__dirname, "../../../supabase/seed.sql"),
+    ];
+
+    for (const path of paths) {
+      expect(existsSync(path)).toBe(true);
+      if (!existsSync(path)) continue;
+      const sql = readFileSync(path, "utf8");
+      const serializedProfiles = sql.match(/\$profiles\$([\s\S]*?)\$profiles\$/)?.[1];
+      expect(serializedProfiles).toBeDefined();
+
+      const seeded = JSON.parse(serializedProfiles ?? "[]") as typeof EXERCISES;
+      expect(seeded).toEqual(EXERCISES);
+      expect(sql).toContain("insert into public.exercise_profiles");
+    }
   });
 });

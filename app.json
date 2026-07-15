@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "form",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "app.form.coach",
@@ -58,7 +57,8 @@
       "expo-audio",
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,

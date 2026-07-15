@@ -11,6 +11,11 @@ def test_orchestrator_persists_real_stages_and_validated_result(tmp_path) -> Non
     video = tmp_path / "original.mp4"
     video.write_bytes(b"video")
     result = {"status": "partial", "videoCheck": {"outcome": "partial"}, "recognition": {"confidence": 0.8}, "score": None, "scoreRationale": [], "didWell": [], "priorityCorrections": [], "coachingCues": []}
+    def analyze(path, frames, evidence, previous, on_stage):
+        on_stage("recognition")
+        on_stage("technique_review")
+        return result
+
     dependencies = AnalysisWorkerDependencies(
         update_stage=lambda session_id, stage: stages.append(stage),
         download_video=lambda job, destination: video,
@@ -18,7 +23,7 @@ def test_orchestrator_persists_real_stages_and_validated_result(tmp_path) -> Non
         extract_pose=lambda path: PoseEvidence(),
         save_pose_evidence=lambda job, evidence: pose_saved.append(evidence),
         extract_frames=lambda path, evidence, directory: [],
-        analyze=lambda path, frames, evidence, previous: result,
+        analyze=analyze,
         verify=lambda candidate, duration, visibility: candidate,
         save_result=lambda job, candidate: saved.append(candidate),
     )

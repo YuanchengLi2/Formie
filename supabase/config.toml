@@ -19,6 +19,7 @@ port = 54323
 [auth]
 enabled = true
 site_url = "http://localhost:8082"
+enable_anonymous_sign_ins = true
 
 [storage]
 enabled = true

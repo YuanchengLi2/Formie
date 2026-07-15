@@ -3,7 +3,7 @@ from copy import deepcopy
 from form_worker.verifier import verify_analysis
 
 
-def finding(identifier: str, *, confidence: float = 0.9, start_ms: int = 1000, end_ms: int = 1500, landmarks=None):
+def finding(identifier: str, *, confidence: float = 0.9, start_ms: int = 1000, end_ms: int = 1500, landmarks=None, media_pipe_evidence=None):
     return {
         "id": identifier,
         "title": identifier,
@@ -12,7 +12,7 @@ def finding(identifier: str, *, confidence: float = 0.9, start_ms: int = 1000, e
         "correction": "Move smoothly.",
         "cue": "Stay controlled.",
         "severity": "important",
-        "evidence": [{"startMs": start_ms, "endMs": end_ms, "repNumber": 1, "phase": "concentric", "visualEvidence": "Visible at this interval.", "mediaPipeEvidence": None, "observableLandmarks": landmarks or ["left_elbow"], "confidence": confidence}],
+        "evidence": [{"startMs": start_ms, "endMs": end_ms, "repNumber": 1, "phase": "concentric", "visualEvidence": "Visible at this interval.", "mediaPipeEvidence": media_pipe_evidence, "observableLandmarks": landmarks or ["left_elbow"], "confidence": confidence}],
     }
 
 
@@ -32,19 +32,20 @@ def analysis():
     }
 
 
-def test_invalid_findings_are_removed_independently_without_rejecting_the_video() -> None:
+def test_invalid_findings_are_removed_without_using_mediapipe_as_a_visual_gate() -> None:
     candidate = analysis()
     candidate["priorityCorrections"] = [
         finding("low-confidence", confidence=0.74),
         finding("outside-video", start_ms=9000, end_ms=9500),
-        finding("hidden-landmark", landmarks=["right_wrist"]),
+        finding("hidden-landmark", landmarks=["right_wrist"], media_pipe_evidence="Right wrist angle changed 20 degrees."),
     ]
     candidate["coachingCues"] = [finding(f"cue-{index}") for index in range(5)]
 
     verified = verify_analysis(candidate, duration_ms=5000, landmark_visibility={"left_elbow": 0.9, "right_wrist": 0.2})
 
     assert verified["status"] == "complete"
-    assert [item["id"] for item in verified["priorityCorrections"]] == []
+    assert [item["id"] for item in verified["priorityCorrections"]] == ["hidden-landmark"]
+    assert verified["priorityCorrections"][0]["evidence"][0]["mediaPipeEvidence"] is None
     assert len(verified["coachingCues"]) == 5
     assert verified["didWell"][0]["id"] == "valid"
 
