@@ -1,4 +1,4 @@
-import { ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { FormButton } from "@/components/form-button";
@@ -10,6 +10,8 @@ import { typography } from "@/theme/type";
 
 type HomeScreenProps = {
   onRecord: () => void;
+  recentAnalyses?: { sessionId: string; label: string; createdAt: string; score: number | null }[];
+  onOpenSession?: (sessionId: string) => void;
 };
 
 const STEPS = [
@@ -18,7 +20,7 @@ const STEPS = [
   ["3", "Correct", "See evidence-backed strengths, corrections, and cues."],
 ] as const;
 
-export function HomeScreen({ onRecord }: HomeScreenProps) {
+export function HomeScreen({ onRecord, recentAnalyses = [], onOpenSession = () => undefined }: HomeScreenProps) {
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
@@ -114,10 +116,22 @@ export function HomeScreen({ onRecord }: HomeScreenProps) {
 
       <View style={{ gap: spacing.md }}>
         <Text selectable style={[typography.heading, { color: colors.text }]}>Recent Analyses</Text>
-        <FormCard>
-          <Text selectable style={[typography.label, { color: colors.text }]}>Your latest coaching will appear here</Text>
-          <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Record your first set to start building movement history automatically.</Text>
-        </FormCard>
+        {recentAnalyses.length === 0 ? (
+          <FormCard>
+            <Text selectable style={[typography.label, { color: colors.text }]}>Your latest coaching will appear here</Text>
+            <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Record your first set to start building movement history automatically.</Text>
+          </FormCard>
+        ) : recentAnalyses.map((analysis) => (
+          <Pressable accessibilityRole="button" key={analysis.sessionId} onPress={() => onOpenSession(analysis.sessionId)}>
+            <FormCard style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flex: 1, gap: spacing.xs }}>
+                <Text selectable style={[typography.label, { color: colors.text }]}>{analysis.label}</Text>
+                <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{new Date(analysis.createdAt).toLocaleDateString()}</Text>
+              </View>
+              <Text selectable style={[typography.label, { color: colors.gold }]}>{analysis.score === null ? "View" : `${analysis.score} / 100`}</Text>
+            </FormCard>
+          </Pressable>
+        ))}
       </View>
     </ScrollView>
   );

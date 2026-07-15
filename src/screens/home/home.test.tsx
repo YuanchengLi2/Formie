@@ -19,4 +19,18 @@ describe("HomeScreen", () => {
     const screen = await render(<HomeScreen onRecord={jest.fn()} />);
     expect(screen.getByText("Record any movement. FORM identifies it and coaches what it can actually see.")).toBeTruthy();
   });
+
+  it("shows recent analyses when history exists", async () => {
+    const onOpenSession = jest.fn();
+    const screen = await render(
+      <HomeScreen
+        onRecord={jest.fn()}
+        onOpenSession={onOpenSession}
+        recentAnalyses={[{ sessionId: "session-1", label: "FreeMotion Row", createdAt: "2026-07-15T10:00:00Z", score: 86 }]}
+      />,
+    );
+    expect(screen.getByText("FreeMotion Row")).toBeTruthy();
+    await fireEvent.press(screen.getByText("86 / 100"));
+    expect(onOpenSession).toHaveBeenCalledWith("session-1");
+  });
 });
