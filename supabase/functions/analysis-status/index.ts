@@ -1,30 +1,7 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { errorResponse, jsonResponse } from "../_shared/responses.ts";
-
-function resultPayload(session: Record<string, unknown>, result: Record<string, unknown> | null) {
-  if (!result) return null;
-  return {
-    status: result.status,
-    recognition: {
-      label: session.corrected_label ?? session.detected_label,
-      variation: session.detected_variation,
-      equipment: session.detected_equipment ?? [],
-      confidence: Number(session.recognition_confidence ?? 0),
-      alternatives: session.recognition_alternatives ?? [],
-      catalogExerciseId: session.corrected_exercise_id ?? session.exercise_id,
-    },
-    videoCheck: result.video_check,
-    overallAssessment: result.overall_assessment,
-    score: result.score === null ? null : Number(result.score),
-    scoreRationale: result.score_rationale ?? [],
-    didWell: result.did_well ?? [],
-    priorityCorrections: result.priority_corrections ?? [],
-    coachingCues: result.coaching_cues ?? [],
-    viewNote: result.view_note,
-    comparison: result.comparison,
-  };
-}
+import { resultPayload } from "../_shared/result-payload.ts";
 
 Deno.serve(async (request) => {
   const options = preflight(request);
