@@ -8,8 +8,8 @@ node_modules/
 .expo/
 dist/
 web-build/
+.form-scaffold/
 
 # Native and editor artifacts
 *.log
 .DS_Store
-
