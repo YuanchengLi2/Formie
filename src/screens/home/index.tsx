@@ -1,22 +1,24 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
+import { FormButton } from "@/components/form-button";
+import { FormCard } from "@/components/form-card";
 import { FormWordmark } from "@/components/form-wordmark";
-import { findExercise } from "@/features/exercises/catalog";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
 
-import { ExerciseRow } from "./exercise-row";
-
-const CATEGORIES = ["All", "Chest", "Back", "Legs", "Shoulders", "Arms", "Core"] as const;
-const RECENT = [findExercise("barbell-bench-press"), findExercise("back-squat")].filter((item) => item !== undefined);
-
 type HomeScreenProps = {
-  onOpenSearch: () => void;
-  onSelectExercise: (slug: string) => void;
+  onRecord: () => void;
 };
 
-export function HomeScreen({ onOpenSearch, onSelectExercise }: HomeScreenProps) {
+const STEPS = [
+  ["1", "Record", "Capture one working set from any useful angle."],
+  ["2", "Understand", "FORM identifies the movement and reviews every visible rep."],
+  ["3", "Correct", "See evidence-backed strengths, corrections, and cues."],
+] as const;
+
+export function HomeScreen({ onRecord }: HomeScreenProps) {
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
@@ -25,59 +27,97 @@ export function HomeScreen({ onOpenSearch, onSelectExercise }: HomeScreenProps) 
     >
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <FormWordmark />
-        <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 1, borderColor: colors.border }}>
-          <Text selectable style={{ color: colors.text, fontSize: 15 }}>♢</Text>
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: radii.pill,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+          }}
+        >
+          <Text selectable style={{ color: colors.gold, fontSize: 14 }}>●</Text>
         </View>
       </View>
-      <View style={{ gap: spacing.sm }}>
-        <Text selectable style={[typography.title, { color: colors.text, maxWidth: 280 }]}>
-          Ready to improve today?
+
+      <Animated.View entering={FadeInDown.duration(240)} style={{ gap: spacing.sm }}>
+        <Text selectable style={[typography.title, { color: colors.text, maxWidth: 300 }]}>Ready to move better?</Text>
+        <Text selectable style={[typography.body, { color: colors.textSecondary, maxWidth: 340 }]}>
+          Record any movement. FORM identifies it and coaches what it can actually see.
         </Text>
-      </View>
-      <Pressable
-        accessibilityRole="search"
-        onPress={onOpenSearch}
-        style={({ pressed }) => ({
-          height: 52,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: spacing.md,
-          paddingHorizontal: spacing.lg,
-          borderRadius: radii.md,
-          borderCurve: "continuous",
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: pressed ? colors.surfaceRaised : colors.surface,
-        })}
-      >
-        <Text selectable style={{ color: colors.text, fontSize: 18 }}>⌕</Text>
-        <Text selectable style={[typography.body, { color: colors.textSecondary }]}>Search exercises</Text>
-      </Pressable>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-        {CATEGORIES.map((category, index) => (
-          <View
-            key={category}
-            style={{
-              paddingHorizontal: 13,
-              paddingVertical: 7,
-              borderRadius: radii.pill,
-              borderWidth: 1,
-              borderColor: index === 0 ? colors.gold : colors.border,
-              backgroundColor: index === 0 ? colors.gold : colors.surface,
-            }}
-          >
-            <Text selectable style={[typography.caption, { color: index === 0 ? colors.background : colors.textSecondary }]}>{category}</Text>
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.duration(240).delay(60)}>
+        <FormCard style={{ gap: spacing.xl, padding: spacing.xl, backgroundColor: colors.surfaceRaised }}>
+          <View style={{ height: 176, alignItems: "center", justifyContent: "center" }}>
+            <View
+              style={{
+                width: 126,
+                height: 126,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 63,
+                borderWidth: 1,
+                borderColor: colors.gold,
+                backgroundColor: colors.goldSoft,
+              }}
+            >
+              <View
+                style={{
+                  width: 74,
+                  height: 74,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 37,
+                  borderWidth: 2,
+                  borderColor: colors.gold,
+                }}
+              >
+                <Text selectable style={{ color: colors.gold, fontSize: 30 }}>●</Text>
+              </View>
+            </View>
+          </View>
+          <View style={{ gap: spacing.sm }}>
+            <Text selectable style={[typography.heading, { color: colors.text, textAlign: "center" }]}>Your set. Your camera. Real feedback.</Text>
+            <Text selectable style={[typography.caption, { color: colors.textSecondary, textAlign: "center" }]}>No exercise selection or perfect setup required.</Text>
+          </View>
+          <FormButton label="Record an Exercise" onPress={onRecord} />
+        </FormCard>
+      </Animated.View>
+
+      <View style={{ gap: spacing.md }}>
+        <Text selectable style={[typography.heading, { color: colors.text }]}>How FORM works</Text>
+        {STEPS.map(([number, title, detail]) => (
+          <View key={number} style={{ flexDirection: "row", gap: spacing.md, alignItems: "flex-start" }}>
+            <View
+              style={{
+                width: 30,
+                height: 30,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 15,
+                backgroundColor: colors.goldSoft,
+              }}
+            >
+              <Text selectable style={[typography.label, { color: colors.gold }]}>{number}</Text>
+            </View>
+            <View style={{ flex: 1, gap: spacing.xs }}>
+              <Text selectable style={[typography.label, { color: colors.text }]}>{title}</Text>
+              <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>{detail}</Text>
+            </View>
           </View>
         ))}
-      </ScrollView>
+      </View>
+
       <View style={{ gap: spacing.md }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Text selectable style={[typography.heading, { color: colors.text }]}>Recent Exercises</Text>
-          <Pressable onPress={onOpenSearch}><Text selectable style={[typography.caption, { color: colors.gold }]}>View all</Text></Pressable>
-        </View>
-        {RECENT.map((exercise) => (
-          <ExerciseRow key={exercise.slug} exercise={exercise} onPress={() => onSelectExercise(exercise.slug)} />
-        ))}
+        <Text selectable style={[typography.heading, { color: colors.text }]}>Recent Analyses</Text>
+        <FormCard>
+          <Text selectable style={[typography.label, { color: colors.text }]}>Your latest coaching will appear here</Text>
+          <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Record your first set to start building movement history automatically.</Text>
+        </FormCard>
       </View>
     </ScrollView>
   );

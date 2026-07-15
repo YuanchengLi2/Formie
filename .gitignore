@@ -9,6 +9,8 @@ node_modules/
 dist/
 web-build/
 .form-scaffold/
+supabase/.branches/
+supabase/.temp/
 
 # Native and editor artifacts
 *.log
