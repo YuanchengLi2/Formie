@@ -1,5 +1,7 @@
 # Expo Go MediaPipe WebView Design
 
+> **Superseded:** The approved implementation removes MediaPipe and uses the Gemini-only design in `2026-07-15-gemini-only-video-analysis-design.md`.
+
 ## Goal
 
 FORM must analyze recorded exercise videos in Expo Go without a separately deployed Python worker. MediaPipe and Gemini remain part of the analysis. Supabase remains the authentication, private video storage, Edge Function, and result-persistence backend.
