@@ -20,7 +20,7 @@ function requirePhase(state: CaptureState, allowed: CaptureState["phase"][], act
 export function captureReducer(state: CaptureState, event: CaptureEvent): CaptureState {
   switch (event.type) {
     case "begin_countdown":
-      requirePhase(state, ["idle", "recorded", "queued", "error"], "begin countdown");
+      requirePhase(state, ["idle", "recorded", "processing", "error"], "begin countdown");
       return {
         ...initialCaptureState,
         phase: "countingDown",
@@ -53,9 +53,9 @@ export function captureReducer(state: CaptureState, event: CaptureEvent): Captur
       requirePhase(state, ["error"], "retry upload");
       if (!state.recording) throw new Error("Cannot retry upload without a local recording");
       return { ...state, phase: "uploading", error: null };
-    case "queued":
-      requirePhase(state, ["uploading"], "queue analysis");
-      return { ...state, phase: "queued", sessionId: event.sessionId, error: null };
+    case "processing":
+      requirePhase(state, ["uploading"], "process analysis");
+      return { ...state, phase: "processing", sessionId: event.sessionId, error: null };
     case "reset":
       return initialCaptureState;
   }

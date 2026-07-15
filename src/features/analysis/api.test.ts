@@ -1,4 +1,4 @@
-import { AnalysisApiError, correctAnalysisLabel, createAnalysisSession, uploadAnalysisVideo } from "./api";
+import { AnalysisApiError, completeAnalysisUpload, correctAnalysisLabel, createAnalysisSession, processAnalysis, uploadAnalysisVideo } from "./api";
 
 describe("analysis API", () => {
   it("creates a session without requiring exercise selection", async () => {
@@ -107,5 +107,38 @@ describe("analysis API", () => {
     expect(uploadRequest).toEqual(expect.objectContaining({ method: "PUT", body: expect.any(ArrayBuffer) }));
     expect(uploadRequest.headers).toEqual(expect.objectContaining({ "Content-Type": "video/mp4", "x-upsert": "false" }));
     expect(uploadRequest.headers.Authorization).toBeUndefined();
+  });
+
+  it("completes upload with capture metadata and starts processing", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ processing: true }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await completeAnalysisUpload({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      sessionId: "session-123",
+      durationMs: 18_500,
+      captureOrientation: "landscapeLeft",
+      cameraFacing: "back",
+      cameraLens: "wideAngleCamera",
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://example.supabase.co/functions/v1/complete-upload",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ sessionId: "session-123", durationMs: 18_500, captureOrientation: "landscapeLeft", cameraFacing: "back", cameraLens: "wideAngleCamera" }),
+      }),
+    );
+  });
+
+  it("advances one analysis session through the Gemini endpoint", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "processing", stage: "video_processing", videoUrl: null, result: null }), { status: 202, headers: { "Content-Type": "application/json" } }));
+
+    await expect(processAnalysis({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" })).resolves.toMatchObject({ stage: "video_processing" });
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://example.supabase.co/functions/v1/analyze-video",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ sessionId: "session-123" }) }),
+    );
   });
 });

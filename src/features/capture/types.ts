@@ -4,13 +4,18 @@ export type CapturePhase =
   | "recording"
   | "recorded"
   | "uploading"
-  | "queued"
+  | "processing"
   | "error";
+
+export type CaptureOrientation = "portraitUp" | "portraitDown" | "landscapeLeft" | "landscapeRight" | "unknown";
 
 export type RecordedSet = {
   localUri: string;
   durationMs: number;
   mimeType: string;
+  captureOrientation: CaptureOrientation;
+  cameraFacing: "front" | "back";
+  cameraLens: string | null;
 };
 
 export type UploadTarget = {
@@ -41,5 +46,5 @@ export type CaptureEvent =
   | { type: "upload_target_created"; target: UploadTarget }
   | { type: "upload_failed"; message: string }
   | { type: "retry_upload" }
-  | { type: "queued"; sessionId: string }
+  | { type: "processing"; sessionId: string }
   | { type: "reset" };

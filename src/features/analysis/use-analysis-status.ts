@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { supabase } from "@/lib/supabase";
 
-import { getAnalysisStatus } from "./api";
+import { processAnalysis } from "./api";
 
 const terminalStatuses = new Set(["complete", "partial", "unable", "failed"]);
 
@@ -22,7 +22,7 @@ export function useAnalysisStatus(sessionId: string) {
     queryKey: ["analysis-status", sessionId],
     queryFn: async ({ signal }) => {
       const accessToken = await getAccessToken();
-      return getAnalysisStatus({ accessToken, sessionId, signal });
+      return processAnalysis({ accessToken, sessionId, signal });
     },
     enabled: Boolean(sessionId),
     retry: 2,

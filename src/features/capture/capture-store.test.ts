@@ -2,7 +2,7 @@ import { captureReducer, initialCaptureState } from "./capture-store";
 import type { CaptureState } from "./types";
 
 describe("capture state", () => {
-  it("moves through countdown, recording, local save, upload, and queue", () => {
+  it("moves through countdown, recording, local save, upload, and processing", () => {
     let state = captureReducer(initialCaptureState, { type: "begin_countdown", previousSessionId: "prior-1" });
     expect(state).toMatchObject({ phase: "countingDown", countdown: 10, previousSessionId: "prior-1" });
 
@@ -12,13 +12,13 @@ describe("capture state", () => {
     state = captureReducer(state, { type: "recording_started", startedAt: 1_000 });
     state = captureReducer(state, {
       type: "recording_finished",
-      recording: { localUri: "file:///set.mp4", durationMs: 18_000, mimeType: "video/mp4" },
+      recording: { localUri: "file:///set.mp4", durationMs: 18_000, mimeType: "video/mp4", captureOrientation: "landscapeLeft", cameraFacing: "back", cameraLens: "wide" },
     });
     state = captureReducer(state, { type: "upload_started" });
-    state = captureReducer(state, { type: "queued", sessionId: "session-1" });
+    state = captureReducer(state, { type: "processing", sessionId: "session-1" });
 
     expect(state).toMatchObject({
-      phase: "queued",
+      phase: "processing",
       sessionId: "session-1",
       recording: { localUri: "file:///set.mp4", durationMs: 18_000 },
     });
@@ -28,7 +28,7 @@ describe("capture state", () => {
     let state: CaptureState = {
       ...initialCaptureState,
       phase: "recorded" as const,
-      recording: { localUri: "file:///set.mp4", durationMs: 12_000, mimeType: "video/mp4" },
+      recording: { localUri: "file:///set.mp4", durationMs: 12_000, mimeType: "video/mp4", captureOrientation: "portraitUp", cameraFacing: "back", cameraLens: null },
     };
 
     state = captureReducer(state, { type: "upload_started" });

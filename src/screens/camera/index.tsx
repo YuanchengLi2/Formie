@@ -4,6 +4,7 @@ import { useAudioPlayer } from "expo-audio";
 import { CameraView, useCameraPermissions, type CameraType } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
+import * as ScreenOrientation from "expo-screen-orientation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormButton } from "@/components/form-button";
@@ -14,7 +15,7 @@ import {
 } from "@/features/analysis/api";
 import { useCaptureStore } from "@/features/capture/capture-store";
 import { START_BEEP_URI } from "@/features/capture/start-beep";
-import type { RecordedSet, UploadTarget } from "@/features/capture/types";
+import type { CaptureOrientation, RecordedSet, UploadTarget } from "@/features/capture/types";
 import { supabase } from "@/lib/supabase";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
@@ -25,6 +26,21 @@ import { CameraControls } from "./camera-controls";
 type CameraScreenProps = {
   previousSessionId?: string;
 };
+
+function captureOrientation(value: ScreenOrientation.Orientation): CaptureOrientation {
+  switch (value) {
+    case ScreenOrientation.Orientation.PORTRAIT_UP:
+      return "portraitUp";
+    case ScreenOrientation.Orientation.PORTRAIT_DOWN:
+      return "portraitDown";
+    case ScreenOrientation.Orientation.LANDSCAPE_LEFT:
+      return "landscapeLeft";
+    case ScreenOrientation.Orientation.LANDSCAPE_RIGHT:
+      return "landscapeRight";
+    default:
+      return "unknown";
+  }
+}
 
 async function getAccessToken(): Promise<string> {
   const existing = await supabase.auth.getSession();
@@ -92,8 +108,15 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
           signedUrl: target.signedUrl,
           uploadToken: target.uploadToken,
         });
-        await completeAnalysisUpload({ accessToken, sessionId: target.sessionId });
-        dispatch({ type: "queued", sessionId: target.sessionId });
+        await completeAnalysisUpload({
+          accessToken,
+          sessionId: target.sessionId,
+          durationMs: saved.durationMs,
+          captureOrientation: saved.captureOrientation,
+          cameraFacing: saved.cameraFacing,
+          cameraLens: saved.cameraLens,
+        });
+        dispatch({ type: "processing", sessionId: target.sessionId });
         router.replace({ pathname: "/analysis/[session-id]", params: { "session-id": target.sessionId } });
       } catch (uploadError) {
         dispatch({
@@ -113,12 +136,16 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     void beep.seekTo(0).then(() => beep.play());
 
     try {
+      const orientation = await ScreenOrientation.getOrientationAsync().catch(() => ScreenOrientation.Orientation.UNKNOWN);
       const result = await cameraRef.current.recordAsync({ maxDuration: 60 });
       if (!result?.uri) throw new Error("The camera did not save the recording");
       const saved: RecordedSet = {
         localUri: result.uri,
         durationMs: Date.now() - actualStart,
         mimeType: "video/mp4",
+        captureOrientation: captureOrientation(orientation),
+        cameraFacing: facing,
+        cameraLens: selectedLens ?? null,
       };
       dispatch({ type: "recording_finished", recording: saved });
       dispatch({ type: "upload_started" });
@@ -130,7 +157,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         dispatch({ type: "recording_failed", message });
       }
     }
-  }, [beep, dispatch, uploadRecording]);
+  }, [beep, dispatch, facing, selectedLens, uploadRecording]);
 
   useEffect(() => {
     if (phase !== "countingDown" || countdown === null) return;

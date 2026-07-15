@@ -135,12 +135,27 @@ export async function uploadAnalysisVideo(input: {
   }
 }
 
-export async function completeAnalysisUpload(input: RequestContext & { sessionId: string }): Promise<{ queued: true }> {
+export async function completeAnalysisUpload(input: RequestContext & {
+  sessionId: string;
+  durationMs: number;
+  captureOrientation: "portraitUp" | "portraitDown" | "landscapeLeft" | "landscapeRight" | "unknown";
+  cameraFacing: "front" | "back";
+  cameraLens: string | null;
+}): Promise<{ processing: true }> {
   return requestJson(
     "complete-upload",
     input,
+    { method: "POST", body: JSON.stringify({ sessionId: input.sessionId, durationMs: input.durationMs, captureOrientation: input.captureOrientation, cameraFacing: input.cameraFacing, cameraLens: input.cameraLens }) },
+    z.object({ processing: z.literal(true) }),
+  );
+}
+
+export async function processAnalysis(input: RequestContext & { sessionId: string }): Promise<AnalysisStatusResponse> {
+  return requestJson(
+    "analyze-video",
+    input,
     { method: "POST", body: JSON.stringify({ sessionId: input.sessionId }) },
-    z.object({ queued: z.literal(true) }),
+    statusResponseSchema,
   );
 }
 
