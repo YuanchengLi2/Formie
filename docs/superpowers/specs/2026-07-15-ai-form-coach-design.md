@@ -1,257 +1,319 @@
-# AI Form Coach Design
+# FORM Record-First AI Coach Design
 
-## Product Goal
+## Product Promise
 
-Build a premium iOS and Android fitness app called FORM that records a gym set, sends the actual video to a multimodal model, grounds the model with dense pose and frame evidence, and returns concise coaching the user can act on immediately.
+Open FORM, record any exercise, and learn what to improve.
 
-The first release supports 50 exercises. The experience follows the supplied black-and-gold references and keeps the results screen deliberately simple: score, what went wrong, and what to improve. The AI decides which visible problem or problems are important enough to show, subject to evidence and confidence gates.
+FORM does not require exercise search, category selection, variation confirmation, camera calibration, or setup approval before recording. The app watches the original recording, recognizes the movement in the background, measures visible motion, gives evidence-backed coaching, and helps the user immediately record another set.
 
-## Success Criteria
+The existing 50 exercise profiles remain useful reference knowledge, but they are not a whitelist. Recognition and analysis are fully open-ended.
 
-1. A user can select any supported exercise, learn the required camera position, record a set, upload it, receive analysis, and record another set.
-2. The original MP4 is supplied directly to Gemini. The system must never claim the AI watched the video if it only received text, metadata, or isolated pose coordinates.
-3. Fast movement is examined at 15 frames per second by the pose pipeline, with high-resolution evidence frames selected around movement phase changes and suspected faults.
-4. Every visible coaching claim includes internal timestamp, visibility, and confidence evidence. Unsupported claims are removed before the result reaches the app.
-5. The results screen contains only an overall score, AI-selected "What went wrong" content, AI-selected "What to improve" content, and the next-recording action.
-6. If the relevant joints or equipment are not visible, the app requests a new recording rather than inventing feedback.
-7. The service-role and Gemini keys remain server-only. The mobile bundle contains only the Supabase URL and anon key.
+## Core Principles
 
-## Scope
+1. Gemini must receive and inspect the original video. FORM never claims that the AI watched a recording if it only received text, metadata, pose coordinates, or isolated frames.
+2. Gemini 3.5 Flash is the semantic video reasoner. The exact stable model identifier is `gemini-3.5-flash`.
+3. MediaPipe is the measurement layer. It tracks landmarks and derives time-series evidence; it does not write coaching or decide what an exercise means.
+4. The camera angle only needs to be useful, not perfect. FORM analyzes what the chosen view reveals and explains what it cannot evaluate.
+5. Feedback has no fixed item limit. Gemini may return as many positive observations, corrections, cues, and detailed findings as the recording genuinely supports.
+6. Every technique claim must be tied to visible evidence, a video interval or repetition when possible, and an explicit confidence value.
+7. A score is optional. FORM displays one only when the exercise identity and enough relevant criteria are supported.
+8. Uncertainty must be explained instead of hidden. FORM never invents an exercise label, invisible joint position, or precise biomechanical conclusion.
+9. The core loop is Record -> Understand -> Correct -> Record again.
+10. Gemini and Supabase service credentials remain server-only.
 
-### Included
+## User Flow
 
-- Email/social authentication and private user accounts.
-- Searchable catalog of 50 exercises.
-- Exercise-specific camera setup guidance.
-- Live setup readiness checks with one instruction at a time.
-- Video capture, resumable upload, analysis status, results, and retry flows.
-- Native Gemini video understanding of the original recording.
-- Dense pose extraction, repetition segmentation, phase detection, and high-resolution evidence-frame selection.
-- AI-selected results content and score.
-- Per-exercise session history and progress chart.
-- Private video storage with deletion controls.
+### 1. Home
 
-### Not Included in the First Release
+The Home screen has one dominant action: **Record an Exercise**.
 
-- Real-time coaching during the set.
-- Medical diagnosis, injury diagnosis, or rehabilitation prescriptions.
-- Weight-plate recognition, one-repetition-max estimation, nutrition, workout programming, social feeds, trainer marketplaces, or subscriptions.
-- Claims that require force plates, multiple synchronized cameras, or depth sensors.
-- Automatic exercise recognition. The user selects the exercise before recording.
+Below the primary action, show recent analyses and a compact progress summary when data exists. Do not show search, categories, exercise rows that begin a selection flow, or variation controls.
 
-## Visual Direction
+Bottom navigation contains Home, Progress, and Profile.
 
-The attached references are the source of truth:
+### 2. Recording Tips
 
-- `C:\Users\yuanc\Downloads\ChatGPT Image Jul 14, 2026, 11_57_42 PM (1).png`
-- `C:\Users\yuanc\Downloads\ChatGPT Image Jul 14, 2026, 11_57_42 PM (2).png`
+Title: **Place your phone anywhere stable**
 
-### Visual Rules
+Show a short, premium phone-placement animation with three realistic examples:
 
-- Matte black `#090909` foundation with charcoal surfaces, white type, and warm gold accents.
-- Gold is reserved for primary actions, selected states, progress, and high-value emphasis.
-- Large, confident numeric hierarchy; sparse copy; generous spacing.
-- Thin borders and subtle surface differences instead of glow or gradients.
-- Slow fades, short directional slides, and restrained scale transitions. No bounce.
-- Real user video is used in recording and evidence views. Instructional art uses neutral monochrome mannequins.
-- Bottom navigation contains Home, Progress, and Profile. Recording remains the central product flow even though it is not a persistent fourth tab.
+- On a bench.
+- Leaned horizontally against a stable water bottle or gym bag owned by the user.
+- On a small phone tripod.
 
-## Navigation and Screens
+Guidance:
 
-### Home
+- Use the rear camera for better quality.
+- Select 0.5x when space is limited and the device supports it.
+- Place the phone roughly hip-to-chest height when possible.
+- Use a side or diagonal view when practical.
+- Prioritize keeping the person and full movement visible over finding a perfect angle.
 
-- FORM wordmark, greeting, search field, category chips, recent exercises, and bottom navigation.
-- Selecting search opens the full exercise catalog.
-- Recent exercises are derived from completed analyses.
+Reassurance copy:
 
-### Exercise Search
+> The angle does not need to be perfect. Just keep yourself and the movement visible.
 
-- Search and category filtering over all 50 exercises.
-- Each row has a monochrome exercise icon, name, and chevron.
+Primary action: **Continue to Camera**.
 
-### Exercise Confirmation
+The tips screen may become skippable after the user has completed it, but the first implementation always shows it when starting a new recording.
 
-- Exercise name, movement demonstration, one short coaching description, and "This Is My Exercise."
-- A variation chooser returns to the filtered catalog.
+#### No Recording Space Help
 
-### Camera Setup
+A secondary action reads **No good place for your phone?** and opens a native sheet containing:
 
-- A 4–6 second looping instructional animation shows phone placement, viewing angle, distance, and required body framing.
-- The screen shows no technique tutorial. It teaches camera placement only.
-- Requirements are driven by the selected exercise profile.
+- Switch to 0.5x and place the phone closer.
+- Lean the phone horizontally against a stable personal item.
+- Place it on a bench and tilt it with a soft personal item.
+- Ask a training partner to hold it steadily.
+- Use a compact folding phone stand.
 
-### Live Setup
+Do not recommend placing a phone on gym equipment that can move or roll, equipment another person may need, or any location in a walking or lifting path.
 
-- The camera checks body visibility, orientation, distance/framing, camera height, and lighting.
-- Only the highest-priority instruction appears at a time.
-- The record action unlocks when required landmarks are consistently visible for at least one second.
+The closing rule is:
 
-### Recording
+> Good enough to see is good enough to try.
 
-- Full-screen camera, timer, stop control, and no coaching overlays.
-- Target duration is 3–60 seconds and one working set.
+A future FORM stand may be an optional companion product, never a prerequisite.
 
-### Analysis
+### 3. Full-Screen Camera
 
-- Show only real persisted stages: uploading, checking video, tracking movement, reviewing technique, and preparing feedback.
-- A stage is checked only after its backend state completes. No fabricated percentage.
+- Request camera permission clearly and link to system settings when denied.
+- Default to the rear camera.
+- Provide a lens control that uses 0.5x only when the device exposes an ultra-wide zoom range.
+- Provide camera flip and flash controls where supported.
+- Start a ten-second countdown after the user taps record.
+- Give sound and haptic feedback when recording actually starts.
+- Show elapsed time and a large stop control while recording.
+- The user stops after completing the set.
+- Keep the camera screen free of technique prompts and fake framing gates.
+- Preserve the local recording when upload or connectivity fails so the set can be retried.
 
-### Results
+### 4. Video Check
 
-- Exercise name and overall score from 0–100.
-- "What went wrong" shows zero to three AI-selected issue cards, ordered by severity, actionability, and confidence.
-- "What to improve" gives one concise action for each displayed issue. A coaching cue may be included within the improvement sentence, but it is not a separate permanent section.
-- If no meaningful error is detected, "What went wrong" says "No major form issue detected in the visible set," and "What to improve" gives the best next refinement.
-- The AI determines how many issues to show. The UI does not require fixed sub-scores such as tempo, range of motion, or consistency.
-- "Record Another Set" is the single primary action.
+Before detailed coaching, the backend evaluates:
 
-### Unable to Analyze
+- A person and a physical movement are visible.
+- Enough motion or repetitions exist to analyze.
+- Relevant body regions are visible often enough for at least some observations.
+- Lighting, stability, resolution, orientation, and duration are usable.
+- Equipment and environmental context are visible when relevant.
 
-- Explain the exact visibility or recording problem and show one corrective setup instruction.
-- Actions: "Record Again" and "Replay Camera Setup."
+Outcomes:
 
-### Progress
+- `usable`: continue with full analysis.
+- `partial`: analyze only supported aspects and explain visibility limitations.
+- `unable`: stop only when the movement genuinely cannot be evaluated, then show one clear reason and **Record Again**.
 
-- Overall score history, per-exercise filter, and recent sessions.
-- Do not show a metric trend until that metric has appeared consistently and comparably across enough sessions.
+Front, side, diagonal, elevated, and low recordings are accepted. The analysis adapts to the view:
 
-## Supported Exercise Catalog
+- Side views may support depth, torso angle, and forward-backward motion.
+- Front views may support left-right symmetry, stance, and frontal knee motion.
+- Diagonal views may support a mixture of both.
+- Low or partially obstructed views may remain useful with reduced confidence.
 
-### Chest
+If a criterion is not visible, omit that criterion rather than rejecting the entire set. Results may say:
 
-1. Barbell Bench Press
-2. Incline Dumbbell Press
-3. Dumbbell Bench Press
-4. Incline Barbell Bench Press
-5. Push-Up
-6. Machine Chest Press
-7. Cable Fly
+> This angle was useful for evaluating depth and control. A side view would make torso position easier to assess next time.
 
-### Back
+### 5. Automatic Open-Ended Recognition
 
-8. Conventional Deadlift
-9. Lat Pulldown
-10. Pull-Up
-11. Seated Cable Row
-12. One-Arm Dumbbell Row
-13. Barbell Bent-Over Row
-14. Chest-Supported Row
-15. Face Pull
+Exercise recognition runs in the background and never interrupts the analysis flow.
 
-### Legs and Glutes
+Gemini determines:
 
-16. Romanian Deadlift
-17. Back Squat
-18. Front Squat
-19. Goblet Squat
-20. Leg Press
-21. Bulgarian Split Squat
-22. Walking Lunge
-23. Reverse Lunge
-24. Leg Extension
-25. Seated Leg Curl
-26. Hip Thrust
-27. Standing Calf Raise
+- Exercise name and likely variation.
+- Equipment and relevant environmental context.
+- Movement pattern and repetition structure.
+- Recognition confidence and plausible alternatives.
+- Which coaching standards are appropriate.
 
-### Shoulders
+The 50 curated profiles are retrieved when they match or closely resemble the detected movement. For any movement outside the catalog, Gemini constructs a recording-specific observation rubric from the visible exercise, equipment, movement phases, and safe coaching knowledge.
 
-28. Barbell Overhead Press
-29. Dumbbell Shoulder Press
-30. Dumbbell Lateral Raise
-31. Dumbbell Front Raise
-32. Rear-Delt Fly
-33. Upright Row
-34. Dumbbell Shrug
+If variation confidence is low, use safe criteria shared by plausible variants. If exercise identity is too uncertain, FORM may still describe visible control, stability, symmetry, tempo, consistency, and range of motion, but it must not display an exercise-specific score or pretend the label is certain.
 
-### Arms
+The results menu permits optional correction of the detected label after analysis. The correction updates organization and future comparison context; it does not silently rewrite the original model evidence.
 
-35. Standing Dumbbell Curl
-36. Hammer Curl
-37. Barbell Curl
-38. Cable Curl
-39. Preacher Curl
-40. Cable Triceps Pushdown
-41. Overhead Triceps Extension
-42. Skull Crusher
-43. Parallel-Bar Dip
-44. Close-Grip Bench Press
+### 6. Analysis Progress
 
-### Core
+Display only stages backed by persisted worker state:
 
-45. Front Plank
-46. Side Plank
-47. Crunch
-48. Hanging Leg Raise
-49. Cable Crunch
-50. Ab Wheel Rollout
+1. Checking video quality.
+2. Tracking movement.
+3. Detecting repetitions.
+4. Identifying exercise.
+5. Reviewing technique.
+6. Preparing coaching.
 
-## Exercise Profiles
+Do not fabricate completion percentages. A stage becomes complete only after the backend records it as complete.
 
-The 50 exercises use one analysis engine and 50 data profiles. Each profile contains:
+### 7. Results
 
-- Exercise ID, display name, category, equipment, and aliases.
-- Required and acceptable camera angles.
-- Minimum visible landmarks and any important equipment visibility.
-- Setup animation copy and live setup priority rules.
-- Movement phases and expected joint or body relationships.
-- Common observable faults, why each matters, and one safe corrective cue.
-- Conditions that make a fault unobservable from the chosen camera angle.
-- Scoring dimensions and their relative importance for this exercise.
-- Model prompt context and prohibited claims.
+The results screen shows:
 
-The profiles guide attention; they do not replace visual reasoning. Gemini still receives and analyzes the entire video.
+- Detected exercise and recognition confidence language.
+- Overall assessment in concise gym language.
+- Optional score when supported.
+- **What You Did Well** with zero or more observations.
+- **Priority Corrections** with zero or more corrections.
+- **Coaching Cues** with zero or more short cues.
+- View/visibility note when it helps the next recording.
+- **Record Another Set** as the primary action.
+
+There is no hard maximum for feedback arrays. Gemini chooses the count based on evidence and coaching value. The verifier filters unsupported items; the UI renders every accepted item in ranked order.
+
+Each accepted finding records:
+
+- What happened.
+- When it happened, using a video interval and repetition when available.
+- Why it matters in cautious, non-medical language.
+- What to change.
+- A short cue.
+- Visual evidence and optional MediaPipe evidence.
+- Confidence and applicable view.
+
+Do not manufacture criticism. A good set can contain many positive observations and no correction. Multiple corrections are allowed when each is useful and supported.
+
+### 8. Detailed Feedback
+
+Selecting a result item opens the relevant video moment and explains what happened, when, why it matters, what to change, and the cue. Keep the writing short and practical.
+
+### 9. Repeat and Compare
+
+**Record Another Set** starts the tips/camera flow without requiring an exercise selection. The new analysis links to the prior session and compares:
+
+- Whether earlier priority corrections improved, persisted, or were not observable.
+- Score change only when both scores are comparable.
+- Rep consistency and relevant measured trends.
+
+Progress is organized by the detected or user-corrected exercise label.
+
+## Responsibility Boundary
+
+### Gemini 3.5 Flash
+
+Gemini handles:
+
+- Recognizing the exercise and variation.
+- Understanding equipment and environment.
+- Interpreting the complete movement.
+- Connecting visible problems to coaching knowledge.
+- Selecting and ranking evidence-backed feedback.
+- Writing clear positive observations, corrections, cues, and explanations.
+- Explaining uncertainty and camera-view limitations.
+- Comparing the current set to a prior set when comparable evidence is supplied.
+
+Gemini receives:
+
+- The original video through the Gemini Files API.
+- Full-resolution evidence frames around phases and suspected events.
+- MediaPipe time-series summaries, repetitions, angles, visibility, and candidate asymmetries.
+- Matching curated profiles when available.
+- The previous session's accepted result for repeat comparisons.
+- A strict structured-output schema.
+
+Use `gemini-3.5-flash` with default sampling parameters and `thinkingLevel: "medium"` unless evaluation data supports another level.
+
+### MediaPipe
+
+MediaPipe handles:
+
+- Tracking body joints throughout the recording at 15 frames per second.
+- Measuring landmark presence, visibility, and tracking confidence.
+- Detecting repetitions from smoothed motion trajectories.
+- Measuring camera-aware 2D joint angles.
+- Measuring range of motion.
+- Detecting tempo, phase duration, and pauses.
+- Comparing repetitions at aligned movement phases.
+- Identifying possible asymmetry only when both sides are visible and comparable.
+- Producing candidate event intervals and high-resolution frame-selection timestamps.
+
+MediaPipe does not name the exercise, diagnose technique, write feedback, or infer invisible joints. Gemini interprets its measurements together with the actual video.
 
 ## Technical Architecture
 
-### Mobile Application
+### Mobile App
 
-- Expo Router and React Native with a custom development build for iOS and Android.
-- Camera module capable of video recording and on-device frame processing.
-- On-device pose inference for setup readiness only; final technique analysis occurs server-side.
-- Supabase client uses only `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
-- TanStack Query manages server state. Zustand manages transient capture flow state.
+- Expo SDK 57, React Native, Expo Router, Native Tabs, `expo-camera`, `expo-video`, Reanimated, TanStack Query, Zustand, and Zod.
+- Routes contain only route adapters. Screen components live under `src/screens` and feature logic under `src/features`.
+- Supabase URL and anon key are the only backend configuration embedded in the app.
+- Capture state survives foreground/background transitions when possible.
 
 ### Supabase
 
-- Auth for user identity.
-- Postgres for exercises, sessions, analysis jobs, results, and progress summaries.
-- Private Storage bucket for raw videos and derived evidence images.
-- Row Level Security restricts every user-owned row and object path to its owner.
-- An Edge Function creates signed upload URLs, enqueues analysis jobs, reports status, and deletes user media.
-- The service-role key is available only to trusted server processes.
+- Auth identifies users.
+- Postgres stores sessions, recognition, accepted results, feedback, comparisons, and corrections.
+- Private Storage stores original recordings and derived evidence.
+- Row Level Security isolates all user-owned data.
+- Edge Functions create sessions, sign uploads, enqueue processing, report status, accept label corrections, and delete sessions.
+- Gemini and service-role keys exist only in Edge Function or worker secrets.
 
 ### Analysis Worker
 
-- Python service deployed on Google Cloud Run.
-- FFmpeg/ffprobe validates, rotates, normalizes, and samples the recording.
-- MediaPipe Pose Landmarker extracts landmarks at 15 FPS with timestamped confidence and visibility.
-- A motion module smooths landmarks, identifies repetitions, separates movement phases, computes camera-aware joint relationships, and flags candidate anomalies.
-- A frame selector saves full-resolution frames around phase transitions and candidate anomalies. These images preserve details that Gemini's default one-frame-per-second video sampling might miss.
-- The Gemini adapter uploads the original MP4 and sends it together with selected high-resolution evidence frames, pose summaries, exercise profile, and a strict structured-output schema.
-- A verifier checks timestamps, evidence availability, visibility, score consistency, and unsupported medical or biomechanical certainty before saving a result.
+- Python Cloud Run service with FFmpeg, MediaPipe Pose Landmarker, and the Google Gen AI SDK.
+- FFmpeg validates and normalizes the video and extracts full-resolution evidence frames.
+- MediaPipe samples at 15 FPS and produces measurements.
+- Gemini 3.5 Flash performs open-ended recognition and coaching from the original video plus measurement evidence.
+- A deterministic verifier checks confidence, timestamps, visibility, score support, and safe language before persistence.
 
-## Video Analysis Data Flow
+## End-to-End Data Flow
 
-1. The app creates an `analysis_session` for a selected exercise.
-2. The backend returns a signed path for a private upload.
-3. The app uploads the original MP4 and marks the upload complete.
-4. The worker validates duration, orientation, resolution, brightness, body coverage, and usable frame rate.
-5. If quality is inadequate, the job stops with one retry instruction.
-6. Pose landmarks are extracted at 15 FPS. The worker measures visibility per landmark and never fills an invisible joint with an assumed value.
-7. Repetitions and their eccentric, transition, and concentric phases are detected from smoothed motion trajectories.
-8. Full-resolution evidence frames are selected before, during, and after important phase boundaries and suspected deviations.
-9. Gemini receives the original video first, followed by the selected frames and a prompt containing the exercise profile and pose evidence.
-10. Gemini identifies only the most important visible coaching observations and returns structured JSON.
-11. The verifier removes unsupported issues, recalculates availability, and either accepts the result, retries once with validation feedback, or returns partial/unable status.
-12. Supabase stores the compact result. The user sees the simplified results screen.
+1. The app creates an analysis session without an exercise ID.
+2. The backend returns a signed private upload URL.
+3. The app uploads the original recording and completes the upload.
+4. The worker validates video quality and records the video-check outcome.
+5. FFmpeg normalizes orientation and selects frames without replacing the original video.
+6. MediaPipe tracks landmarks at 15 FPS and derives repetitions, angles, range, tempo, pauses, visibility, consistency, and possible asymmetry.
+7. The original video is uploaded to the Gemini Files API and polled until active.
+8. Gemini performs open-ended recognition and returns structured recognition context.
+9. Matching curated profile knowledge is included when available; otherwise a safe dynamic rubric is used.
+10. Gemini analyzes the complete video with the measurement evidence and optional prior-session context.
+11. The verifier accepts, removes, or downgrades individual findings based on evidence. One weak item never invalidates unrelated supported feedback.
+12. Supabase stores the accepted result and progress grouping label.
+13. The app polls real stage changes and renders the result.
 
-## AI Output Contract
-
-The model may decide which issues matter and how many to show, but it must conform to this shape:
+## Structured Result Contract
 
 ```ts
+type EvidenceMoment = {
+  startMs: number;
+  endMs: number;
+  repNumber: number | null;
+  phase: string | null;
+  visualEvidence: string;
+  mediaPipeEvidence: string | null;
+  observableLandmarks: string[];
+  confidence: number;
+};
+
+type CoachingFinding = {
+  id: string;
+  title: string;
+  detail: string;
+  whyItMatters: string;
+  correction: string | null;
+  cue: string | null;
+  severity: "note" | "important" | "high";
+  evidence: EvidenceMoment[];
+};
+
 type AnalysisResult = {
   status: "complete" | "partial" | "unable";
+  recognition: {
+    label: string | null;
+    variation: string | null;
+    equipment: string[];
+    confidence: number;
+    alternatives: string[];
+    catalogExerciseId: number | null;
+  };
+  videoCheck: {
+    outcome: "usable" | "partial" | "unable";
+    usableObservations: string[];
+    limitations: string[];
+    retryReason: string | null;
+    retryInstruction: string | null;
+  };
+  overallAssessment: string | null;
   score: number | null;
   scoreRationale: Array<{
     criterion: string;
@@ -259,149 +321,123 @@ type AnalysisResult = {
     impact: number;
     confidence: number;
   }>;
-  issues: Array<{
-    title: string;
-    whatWentWrong: string;
-    whatToImprove: string;
-    startMs: number;
-    endMs: number;
-    repNumber: number | null;
-    visualEvidence: string;
-    poseEvidence: string | null;
-    severity: "low" | "medium" | "high";
-    confidence: number;
-    observableLandmarks: string[];
-  }>;
-  noMajorIssueSummary: string | null;
-  nextRefinement: string | null;
-  retryInstruction: string | null;
+  didWell: CoachingFinding[];
+  priorityCorrections: CoachingFinding[];
+  coachingCues: CoachingFinding[];
+  viewNote: string | null;
+  comparison: {
+    previousSessionId: string;
+    summary: string;
+    priorityIssueImproved: boolean | null;
+  } | null;
 };
 ```
 
-Only `score`, `issues[].whatWentWrong`, `issues[].whatToImprove`, `noMajorIssueSummary`, `nextRefinement`, and `retryInstruction` are user-facing. The remaining fields exist to audit and validate the AI.
+Arrays have no application-level maximum. Request and database size limits still protect the service from malformed output. Every finding requires at least one evidence moment and confidence of at least `0.75`.
 
-### AI Selection Rules
+## Recognition and Scoring Rules
 
-- Return at most three issues and prefer one excellent observation over three weak ones.
-- Display an issue only when confidence is at least `0.75` and the required landmarks or equipment are visible.
-- Mention the exact repetition or movement phase when supported.
-- Describe visible motion, not an inferred diagnosis or hidden internal condition.
-- Give one actionable improvement per issue in plain gym language.
-- Do not manufacture a problem to fill the screen.
-- Do not claim exact 3D angles, load distribution, pain source, muscle activation, or injury risk from a single 2D recording.
-
-## Scoring
-
-- The exercise profile supplies relevant criteria, but the AI decides which criteria were actually observable in the set.
-- The internal score rationale must contain at least two supported criteria before a score can be shown.
-- Each criterion has an impact from 0–100 and confidence from 0–1. Low-confidence criteria are excluded.
-- The final score is a normalized weighted score across observable criteria, with consistency across repetitions considered only when at least two repetitions are detected.
-- `partial` analysis can show a score only when at least 70% of the profile's required observation coverage is available. Otherwise `score` is null and the app requests another recording.
-- Scores compare technique visible under similar camera conditions; they are not medical or athletic-performance grades.
-
-## Tiny-Detail Strategy
-
-The system uses multiple evidence resolutions so useful details are not lost:
-
-- Original video gives Gemini global context, equipment, sequencing, body orientation, and the complete set.
-- Fifteen-FPS pose data catches brief joint and torso changes between Gemini's default video samples.
-- High-resolution evidence frames show hand, elbow, knee, foot, bar, and equipment relationships around important moments.
-- Phase-aligned frame groups let the model compare the same point across repetitions.
-- Visibility masks prevent false measurements when a joint is occluded.
-- Camera-angle rules suppress conclusions that cannot be supported from the recorded viewpoint.
-- The verifier requires the text observation, timestamp, and available visual/pose evidence to agree.
+- A confident open-ended label is allowed even when it does not exist in the curated catalog.
+- A corrected label is stored separately from the original detected label.
+- Exercise-specific scoring requires recognition confidence of at least `0.8`, at least two supported criteria, and enough view coverage for those criteria.
+- A partial analysis may show a score only when its observable criteria remain meaningful for that exercise and view.
+- If identity confidence is below the exercise-specific threshold, omit the score and use only safe visible observations.
+- Scores are technique summaries for the visible set, not medical, injury, strength, or athletic-potential grades.
+- Never claim exact 3D joint angles, joint loading, pain causes, muscle activation, or injury diagnosis from one 2D recording.
 
 ## Data Model
 
-### `exercises`
+### `exercises` and `exercise_profiles`
 
-- `id`, `slug`, `name`, `category`, `equipment`, `aliases`, `profile_version`, `is_active`.
-
-### `exercise_profiles`
-
-- `exercise_id`, `version`, `camera_requirements`, `landmark_requirements`, `movement_phases`, `observable_faults`, `scoring_criteria`, `prompt_context`.
+The curated 50-profile reference catalog remains available for rubric retrieval. It is no longer a user-facing selection requirement.
 
 ### `analysis_sessions`
 
-- `id`, `user_id`, `exercise_id`, `status`, `video_path`, `duration_ms`, `camera_angle`, `created_at`, `completed_at`, `failure_code`.
-
-### `analysis_jobs`
-
-- `id`, `session_id`, `stage`, `attempt`, `lease_until`, `worker_version`, `profile_version`, `model_name`, `error_detail`, `updated_at`.
+- `id`, `user_id`, `status`, `stage`, `video_path`, `duration_ms`, `camera_view`, `previous_session_id`, `failure_code`, timestamps.
+- `exercise_id` is nullable and represents a confident catalog match, never required input.
+- `detected_label`, `detected_variation`, `recognition_confidence`, `recognition_alternatives`, and `detected_equipment` store the original recognition.
+- `corrected_label` and `corrected_exercise_id` store optional user correction.
 
 ### `analysis_results`
 
-- `session_id`, `status`, `score`, `score_rationale`, `issues`, `no_major_issue_summary`, `next_refinement`, `retry_instruction`, `analysis_version`.
+- `session_id`, `status`, `video_check`, `overall_assessment`, `score`, `score_rationale`, `did_well`, `priority_corrections`, `coaching_cues`, `view_note`, `comparison`, `analysis_version`.
 
 ### `pose_artifacts`
 
-- `session_id`, `storage_path`, `sample_rate`, `visibility_summary`, `rep_boundaries`, `expires_at`.
+- `session_id`, `storage_path`, `sample_rate`, `visibility_summary`, `rep_boundaries`, `measurements`, `candidate_events`, `expires_at`.
 
 ## Security and Privacy
 
-- `.env.local` is ignored by Git. A committed `.env.example` contains names only.
-- `GEMINI_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are read only by trusted backend services.
-- The app receives the Supabase URL and anon key. RLS is mandatory before client access.
-- Videos live in a private bucket and are accessed with short-lived signed URLs.
-- Default retention is 30 days for raw video and 7 days for derived pose/frame artifacts; users can delete immediately.
-- Analysis logs contain identifiers and timings, not raw frames or model secrets.
-- The app requires explicit consent before uploading body video for analysis.
+- `.env.local` remains ignored by Git.
+- `GEMINI_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` are never prefixed with `EXPO_PUBLIC_` and never imported into client code.
+- Raw videos are private and accessed through short-lived signed URLs.
+- Default retention is 30 days for raw video and 7 days for derived artifacts, with immediate user deletion available.
+- Users explicitly consent before the first body-video upload.
+- Logs contain identifiers, model/version names, timings, and error codes, not API keys or raw body frames.
+- The credentials previously pasted into chat must be rotated before a production launch.
 
-## Error Handling
+## Error and Uncertainty Behavior
 
-- Camera denied: explain why recording is needed and link to system settings.
-- Upload interrupted: persist local video and resume or retry without losing the set.
-- Body not visible or lighting inadequate: stop before model analysis and return one setup correction.
-- Gemini file processing delayed: retain a real processing state and poll with backoff.
-- Invalid model JSON: retry once with schema feedback; then mark the job failed without exposing raw model text.
-- Pose and Gemini disagree: suppress the disputed issue or return partial analysis.
-- Worker crash: lease-based job processing permits safe retry without duplicate results.
-- User leaves the app: analysis continues, and the result is available from session history.
+- Camera permission denied: explain the need and provide a system-settings action.
+- No recording space: provide the safe placement sheet; never block recording for an imperfect setup.
+- Upload interrupted: retain the local URI and permit retry.
+- Gemini file processing delayed: show the real current stage and poll with bounded backoff.
+- MediaPipe cannot track a joint: mark it unobservable and prevent related measurements from supporting feedback.
+- Gemini and MediaPipe disagree: keep the video-grounded observation only if its visual evidence independently supports it; otherwise remove or downgrade it.
+- Invalid structured output: retry once with validation feedback, then fail without showing raw model text.
+- Model or worker failure: show a clear retry action while preserving the recording when possible.
 
-## Validation Strategy
+## Validation
 
-### Automated Tests
+### Automated
 
-- Unit tests for exercise profile validation, pose smoothing, repetition segmentation, phase boundaries, scoring normalization, result schema, confidence gates, and RLS policies.
-- Contract tests using a fake Gemini adapter to verify that the original video reference, evidence frames, pose summary, and exercise profile are all included.
-- Integration tests for signed upload, job lifecycle, retry behavior, private storage, and result persistence.
-- Mobile tests for navigation, permissions, recording state, background/foreground transitions, analysis polling, results rendering, and retry flows.
+- Result-schema tests for unbounded arrays, evidence requirements, optional scores, unable states, and recognition confidence.
+- Video-check and angle-tolerance tests.
+- MediaPipe unit tests for smoothing, repetition boundaries, angles, range, tempo, pauses, visibility, comparisons, and asymmetry gates.
+- Gemini contract tests proving the original video file, evidence frames, measurements, recognition context, and prior result are supplied.
+- API tests proving session creation has no exercise ID.
+- RLS tests proving users cannot read another user's sessions, results, or recordings.
+- Mobile tests for record-first navigation, phone-placement help, permissions, countdown, recording, upload retry, real analysis stages, results, correction, and repeat flow.
 
-### Video Evaluation Set
+### Evaluation Set
 
-- Maintain consented test clips across all 50 exercises, body types, clothing, lighting conditions, camera angles, equipment variants, and both correct and intentionally flawed repetitions.
-- Each clip is annotated by a qualified coach with visible issues, observable/non-observable criteria, repetition boundaries, and acceptable coaching language.
-- Track issue precision, unsupported-claim rate, retry correctness, rep-count accuracy, and coach usefulness ratings.
-- Launch gate: no exercise ships merely because the model returns JSON. Each profile must pass its small evaluation set and an expert spot check.
+- Use consented clips across curated and non-catalog exercises, multiple body types, clothing, equipment, lighting, environments, and camera views.
+- Coach annotations identify recognition, repetitions, visible strengths, visible corrections, non-observable criteria, and useful cues.
+- Track recognition precision, unsupported-claim rate, issue precision, repetition-count error, timestamp accuracy, score calibration, camera-view tolerance, and coach usefulness.
+- Do not launch on JSON validity alone. The open-ended system must pass expert review across both known and unfamiliar movements.
 
 ### Acceptance Tests
 
-1. Network inspection proves the backend uploads the original MP4 to Gemini.
-2. A brief fault occurring between one-second samples is detectable through pose data or selected evidence frames.
-3. Occluded elbows cannot produce an elbow-position critique.
-4. A well-executed set may return zero issues without fabricated criticism.
-5. The UI never exposes internal metric clutter, rationales, secrets, or unvalidated model output.
-6. The service-role key is absent from compiled mobile assets.
-7. RLS prevents one user from reading another user's sessions or videos.
+1. The app begins recording without exercise selection.
+2. Network and worker logs prove Gemini receives the original video.
+3. A non-catalog exercise can receive a confident label and evidence-backed analysis.
+4. An uncertain label produces useful generic observations without an exercise-specific score.
+5. A front recording can receive symmetry feedback while side-only claims are omitted.
+6. A side recording can receive depth or torso feedback while unsupported symmetry claims are omitted.
+7. One occluded joint does not cause the full video to be rejected.
+8. Feedback arrays can contain more than three items and all accepted items render.
+9. Every finding opens a matching video interval.
+10. A second set reports whether earlier priority corrections improved when comparable.
+11. The mobile bundle contains neither the Gemini key nor the Supabase service-role key.
 
-## Delivery Sequence
+## Superseded Logic to Remove
 
-1. Foundation: Expo app, visual system, navigation, Supabase schema, authentication, and security policies.
-2. Catalog: 50 exercise records and profiles, search, confirmation, and camera setup screens.
-3. Capture: live readiness, recording, private upload, and job status.
-4. Analysis core: video validation, 15-FPS pose pipeline, repetition/phase processing, and evidence frames.
-5. Gemini: original-video ingestion, structured prompt, AI selection rules, and result verifier.
-6. Results: simplified score/problem/improvement UI and unable/partial states.
-7. Progress: history and trend display.
-8. Quality: 50-exercise evaluation suite, security review, performance tuning, and store readiness.
+- Exercise search route and screen.
+- Category filters and search utilities used only by selection UI.
+- Exercise detail and variation confirmation routes/screens.
+- Home recent-exercise rows that start selection.
+- Required `exerciseId` in session-creation API and database constraints.
+- Exercise-specific camera setup gates that prevent recording.
+- Result limit of three issues and the old `whatWentWrong` / `whatToImprove`-only shape.
+- The rule that complete analyses always require a score.
 
 ## Confirmed Decisions
 
-- Launch catalog contains all 50 exercises.
-- Gemini receives the actual original video.
-- Pose analysis supplements rather than replaces native video understanding.
-- Results show only score, what went wrong, and what to improve.
-- The AI decides which evidence-backed issues to display.
-- The supplied black-and-gold images are the visual target.
-- Implementation will stay in this single agent/session workflow; no subagents are used.
-
+- Recognition is fully open-ended.
+- The 50 profiles are reference knowledge, not a whitelist.
+- Gemini uses the stable `gemini-3.5-flash` model and watches the original video.
+- MediaPipe provides measurements and never replaces Gemini's semantic video analysis.
+- Feedback count is determined by evidence and coaching value, with no fixed item maximum.
+- Phone setup is forgiving and angle-tolerant.
+- The supplied black-and-gold reference images remain the visual target.
+- Implementation remains a single-agent workflow with no subagents.
