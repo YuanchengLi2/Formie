@@ -28,6 +28,8 @@ export default function RootLayout() {
           <Stack.Screen name="recording-tips" options={{ headerShown: true, title: "Recording Tips", headerBackButtonDisplayMode: "minimal" }} />
           <Stack.Screen name="camera" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="analysis/[session-id]" options={{ headerShown: false, gestureEnabled: false }} />
+          <Stack.Screen name="results/[session-id]" options={{ headerShown: false }} />
+          <Stack.Screen name="results/[session-id]/finding/[finding-id]" options={{ headerShown: true, title: "Coaching Detail", headerBackButtonDisplayMode: "minimal" }} />
           <Stack.Screen
             name="no-phone-space"
             options={{

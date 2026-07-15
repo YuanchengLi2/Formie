@@ -1,4 +1,4 @@
-import { AnalysisApiError, createAnalysisSession } from "./api";
+import { AnalysisApiError, correctAnalysisLabel, createAnalysisSession } from "./api";
 
 describe("analysis API", () => {
   it("creates a session without requiring exercise selection", async () => {
@@ -67,6 +67,25 @@ describe("analysis API", () => {
 
     await expect(createAnalysisSession({ accessToken: "expired", baseUrl: "https://example.supabase.co/functions/v1", fetcher })).rejects.toEqual(
       new AnalysisApiError("Sign in again", 401, "UNAUTHORIZED"),
+    );
+  });
+
+  it("sends an optional user correction without replacing the detected label", async () => {
+    const fetcher = jest.fn(async () =>
+      new Response(JSON.stringify({ corrected: true }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+
+    await correctAnalysisLabel({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      sessionId: "session-123",
+      label: "FreeMotion high-to-low row",
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://example.supabase.co/functions/v1/correct-analysis-label",
+      expect.objectContaining({ body: JSON.stringify({ sessionId: "session-123", label: "FreeMotion high-to-low row" }) }),
     );
   });
 });
