@@ -1,777 +1,657 @@
-# AI Form Coach Implementation Plan
+# FORM Record-First AI Coach Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task in one agent. Steps use checkbox (`- [ ]`) syntax for tracking. The repository instruction forbids subagents.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Repository instructions prohibit subagents, so execution is inline.
 
-**Goal:** Build the FORM Expo app and analysis services so users can record any of 50 exercises, have Gemini analyze the actual video with dense pose evidence, and receive a score plus concise, AI-selected corrections.
+**Goal:** Replace the exercise-selection prototype with a working record-any-exercise flow that uploads the original video, derives MediaPipe evidence, uses Gemini 3.5 Flash for open-ended recognition and coaching, and renders unlimited evidence-backed feedback.
 
-**Architecture:** An Expo Router mobile client records and privately uploads video to Supabase. Supabase owns identity, storage, job state, and validated results; a Python worker performs dense pose/evidence extraction and invokes Gemini with the original MP4, exercise context, and evidence frames. The client displays only validated score, problem, and improvement content.
+**Architecture:** The Expo app records and privately uploads video without an exercise ID, then polls real Supabase job stages. A Python Cloud Run worker validates video, extracts 15-FPS MediaPipe evidence, uploads the original MP4 to Gemini, receives structured recognition/coaching output, verifies each finding, and persists a compact result. The curated 50 exercises remain optional rubric context rather than a recognition boundary.
 
-**Tech Stack:** Expo SDK 55+, React Native, TypeScript, Expo Router, Expo Camera, Expo Video, TanStack Query, Supabase, Deno Edge Functions, Python 3.12, FastAPI, FFmpeg, OpenCV, MediaPipe, Google Gemini, Vitest, React Native Testing Library, Pytest.
+**Tech Stack:** Expo SDK 57, React Native 0.86, Expo Router Native Tabs, expo-camera, expo-video, Reanimated 4, Zustand, TanStack Query, Zod 4, Supabase Auth/Postgres/Storage/Edge Functions, Python 3.12, FFmpeg, MediaPipe, Google Gen AI SDK, pytest.
 
 ## Global Constraints
 
-- Support iOS and Android from one Expo codebase.
-- Include the 50 exercises enumerated in the approved design.
-- The original video must be uploaded to Gemini; pose coordinates alone are insufficient.
-- Extract pose at 15 FPS and preserve full-resolution evidence frames around phase transitions.
-- Results expose only score, what went wrong, what to improve, and retry/record-another actions.
-- AI observations are open-ended; exercise profile faults are context examples, never an answer whitelist.
-- Display no issue below `0.75` confidence or when required visual evidence is unavailable.
-- Keep `GEMINI_API_KEY` and `SUPABASE_SERVICE_ROLE_KEY` server-only.
-- Follow the supplied matte-black, charcoal, white, and warm-gold visual references.
-- Use no subagents.
+- Use the exact Gemini model ID `gemini-3.5-flash` with `thinkingLevel: "medium"` and default sampling parameters.
+- Gemini receives the original video and owns recognition, environment/equipment understanding, movement interpretation, coaching knowledge, feedback writing, and uncertainty explanations.
+- MediaPipe owns joint tracking, repetitions, angles, range, tempo, pauses, rep comparison, visibility, and possible asymmetry measurements.
+- Session creation never accepts or requires an exercise selection.
+- Feedback arrays have no application-level maximum; every accepted finding requires timestamped visual evidence and confidence of at least `0.75`.
+- Accept front, side, diagonal, low, and imperfect views. Reject only when the movement cannot genuinely be analyzed.
+- Gemini and service-role keys remain server-only. Never expose either with `EXPO_PUBLIC_`.
+- Preserve the premium matte-black, charcoal, white, and warm-gold visual system.
+- Use test-first red-green-refactor for every behavior change.
+- Do not use subagents.
 
 ---
 
-## File Map
-
-### Mobile
-
-- `src/app/`: routes only.
-- `src/screens/`: Home, exercise, capture, analysis, results, progress, and profile screen bodies.
-- `src/components/`: reusable premium UI primitives.
-- `src/features/exercises/`: catalog, profile types, search, and selection.
-- `src/features/analysis/`: result types, validation, upload/polling API, and hooks.
-- `src/features/capture/`: camera permissions and recording state.
-- `src/lib/`: Supabase client and query client.
-- `src/theme/`: immutable FORM tokens.
-
-### Supabase
-
-- `supabase/migrations/`: schema, indexes, storage policies, and RLS.
-- `supabase/functions/create-analysis/`: creates an owned session and signed upload target.
-- `supabase/functions/complete-upload/`: verifies the uploaded object and queues analysis.
-- `supabase/functions/analysis-status/`: returns an owned validated result.
-- `supabase/functions/_shared/`: authentication, responses, and job helpers.
-
-### Worker
-
-- `worker/app/`: FastAPI entrypoint, config, job lease, storage, media, pose, evidence, Gemini, validation, and orchestration modules.
-- `worker/tests/`: unit and integration tests with synthetic landmark fixtures and a fake Gemini adapter.
-
----
-
-### Task 1: Scaffold the Expo App and Test Harness
+### Task 1: Replace the selected-exercise analysis contract
 
 **Files:**
-- Create: `package.json`
-- Create: `app.json`
-- Create: `babel.config.js`
-- Create: `tsconfig.json`
-- Create: `vitest.config.ts`
-- Create: `src/app/_layout.tsx`
-- Create: `src/app/index.tsx`
-- Create: `src/test/setup.ts`
-- Create: `.env.example`
+- Modify: `src/features/analysis/result-schema.test.ts`
+- Modify: `src/features/analysis/result-schema.ts`
+- Modify: `src/features/analysis/types.ts`
+- Modify: `src/features/analysis/presentation.test.ts`
+- Modify: `src/features/analysis/presentation.ts`
+- Modify: `src/features/analysis/api.test.ts`
+- Modify: `src/features/analysis/api.ts`
 
 **Interfaces:**
-- Produces: Expo Router entrypoint, `@/* -> src/*` alias, Vitest environment, and named environment variables.
+- Produces: `AnalysisResult`, `CoachingFinding`, `EvidenceMoment`, `AnalysisStatusResponse`, and `createAnalysisSession({ accessToken })`.
+- Consumed by: result screens, progress screens, Edge Function responses, worker output verifier.
 
-- [ ] **Step 1: Create the Expo project manifest and install dependencies**
+- [ ] **Step 1: Write failing schema tests**
 
-Use Expo SDK 55-compatible package versions selected by `npx expo install`; include `expo-router`, `expo-camera`, `expo-video`, `expo-image`, `expo-haptics`, `expo-secure-store`, `react-native-reanimated`, `react-native-safe-area-context`, `@tanstack/react-query`, `@supabase/supabase-js`, `zod`, `zustand`, `vitest`, `@testing-library/react-native`, and `react-test-renderer`.
-
-Run:
-
-```powershell
-npx create-expo-app@latest . --template blank-typescript
-npx expo install expo-router expo-camera expo-video expo-image expo-haptics expo-secure-store react-native-reanimated react-native-safe-area-context
-npm install @tanstack/react-query @supabase/supabase-js zod zustand
-npm install --save-dev vitest @testing-library/react-native react-test-renderer
-```
-
-Expected: dependencies install with exit code 0 and `npx expo install --check` reports no invalid versions.
-
-- [ ] **Step 2: Configure routes, aliases, tests, and environment names**
-
-`tsconfig.json` must include:
-
-```json
-{
-  "extends": "expo/tsconfig.base",
-  "compilerOptions": {
-    "strict": true,
-    "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] },
-    "types": ["vitest/globals"]
-  },
-  "include": ["src/**/*.ts", "src/**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
-}
-```
-
-`.env.example` must contain variable names without values:
-
-```dotenv
-EXPO_PUBLIC_SUPABASE_URL=
-EXPO_PUBLIC_SUPABASE_ANON_KEY=
-GEMINI_API_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-```
-
-- [ ] **Step 3: Verify the generated baseline**
-
-Run:
-
-```powershell
-npx tsc --noEmit
-npx expo export --platform web
-npm test -- --run
-```
-
-Expected: all commands exit 0; Vitest reports zero failed tests.
-
-- [ ] **Step 4: Commit the scaffold**
-
-```powershell
-git add package.json package-lock.json app.json babel.config.js tsconfig.json vitest.config.ts src .env.example
-git commit -m "chore: scaffold FORM mobile app"
-```
-
-### Task 2: Build the Exercise Catalog and Open-Ended Profiles
-
-**Files:**
-- Create: `src/features/exercises/types.ts`
-- Create: `src/features/exercises/catalog.ts`
-- Create: `src/features/exercises/catalog.test.ts`
-- Create: `src/features/exercises/search.ts`
-- Create: `src/features/exercises/search.test.ts`
-- Create: `src/features/exercises/profile-schema.ts`
-- Create: `src/features/exercises/profile-schema.test.ts`
-
-**Interfaces:**
-- Produces: `Exercise`, `ExerciseProfile`, `EXERCISES`, `findExercise(slug)`, `searchExercises(query, category)`, and `exerciseProfileSchema`.
-- Profile contract: `commonFaults` is advisory context and has no exhaustive/whitelist flag.
-
-- [ ] **Step 1: Write failing catalog tests**
+Replace the old issue-cap test with tests that parse four or more findings, reject findings with no evidence, permit a complete result with a null score, require an unable result to contain one retry reason/instruction, and reject exercise-specific scores below `0.8` recognition confidence.
 
 ```ts
-import { EXERCISES, findExercise } from "./catalog";
+it("accepts every evidence-backed finding without a fixed count cap", () => {
+  const result = validResult();
+  result.priorityCorrections = Array.from({ length: 5 }, (_, index) => validFinding(`correction-${index}`));
+  expect(analysisResultSchema.safeParse(result).success).toBe(true);
+});
 
-describe("exercise catalog", () => {
-  it("contains exactly 50 unique launch exercises", () => {
-    expect(EXERCISES).toHaveLength(50);
-    expect(new Set(EXERCISES.map((exercise) => exercise.slug)).size).toBe(50);
-  });
-
-  it("keeps common faults as non-exclusive AI context", () => {
-    const curl = findExercise("standing-dumbbell-curl");
-    expect(curl?.profile.analysisInstruction).toContain("not an exhaustive list");
-  });
+it("omits exercise-specific scores when recognition is uncertain", () => {
+  const result = validResult();
+  result.recognition.confidence = 0.62;
+  expect(analysisResultSchema.safeParse(result).success).toBe(false);
 });
 ```
 
-- [ ] **Step 2: Run the catalog tests and confirm RED**
+- [ ] **Step 2: Run the schema tests and verify RED**
 
-Run: `npm test -- --run src/features/exercises/catalog.test.ts`
+Run: `npm test -- --runInBand src/features/analysis/result-schema.test.ts`
 
-Expected: FAIL because `./catalog` does not exist.
+Expected: FAIL because the old result shape has `issues` and a three-item maximum.
 
-- [ ] **Step 3: Implement types and all 50 exercise records**
+- [ ] **Step 3: Implement the new Zod contract**
 
-Use this public shape:
+Define `evidenceMomentSchema`, `coachingFindingSchema`, `recognitionSchema`, `videoCheckSchema`, `comparisonSchema`, and `analysisResultSchema`. Use `.array()` with no `.max()`. Add refinements for `endMs > startMs`, `confidence >= 0.75`, unable-result retry requirements, and score support.
 
-```ts
-export type ExerciseProfile = {
-  camera: {
-    preferredView: "front" | "side" | "rear" | "front-45" | "rear-45";
-    alternatives: string[];
-    requiredLandmarks: string[];
-    distanceMeters: [number, number];
-  };
-  phases: string[];
-  attentionAreas: string[];
-  commonFaults: Array<{ observation: string; whyItMatters: string; cue: string }>;
-  analysisInstruction: string;
-};
+- [ ] **Step 4: Write and run failing API tests**
 
-export type Exercise = {
-  id: number;
-  slug: string;
-  name: string;
-  category: "Chest" | "Back" | "Legs" | "Shoulders" | "Arms" | "Core";
-  equipment: string[];
-  aliases: string[];
-  profile: ExerciseProfile;
-};
-```
-
-Every profile's `analysisInstruction` must say: `Use these checks as attention guidance, not an exhaustive list. Analyze the complete video and report any visible, evidence-backed technique issue.`
-
-- [ ] **Step 4: Run catalog tests and confirm GREEN**
-
-Run: `npm test -- --run src/features/exercises/catalog.test.ts`
-
-Expected: 2 tests pass.
-
-- [ ] **Step 5: Write failing search tests**
+Change session creation to call:
 
 ```ts
-import { searchExercises } from "./search";
-
-it("searches names and aliases without case sensitivity", () => {
-  expect(searchExercises("RDL").map((item) => item.slug)).toContain("romanian-deadlift");
-});
-
-it("filters by category", () => {
-  expect(searchExercises("", "Arms").every((item) => item.category === "Arms")).toBe(true);
-});
+await createAnalysisSession({ accessToken: "user-jwt", baseUrl, fetcher });
+expect(fetcher).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ body: "{}" }));
 ```
 
-- [ ] **Step 6: Run search tests, implement normalized search, and rerun**
+Run: `npm test -- --runInBand src/features/analysis/api.test.ts`
 
-Run RED: `npm test -- --run src/features/exercises/search.test.ts`
+Expected: FAIL because `exerciseId` is still required.
 
-Implement:
+- [ ] **Step 5: Update API and presentation helpers**
 
-```ts
-import { EXERCISES } from "./catalog";
-import type { Exercise } from "./types";
+Remove `exerciseId` from `createAnalysisSession`. Replace issue-only presentation helpers with helpers that rank accepted findings, format recognition uncertainty, and return every accepted item.
 
-export function searchExercises(query: string, category?: Exercise["category"]): Exercise[] {
-  const normalized = query.trim().toLocaleLowerCase();
-  return EXERCISES.filter((exercise) => {
-    const inCategory = !category || exercise.category === category;
-    const terms = [exercise.name, exercise.slug, ...exercise.aliases].join(" ").toLocaleLowerCase();
-    return inCategory && (!normalized || terms.includes(normalized));
-  });
-}
-```
+- [ ] **Step 6: Verify GREEN**
 
-Run GREEN: `npm test -- --run src/features/exercises/search.test.ts`
+Run: `npm test -- --runInBand src/features/analysis/result-schema.test.ts src/features/analysis/api.test.ts src/features/analysis/presentation.test.ts`
 
-- [ ] **Step 7: Commit catalog and search**
+Expected: all suites pass.
 
-```powershell
-git add src/features/exercises
-git commit -m "feat: add 50 exercise analysis profiles"
-```
-
-### Task 3: Define and Validate AI Results
-
-**Files:**
-- Create: `src/features/analysis/types.ts`
-- Create: `src/features/analysis/result-schema.ts`
-- Create: `src/features/analysis/result-schema.test.ts`
-- Create: `src/features/analysis/presentation.ts`
-- Create: `src/features/analysis/presentation.test.ts`
-
-**Interfaces:**
-- Produces: `analysisResultSchema`, `AnalysisResult`, `getVisibleIssues(result)`, and `getResultPresentation(result)`.
-
-- [ ] **Step 1: Write failing confidence/evidence tests**
-
-```ts
-import { analysisResultSchema } from "./result-schema";
-
-it("rejects an issue without timestamped visual evidence", () => {
-  const parsed = analysisResultSchema.safeParse({
-    status: "complete",
-    score: 82,
-    scoreRationale: [],
-    issues: [{
-      title: "Elbow drift",
-      whatWentWrong: "Your elbow moved forward during rep 3.",
-      whatToImprove: "Keep the elbow stacked under the shoulder.",
-      startMs: 0,
-      endMs: 0,
-      repNumber: 3,
-      visualEvidence: "",
-      poseEvidence: null,
-      severity: "medium",
-      confidence: 0.84,
-      observableLandmarks: ["left_elbow"]
-    }],
-    noMajorIssueSummary: null,
-    nextRefinement: null,
-    retryInstruction: null
-  });
-  expect(parsed.success).toBe(false);
-});
-```
-
-- [ ] **Step 2: Run schema test and confirm RED**
-
-Run: `npm test -- --run src/features/analysis/result-schema.test.ts`
-
-Expected: FAIL because the schema is absent.
-
-- [ ] **Step 3: Implement the strict Zod schema**
-
-Implement the approved `AnalysisResult` fields, require `endMs > startMs`, bound score to `0..100`, bound confidence to `0..1`, cap issues at three, and refine `complete` results so they contain a score and either supported issues or `noMajorIssueSummary`.
-
-- [ ] **Step 4: Run schema tests and confirm GREEN**
-
-Run: `npm test -- --run src/features/analysis/result-schema.test.ts`
-
-Expected: all schema tests pass.
-
-- [ ] **Step 5: Write failing presentation tests**
-
-```ts
-import { getVisibleIssues } from "./presentation";
-
-it("shows only evidence-backed issues at or above 0.75 confidence", () => {
-  const issues = getVisibleIssues({ issues: [
-    { id: "high", confidence: 0.91, visualEvidence: "Visible at 00:08", startMs: 8000, endMs: 8500 },
-    { id: "low", confidence: 0.74, visualEvidence: "Visible at 00:09", startMs: 9000, endMs: 9500 }
-  ] } as never);
-  expect(issues.map((issue) => issue.id)).toEqual(["high"]);
-});
-```
-
-- [ ] **Step 6: Implement presentation gating and rerun**
-
-`getVisibleIssues` must filter `confidence >= 0.75`, non-empty `visualEvidence`, and `endMs > startMs`, then sort high severity before medium before low.
-
-Run: `npm test -- --run src/features/analysis/presentation.test.ts`
-
-Expected: all presentation tests pass.
-
-- [ ] **Step 7: Commit result contracts**
+- [ ] **Step 7: Commit**
 
 ```powershell
 git add src/features/analysis
-git commit -m "feat: validate evidence-backed AI results"
+git commit -m "feat: support open-ended analysis results"
 ```
 
-### Task 4: Build the FORM Visual System and Navigation Shell
+---
+
+### Task 2: Reshape Supabase for automatic recognition
 
 **Files:**
-- Create: `src/theme/colors.ts`
-- Create: `src/theme/spacing.ts`
-- Create: `src/theme/type.ts`
-- Create: `src/components/form-button.tsx`
-- Create: `src/components/form-card.tsx`
-- Create: `src/components/form-wordmark.tsx`
-- Create: `src/components/score-ring.tsx`
-- Create: `src/components/form-button.test.tsx`
+- Modify: `supabase/migrations/202607150001_form_schema.sql`
+- Modify: `supabase/tests/rls.sql`
+- Create: `supabase/seed.sql`
+
+**Interfaces:**
+- Produces: nullable catalog match, detected/corrected labels, JSON feedback arrays, previous-session link, and owner-scoped persistence.
+- Consumed by: Edge Functions and Python worker.
+
+- [ ] **Step 1: Write failing pgTAP assertions**
+
+Assert that `analysis_sessions.exercise_id` is nullable, recognition columns exist, `previous_session_id` exists, and `analysis_results` has `did_well`, `priority_corrections`, `coaching_cues`, `video_check`, and `comparison` JSONB columns.
+
+```sql
+select col_is_null('public', 'analysis_sessions', 'exercise_id', 'exercise match is optional');
+select has_column('public', 'analysis_sessions', 'detected_label');
+select has_column('public', 'analysis_results', 'priority_corrections');
+```
+
+- [ ] **Step 2: Start local Supabase and verify RED**
+
+Run: `npx supabase db start`
+
+Run: `npx supabase test db`
+
+Expected: FAIL on missing recognition/result columns.
+
+- [ ] **Step 3: Replace selected-exercise constraints**
+
+Make `exercise_id` nullable; add recognition, correction, view, and comparison fields. Replace `issues` with unbounded JSON arrays guarded only by `jsonb_typeof(...)= 'array'`. Keep all owner-scoped RLS and private storage policies.
+
+- [ ] **Step 4: Move the 50-row catalog seed into `supabase/seed.sql`**
+
+The seed remains idempotent and keeps every curated profile available without making it required by `analysis_sessions`.
+
+- [ ] **Step 5: Verify GREEN**
+
+Run: `npx supabase db reset --no-seed=false`
+
+Run: `npx supabase test db`
+
+Expected: all pgTAP assertions pass.
+
+- [ ] **Step 6: Commit**
+
+```powershell
+git add supabase
+git commit -m "feat: persist automatic exercise recognition"
+```
+
+---
+
+### Task 3: Replace discovery routes with the record-first flow
+
+**Files:**
+- Delete: `src/app/exercises/_layout.tsx`
+- Delete: `src/app/exercises/index.tsx`
+- Delete: `src/app/exercises/[slug].tsx`
+- Delete: `src/screens/exercise-search/index.tsx`
+- Delete: `src/screens/exercise-search/exercise-search.test.tsx`
+- Delete: `src/screens/exercise-detail/index.tsx`
+- Delete: `src/screens/home/exercise-row.tsx`
+- Delete: `src/features/exercises/search.ts`
+- Delete: `src/features/exercises/search.test.ts`
 - Modify: `src/app/_layout.tsx`
-- Create: `src/app/(tabs)/_layout.tsx`
-- Create: `src/app/(tabs)/(home)/_layout.tsx`
-- Create: `src/app/(tabs)/(home)/index.tsx`
-- Create: `src/app/(tabs)/(progress)/_layout.tsx`
-- Create: `src/app/(tabs)/(progress)/index.tsx`
-- Create: `src/app/(tabs)/(profile)/_layout.tsx`
-- Create: `src/app/(tabs)/(profile)/index.tsx`
+- Modify: `src/app/(tabs)/(home)/index.tsx`
+- Modify: `src/screens/home/index.tsx`
+- Create: `src/app/recording-tips.tsx`
+- Create: `src/screens/recording-tips/index.tsx`
+- Create: `src/screens/recording-tips/recording-tips.test.tsx`
+- Create: `src/components/phone-placement-illustration.tsx`
 
 **Interfaces:**
-- Produces: stable FORM tokens and three native bottom tabs.
+- Produces: `/recording-tips` route and `RecordingTipsScreen` callbacks `onContinue` and `onOpenSpaceHelp`.
+- Consumed by: camera route in Task 4.
 
-- [ ] **Step 1: Write a failing button behavior test**
+- [ ] **Step 1: Write failing home and tips tests**
 
-```tsx
-import { fireEvent, render } from "@testing-library/react-native";
-import { FormButton } from "./form-button";
+Assert Home renders `Record an Exercise` and not `Search exercises`. Assert tips render the required stability, 0.5x, angle reassurance, and `No good place for your phone?` copy.
 
-it("invokes the primary action once", () => {
-  const onPress = vi.fn();
-  const view = render(<FormButton label="Record Set" onPress={onPress} />);
-  fireEvent.press(view.getByText("Record Set"));
-  expect(onPress).toHaveBeenCalledTimes(1);
-});
-```
+- [ ] **Step 2: Verify RED**
 
-- [ ] **Step 2: Run the component test and confirm RED**
+Run: `npm test -- --runInBand src/screens/home/home.test.tsx src/screens/recording-tips/recording-tips.test.tsx`
 
-Run: `npm test -- --run src/components/form-button.test.tsx`
+Expected: FAIL because the record-first screens do not exist.
 
-Expected: FAIL because the component does not exist.
+- [ ] **Step 3: Implement premium Home and Recording Tips screens**
 
-- [ ] **Step 3: Implement tokens and primitives**
+Use the existing theme, `FormWordmark`, `FormButton`, Reanimated entrance transitions, a camera-inspired hero card, the three placement examples, and the explicit reassurance. Keep Home recent content data-driven with an empty state until history exists.
 
-Use `#090909` background, `#141414` surfaces, `#262626` borders, `#FFFFFF` primary text, `#A6A6A6` secondary text, and `#D8B45A` gold. Buttons use 56px height, 16px continuous corners, black text on gold, and reduced opacity while disabled.
+- [ ] **Step 4: Add the native space-help sheet**
 
-- [ ] **Step 4: Implement NativeTabs and stacks**
+Create `src/app/no-phone-space.tsx` as an Expo Router form sheet and `src/screens/recording-tips/no-phone-space.tsx` with exactly the five safe options and the “Good enough to see is good enough to try” close.
 
-Use `NativeTabs` from `expo-router/unstable-native-tabs` with Home (`house`), Progress (`chart.bar`), and Profile (`person`) triggers. Nest a `Stack` inside each tab group. Camera routes are outside the tab group with hidden headers.
+- [ ] **Step 5: Remove all selection-only routes and components**
 
-- [ ] **Step 5: Run UI test, typecheck, and export**
+Delete search/detail route adapters and selection-only search logic. Retain `catalog.ts` and profile schema as backend reference knowledge.
 
-```powershell
-npm test -- --run src/components/form-button.test.tsx
-npx tsc --noEmit
-npx expo export --platform web
-```
+- [ ] **Step 6: Verify GREEN and route generation**
 
-Expected: all commands exit 0.
+Run: `npm test -- --runInBand src/screens/home/home.test.tsx src/screens/recording-tips/recording-tips.test.tsx`
 
-- [ ] **Step 6: Commit the shell**
+Run: `npm run typecheck`
+
+Expected: tests and TypeScript pass with no references to `/exercises`.
+
+- [ ] **Step 7: Commit**
 
 ```powershell
-git add src/theme src/components src/app
-git commit -m "feat: build premium FORM app shell"
+git add -A src/app src/screens src/components src/features/exercises
+git commit -m "feat: replace exercise discovery with record-first flow"
 ```
 
-### Task 5: Implement Exercise Discovery and Selection
+---
+
+### Task 4: Implement countdown video capture
 
 **Files:**
-- Create: `src/screens/home/index.tsx`
-- Create: `src/screens/home/exercise-row.tsx`
-- Create: `src/screens/exercise-search/index.tsx`
-- Create: `src/screens/exercise-detail/index.tsx`
-- Create: `src/screens/exercise-search/exercise-search.test.tsx`
-- Create: `src/app/exercises/index.tsx`
-- Create: `src/app/exercises/[slug].tsx`
+- Create: `src/features/capture/types.ts`
+- Create: `src/features/capture/capture-store.ts`
+- Create: `src/features/capture/capture-store.test.ts`
+- Create: `src/features/capture/countdown.ts`
+- Create: `src/features/capture/countdown.test.ts`
+- Create: `src/app/camera.tsx`
+- Create: `src/screens/camera/index.tsx`
+- Create: `src/screens/camera/camera-controls.tsx`
+- Modify: `app.json`
 
 **Interfaces:**
-- Consumes: `EXERCISES`, `searchExercises`, `findExercise`.
-- Produces: navigation from Home to search to `/exercises/[slug]` to `/capture/setup?exercise=<slug>`.
+- Produces: `useCaptureStore`, `RecordedSet`, and `/camera` route that navigates to `/analysis/[sessionId]` after upload.
+- Consumes: `createAnalysisSession`, `uploadAnalysisVideo`, `completeAnalysisUpload`.
 
-- [ ] **Step 1: Write failing discovery tests**
+- [ ] **Step 1: Write failing capture-state and countdown tests**
 
-Render the search screen, type `curl`, and assert that Standing Dumbbell Curl, Hammer Curl, Barbell Curl, Cable Curl, and Preacher Curl appear. Press a result and assert the route target contains its slug.
+Test `idle -> countingDown -> recording -> recorded -> uploading` transitions, a ten-to-zero sequence, retryable local URI preservation, and invalid transition rejection.
 
-- [ ] **Step 2: Run tests and confirm RED**
+- [ ] **Step 2: Verify RED**
 
-Run: `npm test -- --run src/screens/exercise-search/exercise-search.test.tsx`
+Run: `npm test -- --runInBand src/features/capture`
 
-Expected: FAIL because screen modules are absent.
+Expected: FAIL because capture modules do not exist.
 
-- [ ] **Step 3: Implement Home, search, and confirmation screens**
+- [ ] **Step 3: Implement the finite capture store and countdown utility**
 
-Match the reference hierarchy: FORM wordmark, `Ready to improve today?`, search surface, category chips, recent cards, monochrome glyphs, and a gold confirmation action. Use `FlatList`/`ScrollView` with automatic content insets and dark surfaces.
+Keep state serializable except the camera ref. Store the local URI, duration, upload state, and current session ID. Reset only after a successful queue or explicit discard.
 
-- [ ] **Step 4: Run tests and confirm GREEN**
+- [ ] **Step 4: Implement full-screen `CameraView` recording**
 
-Run: `npm test -- --run src/screens/exercise-search/exercise-search.test.tsx`
+Use rear camera by default, hide the header, request permissions eagerly, expose camera flip/flash, show 0.5x only if `minAvailableVideoZoomFactor <= 0.5`, call `recordAsync`, and stop with `stopRecording`. Use `expo-haptics` plus a short platform notification sound at actual start.
 
-Expected: discovery tests pass.
+- [ ] **Step 5: Wire upload retry without losing the local file**
 
-- [ ] **Step 5: Commit discovery flow**
+Create the server session after recording, upload the blob to the signed URL, complete the upload, and navigate only when the backend returns `{ queued: true }`. Keep a retry action on any network failure.
+
+- [ ] **Step 6: Verify GREEN**
+
+Run: `npm test -- --runInBand src/features/capture`
+
+Run: `npm run typecheck`
+
+Expected: capture tests and TypeScript pass.
+
+- [ ] **Step 7: Commit**
 
 ```powershell
-git add src/screens/home src/screens/exercise-search src/screens/exercise-detail src/app/exercises
-git commit -m "feat: add exercise discovery flow"
+git add app.json src/app/camera.tsx src/screens/camera src/features/capture
+git commit -m "feat: record exercise sets with countdown"
 ```
 
-### Task 6: Add Supabase Schema, Security, and Client Access
+---
+
+### Task 5: Add real analysis stages and result navigation
 
 **Files:**
-- Create: `supabase/config.toml`
-- Create: `supabase/migrations/202607150001_form_schema.sql`
-- Create: `supabase/tests/rls.sql`
-- Create: `src/lib/supabase.ts`
-- Create: `src/lib/query-client.ts`
-- Create: `src/features/analysis/api.ts`
-- Create: `src/features/analysis/api.test.ts`
-
-**Interfaces:**
-- Produces: `createAnalysisSession(exerciseId)`, `uploadAnalysisVideo(target, uri)`, `completeAnalysisUpload(sessionId)`, and `getAnalysisStatus(sessionId)`.
-
-- [ ] **Step 1: Write failing API contract tests with an injected fetch function**
-
-Assert that `createAnalysisSession` sends the user's bearer token, exercise ID, and JSON content type; non-2xx responses must throw `AnalysisApiError` with response status and code.
-
-- [ ] **Step 2: Run API tests and confirm RED**
-
-Run: `npm test -- --run src/features/analysis/api.test.ts`
-
-Expected: FAIL because the API module is absent.
-
-- [ ] **Step 3: Implement database tables and RLS**
-
-Create `exercises`, `exercise_profiles`, `analysis_sessions`, `analysis_jobs`, `analysis_results`, and `pose_artifacts`. Policies must use `auth.uid() = user_id` directly or through the owning session. Add a private `analysis-videos` bucket and owner-scoped object policies using the first path segment as user ID.
-
-- [ ] **Step 4: Implement typed client and resilient API wrapper**
-
-Use `@supabase/supabase-js` with `expo-secure-store` session storage. Use `fetch`, explicit status checks, parsed error bodies, and `AbortSignal`; do not use Axios.
-
-- [ ] **Step 5: Run API tests and SQL policy tests**
-
-```powershell
-npm test -- --run src/features/analysis/api.test.ts
-npx supabase db start
-npx supabase test db
-```
-
-Expected: API tests and database policy tests pass.
-
-- [ ] **Step 6: Commit database and client**
-
-```powershell
-git add supabase src/lib src/features/analysis/api.ts src/features/analysis/api.test.ts
-git commit -m "feat: secure analysis data with Supabase"
-```
-
-### Task 7: Build Camera Setup, Recording, and Upload
-
-**Files:**
-- Create: `src/features/capture/recording-machine.ts`
-- Create: `src/features/capture/recording-machine.test.ts`
-- Create: `src/features/capture/use-recording.ts`
-- Create: `src/screens/camera-setup/index.tsx`
-- Create: `src/screens/record-set/index.tsx`
-- Create: `src/screens/analysis-progress/index.tsx`
-- Create: `src/app/capture/setup.tsx`
-- Create: `src/app/capture/record.tsx`
+- Create: `src/features/analysis/stages.ts`
+- Create: `src/features/analysis/stages.test.ts`
+- Create: `src/features/analysis/use-analysis-status.ts`
 - Create: `src/app/analysis/[session-id].tsx`
+- Create: `src/screens/analysis-progress/index.tsx`
+- Create: `src/screens/analysis-progress/analysis-progress.test.tsx`
 
 **Interfaces:**
-- Produces: deterministic capture states `permission -> ready -> countdown -> recording -> stopped -> uploading -> queued | failed`.
+- Produces: stage labels and a polling hook that stops at complete/partial/unable/failed.
+- Consumes: `getAnalysisStatus` and TanStack Query.
 
-- [ ] **Step 1: Write failing state-machine tests**
+- [ ] **Step 1: Write failing stage tests**
 
-Test that recording cannot begin before permission and readiness, stop returns the recorded URI, upload failure retains the local URI, and retry resumes from `stopped` rather than discarding the set.
+Test exact persisted-stage mapping: `video_check`, `pose_tracking`, `rep_detection`, `recognition`, `technique_review`, `coaching`, with no percentage calculation.
 
-- [ ] **Step 2: Run state-machine tests and confirm RED**
+- [ ] **Step 2: Verify RED**
 
-Run: `npm test -- --run src/features/capture/recording-machine.test.ts`
+Run: `npm test -- --runInBand src/features/analysis/stages.test.ts src/screens/analysis-progress/analysis-progress.test.tsx`
 
-Expected: FAIL because the machine is absent.
+Expected: FAIL because stage modules and screen do not exist.
 
-- [ ] **Step 3: Implement the minimal state machine and hook**
+- [ ] **Step 3: Implement polling and real-stage rendering**
 
-Use a pure reducer for transitions and a hook for `CameraView` effects. Record `mp4` with a 60-second maximum, keep the URI until upload succeeds, and request camera permission before rendering setup.
+Use React Query with a two-second interval while processing, bounded retry, AbortSignal propagation, stage checkmarks only for preceding persisted stages, and navigation to results when a result is present.
 
-- [ ] **Step 4: Implement reference-faithful camera screens**
+- [ ] **Step 4: Verify GREEN**
 
-Setup shows preferred view, full-body framing, distance, and one gold action. Recording hides headers, uses a real ten-second countdown, shows timer and stop control, and transitions to analysis only after successful queueing.
+Run: `npm test -- --runInBand src/features/analysis/stages.test.ts src/screens/analysis-progress/analysis-progress.test.tsx`
 
-- [ ] **Step 5: Run tests, typecheck, and Expo Go smoke test**
+Expected: both suites pass.
 
-```powershell
-npm test -- --run src/features/capture/recording-machine.test.ts
-npx tsc --noEmit
-npx expo start
-```
-
-Expected: tests/typecheck pass and the app opens in Expo Go with camera permission flow available.
-
-- [ ] **Step 6: Commit capture flow**
+- [ ] **Step 5: Commit**
 
 ```powershell
-git add src/features/capture src/screens/camera-setup src/screens/record-set src/screens/analysis-progress src/app/capture src/app/analysis
-git commit -m "feat: record and upload exercise sets"
+git add src/features/analysis src/app/analysis src/screens/analysis-progress
+git commit -m "feat: show persisted video analysis stages"
 ```
 
-### Task 8: Create Supabase Analysis Functions and Direct Gemini Video Input
+---
+
+### Task 6: Build results, evidence detail, correction, and repeat UI
+
+**Files:**
+- Create: `src/features/analysis/result-store.ts`
+- Create: `src/app/results/[session-id].tsx`
+- Create: `src/app/results/[session-id]/finding/[finding-id].tsx`
+- Create: `src/screens/results/index.tsx`
+- Create: `src/screens/results/results.test.tsx`
+- Create: `src/screens/finding-detail/index.tsx`
+- Create: `src/screens/finding-detail/finding-detail.test.tsx`
+- Create: `src/components/feedback-section.tsx`
+- Create: `src/components/evidence-video.tsx`
+- Modify: `src/features/analysis/api.ts`
+- Modify: `src/features/analysis/api.test.ts`
+
+**Interfaces:**
+- Produces: results rendering, finding deep link, `correctAnalysisLabel`, and repeat route with `previousSessionId`.
+
+- [ ] **Step 1: Write failing results tests**
+
+Render a result with five positives, four corrections, and four cues. Assert all titles appear, a null score omits the score component, uncertainty language appears, and `Record Another Set` is present.
+
+- [ ] **Step 2: Verify RED**
+
+Run: `npm test -- --runInBand src/screens/results/results.test.tsx src/screens/finding-detail/finding-detail.test.tsx`
+
+Expected: FAIL because results screens do not exist.
+
+- [ ] **Step 3: Implement complete/partial/unable result states**
+
+Use detected label at top, optional score ring, overall assessment, unbounded sections, angle note, comparison summary, and retry/record-another actions. Each card links to its finding route.
+
+- [ ] **Step 4: Implement evidence playback**
+
+Use `expo-video` to seek to `evidence[0].startMs`, show the relevant repetition/phase, and render the short what/when/why/change/cue explanation.
+
+- [ ] **Step 5: Add optional label correction**
+
+Add a results menu action that opens a native prompt/sheet, calls `correct-analysis-label`, invalidates result/history queries, and preserves the original detected label server-side.
+
+- [ ] **Step 6: Implement repeat context**
+
+`Record Another Set` resets capture state and navigates to tips with `previousSessionId`; session creation includes only that optional previous ID.
+
+- [ ] **Step 7: Verify GREEN**
+
+Run: `npm test -- --runInBand src/screens/results src/screens/finding-detail src/features/analysis/api.test.ts`
+
+Run: `npm run typecheck`
+
+Expected: tests and TypeScript pass.
+
+- [ ] **Step 8: Commit**
+
+```powershell
+git add src/app/results src/screens/results src/screens/finding-detail src/components src/features/analysis
+git commit -m "feat: show unlimited evidence-backed coaching"
+```
+
+---
+
+### Task 7: Implement Supabase analysis lifecycle functions
 
 **Files:**
 - Create: `supabase/functions/_shared/auth.ts`
-- Create: `supabase/functions/_shared/http.ts`
-- Create: `supabase/functions/_shared/gemini.ts`
+- Create: `supabase/functions/_shared/cors.ts`
+- Create: `supabase/functions/_shared/responses.ts`
 - Create: `supabase/functions/create-analysis/index.ts`
+- Create: `supabase/functions/create-analysis/index.test.ts`
 - Create: `supabase/functions/complete-upload/index.ts`
 - Create: `supabase/functions/analysis-status/index.ts`
-- Create: `supabase/functions/tests/gemini.test.ts`
-- Create: `supabase/functions/tests/create-analysis.test.ts`
+- Create: `supabase/functions/correct-analysis-label/index.ts`
+- Create: `supabase/functions/delete-analysis/index.ts`
 
 **Interfaces:**
-- Produces: authenticated create/complete/status endpoints and `uploadVideoToGemini(bytes, mimeType) -> GeminiFileReference`.
+- Produces: authenticated create/upload-complete/status/correct/delete endpoints.
+- Consumed by: Expo API client and worker job lease.
 
-- [ ] **Step 1: Write failing Gemini adapter tests**
+- [ ] **Step 1: Write failing Deno tests for session creation**
 
-Assert that the adapter starts a resumable Gemini Files upload, writes the original MP4 bytes, polls until `ACTIVE`, and creates a request whose first input item is `{ type: "video", uri, mime_type }`.
+Assert the handler rejects a body containing `exerciseId`, accepts `{ previousSessionId?: string }`, verifies prior-session ownership, inserts an owner-scoped session, and returns a signed upload URL.
 
-- [ ] **Step 2: Run Deno tests and confirm RED**
+- [ ] **Step 2: Verify RED**
 
-Run: `deno test --allow-env supabase/functions/tests/gemini.test.ts`
+Run: `npx supabase functions serve create-analysis --env-file .env.local`
 
-Expected: FAIL because the adapter is absent.
+Run the function test with the Supabase Deno runtime command configured by the CLI.
 
-- [ ] **Step 3: Implement authenticated create and upload-complete functions**
+Expected: FAIL because functions do not exist.
 
-`create-analysis` validates the exercise, creates an owned session, and returns a signed upload path. `complete-upload` verifies ownership and storage metadata, creates exactly one queued job, and never returns a service secret.
+- [ ] **Step 3: Implement small dependency-injected handlers**
 
-- [ ] **Step 4: Implement actual Gemini Files upload adapter**
+Keep HTTP adapters thin. Verify JWT identity, never accept `user_id` from clients, create storage paths as `{userId}/{sessionId}/original.mp4`, and return typed JSON errors.
 
-Read `GEMINI_API_KEY` only inside the function/worker environment. Send original bytes without transcoding them into text or pose summaries. Delete the Gemini file after the final analysis or retention timeout.
+- [ ] **Step 4: Implement upload completion and status**
 
-- [ ] **Step 5: Run Deno tests and local function integration**
+`complete-upload` verifies object existence and moves the session to `queued`. `analysis-status` returns only owner-visible session/result fields and the real persisted stage.
+
+- [ ] **Step 5: Implement correction and deletion**
+
+Correction writes separate `corrected_label`/`corrected_exercise_id`. Delete removes the private object and owner session without exposing the service role.
+
+- [ ] **Step 6: Verify functions and RLS**
+
+Run: `npx supabase test db`
+
+Run: `npx supabase functions serve --env-file .env.local` and smoke-test authenticated endpoints against the local stack.
+
+Expected: owner requests succeed; cross-user requests return 404/403.
+
+- [ ] **Step 7: Commit**
 
 ```powershell
-deno test --allow-env supabase/functions/tests
-npx supabase functions serve --env-file .env.local
+git add supabase/functions supabase/tests
+git commit -m "feat: add private analysis lifecycle APIs"
 ```
 
-Expected: Deno tests pass and authenticated local calls create owned sessions without revealing secrets.
+---
 
-- [ ] **Step 6: Commit edge functions**
-
-```powershell
-git add supabase/functions
-git commit -m "feat: queue original videos for Gemini analysis"
-```
-
-### Task 9: Implement Dense Pose and Evidence Worker
+### Task 8: Build the MediaPipe measurement worker
 
 **Files:**
 - Create: `worker/pyproject.toml`
 - Create: `worker/Dockerfile`
-- Create: `worker/app/config.py`
-- Create: `worker/app/models.py`
-- Create: `worker/app/media.py`
-- Create: `worker/app/pose.py`
-- Create: `worker/app/repetitions.py`
-- Create: `worker/app/evidence.py`
-- Create: `worker/app/gemini.py`
-- Create: `worker/app/verifier.py`
-- Create: `worker/app/orchestrator.py`
-- Create: `worker/app/main.py`
-- Create: `worker/tests/test_pose.py`
+- Create: `worker/form_worker/__init__.py`
+- Create: `worker/form_worker/models.py`
+- Create: `worker/form_worker/video.py`
+- Create: `worker/form_worker/pose.py`
+- Create: `worker/form_worker/measurements.py`
+- Create: `worker/form_worker/repetitions.py`
+- Create: `worker/form_worker/evidence_frames.py`
+- Create: `worker/tests/test_measurements.py`
 - Create: `worker/tests/test_repetitions.py`
-- Create: `worker/tests/test_evidence.py`
-- Create: `worker/tests/test_verifier.py`
-- Create: `worker/tests/test_orchestrator.py`
+- Create: `worker/tests/test_visibility.py`
 
 **Interfaces:**
-- Produces: `analyze_session(session_id: UUID) -> AnalysisResult`, `extract_pose(video_path, sample_fps=15)`, `segment_repetitions(frames, profile)`, `select_evidence(...)`, and `verify_result(...)`.
+- Produces: `PoseEvidence` containing timestamped landmarks, visibility, rep boundaries, joint angles, ROM, tempo/pauses, rep comparison, possible asymmetry, and evidence-frame timestamps.
+- Consumed by: Gemini prompt builder and verifier.
 
-- [ ] **Step 1: Write failing pose sampling test**
+- [ ] **Step 1: Write failing pure measurement tests**
 
-```py
-def test_sample_timestamps_are_15_fps_for_two_seconds():
-    timestamps = build_sample_timestamps(duration_ms=2000, sample_fps=15)
-    assert len(timestamps) == 30
-    assert timestamps[0] == 0
-    assert timestamps[-1] < 2000
-```
+Use synthetic landmarks to assert a 90-degree elbow angle, ROM max-min, hidden-landmark exclusion, rep boundaries from a periodic trajectory, pause intervals, aligned rep comparison, and asymmetry only when both sides exceed the visibility threshold.
 
-- [ ] **Step 2: Run Pytest and confirm RED**
+- [ ] **Step 2: Verify RED**
 
-Run: `python -m pytest worker/tests/test_pose.py -q`
+Run: `python -m pytest worker/tests -q`
 
-Expected: FAIL because `build_sample_timestamps` is absent.
+Expected: FAIL because the worker package does not exist.
 
-- [ ] **Step 3: Implement media validation and 15-FPS pose extraction**
+- [ ] **Step 3: Implement typed measurement primitives**
 
-FFprobe must reject duration outside 3–60 seconds, resolution below 720 pixels on the long edge, and unusable frame rate. MediaPipe output retains per-landmark visibility and never interpolates across an occlusion longer than 200ms.
+Use NumPy for smoothing and geometry. Angle calculations are camera-aware 2D observations and include visibility/confidence metadata. Never interpolate a landmark across an interval marked invisible.
 
-- [ ] **Step 4: Write failing repetition and evidence tests**
+- [ ] **Step 4: Implement MediaPipe Pose Landmarker adapter**
 
-Use synthetic sinusoidal joint motion to assert two complete repetitions, phase boundaries, and selection of full-resolution frames on both sides of each transition.
+Load `POSE_LANDMARKER_MODEL_PATH`, run VIDEO mode at 15 FPS, map landmarks to typed samples, and return visibility rather than dropping low-confidence samples silently.
 
-- [ ] **Step 5: Implement segmentation and evidence selection**
+- [ ] **Step 5: Implement repetition and phase evidence**
 
-Smooth only short noise with a Savitzky-Golay filter, use exercise profile attention areas to select primary trajectories, and retain global/full-body plus detail crops. Selection is not limited to known common faults.
+Select the strongest periodic joint/body trajectory, smooth it, find alternating extrema with minimum duration/amplitude guards, and return candidate reps for Gemini to confirm semantically.
 
-- [ ] **Step 6: Write failing verifier tests**
+- [ ] **Step 6: Implement FFmpeg validation and evidence frames**
 
-Test suppression for confidence `0.74`, missing visual evidence, non-visible required landmark, zero-length timestamp, medical diagnosis language, and contradiction between pose direction and text observation.
+Use ffprobe for duration/rotation/resolution; FFmpeg creates a normalized analysis proxy and full-resolution JPEG frames at candidate events. The original MP4 remains unchanged for Gemini.
 
-- [ ] **Step 7: Implement Gemini orchestration and verifier**
+- [ ] **Step 7: Verify GREEN**
 
-Provide the original Gemini video reference, profile attention guidance, pose summary, phase-aligned evidence images, and strict JSON schema. The prompt explicitly permits novel visible issues and forbids inventing feedback to fill the result.
+Run: `python -m pytest worker/tests -q`
 
-- [ ] **Step 8: Run worker tests and container build**
+Expected: all worker unit tests pass.
 
-```powershell
-python -m pytest worker/tests -q
-docker build -t form-analysis-worker worker
-```
-
-Expected: all Pytest tests pass and Docker build exits 0.
-
-- [ ] **Step 9: Commit worker**
+- [ ] **Step 8: Commit**
 
 ```powershell
 git add worker
-git commit -m "feat: analyze video with dense pose evidence"
+git commit -m "feat: extract MediaPipe movement evidence"
 ```
 
-### Task 10: Render Analysis, Results, Progress, and Failure States
+---
+
+### Task 9: Integrate Gemini 3.5 Flash and evidence verification
 
 **Files:**
-- Create: `src/features/analysis/hooks.ts`
-- Create: `src/screens/results/index.tsx`
-- Create: `src/screens/results/issue-card.tsx`
-- Create: `src/screens/results/results.test.tsx`
-- Create: `src/screens/unable-to-analyze/index.tsx`
-- Create: `src/screens/progress/index.tsx`
-- Create: `src/app/results/[session-id].tsx`
-- Create: `src/app/results/[session-id]/unable.tsx`
-- Modify: `src/app/(tabs)/(progress)/index.tsx`
+- Create: `worker/form_worker/gemini.py`
+- Create: `worker/form_worker/prompts.py`
+- Create: `worker/form_worker/verifier.py`
+- Create: `worker/form_worker/orchestrator.py`
+- Create: `worker/form_worker/main.py`
+- Create: `worker/tests/test_gemini_contract.py`
+- Create: `worker/tests/test_verifier.py`
+- Create: `worker/tests/test_orchestrator.py`
+- Create: `.env.example`
 
 **Interfaces:**
-- Consumes: `getAnalysisStatus`, `analysisResultSchema`, `getResultPresentation`.
-- Produces: simplified result UI and session history.
+- Produces: lease-based job runner that saves validated `AnalysisResult` JSON.
+- Consumes: private video download, `PoseEvidence`, Gemini Files API, optional curated profile, optional previous result.
 
-- [ ] **Step 1: Write failing results tests**
+- [ ] **Step 1: Write failing Gemini contract tests**
 
-Assert that a complete result renders the score, `What went wrong`, and `What to improve`; internal rationale and fixed metrics are absent; zero supported issues renders `No major form issue detected in the visible set`; unable status renders one retry instruction.
+Inject a fake Gen AI client and assert the request uses `gemini-3.5-flash`, includes the uploaded original video reference, evidence images, serialized MediaPipe measurements, optional previous result, structured JSON schema, and `thinkingLevel: "medium"`.
 
-- [ ] **Step 2: Run results tests and confirm RED**
+- [ ] **Step 2: Write failing verifier tests**
 
-Run: `npm test -- --run src/screens/results/results.test.tsx`
+Assert it removes findings with missing intervals, confidence below `0.75`, invisible claimed landmarks, or intervals beyond video duration; preserves unrelated valid findings; removes scores when recognition is below `0.8`; and permits more than three valid findings.
 
-Expected: FAIL because the results screen is absent.
+- [ ] **Step 3: Verify RED**
 
-- [ ] **Step 3: Implement polling and simplified results**
+Run: `python -m pytest worker/tests/test_gemini_contract.py worker/tests/test_verifier.py -q`
 
-Use TanStack Query with two-second polling only while status is queued/processing, stop on terminal state, validate every server payload with Zod, and navigate partial/unable results to the correct presentation.
+Expected: FAIL because Gemini and verifier modules do not exist.
 
-- [ ] **Step 4: Implement progress from completed sessions**
+- [ ] **Step 4: Implement two-pass Gemini analysis**
 
-Render score history and recent sessions. A metric trend is omitted until at least three comparable observations exist for the same exercise/profile version.
+Pass one recognizes exercise/equipment/environment/variation/uncertainty from the original video. Pass two receives recognition, optional profile, original video, full-resolution frames, MediaPipe evidence, and optional previous result, then returns the full coaching contract.
 
-- [ ] **Step 5: Run tests and export**
+- [ ] **Step 5: Implement deterministic verification**
+
+Validate each finding independently. Persist accepted arrays without a fixed maximum. Downgrade to partial or unable only from the video-check and remaining evidence, not because a single finding failed.
+
+- [ ] **Step 6: Implement job orchestration**
+
+Lease one queued job, download the private video, persist each real stage, run video/pose/Gemini/verifier steps, store results atomically, and clean local files. Record `model_name = 'gemini-3.5-flash'`.
+
+- [ ] **Step 7: Add environment contract**
+
+`.env.example` contains names only: Supabase URL, service key, Gemini key, pose model path, worker ID, and artifact retention values. Confirm no real values are committed.
+
+- [ ] **Step 8: Verify GREEN**
+
+Run: `python -m pytest worker/tests -q`
+
+Expected: all worker suites pass.
+
+- [ ] **Step 9: Commit**
 
 ```powershell
-npm test -- --run src/screens/results/results.test.tsx
-npx tsc --noEmit
-npx expo export --platform web
+git add worker .env.example
+git commit -m "feat: analyze original videos with Gemini 3.5 Flash"
 ```
 
-Expected: tests, typecheck, and export pass.
+---
 
-- [ ] **Step 6: Commit presentation flow**
-
-```powershell
-git add src/features/analysis/hooks.ts src/screens/results src/screens/unable-to-analyze src/screens/progress src/app/results src/app/(tabs)/(progress)/index.tsx
-git commit -m "feat: present concise AI coaching results"
-```
-
-### Task 11: End-to-End Security, Evaluation, and Release Verification
+### Task 10: Add automatic history and progress
 
 **Files:**
-- Create: `tests/e2e/analysis-flow.test.ts`
-- Create: `tests/contracts/mobile-bundle-secrets.test.ts`
-- Create: `evaluation/manifest.schema.json`
-- Create: `evaluation/README.md`
-- Create: `scripts/verify-analysis-contract.mjs`
-- Modify: `README.md`
+- Create: `src/features/progress/api.ts`
+- Create: `src/features/progress/group-sessions.ts`
+- Create: `src/features/progress/group-sessions.test.ts`
+- Modify: `src/screens/progress/index.tsx`
+- Create: `src/screens/progress/progress.test.tsx`
+- Modify: `src/screens/home/index.tsx`
 
 **Interfaces:**
-- Produces: repeatable proof of original-video transmission, secret isolation, evidence gating, all-50 profile coverage, and app build health.
+- Produces: recent analyses, exercise-label grouping, score trends, recurring corrections, and improvements.
+- Consumes: owner-scoped completed analysis rows.
 
-- [ ] **Step 1: Write contract tests**
+- [ ] **Step 1: Write failing grouping tests**
 
-Test that all 50 profiles validate, the mobile bundle contains neither server secret variable name nor current secret values, the Gemini request contains a video item, and the result endpoint never returns score rationale or raw model output to unauthorized users.
+Assert corrected label wins over detected label, case/spacing variants normalize to one group, null scores do not enter score trends, and comparisons/recurring correction titles are preserved.
 
-- [ ] **Step 2: Run contract tests and confirm RED**
+- [ ] **Step 2: Verify RED**
 
-Run: `npm test -- --run tests/contracts`
+Run: `npm test -- --runInBand src/features/progress src/screens/progress/progress.test.tsx`
 
-Expected: FAIL until build inspection and request capture helpers are implemented.
+Expected: FAIL because progress grouping does not exist.
 
-- [ ] **Step 3: Implement verification scripts and evaluation manifest**
+- [ ] **Step 3: Implement history query and grouping**
 
-The manifest schema requires exercise slug, consented clip path, expected visible issues, non-observable criteria, rep boundaries, camera angle, and coach rating. `verify-analysis-contract.mjs` captures a fake-worker Gemini request and asserts `input[0].type === "video"`.
+Fetch owner-visible completed sessions/results through Supabase, group by effective label, derive comparable score points, recurring accepted corrections, and improvement summaries.
 
-- [ ] **Step 4: Run full verification**
+- [ ] **Step 4: Render Home recents and Progress**
 
-```powershell
-npm test -- --run
-npx tsc --noEmit
-npx expo install --check
-npx expo export --platform web
-python -m pytest worker/tests -q
-deno test --allow-env supabase/functions/tests
-npx supabase test db
-node scripts/verify-analysis-contract.mjs
-git diff --check
-```
+Home shows recent analysis cards under the record action. Progress shows detected exercise history, supported score trends, recurring issues, improvements, and result links without manual logs.
 
-Expected: every command exits 0 and reports zero failed tests.
+- [ ] **Step 5: Verify GREEN**
 
-- [ ] **Step 5: Run a device smoke test**
+Run: `npm test -- --runInBand src/features/progress src/screens/progress src/screens/home`
 
-Start Expo Go, select Standing Dumbbell Curl, record a short set, confirm a private upload is created, verify the job stages advance from real backend state, inspect the captured Gemini request for the original video item, and confirm the results screen displays only score/problem/improvement.
+Run: `npm run typecheck`
 
-- [ ] **Step 6: Commit verification assets and documentation**
+Expected: tests and TypeScript pass.
+
+- [ ] **Step 6: Commit**
 
 ```powershell
-git add tests evaluation scripts README.md
-git commit -m "test: verify FORM analysis end to end"
+git add src/features/progress src/screens/progress src/screens/home
+git commit -m "feat: organize progress by detected exercise"
 ```
 
+---
+
+### Task 11: Final security, build, and visual verification
+
+**Files:**
+- Modify only files revealed by verification failures.
+
+**Interfaces:**
+- Produces: verified mobile app, backend schema/functions, worker package, and documentation.
+
+- [ ] **Step 1: Run the complete JavaScript verification**
+
+Run: `npm test -- --runInBand`
+
+Run: `npm run typecheck`
+
+Run: `npx expo install --check`
+
+Run: `npx expo export --platform web`
+
+Expected: zero test failures, TypeScript errors, dependency mismatches, or export failures.
+
+- [ ] **Step 2: Run complete backend verification**
+
+Run: `npx supabase db start`
+
+Run: `npx supabase db reset`
+
+Run: `npx supabase test db`
+
+Run: `python -m pytest worker/tests -q`
+
+Expected: migrations reset cleanly, RLS tests pass, and worker tests pass.
+
+- [ ] **Step 3: Scan client code and exported bundle for secrets**
+
+Search for the real Gemini and service-role values without printing them by using fixed-name and JWT-role checks. Confirm client source references only `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+
+- [ ] **Step 4: Visual QA the record-first flow**
+
+Launch Expo web first, then inspect Home, Recording Tips, space-help sheet, analysis progress, results, finding detail, and Progress at phone dimensions. Verify the black/gold hierarchy, scroll safety, readable cards, and absence of search/selection UI. Camera hardware behavior is verified separately in Expo Go.
+
+- [ ] **Step 5: Review requirements line by line**
+
+Re-read `docs/superpowers/specs/2026-07-15-ai-form-coach-design.md` and map every acceptance test to code/test evidence. Report any hardware-only or cloud-deployment validation that remains external.
+
+- [ ] **Step 6: Commit verification fixes**
+
+```powershell
+git add -A
+git commit -m "chore: verify record-first FORM experience"
+```
