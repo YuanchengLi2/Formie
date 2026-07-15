@@ -18,7 +18,7 @@ import { START_BEEP_URI } from "@/features/capture/start-beep";
 import type { CaptureOrientation, RecordedSet, UploadTarget } from "@/features/capture/types";
 import { supabase } from "@/lib/supabase";
 import { colors } from "@/theme/colors";
-import { radii, spacing } from "@/theme/spacing";
+import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
 
 import { CameraControls } from "./camera-controls";
@@ -78,10 +78,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   }, [permission, requestPermission]);
 
   useEffect(() => {
-    if (phase !== "recording" || startedAt === null) {
-      if (phase !== "recording") setElapsedMs(0);
-      return;
-    }
+    if (phase !== "recording" || startedAt === null) return;
     const update = () => setElapsedMs(Date.now() - startedAt);
     update();
     const timer = setInterval(update, 250);
@@ -255,7 +252,10 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         elapsedMs={elapsedMs}
         error={error}
         hasRecording={Boolean(recording?.localUri)}
-        onRecord={() => dispatch({ type: "begin_countdown", previousSessionId })}
+        onRecord={() => {
+          setElapsedMs(0);
+          dispatch({ type: "begin_countdown", previousSessionId });
+        }}
         onStop={() => cameraRef.current?.stopRecording()}
         onRetryUpload={retryUpload}
         onDiscardRecording={discardRecording}

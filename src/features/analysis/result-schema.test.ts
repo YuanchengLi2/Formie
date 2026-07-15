@@ -88,8 +88,8 @@ describe("analysisResultSchema", () => {
 
   it("rejects legacy pose evidence instead of treating it as video evidence", () => {
     const result = validResult() as unknown as Record<string, unknown>;
-    const correction = (result.priorityCorrections as Array<Record<string, unknown>>)[0];
-    const evidence = (correction.evidence as Array<Record<string, unknown>>)[0];
+    const correction = (result.priorityCorrections as Record<string, unknown>[])[0];
+    const evidence = (correction.evidence as Record<string, unknown>[])[0];
     delete evidence.visibleBodyAreas;
     evidence.mediaPipeEvidence = "A pose model estimated elbow drift.";
     evidence.observableLandmarks = ["left_elbow"];
