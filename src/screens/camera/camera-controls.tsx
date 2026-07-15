@@ -16,6 +16,7 @@ type CameraControlsProps = {
   onRecord: () => void;
   onStop: () => void;
   onRetryUpload: () => void;
+  onDiscardRecording?: () => void;
 };
 
 export function CameraControls({
@@ -27,6 +28,7 @@ export function CameraControls({
   onRecord,
   onStop,
   onRetryUpload,
+  onDiscardRecording = () => undefined,
 }: CameraControlsProps) {
   return (
     <View pointerEvents="box-none" style={{ position: "absolute", inset: 0, justifyContent: "space-between", padding: spacing.xl }}>
@@ -95,6 +97,7 @@ export function CameraControls({
               <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Nothing was uploaded. You can safely try again.</Text>
             )}
             <FormButton label={hasRecording ? "Retry Upload" : "Record Again"} onPress={hasRecording ? onRetryUpload : onRecord} />
+            {hasRecording ? <FormButton label="Discard and Record Again" variant="ghost" onPress={onDiscardRecording} /> : null}
           </View>
         ) : null}
       </View>

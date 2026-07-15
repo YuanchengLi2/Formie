@@ -25,12 +25,22 @@ export function ResultsScreen({ result, onFindingPress, onRecordAnother, onCorre
   const presentation = getResultPresentation(result);
   const [editingLabel, setEditingLabel] = useState(false);
   const [label, setLabel] = useState(result.recognition.label ?? "");
+  const [savingLabel, setSavingLabel] = useState(false);
+  const [labelError, setLabelError] = useState<string | null>(null);
 
   const saveLabel = async () => {
     const cleaned = label.trim();
     if (!cleaned) return;
-    await onCorrectLabel(cleaned);
-    setEditingLabel(false);
+    setSavingLabel(true);
+    setLabelError(null);
+    try {
+      await onCorrectLabel(cleaned);
+      setEditingLabel(false);
+    } catch (error) {
+      setLabelError(error instanceof Error ? error.message : "The exercise name could not be saved.");
+    } finally {
+      setSavingLabel(false);
+    }
   };
 
   return (
@@ -43,7 +53,10 @@ export function ResultsScreen({ result, onFindingPress, onRecordAnother, onCorre
           <FormWordmark />
           <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{presentation.status === "complete" ? "ANALYSIS COMPLETE" : presentation.status === "partial" ? "ANALYSIS FROM VISIBLE MOVEMENT" : "RECORDING GUIDANCE"}</Text>
           <Text selectable style={[typography.title, { color: colors.text, textAlign: "center" }]}>{presentation.exerciseLabel}</Text>
-          <FormButton label="Correct exercise name" variant="ghost" onPress={() => setEditingLabel(true)} />
+          <FormButton label="Correct exercise name" variant="ghost" onPress={() => {
+            setLabelError(null);
+            setEditingLabel(true);
+          }} />
           {presentation.score !== null ? <ScoreRing score={presentation.score} /> : null}
         </View>
 
@@ -88,8 +101,9 @@ export function ResultsScreen({ result, onFindingPress, onRecordAnother, onCorre
             <Text selectable style={[typography.title, { color: colors.text }]}>Correct exercise name</Text>
             <Text selectable style={[typography.body, { color: colors.textSecondary }]}>This improves history without erasing what FORM originally detected.</Text>
             <TextInput accessibilityLabel="Exercise name" autoFocus onChangeText={setLabel} value={label} placeholder="Exercise name" placeholderTextColor={colors.textMuted} style={[typography.body, { minHeight: 54, paddingHorizontal: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radii.md, color: colors.text, backgroundColor: colors.background }]} />
-            <FormButton label="Save Correction" onPress={() => void saveLabel()} />
-            <FormButton label="Cancel" variant="ghost" onPress={() => setEditingLabel(false)} />
+            {labelError ? <Text selectable style={[typography.caption, { color: colors.danger }]}>{labelError}</Text> : null}
+            <FormButton label={savingLabel ? "Saving…" : "Save Correction"} disabled={savingLabel || !label.trim()} onPress={() => void saveLabel()} />
+            <FormButton label="Cancel" variant="ghost" disabled={savingLabel} onPress={() => setEditingLabel(false)} />
           </View>
         </View>
       </Modal>

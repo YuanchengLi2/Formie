@@ -23,12 +23,25 @@ describe("CameraControls", () => {
 
   it("keeps a retry action visible when upload fails", async () => {
     const onRetryUpload = jest.fn();
+    const onDiscardRecording = jest.fn();
     const screen = await render(
-      <CameraControls phase="error" countdown={null} elapsedMs={0} error="Connection lost" hasRecording onRecord={jest.fn()} onStop={jest.fn()} onRetryUpload={onRetryUpload} />,
+      <CameraControls
+        phase="error"
+        countdown={null}
+        elapsedMs={0}
+        error="Connection lost"
+        hasRecording
+        onRecord={jest.fn()}
+        onStop={jest.fn()}
+        onRetryUpload={onRetryUpload}
+        onDiscardRecording={onDiscardRecording}
+      />,
     );
     expect(screen.getByText("Connection lost")).toBeTruthy();
     await fireEvent.press(screen.getByText("Retry Upload"));
+    await fireEvent.press(screen.getByText("Discard and Record Again"));
     expect(onRetryUpload).toHaveBeenCalledTimes(1);
+    expect(onDiscardRecording).toHaveBeenCalledTimes(1);
   });
 
   it("offers a new recording when the camera never saved a local file", async () => {

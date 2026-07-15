@@ -34,10 +34,10 @@ function result(): AnalysisResult {
   };
 }
 
-function renderResults(onFindingPress = jest.fn(), onRecordAnother = jest.fn()) {
+function renderResults(onFindingPress = jest.fn(), onRecordAnother = jest.fn(), onCorrectLabel: (label: string) => void | Promise<void> = jest.fn()) {
   return render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-      <ResultsScreen result={result()} onFindingPress={onFindingPress} onRecordAnother={onRecordAnother} onCorrectLabel={jest.fn()} />
+      <ResultsScreen result={result()} onFindingPress={onFindingPress} onRecordAnother={onRecordAnother} onCorrectLabel={onCorrectLabel} />
     </SafeAreaProvider>,
   );
 }
@@ -67,5 +67,18 @@ describe("ResultsScreen", () => {
     await fireEvent.press(screen.getByText("Record Another Set"));
     expect(onFindingPress).toHaveBeenCalledWith(expect.objectContaining({ id: "fix-0" }));
     expect(onRecordAnother).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps label correction open and explains a save failure", async () => {
+    const screen = await renderResults(jest.fn(), jest.fn(), async () => {
+      throw new Error("Connection lost");
+    });
+
+    await fireEvent.press(screen.getByText("Correct exercise name"));
+    await fireEvent.changeText(screen.getByLabelText("Exercise name"), "Cable Row");
+    await fireEvent.press(screen.getByText("Save Correction"));
+
+    expect(await screen.findByText("Connection lost")).toBeTruthy();
+    expect(screen.getAllByText("Correct exercise name").length).toBeGreaterThan(1);
   });
 });

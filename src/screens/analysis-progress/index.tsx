@@ -1,6 +1,7 @@
 import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { FormButton } from "@/components/form-button";
 import { FormCard } from "@/components/form-card";
 import { FormWordmark } from "@/components/form-wordmark";
 import { analysisStages, getAnalysisStageState } from "@/features/analysis/stages";
@@ -11,9 +12,11 @@ import { typography } from "@/theme/type";
 type AnalysisProgressScreenProps = {
   stage: string | null;
   failureMessage: string | null;
+  onRecordAgain?: () => void;
+  onGoHome?: () => void;
 };
 
-export function AnalysisProgressScreen({ stage, failureMessage }: AnalysisProgressScreenProps) {
+export function AnalysisProgressScreen({ stage, failureMessage, onRecordAgain, onGoHome }: AnalysisProgressScreenProps) {
   const insets = useSafeAreaInsets();
   const states = getAnalysisStageState(stage);
 
@@ -56,9 +59,11 @@ export function AnalysisProgressScreen({ stage, failureMessage }: AnalysisProgre
       </FormCard>
 
       {failureMessage ? (
-        <FormCard style={{ marginTop: spacing.lg, borderColor: colors.danger }}>
+        <FormCard style={{ gap: spacing.md, marginTop: spacing.lg, borderColor: colors.danger }}>
           <Text selectable style={[typography.body, { color: colors.text }]}>{failureMessage}</Text>
           <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Your recording is still saved securely.</Text>
+          {onRecordAgain ? <FormButton label="Record Again" onPress={onRecordAgain} /> : null}
+          {onGoHome ? <FormButton label="Back to Home" variant="ghost" onPress={onGoHome} /> : null}
         </FormCard>
       ) : null}
     </ScrollView>

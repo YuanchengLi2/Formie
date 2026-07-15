@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from form_worker.gemini import GeminiAnalyzer
 from form_worker.models import PoseEvidence
 
@@ -8,11 +10,15 @@ from form_worker.models import PoseEvidence
 class FakeFiles:
     def __init__(self) -> None:
         self.uploads = []
+        self.deletes = []
 
     def upload(self, *, file, config=None):
         uploaded = type("Uploaded", (), {"name": Path(file).name, "uri": f"gemini://{Path(file).name}", "state": "ACTIVE"})()
         self.uploads.append((file, config, uploaded))
         return uploaded
+
+    def delete(self, *, name):
+        self.deletes.append(name)
 
 
 class FakeModels:
@@ -53,6 +59,7 @@ def test_two_pass_request_uses_original_video_pose_evidence_and_open_ended_contr
     assert "previous" in coaching_contents.lower()
     assert "controlled elbow path" in coaching_contents
     assert client.models.calls[1]["config"]["response_json_schema"]["properties"]["priorityCorrections"]["type"] == "array"
+    assert client.files.deletes == ["evidence.jpg", "original.mp4"]
 
 
 def test_invalid_structured_output_is_retried_once(tmp_path) -> None:
@@ -85,3 +92,15 @@ def test_analysis_reports_stages_when_the_work_really_begins(tmp_path) -> None:
     GeminiAnalyzer(FakeClient()).analyze(video, [], PoseEvidence(), on_stage=stages.append)
 
     assert stages == ["recognition", "technique_review"]
+
+
+def test_uploaded_files_are_deleted_when_gemini_output_fails(tmp_path) -> None:
+    video = tmp_path / "original.mp4"
+    video.write_bytes(b"video")
+    client = FakeClient()
+    client.models.responses = ["not-json", "still-not-json"]
+
+    with pytest.raises(ValueError, match="invalid structured output twice"):
+        GeminiAnalyzer(client).analyze(video, [], PoseEvidence())
+
+    assert client.files.deletes == ["original.mp4"]

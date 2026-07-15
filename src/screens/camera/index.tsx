@@ -148,6 +148,12 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     void uploadRecording(recording, uploadTarget);
   };
 
+  const discardRecording = () => {
+    dispatch({ type: "reset" });
+  };
+
+  const cameraCanClose = phase === "idle" || phase === "countingDown" || phase === "error";
+
   if (permission && !permission.granted) {
     return (
       <View style={{ flex: 1, justifyContent: "center", gap: spacing.xl, padding: spacing.xl, backgroundColor: colors.background }}>
@@ -185,7 +191,16 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
       />
 
       <View pointerEvents="box-none" style={{ position: "absolute", top: insets.top + spacing.md, left: spacing.lg, right: spacing.lg, flexDirection: "row", justifyContent: "space-between" }}>
-        <Pressable accessibilityLabel="Close camera" onPress={() => router.back()} style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)" }}>
+        <Pressable
+          accessibilityLabel="Close camera"
+          accessibilityState={{ disabled: !cameraCanClose }}
+          disabled={!cameraCanClose}
+          onPress={() => {
+            dispatch({ type: "reset" });
+            router.back();
+          }}
+          style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)", opacity: cameraCanClose ? 1 : 0.45 }}
+        >
           <Text selectable style={{ color: colors.text, fontSize: 24 }}>×</Text>
         </Pressable>
         <View style={{ flexDirection: "row", gap: spacing.sm }}>
@@ -216,6 +231,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         onRecord={() => dispatch({ type: "begin_countdown", previousSessionId })}
         onStop={() => cameraRef.current?.stopRecording()}
         onRetryUpload={retryUpload}
+        onDiscardRecording={discardRecording}
       />
     </View>
   );

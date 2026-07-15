@@ -66,29 +66,42 @@ class GeminiAnalyzer:
     ) -> dict[str, Any]:
         report_stage = on_stage or (lambda _stage: None)
         video_path = Path(original_video)
-        video_file = self._upload(video_path, "video/mp4")
-        image_files = [self._upload(Path(path), "image/jpeg") for path in evidence_frames]
+        uploaded_files: list[Any] = []
+        try:
+            video_file = self._upload(video_path, "video/mp4")
+            uploaded_files.append(video_file)
+            image_files = []
+            for path in evidence_frames:
+                image_file = self._upload(Path(path), "image/jpeg")
+                uploaded_files.append(image_file)
+                image_files.append(image_file)
 
-        report_stage("recognition")
-        recognition = self._generate_json([recognition_prompt(), video_file], RECOGNITION_SCHEMA)
-        recognition.setdefault("catalogExerciseId", None)
-        profile = self.profile_provider(recognition) if self.profile_provider else None
+            report_stage("recognition")
+            recognition = self._generate_json([recognition_prompt(), video_file], RECOGNITION_SCHEMA)
+            recognition.setdefault("catalogExerciseId", None)
+            profile = self.profile_provider(recognition) if self.profile_provider else None
 
-        evidence_json = json.dumps(pose_evidence.to_dict(), separators=(",", ":"))
-        previous_json = json.dumps(previous_result, separators=(",", ":")) if previous_result else "No previous result."
-        report_stage("technique_review")
-        result = self._generate_json(
-            [
-                coaching_prompt(recognition),
-                "Original video:",
-                video_file,
-                "Full-resolution evidence frames:",
-                *image_files,
-                f"MediaPipe evidence: {evidence_json}",
-                f"Matching curated profile: {json.dumps(profile, separators=(',', ':')) if profile else 'No catalog match; use a safe dynamic rubric.'}",
-                f"Previous result context: {previous_json}",
-            ],
-            ANALYSIS_SCHEMA,
-        )
-        result["recognition"] = recognition
-        return result
+            evidence_json = json.dumps(pose_evidence.to_dict(), separators=(",", ":"))
+            previous_json = json.dumps(previous_result, separators=(",", ":")) if previous_result else "No previous result."
+            report_stage("technique_review")
+            result = self._generate_json(
+                [
+                    coaching_prompt(recognition),
+                    "Original video:",
+                    video_file,
+                    "Full-resolution evidence frames:",
+                    *image_files,
+                    f"MediaPipe evidence: {evidence_json}",
+                    f"Matching curated profile: {json.dumps(profile, separators=(',', ':')) if profile else 'No catalog match; use a safe dynamic rubric.'}",
+                    f"Previous result context: {previous_json}",
+                ],
+                ANALYSIS_SCHEMA,
+            )
+            result["recognition"] = recognition
+            return result
+        finally:
+            for uploaded in reversed(uploaded_files):
+                try:
+                    self.client.files.delete(name=uploaded.name)
+                except Exception:
+                    pass

@@ -21,7 +21,22 @@ export default function ResultsRoute() {
   const resetCapture = useCaptureStore((state) => state.dispatch);
 
   if (!status.data?.result) {
-    return <AnalysisProgressScreen stage={status.data?.stage ?? null} failureMessage={status.error instanceof Error ? status.error.message : null} />;
+    const failureMessage = status.data?.status === "failed"
+      ? "Analysis paused. Record again to start a fresh review."
+      : status.error instanceof Error
+        ? status.error.message
+        : null;
+    return (
+      <AnalysisProgressScreen
+        stage={status.data?.stage ?? null}
+        failureMessage={failureMessage}
+        onRecordAgain={failureMessage ? () => {
+          resetCapture({ type: "reset" });
+          router.replace("/recording-tips");
+        } : undefined}
+        onGoHome={failureMessage ? () => router.replace("/(tabs)/(home)") : undefined}
+      />
+    );
   }
 
   const openFinding = (finding: CoachingFinding) => {
