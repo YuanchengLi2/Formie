@@ -1,1 +1,6 @@
-export type { AnalysisIssue, AnalysisResult, ScoreRationale } from "./result-schema";
+export type {
+  AnalysisResult,
+  CoachingFinding,
+  EvidenceMoment,
+  ScoreRationale,
+} from "./result-schema";

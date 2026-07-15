@@ -1,79 +1,133 @@
 import { analysisResultSchema } from "./result-schema";
-import type { AnalysisIssue, AnalysisResult } from "./result-schema";
+import type { AnalysisResult, CoachingFinding } from "./result-schema";
 
-function validIssue(): AnalysisIssue {
+function validFinding(id = "elbow-drift"): CoachingFinding {
   return {
+    id,
     title: "Elbow drift",
-    whatWentWrong: "Your elbows moved forward during the concentric phase of rep 3.",
-    whatToImprove: "Keep your upper arms quiet and curl through the elbows.",
-    startMs: 8_000,
-    endMs: 8_700,
-    repNumber: 3,
-    visualEvidence: "Both elbow centers move anterior to the shoulder line between 00:08.0 and 00:08.7.",
-    poseEvidence: "Mean elbow-to-shoulder x-offset increased by 12% during concentric phase.",
-    severity: "medium" as const,
-    confidence: 0.88,
-    observableLandmarks: ["left_shoulder", "right_shoulder", "left_elbow", "right_elbow"],
+    detail: "Your elbows moved forward during the concentric phase of rep 3.",
+    whyItMatters: "This shifts work away from a controlled curl pattern.",
+    correction: "Keep your upper arms quiet and curl through the elbows.",
+    cue: "Imagine your elbows resting against a wall.",
+    severity: "important",
+    evidence: [
+      {
+        startMs: 8_000,
+        endMs: 8_700,
+        repNumber: 3,
+        phase: "concentric",
+        visualEvidence: "Both elbows move forward between 00:08.0 and 00:08.7.",
+        mediaPipeEvidence: "Elbow-to-shoulder x-offset increased during rep 3.",
+        observableLandmarks: ["left_shoulder", "right_shoulder", "left_elbow", "right_elbow"],
+        confidence: 0.88,
+      },
+    ],
   };
 }
 
-function validCompleteResult(): AnalysisResult {
+function validResult(): AnalysisResult {
   return {
-    status: "complete" as const,
+    status: "complete",
+    recognition: {
+      label: "Standing Dumbbell Curl",
+      variation: "Alternating curl",
+      equipment: ["dumbbells"],
+      confidence: 0.94,
+      alternatives: ["Hammer curl"],
+      catalogExerciseId: 35,
+    },
+    videoCheck: {
+      outcome: "usable",
+      usableObservations: ["side view", "upper body visible"],
+      limitations: [],
+      retryReason: null,
+      retryInstruction: null,
+    },
+    overallAssessment: "Your repetitions were controlled, with some elbow drift near the end.",
     score: 82,
     scoreRationale: [
       { criterion: "elbow control", observed: "Forward drift appeared in rep 3", impact: 72, confidence: 0.88 },
       { criterion: "torso control", observed: "Torso remained stable", impact: 92, confidence: 0.91 },
     ],
-    issues: [validIssue()],
-    noMajorIssueSummary: null,
-    nextRefinement: null,
-    retryInstruction: null,
+    didWell: [validFinding("controlled-lowering")],
+    priorityCorrections: [validFinding()],
+    coachingCues: [validFinding("wall-cue")],
+    viewNote: "This angle clearly showed elbow and torso control.",
+    comparison: null,
   };
 }
 
 describe("analysisResultSchema", () => {
   it("accepts a complete result with timestamped evidence", () => {
-    expect(analysisResultSchema.safeParse(validCompleteResult()).success).toBe(true);
+    expect(analysisResultSchema.safeParse(validResult()).success).toBe(true);
   });
 
-  it("rejects an issue without visual evidence", () => {
-    const result = validCompleteResult();
-    result.issues[0].visualEvidence = "";
-    expect(analysisResultSchema.safeParse(result).success).toBe(false);
-  });
-
-  it("rejects an issue with a zero-length timestamp", () => {
-    const result = validCompleteResult();
-    result.issues[0].endMs = result.issues[0].startMs;
-    expect(analysisResultSchema.safeParse(result).success).toBe(false);
-  });
-
-  it("caps AI-selected issues at three", () => {
-    const result = validCompleteResult();
-    result.issues = [validIssue(), validIssue(), validIssue(), validIssue()];
-    expect(analysisResultSchema.safeParse(result).success).toBe(false);
-  });
-
-  it("allows a strong set with no manufactured issue", () => {
-    const result = validCompleteResult();
-    result.issues = [];
-    result.noMajorIssueSummary = "No major form issue detected in the visible set.";
-    result.nextRefinement = "Keep the same elbow position as fatigue increases.";
+  it("accepts every evidence-backed finding without a fixed count cap", () => {
+    const result = validResult();
+    result.priorityCorrections = Array.from({ length: 7 }, (_, index) => validFinding(`correction-${index}`));
     expect(analysisResultSchema.safeParse(result).success).toBe(true);
   });
 
-  it("requires unable results to omit score and provide a retry instruction", () => {
-    const result = {
+  it("rejects a finding without visual evidence", () => {
+    const result = validResult();
+    result.priorityCorrections[0].evidence[0].visualEvidence = "";
+    expect(analysisResultSchema.safeParse(result).success).toBe(false);
+  });
+
+  it("rejects a finding with a zero-length timestamp", () => {
+    const result = validResult();
+    result.priorityCorrections[0].evidence[0].endMs = result.priorityCorrections[0].evidence[0].startMs;
+    expect(analysisResultSchema.safeParse(result).success).toBe(false);
+  });
+
+  it("rejects evidence below the accepted confidence threshold", () => {
+    const result = validResult();
+    result.priorityCorrections[0].evidence[0].confidence = 0.74;
+    expect(analysisResultSchema.safeParse(result).success).toBe(false);
+  });
+
+  it("allows a supported complete analysis without a score", () => {
+    const result = validResult();
+    result.score = null;
+    result.scoreRationale = [];
+    expect(analysisResultSchema.safeParse(result).success).toBe(true);
+  });
+
+  it("rejects an exercise-specific score when recognition is uncertain", () => {
+    const result = validResult();
+    result.recognition.confidence = 0.62;
+    expect(analysisResultSchema.safeParse(result).success).toBe(false);
+  });
+
+  it("requires unable results to omit feedback and include one retry reason and instruction", () => {
+    const result = validResult();
+    const unable: AnalysisResult = {
+      ...result,
       status: "unable",
+      recognition: { ...result.recognition, label: null, variation: null, confidence: 0, catalogExerciseId: null },
+      videoCheck: {
+        outcome: "unable",
+        usableObservations: [],
+        limitations: ["upper body left the frame"],
+        retryReason: "Your upper body moved outside the frame.",
+        retryInstruction: "Place the phone farther away and record again.",
+      },
+      overallAssessment: null,
       score: null,
       scoreRationale: [],
-      issues: [],
-      noMajorIssueSummary: null,
-      nextRefinement: null,
-      retryInstruction: "Move the phone farther back so both elbows remain visible.",
+      didWell: [],
+      priorityCorrections: [],
+      coachingCues: [],
+      viewNote: null,
     };
-    expect(analysisResultSchema.safeParse(result).success).toBe(true);
-    expect(analysisResultSchema.safeParse({ ...result, score: 50 }).success).toBe(false);
+
+    expect(analysisResultSchema.safeParse(unable).success).toBe(true);
+    expect(analysisResultSchema.safeParse({ ...unable, priorityCorrections: [validFinding()] }).success).toBe(false);
+    expect(
+      analysisResultSchema.safeParse({
+        ...unable,
+        videoCheck: { ...unable.videoCheck, retryInstruction: null },
+      }).success,
+    ).toBe(false);
   });
 });
