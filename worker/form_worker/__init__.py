@@ -1,1 +1,0 @@
-"""FORM video analysis worker."""

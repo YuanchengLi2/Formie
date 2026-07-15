@@ -17,23 +17,13 @@ Deno.serve(async (request) => {
         .maybeSingle();
       if (sessionError) throw sessionError;
       if (!session) return null;
-      const { data: artifacts, error: artifactError } = await admin
-        .from("pose_artifacts")
-        .select("storage_path")
-        .eq("session_id", sessionId);
-      if (artifactError) throw artifactError;
       return {
         id: session.id,
         videoPath: session.video_path,
-        artifactPaths: (artifacts ?? []).map((artifact) => artifact.storage_path),
       };
     },
     removeVideos: async (paths) => {
       const { error } = await admin.storage.from("analysis-videos").remove(paths);
-      if (error) throw error;
-    },
-    removeArtifacts: async (paths) => {
-      const { error } = await admin.storage.from("analysis-artifacts").remove(paths);
       if (error) throw error;
     },
     deleteSession: async (sessionId, userId) => {

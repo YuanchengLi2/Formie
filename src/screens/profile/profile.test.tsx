@@ -8,8 +8,8 @@ describe("ProfileScreen", () => {
 
     expect(screen.getByText("Private by default")).toBeTruthy();
     expect(screen.getByText("How FORM analyzes")).toBeTruthy();
-    expect(screen.getByText(/Gemini reviews the full video/i)).toBeTruthy();
-    expect(screen.getByText(/MediaPipe tracks visible joints/i)).toBeTruthy();
+    expect(screen.getByText(/Gemini reviews the complete recording at up to 24 sampled frames per second/i)).toBeTruthy();
+    expect(screen.queryByText(/MediaPipe/i)).toBeNull();
     expect(screen.queryByText("Privacy, retention, and account controls live here.")).toBeNull();
   });
 });

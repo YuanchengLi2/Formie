@@ -7,17 +7,17 @@ describe("AnalysisProgressScreen", () => {
   it("shows real persisted stages and never a fake percentage", async () => {
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-        <AnalysisProgressScreen stage="pose_tracking" failureMessage={null} />
+        <AnalysisProgressScreen stage="video_processing" failureMessage={null} />
       </SafeAreaProvider>,
     );
 
-    expect(screen.getByText("Checking video quality")).toBeTruthy();
-    expect(screen.getByText("Tracking your movement")).toBeTruthy();
-    expect(screen.getByText("Detecting repetitions")).toBeTruthy();
+    expect(screen.getByText("Checking your recording")).toBeTruthy();
+    expect(screen.getByText("Preparing the full video")).toBeTruthy();
+    expect(screen.getByText("Reviewing visible technique")).toBeTruthy();
     expect(screen.queryByText(/%/)).toBeNull();
   });
 
-  it("explains a worker failure without discarding the recording", async () => {
+  it("explains an analysis failure without discarding the recording", async () => {
     const onRecordAgain = jest.fn();
     const onGoHome = jest.fn();
     const screen = await render(

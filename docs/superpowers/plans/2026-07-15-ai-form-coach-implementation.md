@@ -1,5 +1,7 @@
 # FORM Record-First AI Coach Implementation Plan
 
+> **Superseded architecture:** The worker and MediaPipe tasks are replaced by `2026-07-15-gemini-only-video-analysis-implementation.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Repository instructions prohibit subagents, so execution is inline.
 
 **Goal:** Replace the exercise-selection prototype with a working record-any-exercise flow that uploads the original video, derives MediaPipe evidence, uses Gemini 3.5 Flash for open-ended recognition and coaching, and renders unlimited evidence-backed feedback.

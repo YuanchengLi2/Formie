@@ -1,5 +1,7 @@
 # FORM Record-First AI Coach Design
 
+> **Superseded architecture:** The worker and MediaPipe portions are replaced by `2026-07-15-gemini-only-video-analysis-design.md`.
+
 ## Product Promise
 
 Open FORM, record any exercise, and learn what to improve.
