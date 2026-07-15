@@ -27,6 +27,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="recording-tips" options={{ headerShown: true, title: "Recording Tips", headerBackButtonDisplayMode: "minimal" }} />
           <Stack.Screen name="camera" options={{ headerShown: false, gestureEnabled: false }} />
+          <Stack.Screen name="analysis/[session-id]" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen
             name="no-phone-space"
             options={{
