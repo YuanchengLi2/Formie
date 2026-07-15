@@ -17,8 +17,7 @@ function finding(id: string, severity: CoachingFinding["severity"] = "important"
         repNumber: 1,
         phase: "concentric",
         visualEvidence: `${id} is visible`,
-        mediaPipeEvidence: null,
-        observableLandmarks: ["left_elbow"],
+        visibleBodyAreas: ["elbows"],
         confidence: 0.9,
       },
     ],
@@ -35,6 +34,7 @@ function result(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
       confidence: 0.94,
       alternatives: [],
       catalogExerciseId: 35,
+      cameraView: "side",
     },
     videoCheck: {
       outcome: "usable",

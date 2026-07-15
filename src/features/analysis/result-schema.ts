@@ -14,8 +14,7 @@ export const evidenceMomentSchema = z
     repNumber: z.number().int().positive().nullable(),
     phase: z.string().min(1).nullable(),
     visualEvidence: z.string().min(1),
-    mediaPipeEvidence: z.string().min(1).nullable(),
-    observableLandmarks: z.array(z.string().min(1)).min(1),
+    visibleBodyAreas: z.array(z.string().min(1)).min(1),
     confidence: z.number().min(0.75).max(1),
   })
   .refine((moment) => moment.endMs > moment.startMs, {
@@ -41,6 +40,7 @@ const recognitionSchema = z.object({
   confidence: z.number().min(0).max(1),
   alternatives: z.array(z.string().min(1)),
   catalogExerciseId: z.number().int().positive().nullable(),
+  cameraView: z.enum(["front", "side", "diagonal", "elevated", "low", "uncertain"]),
 });
 
 const videoCheckSchema = z.object({

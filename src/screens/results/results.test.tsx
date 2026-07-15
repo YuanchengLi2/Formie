@@ -14,14 +14,14 @@ function finding(id: string, title: string): CoachingFinding {
     correction: `Improve ${title.toLowerCase()}.`,
     cue: `Think ${title.toLowerCase()}.`,
     severity: "important",
-    evidence: [{ startMs: 1_000, endMs: 1_600, repNumber: 1, phase: "concentric", visualEvidence: `${title} at rep 1.`, mediaPipeEvidence: null, observableLandmarks: ["left_shoulder"], confidence: 0.9 }],
+    evidence: [{ startMs: 1_000, endMs: 1_600, repNumber: 1, phase: "concentric", visualEvidence: `${title} at rep 1.`, visibleBodyAreas: ["shoulders"], confidence: 0.9 }],
   };
 }
 
 function result(): AnalysisResult {
   return {
     status: "partial",
-    recognition: { label: "High-to-low cable row", variation: null, equipment: ["cable machine"], confidence: 0.76, alternatives: ["High row"], catalogExerciseId: null },
+    recognition: { label: "High-to-low cable row", variation: null, equipment: ["cable machine"], confidence: 0.76, alternatives: ["High row"], catalogExerciseId: null, cameraView: "low" },
     videoCheck: { outcome: "partial", usableObservations: ["tempo", "elbow path"], limitations: ["hips obscured"], retryReason: null, retryInstruction: null },
     overallAssessment: "The visible repetitions were controlled and provided useful coaching evidence.",
     score: null,

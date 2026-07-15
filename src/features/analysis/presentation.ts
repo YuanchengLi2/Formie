@@ -14,7 +14,7 @@ export function getVisibleFindings(findings: CoachingFinding[]): CoachingFinding
           evidence.confidence >= 0.75 &&
           evidence.visualEvidence.trim().length > 0 &&
           evidence.endMs > evidence.startMs &&
-          evidence.observableLandmarks.length > 0,
+          evidence.visibleBodyAreas.length > 0,
       ),
     )
     .toSorted((left, right) => SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity]);

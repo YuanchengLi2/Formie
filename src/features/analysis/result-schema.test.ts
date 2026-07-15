@@ -17,8 +17,7 @@ function validFinding(id = "elbow-drift"): CoachingFinding {
         repNumber: 3,
         phase: "concentric",
         visualEvidence: "Both elbows move forward between 00:08.0 and 00:08.7.",
-        mediaPipeEvidence: "Elbow-to-shoulder x-offset increased during rep 3.",
-        observableLandmarks: ["left_shoulder", "right_shoulder", "left_elbow", "right_elbow"],
+        visibleBodyAreas: ["shoulders", "elbows", "torso"],
         confidence: 0.88,
       },
     ],
@@ -35,6 +34,7 @@ function validResult(): AnalysisResult {
       confidence: 0.94,
       alternatives: ["Hammer curl"],
       catalogExerciseId: 35,
+      cameraView: "side",
     },
     videoCheck: {
       outcome: "usable",
@@ -83,6 +83,16 @@ describe("analysisResultSchema", () => {
   it("rejects evidence below the accepted confidence threshold", () => {
     const result = validResult();
     result.priorityCorrections[0].evidence[0].confidence = 0.74;
+    expect(analysisResultSchema.safeParse(result).success).toBe(false);
+  });
+
+  it("rejects legacy pose evidence instead of treating it as video evidence", () => {
+    const result = validResult() as unknown as Record<string, unknown>;
+    const correction = (result.priorityCorrections as Array<Record<string, unknown>>)[0];
+    const evidence = (correction.evidence as Array<Record<string, unknown>>)[0];
+    delete evidence.visibleBodyAreas;
+    evidence.mediaPipeEvidence = "A pose model estimated elbow drift.";
+    evidence.observableLandmarks = ["left_elbow"];
     expect(analysisResultSchema.safeParse(result).success).toBe(false);
   });
 

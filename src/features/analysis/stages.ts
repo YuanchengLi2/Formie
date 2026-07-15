@@ -1,8 +1,6 @@
 export const analysisStages = [
-  { id: "video_check", label: "Checking video quality" },
-  { id: "pose_tracking", label: "Tracking your movement" },
-  { id: "rep_detection", label: "Detecting repetitions" },
-  { id: "recognition", label: "Recognizing the exercise" },
+  { id: "video_check", label: "Checking your recording" },
+  { id: "video_processing", label: "Preparing the full video" },
   { id: "technique_review", label: "Reviewing visible technique" },
   { id: "coaching", label: "Preparing your coaching" },
 ] as const;
