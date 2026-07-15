@@ -51,15 +51,50 @@ ANALYSIS_SCHEMA: dict[str, Any] = {
     "required": ["status", "videoCheck", "overallAssessment", "score", "scoreRationale", "didWell", "priorityCorrections", "coachingCues", "viewNote", "comparison"],
     "properties": {
         "status": {"type": "string", "enum": ["complete", "partial", "unable"]},
-        "videoCheck": {"type": "object"},
+        "videoCheck": {
+            "type": "object",
+            "required": ["outcome", "usableObservations", "limitations", "retryReason", "retryInstruction"],
+            "properties": {
+                "outcome": {"type": "string", "enum": ["usable", "partial", "unable"]},
+                "usableObservations": {"type": "array", "items": {"type": "string"}},
+                "limitations": {"type": "array", "items": {"type": "string"}},
+                "retryReason": {"type": ["string", "null"]},
+                "retryInstruction": {"type": ["string", "null"]},
+            },
+        },
         "overallAssessment": {"type": ["string", "null"]},
         "score": {"type": ["number", "null"]},
-        "scoreRationale": {"type": "array", "items": {"type": "object"}},
+        "scoreRationale": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["criterion", "observed", "impact", "confidence"],
+                "properties": {
+                    "criterion": {"type": "string"},
+                    "observed": {"type": "string"},
+                    "impact": {"type": "number", "minimum": 0, "maximum": 100},
+                    "confidence": {"type": "number", "minimum": 0.75, "maximum": 1},
+                },
+            },
+        },
         "didWell": {"type": "array", "items": FINDING_SCHEMA},
         "priorityCorrections": {"type": "array", "items": FINDING_SCHEMA},
         "coachingCues": {"type": "array", "items": FINDING_SCHEMA},
         "viewNote": {"type": ["string", "null"]},
-        "comparison": {"type": ["object", "null"]},
+        "comparison": {
+            "oneOf": [
+                {"type": "null"},
+                {
+                    "type": "object",
+                    "required": ["previousSessionId", "summary", "priorityIssueImproved"],
+                    "properties": {
+                        "previousSessionId": {"type": "string"},
+                        "summary": {"type": "string"},
+                        "priorityIssueImproved": {"type": ["boolean", "null"]},
+                    },
+                },
+            ],
+        },
     },
 }
 

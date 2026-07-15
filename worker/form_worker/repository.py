@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from .models import PoseEvidence
+
 
 class WorkerRepository:
     def __init__(self, client: Any, worker_id: str) -> None:
@@ -43,6 +45,63 @@ class WorkerRepository:
         now = datetime.now(timezone.utc).isoformat()
         self.client.table("analysis_sessions").update({"status": "processing", "stage": stage, "updated_at": now}).eq("id", session_id).execute()
         self.client.table("analysis_jobs").update({"stage": stage, "lease_until": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(), "updated_at": now}).eq("session_id", session_id).execute()
+
+    def matching_profile(self, recognition: dict[str, Any]) -> dict[str, Any] | None:
+        label = " ".join(str(recognition.get("label") or "").lower().split())
+        if not label:
+            return None
+        rows = self.client.table("exercises").select("id,name,slug,aliases").eq("is_active", True).execute().data or []
+        matched = next(
+            (
+                row
+                for row in rows
+                if label in {" ".join(str(candidate).lower().replace("-", " ").split()) for candidate in [row["name"], row["slug"], *(row.get("aliases") or [])]}
+            ),
+            None,
+        )
+        if not matched:
+            return None
+        profile_rows = (
+            self.client.table("exercise_profiles")
+            .select("profile,version")
+            .eq("exercise_id", matched["id"])
+            .eq("is_active", True)
+            .order("version", desc=True)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        if not profile_rows:
+            return None
+        recognition["catalogExerciseId"] = matched["id"]
+        return profile_rows[0]["profile"]
+
+    def save_pose_evidence(self, job: dict[str, Any], evidence: PoseEvidence) -> None:
+        import json
+        import os
+
+        path = f"{job['user_id']}/{job['session_id']}/pose-evidence.json"
+        payload = json.dumps(evidence.to_dict(), separators=(",", ":")).encode()
+        self.client.storage.from_("analysis-artifacts").upload(path, payload, {"content-type": "application/json", "upsert": "true"})
+        self.client.table("pose_artifacts").delete().eq("session_id", job["session_id"]).execute()
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=int(os.environ.get("POSE_ARTIFACT_RETENTION_DAYS", "7")))).isoformat()
+        self.client.table("pose_artifacts").insert({
+            "session_id": job["session_id"],
+            "storage_path": path,
+            "sample_rate": evidence.sample_rate,
+            "visibility_summary": evidence.visibility,
+            "rep_boundaries": [vars(boundary) for boundary in evidence.rep_boundaries],
+            "measurements": {
+                "joint_angles": evidence.joint_angles,
+                "range_of_motion": evidence.range_of_motion,
+                "pauses": evidence.pauses,
+                "rep_comparison": evidence.rep_comparison,
+                "possible_asymmetry": evidence.possible_asymmetry,
+            },
+            "candidate_events": evidence.evidence_timestamps_ms,
+            "expires_at": expires_at,
+        }).execute()
 
     def save_result(self, job: dict[str, Any], result: dict[str, Any]) -> None:
         recognition = result["recognition"]

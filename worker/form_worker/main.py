@@ -16,6 +16,7 @@ from .pose import PoseLandmarkerAdapter
 from .repository import WorkerRepository
 from .verifier import verify_analysis
 from .video import probe_video
+from .video import create_analysis_proxy
 
 
 def required_environment(name: str) -> str:
@@ -23,6 +24,12 @@ def required_environment(name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} is required")
     return value
+
+
+def _extract_pose(original_path: Path, pose_adapter: PoseLandmarkerAdapter):
+    proxy = original_path.with_name("analysis-proxy.mp4")
+    create_analysis_proxy(original_path, proxy)
+    return build_pose_evidence(pose_adapter.process_video(proxy))
 
 
 def run_once(repository: WorkerRepository, analyzer: GeminiAnalyzer, pose_adapter: PoseLandmarkerAdapter) -> bool:
@@ -36,7 +43,8 @@ def run_once(repository: WorkerRepository, analyzer: GeminiAnalyzer, pose_adapte
                     update_stage=repository.update_stage,
                     download_video=repository.download_video,
                     validate_video=probe_video,
-                    extract_pose=lambda path: build_pose_evidence(pose_adapter.process_video(path)),
+                    extract_pose=lambda path: _extract_pose(path, pose_adapter),
+                    save_pose_evidence=repository.save_pose_evidence,
                     extract_frames=lambda path, evidence, output: extract_evidence_frames(path, evidence.evidence_timestamps_ms[:24], output),
                     analyze=analyzer.analyze,
                     verify=lambda candidate, duration, visibility: verify_analysis(candidate, duration_ms=duration, landmark_visibility=visibility),
@@ -53,7 +61,7 @@ def run_once(repository: WorkerRepository, analyzer: GeminiAnalyzer, pose_adapte
 def main() -> None:
     supabase = create_client(required_environment("SUPABASE_URL"), required_environment("SUPABASE_SERVICE_ROLE_KEY"))
     repository = WorkerRepository(supabase, os.environ.get("WORKER_ID", "local-worker"))
-    analyzer = GeminiAnalyzer(genai.Client(api_key=required_environment("GEMINI_API_KEY")))
+    analyzer = GeminiAnalyzer(genai.Client(api_key=required_environment("GEMINI_API_KEY")), profile_provider=repository.matching_profile)
     pose_adapter = PoseLandmarkerAdapter(required_environment("POSE_LANDMARKER_MODEL_PATH"))
     run_continuously = os.environ.get("WORKER_RUN_CONTINUOUSLY", "false").lower() == "true"
     while True:

@@ -7,6 +7,7 @@ from form_worker.orchestrator import AnalysisOrchestrator, AnalysisWorkerDepende
 def test_orchestrator_persists_real_stages_and_validated_result(tmp_path) -> None:
     stages = []
     saved = []
+    pose_saved = []
     video = tmp_path / "original.mp4"
     video.write_bytes(b"video")
     result = {"status": "partial", "videoCheck": {"outcome": "partial"}, "recognition": {"confidence": 0.8}, "score": None, "scoreRationale": [], "didWell": [], "priorityCorrections": [], "coachingCues": []}
@@ -15,6 +16,7 @@ def test_orchestrator_persists_real_stages_and_validated_result(tmp_path) -> Non
         download_video=lambda job, destination: video,
         validate_video=lambda path: type("Metadata", (), {"duration_ms": 5000})(),
         extract_pose=lambda path: PoseEvidence(),
+        save_pose_evidence=lambda job, evidence: pose_saved.append(evidence),
         extract_frames=lambda path, evidence, directory: [],
         analyze=lambda path, frames, evidence, previous: result,
         verify=lambda candidate, duration, visibility: candidate,
@@ -25,3 +27,4 @@ def test_orchestrator_persists_real_stages_and_validated_result(tmp_path) -> Non
 
     assert stages == ["video_check", "pose_tracking", "rep_detection", "recognition", "technique_review", "coaching"]
     assert saved == [result]
+    assert len(pose_saved) == 1

@@ -13,6 +13,7 @@ class AnalysisWorkerDependencies:
     download_video: Callable[[dict[str, Any], Path], Path]
     validate_video: Callable[[Path], Any]
     extract_pose: Callable[[Path], PoseEvidence]
+    save_pose_evidence: Callable[[dict[str, Any], PoseEvidence], None]
     extract_frames: Callable[[Path, PoseEvidence, Path], list[Path]]
     analyze: Callable[[Path, list[Path], PoseEvidence, dict[str, Any] | None], dict[str, Any]]
     verify: Callable[[dict[str, Any], int, dict[str, float]], dict[str, Any]]
@@ -34,6 +35,7 @@ class AnalysisOrchestrator:
 
         self.dependencies.update_stage(session_id, "pose_tracking")
         pose_evidence = self.dependencies.extract_pose(video_path)
+        self.dependencies.save_pose_evidence(job, pose_evidence)
         self.dependencies.update_stage(session_id, "rep_detection")
         frames = self.dependencies.extract_frames(video_path, pose_evidence, workspace_path / "evidence")
 

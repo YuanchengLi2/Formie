@@ -76,6 +76,7 @@ export function RecordingTipsScreen({ onContinue, onOpenSpaceHelp }: RecordingTi
 
       <View style={{ gap: spacing.sm }}>
         <FormButton label="Continue to Camera" onPress={onContinue} />
+        <Text selectable style={[typography.caption, { color: colors.textMuted, textAlign: "center" }]}>By continuing, you consent to securely upload this exercise video for AI form analysis.</Text>
         <Pressable accessibilityRole="button" onPress={onOpenSpaceHelp} style={{ alignItems: "center", paddingVertical: spacing.md }}>
           <Text selectable style={[typography.label, { color: colors.gold }]}>No good place for your phone?</Text>
         </Pressable>

@@ -14,6 +14,7 @@ describe("RecordingTipsScreen", () => {
     expect(screen.getByText("Against a water bottle or gym bag")).toBeTruthy();
     expect(screen.getByText("On a small phone tripod")).toBeTruthy();
     expect(screen.getByLabelText("General phone placement animation")).toBeTruthy();
+    expect(screen.getByText("By continuing, you consent to securely upload this exercise video for AI form analysis.")).toBeTruthy();
     expect(screen.queryByText(/squat|curl|press/i)).toBeNull();
   });
 
