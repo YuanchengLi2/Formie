@@ -1,31 +1,37 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
-import { errorResponse, jsonResponse } from "../_shared/responses.ts";
+import { completeUploadHandler } from "./handler.ts";
 
 Deno.serve(async (request) => {
   const options = preflight(request);
   if (options) return options;
-  if (request.method !== "POST") return errorResponse("Method not allowed", 405, "METHOD_NOT_ALLOWED");
-
-  try {
-    const admin = createAdminClient();
-    const userId = await requireUserId(request, admin);
-    const { sessionId } = await request.json() as { sessionId?: string };
-    if (!sessionId) return errorResponse("sessionId is required", 400, "INVALID_BODY");
-
-    const { data: session } = await admin.from("analysis_sessions").select("id,video_path").eq("id", sessionId).eq("user_id", userId).maybeSingle();
-    if (!session) return errorResponse("Analysis not found", 404, "NOT_FOUND");
-    const videoPath = session.video_path ?? `${userId}/${sessionId}/original.mp4`;
-    const { data: exists, error: existsError } = await admin.storage.from("analysis-videos").exists(videoPath);
-    if (existsError || !exists) return errorResponse("The uploaded video was not found", 409, "VIDEO_NOT_FOUND");
-
-    const { error: updateError } = await admin.from("analysis_sessions").update({ status: "queued", stage: "video_check", video_path: videoPath, updated_at: new Date().toISOString() }).eq("id", sessionId).eq("user_id", userId);
-    if (updateError) throw updateError;
-    const { error: jobError } = await admin.from("analysis_jobs").upsert({ session_id: sessionId, stage: "queued", updated_at: new Date().toISOString() }, { onConflict: "session_id" });
-    if (jobError) throw jobError;
-    return jsonResponse({ queued: true });
-  } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") return errorResponse("Sign in again", 401, "UNAUTHORIZED");
-    return errorResponse("Upload could not be queued", 500, "QUEUE_FAILED");
-  }
+  const admin = createAdminClient();
+  return completeUploadHandler(request, {
+    authenticate: (incoming) => requireUserId(incoming, admin),
+    findSession: async (sessionId, userId) => {
+      const { data, error } = await admin.from("analysis_sessions").select("id,video_path").eq("id", sessionId).eq("user_id", userId).maybeSingle();
+      if (error) throw error;
+      return data ? { id: data.id, videoPath: data.video_path } : null;
+    },
+    videoExists: async (path) => {
+      const { data, error } = await admin.storage.from("analysis-videos").exists(path);
+      if (error) throw error;
+      return data;
+    },
+    markProcessing: async (input) => {
+      const { error } = await admin.from("analysis_sessions").update({
+        status: "processing",
+        stage: "video_check",
+        video_path: input.videoPath,
+        duration_ms: input.durationMs,
+        capture_orientation: input.captureOrientation,
+        camera_facing: input.cameraFacing,
+        camera_lens: input.cameraLens,
+        requested_fps: input.requestedFps,
+        failure_code: null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", input.sessionId).eq("user_id", input.userId);
+      if (error) throw error;
+    },
+  });
 });

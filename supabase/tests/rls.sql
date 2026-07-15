@@ -1,5 +1,5 @@
 begin;
-select plan(19);
+select plan(25);
 
 select has_table('public', 'analysis_sessions', 'analysis_sessions exists');
 select has_table('public', 'analysis_results', 'analysis_results exists');
@@ -11,6 +11,12 @@ select has_column('public', 'analysis_sessions', 'detected_variation', 'detected
 select has_column('public', 'analysis_sessions', 'recognition_confidence', 'recognition confidence is persisted');
 select has_column('public', 'analysis_sessions', 'previous_session_id', 'repeat recordings link to a prior session');
 select has_column('public', 'analysis_sessions', 'corrected_label', 'label correction is stored separately');
+select has_column('public', 'analysis_sessions', 'capture_orientation', 'capture orientation is persisted');
+select has_column('public', 'analysis_sessions', 'requested_fps', 'Gemini sampling rate is persisted');
+select has_column('public', 'analysis_sessions', 'gemini_file_name', 'Gemini file identity is resumable');
+select has_column('public', 'analysis_sessions', 'gemini_file_state', 'Gemini file state is resumable');
+select hasnt_table('public', 'analysis_jobs', 'worker job table is removed');
+select hasnt_table('public', 'pose_artifacts', 'pose artifact table is removed');
 
 select has_column('public', 'analysis_results', 'video_check', 'video check is persisted');
 select has_column('public', 'analysis_results', 'did_well', 'positive findings are persisted');
