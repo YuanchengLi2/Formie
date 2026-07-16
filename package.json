@@ -55,6 +55,7 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "seed:render": "node scripts/render-exercise-seed.cjs",
+    "evaluate:coaching": "node scripts/evaluate-coaching.cjs",
     "typecheck": "tsc --noEmit",
     "test": "jest"
   },

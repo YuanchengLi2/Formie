@@ -46,6 +46,16 @@ export type AnalysisCandidate = {
   didWell: CoachingFinding[];
   priorityCorrections: CoachingFinding[];
   coachingCues: CoachingFinding[];
+  setSummary: { totalReps: number | null; consistentReps: number | null; verdict: string | null };
+  repTimeline: Array<{ repNumber: number; startMs: number; peakMs: number; endMs: number; assessment: "strong" | "consistent" | "breakdown" | "uncertain"; note: string }>;
+  nextSetPlan: Array<{ id: string; action: string; rationale: string; relatedFindingId: string | null }>;
+  verification?: {
+    performed: boolean;
+    reason: string | null;
+    outcome: "not-needed" | "confirmed" | "revised" | "rejected" | "failed";
+    checkedFindingId: string | null;
+    usage?: { promptTokens: number; outputTokens: number; thinkingTokens: number };
+  };
   comparison: { previousSessionId: string; summary: string; priorityIssueImproved: boolean | null } | null;
 };
 
@@ -79,9 +89,33 @@ const findingSchema = {
   },
 } as const;
 
+const repTimelineSchema = {
+  type: "object",
+  required: ["repNumber", "startMs", "peakMs", "endMs", "assessment", "note"],
+  properties: {
+    repNumber: { type: "integer", minimum: 1 },
+    startMs: { type: "integer", minimum: 0 },
+    peakMs: { type: "integer", minimum: 0 },
+    endMs: { type: "integer", minimum: 1 },
+    assessment: { type: "string", enum: ["strong", "consistent", "breakdown", "uncertain"] },
+    note: { type: "string" },
+  },
+} as const;
+
+const nextSetPlanSchema = {
+  type: "object",
+  required: ["id", "action", "rationale", "relatedFindingId"],
+  properties: {
+    id: { type: "string" },
+    action: { type: "string" },
+    rationale: { type: "string" },
+    relatedFindingId: { type: ["string", "null"] },
+  },
+} as const;
+
 export const GEMINI_ANALYSIS_JSON_SCHEMA = {
   type: "object",
-  required: ["status", "recognition", "videoCheck", "overallAssessment", "score", "scoreRationale", "didWell", "priorityCorrections", "coachingCues", "comparison"],
+  required: ["status", "recognition", "videoCheck", "overallAssessment", "score", "scoreRationale", "didWell", "priorityCorrections", "coachingCues", "setSummary", "repTimeline", "nextSetPlan", "comparison"],
   properties: {
     status: { type: "string", enum: ["complete", "partial", "unable"] },
     recognition: {
@@ -126,6 +160,17 @@ export const GEMINI_ANALYSIS_JSON_SCHEMA = {
     didWell: { type: "array", items: findingSchema },
     priorityCorrections: { type: "array", items: findingSchema },
     coachingCues: { type: "array", items: findingSchema },
+    setSummary: {
+      type: "object",
+      required: ["totalReps", "consistentReps", "verdict"],
+      properties: {
+        totalReps: { type: ["integer", "null"], minimum: 1 },
+        consistentReps: { type: ["integer", "null"], minimum: 0 },
+        verdict: { type: ["string", "null"] },
+      },
+    },
+    repTimeline: { type: "array", items: repTimelineSchema },
+    nextSetPlan: { type: "array", maxItems: 5, items: nextSetPlanSchema },
     comparison: {
       anyOf: [
         { type: "null" },
@@ -230,6 +275,30 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
   const corrections = findings(result.priorityCorrections, "priorityCorrections", durationMs);
   const cues = findings(result.coachingCues, "coachingCues", durationMs);
 
+  const setSummary = object(result.setSummary, "setSummary");
+  const totalReps = number(setSummary.totalReps, "setSummary.totalReps", 1, 10_000, true);
+  const consistentReps = number(setSummary.consistentReps, "setSummary.consistentReps", 0, 10_000, true);
+  string(setSummary.verdict, "setSummary.verdict", true);
+  if (totalReps !== null && consistentReps !== null && consistentReps > totalReps) throw new Error("consistent repetitions cannot exceed total repetitions");
+
+  if (!Array.isArray(result.repTimeline)) throw new Error("repTimeline must be an array");
+  for (const rawRep of result.repTimeline) {
+    const rep = object(rawRep, "repTimeline item");
+    if (!Number.isInteger(rep.repNumber) || Number(rep.repNumber) < 1) throw new Error("repTimeline repNumber is invalid");
+    if (!Number.isInteger(rep.startMs) || !Number.isInteger(rep.peakMs) || !Number.isInteger(rep.endMs) || Number(rep.startMs) < 0 || Number(rep.startMs) > Number(rep.peakMs) || Number(rep.peakMs) > Number(rep.endMs) || Number(rep.endMs) > durationMs) throw new Error("repTimeline timestamp is outside the recorded video");
+    if (!["strong", "consistent", "breakdown", "uncertain"].includes(String(rep.assessment))) throw new Error("repTimeline assessment is invalid");
+    string(rep.note, "repTimeline.note");
+  }
+
+  if (!Array.isArray(result.nextSetPlan) || result.nextSetPlan.length > 5) throw new Error("nextSetPlan must contain at most five actions");
+  for (const rawItem of result.nextSetPlan) {
+    const item = object(rawItem, "nextSetPlan item");
+    string(item.id, "nextSetPlan.id");
+    string(item.action, "nextSetPlan.action");
+    string(item.rationale, "nextSetPlan.rationale");
+    string(item.relatedFindingId, "nextSetPlan.relatedFindingId", true);
+  }
+
   if (result.comparison !== null) {
     const comparison = object(result.comparison, "comparison");
     string(comparison.previousSessionId, "previousSessionId");
@@ -242,7 +311,7 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
 
   if (result.status === "unable") {
     if (videoCheck.outcome !== "unable" || didWell.length || corrections.length || cues.length) throw new Error("unable result cannot contain coaching");
-    if (result.overallAssessment !== null || score !== null || !videoCheck.retryReason || !videoCheck.retryInstruction) throw new Error("unable result requires retry guidance and no assessment");
+    if (result.overallAssessment !== null || score !== null || !videoCheck.retryReason || !videoCheck.retryInstruction || totalReps !== null || consistentReps !== null || result.repTimeline.length || result.nextSetPlan.length) throw new Error("unable result requires retry guidance and no assessment");
   } else if (videoCheck.outcome === "unable" || !result.overallAssessment) {
     throw new Error("analyzed result requires visible assessment evidence");
   } else if (!recognition.label) {

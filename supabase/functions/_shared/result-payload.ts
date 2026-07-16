@@ -20,6 +20,10 @@ export function resultPayload(session: Record<string, unknown>, result: Record<s
     didWell: (result.did_well ?? []) as AnalysisCandidate["didWell"],
     priorityCorrections: (result.priority_corrections ?? []) as AnalysisCandidate["priorityCorrections"],
     coachingCues: (result.coaching_cues ?? []) as AnalysisCandidate["coachingCues"],
+    setSummary: (result.set_summary ?? { totalReps: null, consistentReps: null, verdict: null }) as AnalysisCandidate["setSummary"],
+    repTimeline: (result.rep_timeline ?? []) as AnalysisCandidate["repTimeline"],
+    nextSetPlan: (result.next_set_plan ?? []) as AnalysisCandidate["nextSetPlan"],
+    verification: (result.verification ?? undefined) as AnalysisCandidate["verification"],
     comparison: (result.comparison ?? null) as AnalysisCandidate["comparison"],
   };
 }

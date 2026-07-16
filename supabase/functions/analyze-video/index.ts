@@ -131,6 +131,7 @@ Deno.serve(async (request) => {
       });
     },
     generate: (session, file, prompt) => gemini.generateAnalysis({ file, prompt, durationMs: session.durationMs ?? 0 }),
+    verify: (session, file, draft) => gemini.verifyAnalysis({ file, draft, durationMs: session.durationMs ?? 0 }),
     markStage: async (sessionId, stage) => {
       const { error } = await admin.from("analysis_sessions").update({ status: "processing", stage, updated_at: new Date().toISOString() }).eq("id", sessionId);
       if (error) throw error;
@@ -168,8 +169,12 @@ Deno.serve(async (request) => {
         did_well: result.didWell,
         priority_corrections: result.priorityCorrections,
         coaching_cues: result.coachingCues,
+        set_summary: result.setSummary,
+        rep_timeline: result.repTimeline,
+        next_set_plan: result.nextSetPlan,
+        verification: result.verification ?? null,
         comparison: result.comparison,
-        analysis_version: "gemini-video-2.0.0",
+        analysis_version: "gemini-video-3.0.0",
       }, { onConflict: "session_id" });
       if (resultError) throw resultError;
     },

@@ -11,7 +11,7 @@ import { ResultsScreen } from "@/screens/results";
 export default function ResultsRoute() {
   const router = useRouter();
   const { "session-id": sessionId = "" } = useLocalSearchParams<{ "session-id": string }>();
-  const status = useAnalysisStatus(sessionId);
+  const status = useAnalysisStatus(sessionId, { includeVideoUrl: true });
   const tutorial = useExerciseTutorial(sessionId, status.data?.result?.status === "complete" || status.data?.result?.status === "partial");
   const resetCapture = useCaptureStore((state) => state.dispatch);
 
@@ -41,6 +41,7 @@ export default function ResultsRoute() {
   return (
     <ResultsScreen
       result={status.data.result}
+      videoUrl={status.data.videoUrl}
       tutorial={tutorial.data}
       tutorialLoading={tutorial.isLoading}
       onOpenTutorial={(video) => void WebBrowser.openBrowserAsync(video.url)}

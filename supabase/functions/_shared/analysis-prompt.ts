@@ -37,6 +37,11 @@ Judge the attempt against the identified exercise and variation, not a generic m
 
 Return zero to two genuine strengths, one or two priority corrections, and one or two next-set cues. Do not invent praise. Prioritize the correction with the greatest visible effect. Every correction must state: the specific visible observation, why it matters for this exercise, one exact physical change, and one short memorable cue. Mention the specific joint or implement path instead of generic phrases such as "improve form," "stay controlled," or "engage your core." Never repeat the same issue across sections. Treat rep count, tempo, range of motion, and asymmetry as qualitative or estimated unless the recording directly supports the statement.
 
+STRUCTURE THE SET FOR COACHING
+Set setSummary.totalReps and consistentReps only when the repetitions can be counted from the recording; otherwise use null. setSummary.verdict must be one concise coach verdict that answers whether the set was performed well and what most limited it. Create repTimeline entries only for repetitions you can distinguish, with the strongest or clearest moment at peakMs. Mark each as strong, consistent, breakdown, or uncertain and keep the note observable.
+
+Create a nextSetPlan with one to five ordered physical actions the user can apply immediately. Every action must be short, specific, and tied to this exercise. relatedFindingId must reference the correction or cue it comes from when applicable. Do not add generic filler or six simultaneous corrections.
+
 CHOOSE EVIDENCE THAT PROVES EACH CLAIM
 Every finding needs one tight evidence interval around the clearest single frame. Set peakMs to the exact moment where the claim is most visually obvious, startMs shortly before it, and endMs shortly after it. Keep the interval between 400 and 1200 milliseconds and ensure startMs <= peakMs <= endMs. Do not select setup footage for a mid-rep claim or a transition frame for an end-range claim. visualEvidence must describe exactly what is visible at peakMs and name the relevant body area or implement.
 
@@ -44,5 +49,5 @@ Do not discuss recording direction, device position, framing, viewpoint, or how 
 
 Return unable only if the media is blank, corrupted, contains no person, or contains no meaningful human movement at all. Never return unable because of bad form, an unusual variation, partial range, failed repetitions, unfamiliar equipment, low recognition confidence, or an exercise performed very poorly. A poor attempt should receive a low assessment and direct coaching.
 
-For status unable, set videoCheck.outcome to unable; set overallAssessment, score, and comparison to null; set scoreRationale, didWell, priorityCorrections, and coachingCues to empty arrays; and set videoCheck.retryReason and retryInstruction to specific non-empty strings. Otherwise return complete or partial coaching. Include a numeric score when recognition confidence is at least 0.55 and at least two visible exercise-specific criteria support it.`;
+For status unable, set videoCheck.outcome to unable; set overallAssessment, score, comparison, setSummary.totalReps, setSummary.consistentReps, and setSummary.verdict to null; set scoreRationale, didWell, priorityCorrections, coachingCues, repTimeline, and nextSetPlan to empty arrays; and set videoCheck.retryReason and retryInstruction to specific non-empty strings. Otherwise return complete or partial coaching. Include a numeric score when recognition confidence is at least 0.55 and at least two visible exercise-specific criteria support it.`;
 }

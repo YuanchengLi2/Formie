@@ -53,13 +53,21 @@ function validResult(): AnalysisResult {
     didWell: [validFinding("controlled-lowering")],
     priorityCorrections: [validFinding()],
     coachingCues: [validFinding("wall-cue")],
+    setSummary: { totalReps: 8, consistentReps: 6, verdict: "Control changed during the final two repetitions." },
+    repTimeline: [{ repNumber: 1, startMs: 500, peakMs: 900, endMs: 1_300, assessment: "consistent", note: "Elbow position stayed steady." }],
+    nextSetPlan: [{ id: "plan-1", action: "Keep the upper arms still", rationale: "Reduce shoulder assistance.", relatedFindingId: "elbow-drift" }],
+    verification: { performed: true, reason: "Subtle joint-path claim", outcome: "confirmed", checkedFindingId: "elbow-drift" },
     comparison: null,
   };
 }
 
 describe("analysisResultSchema", () => {
   it("accepts a complete result with timestamped evidence", () => {
-    expect(analysisResultSchema.safeParse(validResult()).success).toBe(true);
+    const parsed = analysisResultSchema.parse(validResult());
+    expect(parsed.setSummary).toMatchObject({ totalReps: 8, consistentReps: 6 });
+    expect(parsed.repTimeline?.[0]).toMatchObject({ repNumber: 1, assessment: "consistent" });
+    expect(parsed.nextSetPlan?.[0]).toMatchObject({ relatedFindingId: "elbow-drift" });
+    expect(parsed.verification).toMatchObject({ performed: true, outcome: "confirmed" });
   });
 
   it("accepts every evidence-backed finding without a fixed count cap", () => {
@@ -128,6 +136,9 @@ describe("analysisResultSchema", () => {
       didWell: [],
       priorityCorrections: [],
       coachingCues: [],
+      setSummary: { totalReps: null, consistentReps: null, verdict: null },
+      repTimeline: [],
+      nextSetPlan: [],
     };
 
     expect(analysisResultSchema.safeParse(unable).success).toBe(true);

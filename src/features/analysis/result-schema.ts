@@ -60,6 +60,45 @@ const comparisonSchema = z.object({
   priorityIssueImproved: z.boolean().nullable(),
 });
 
+const setSummarySchema = z.object({
+  totalReps: z.number().int().positive().nullable(),
+  consistentReps: z.number().int().nonnegative().nullable(),
+  verdict: z.string().min(1).nullable(),
+}).refine((summary) => summary.totalReps === null || summary.consistentReps === null || summary.consistentReps <= summary.totalReps, {
+  message: "Consistent repetitions cannot exceed total repetitions",
+  path: ["consistentReps"],
+});
+
+const repTimelineItemSchema = z.object({
+  repNumber: z.number().int().positive(),
+  startMs: z.number().int().min(0),
+  peakMs: z.number().int().min(0),
+  endMs: z.number().int().positive(),
+  assessment: z.enum(["strong", "consistent", "breakdown", "uncertain"]),
+  note: z.string().min(1),
+}).refine((rep) => rep.startMs <= rep.peakMs && rep.peakMs <= rep.endMs, { message: "Rep peak must fall inside its interval", path: ["peakMs"] });
+
+const nextSetPlanItemSchema = z.object({
+  id: z.string().min(1),
+  action: z.string().min(1),
+  rationale: z.string().min(1),
+  relatedFindingId: z.string().min(1).nullable(),
+});
+
+const usageSchema = z.object({
+  promptTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  thinkingTokens: z.number().int().nonnegative(),
+});
+
+const verificationSchema = z.object({
+  performed: z.boolean(),
+  reason: z.string().min(1).nullable(),
+  outcome: z.enum(["not-needed", "confirmed", "revised", "rejected", "failed"]),
+  checkedFindingId: z.string().min(1).nullable(),
+  usage: usageSchema.optional(),
+});
+
 export const analysisResultSchema = z
   .object({
     status: z.enum(["complete", "partial", "unable"]),
@@ -71,6 +110,10 @@ export const analysisResultSchema = z
     didWell: z.array(coachingFindingSchema),
     priorityCorrections: z.array(coachingFindingSchema),
     coachingCues: z.array(coachingFindingSchema),
+    setSummary: setSummarySchema.optional(),
+    repTimeline: z.array(repTimelineItemSchema).optional(),
+    nextSetPlan: z.array(nextSetPlanItemSchema).max(5).optional(),
+    verification: verificationSchema.optional(),
     comparison: comparisonSchema.nullable(),
   })
   .superRefine((result, context) => {
@@ -119,3 +162,5 @@ export type ScoreRationale = z.infer<typeof scoreRationaleSchema>;
 export type EvidenceMoment = z.infer<typeof evidenceMomentSchema>;
 export type CoachingFinding = z.infer<typeof coachingFindingSchema>;
 export type AnalysisResult = z.infer<typeof analysisResultSchema>;
+export type RepTimelineItem = z.infer<typeof repTimelineItemSchema>;
+export type NextSetPlanItem = z.infer<typeof nextSetPlanItemSchema>;

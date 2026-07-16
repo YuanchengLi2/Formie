@@ -27,6 +27,7 @@ export type AnalyzeVideoDependencies = {
   savePreflightCheck: (sessionId: string, check: VideoPreflightCheck) => Promise<void>;
   buildPrompt: (session: AnalyzeVideoSession) => Promise<string>;
   generate: (session: AnalyzeVideoSession, file: GeminiFile, prompt: string) => Promise<AnalysisCandidate>;
+  verify: (session: AnalyzeVideoSession, file: GeminiFile, draft: AnalysisCandidate) => Promise<AnalysisCandidate>;
   markStage: (sessionId: string, stage: "video_processing" | "technique_review" | "coaching") => Promise<void>;
   saveResult: (sessionId: string, result: AnalysisCandidate) => Promise<void>;
   markFailed: (sessionId: string, code: string) => Promise<void>;
@@ -62,6 +63,9 @@ function unableResult(check: VideoPreflightCheck): AnalysisCandidate {
     didWell: [],
     priorityCorrections: [],
     coachingCues: [],
+    setSummary: { totalReps: null, consistentReps: null, verdict: null },
+    repTimeline: [],
+    nextSetPlan: [],
     comparison: null,
   };
 }
@@ -137,6 +141,19 @@ export async function analyzeVideoHandler(request: Request, dependencies: Analyz
     }
 
     await dependencies.markStage(session.id, "coaching");
+    try {
+      result = await dependencies.verify(session, file, result);
+    } catch {
+      result = {
+        ...result,
+        verification: {
+          performed: true,
+          reason: "Precision verification was unavailable; the primary analysis was retained.",
+          outcome: "failed",
+          checkedFindingId: result.priorityCorrections[0]?.id ?? null,
+        },
+      };
+    }
     await dependencies.saveResult(session.id, result);
     await dependencies.deleteFile(file.name).catch(() => undefined);
     return json(statusPayload(session, result.status, "coaching", result), 200);

@@ -32,6 +32,9 @@ function candidate() {
     didWell: [{ id: "stable", title: "Stable torso", detail: "The torso stayed quiet.", whyItMatters: "This keeps the curl repeatable.", correction: null, cue: null, severity: "note", evidence: [evidence] }],
     priorityCorrections: [{ id: "drift", title: "Reduce elbow drift", detail: "The elbows moved forward.", whyItMatters: "Shoulder motion replaces part of the curl.", correction: "Keep the upper arms quiet.", cue: "Elbows against a wall.", severity: "important", evidence: [evidence] }],
     coachingCues: [],
+    setSummary: { totalReps: 3, consistentReps: 2, verdict: "The last repetition changed." },
+    repTimeline: [{ repNumber: 1, startMs: 500, peakMs: 900, endMs: 1_300, assessment: "consistent", note: "The repetition stayed controlled." }],
+    nextSetPlan: [{ id: "plan-1", action: "Keep the upper arms still", rationale: "Reduce elbow drift.", relatedFindingId: "drift" }],
     comparison: null,
   };
 }
@@ -40,6 +43,7 @@ describe("Gemini analysis contract", () => {
   it("accepts one complete evidence-backed video result", () => {
     expect(validateAnalysisCandidate(candidate(), 10_000)).toEqual(candidate());
     expect(GEMINI_ANALYSIS_JSON_SCHEMA.required).toContain("recognition");
+    expect(GEMINI_ANALYSIS_JSON_SCHEMA.required).toEqual(expect.arrayContaining(["setSummary", "repTimeline", "nextSetPlan"]));
   });
 
   it("rejects evidence outside the recording", () => {

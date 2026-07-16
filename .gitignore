@@ -9,6 +9,7 @@ node_modules/
 .expo-export-check/
 dist/
 dist-final-check/
+dist-verify/
 web-build/
 .form-scaffold/
 supabase/.branches/

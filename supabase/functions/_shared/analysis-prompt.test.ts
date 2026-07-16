@@ -15,11 +15,16 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).toContain("qualitative or estimated");
     expect(prompt).toContain("24 frames per second");
     expect(prompt).toContain("Standing Dumbbell Curl");
-    expect(prompt).toContain("overallAssessment, score, and comparison to null");
+    expect(prompt).toContain("set overallAssessment, score, comparison, setSummary.totalReps");
     expect(prompt).toContain("retryReason and retryInstruction to specific non-empty strings");
     expect(prompt).toContain("exerciseFamily");
     expect(prompt).toContain("one or two priority corrections");
     expect(prompt).toContain("specific visible observation");
+    expect(prompt).toContain("STRUCTURE THE SET FOR COACHING");
+    expect(prompt).toContain("setSummary.totalReps");
+    expect(prompt).toContain("Create repTimeline entries");
+    expect(prompt).toContain("Create a nextSetPlan with one to five ordered physical actions");
+    expect(prompt).toContain("six simultaneous corrections");
     expect(prompt).not.toContain("Capture metadata");
     expect(prompt).not.toContain("camera view");
     expect(prompt).not.toContain("angle");

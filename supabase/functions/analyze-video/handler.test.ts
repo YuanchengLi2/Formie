@@ -9,7 +9,8 @@ function result(): AnalysisCandidate {
     status: "complete",
     recognition: { label: "Curl", variation: null, equipment: ["dumbbells"], confidence: 0.9, alternatives: [], catalogExerciseId: null, exerciseFamily: "curl" },
     videoCheck: { outcome: "usable", usableObservations: ["upper body"], limitations: [], retryReason: null, retryInstruction: null },
-    overallAssessment: "The visible set was controlled.", score: null, scoreRationale: [], didWell: [], priorityCorrections: [], coachingCues: [], comparison: null,
+    overallAssessment: "The visible set was controlled.", score: null, scoreRationale: [], didWell: [], priorityCorrections: [], coachingCues: [],
+    setSummary: { totalReps: 8, consistentReps: 7, verdict: "Seven of eight reps stayed controlled." }, repTimeline: [], nextSetPlan: [], comparison: null,
   };
 }
 
@@ -38,6 +39,10 @@ function dependencies(current = session(), overrides: Partial<AnalyzeVideoDepend
     savePreflightCheck: jest.fn(async () => undefined),
     buildPrompt: jest.fn(async () => "coach the actual camera view"),
     generate: jest.fn(async () => result()),
+    verify: jest.fn(async (_session, _file, draft) => ({
+      ...draft,
+      verification: { performed: false, reason: null, outcome: "not-needed", checkedFindingId: null },
+    })),
     markStage: jest.fn(async () => undefined),
     saveResult: jest.fn(async () => undefined),
     markFailed: jest.fn(async () => undefined),
@@ -96,9 +101,12 @@ describe("analyzeVideoHandler", () => {
     const response = await analyzeVideoHandler(request(), deps);
     expect(response.status).toBe(200);
     expect(deps.generate).toHaveBeenCalledTimes(1);
-    expect(deps.saveResult).toHaveBeenCalledWith("session-1", result());
+    expect(deps.verify).toHaveBeenCalledWith(expect.objectContaining({ id: "session-1" }), activeFile, result());
+    expect(deps.saveResult).toHaveBeenCalledWith("session-1", expect.objectContaining({
+      verification: expect.objectContaining({ outcome: "not-needed" }),
+    }));
     expect(deps.deleteFile).toHaveBeenCalledWith("files/file-1");
-    expect((await response.json()).result).toEqual(result());
+    expect((await response.json()).result).toMatchObject(result());
   });
 
   it("stops after the first video check when the recording is blatantly unusable", async () => {
@@ -146,8 +154,29 @@ describe("analyzeVideoHandler", () => {
     const response = await analyzeVideoHandler(request(), deps);
 
     expect(response.status).toBe(200);
-    expect((await response.json()).result).toEqual(result());
-    expect(deps.saveResult).toHaveBeenCalledWith("session-1", result());
+    expect((await response.json()).result).toMatchObject(result());
+    expect(deps.saveResult).toHaveBeenCalledWith("session-1", expect.objectContaining({
+      verification: expect.objectContaining({ outcome: "not-needed" }),
+    }));
+  });
+
+  it("keeps the primary analysis when the precision verifier is unavailable", async () => {
+    const deps = dependencies(session({
+      geminiFileName: "files/file-1",
+      geminiFileUri: "uri",
+      geminiFileState: "ACTIVE",
+      preflightCheck: { outcome: "usable", usableObservations: ["person and movement visible"], limitations: [], retryReason: null, retryInstruction: null },
+    }), {
+      verify: jest.fn(async () => { throw new Error("verifier unavailable"); }),
+    });
+
+    const response = await analyzeVideoHandler(request(), deps);
+
+    expect(response.status).toBe(200);
+    expect(deps.saveResult).toHaveBeenCalledWith("session-1", expect.objectContaining({
+      verification: expect.objectContaining({ performed: true, outcome: "failed" }),
+    }));
+    expect(deps.markFailed).not.toHaveBeenCalled();
   });
 
   it("persists failure when Gemini rejects a file or invalid output", async () => {
