@@ -22,13 +22,7 @@ describe("completeUploadHandler", () => {
   it("marks an owned uploaded video ready for Gemini without queueing a job", async () => {
     const deps = dependencies();
     const response = await completeUploadHandler(
-      request({
-        sessionId: "session-1",
-        durationMs: 18_500,
-        captureOrientation: "landscapeLeft",
-        cameraFacing: "back",
-        cameraLens: "wideAngleCamera",
-      }),
+      request({ sessionId: "session-1", durationMs: 18_500 }),
       deps,
     );
 
@@ -39,17 +33,14 @@ describe("completeUploadHandler", () => {
       userId: "user-1",
       videoPath: "user-1/session-1/original.mp4",
       durationMs: 18_500,
-      captureOrientation: "landscapeLeft",
-      cameraFacing: "back",
-      cameraLens: "wideAngleCamera",
       requestedFps: 24,
     });
   });
 
-  it("rejects unsupported capture metadata", async () => {
+  it("rejects an unsupported recording duration", async () => {
     const deps = dependencies();
     const response = await completeUploadHandler(
-      request({ sessionId: "session-1", durationMs: 2_999, captureOrientation: "upsideways", cameraFacing: "back" }),
+      request({ sessionId: "session-1", durationMs: 2_999 }),
       deps,
     );
 
@@ -60,14 +51,14 @@ describe("completeUploadHandler", () => {
   it("requires an owned session and uploaded storage object", async () => {
     const missingSession = dependencies({ findSession: jest.fn(async () => null) });
     const notFound = await completeUploadHandler(
-      request({ sessionId: "missing", durationMs: 10_000, captureOrientation: "portraitUp", cameraFacing: "front" }),
+      request({ sessionId: "missing", durationMs: 10_000 }),
       missingSession,
     );
     expect(notFound.status).toBe(404);
 
     const missingVideo = dependencies({ videoExists: jest.fn(async () => false) });
     const conflict = await completeUploadHandler(
-      request({ sessionId: "session-1", durationMs: 10_000, captureOrientation: "portraitUp", cameraFacing: "front" }),
+      request({ sessionId: "session-1", durationMs: 10_000 }),
       missingVideo,
     );
     expect(conflict.status).toBe(409);

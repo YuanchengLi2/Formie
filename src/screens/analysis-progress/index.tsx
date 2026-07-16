@@ -24,8 +24,9 @@ export function AnalysisProgressScreen({ stage, failureMessage, onRecordAgain, o
 
   return (
     <ScrollView
-      bounces={false}
-      overScrollMode="never"
+      alwaysBounceVertical
+      bounces
+      overScrollMode="auto"
       contentContainerStyle={{ flexGrow: 1, gap: spacing.lg, paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.lg, paddingHorizontal: spacing.lg }}
       style={{ flex: 1, backgroundColor: colors.background }}
     >

@@ -3,6 +3,7 @@ import { GEMINI_ANALYSIS_JSON_SCHEMA, validateAnalysisCandidate } from "./analys
 function candidate() {
   const evidence = {
     startMs: 1_000,
+    peakMs: 1_350,
     endMs: 1_700,
     repNumber: 1,
     phase: "concentric",
@@ -19,7 +20,6 @@ function candidate() {
       confidence: 0.94,
       alternatives: [],
       catalogExerciseId: 35,
-      cameraView: "side",
       exerciseFamily: "curl",
     },
     videoCheck: { outcome: "usable", usableObservations: ["upper body"], limitations: [], retryReason: null, retryInstruction: null },
@@ -32,13 +32,12 @@ function candidate() {
     didWell: [{ id: "stable", title: "Stable torso", detail: "The torso stayed quiet.", whyItMatters: "This keeps the curl repeatable.", correction: null, cue: null, severity: "note", evidence: [evidence] }],
     priorityCorrections: [{ id: "drift", title: "Reduce elbow drift", detail: "The elbows moved forward.", whyItMatters: "Shoulder motion replaces part of the curl.", correction: "Keep the upper arms quiet.", cue: "Elbows against a wall.", severity: "important", evidence: [evidence] }],
     coachingCues: [],
-    viewNote: "The side view showed the elbows and torso clearly.",
     comparison: null,
   };
 }
 
 describe("Gemini analysis contract", () => {
-  it("accepts one complete view-aware video result", () => {
+  it("accepts one complete evidence-backed video result", () => {
     expect(validateAnalysisCandidate(candidate(), 10_000)).toEqual(candidate());
     expect(GEMINI_ANALYSIS_JSON_SCHEMA.required).toContain("recognition");
   });
@@ -61,8 +60,8 @@ describe("Gemini analysis contract", () => {
 
   it("rejects a score when recognition is uncertain", () => {
     const value = candidate();
-    value.recognition.confidence = 0.62;
-    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("score requires confident recognition");
+    value.recognition.confidence = 0.52;
+    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("score requires usable recognition");
   });
 
   it("requires unable results to contain no coaching", () => {

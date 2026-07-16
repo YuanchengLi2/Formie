@@ -7,15 +7,10 @@ export type CapturePhase =
   | "processing"
   | "error";
 
-export type CaptureOrientation = "portraitUp" | "portraitDown" | "landscapeLeft" | "landscapeRight" | "unknown";
-
 export type RecordedSet = {
   localUri: string;
   durationMs: number;
   mimeType: string;
-  captureOrientation: CaptureOrientation;
-  cameraFacing: "front" | "back";
-  cameraLens: string | null;
 };
 
 export type UploadTarget = {

@@ -13,7 +13,7 @@ const finding: CoachingFinding = {
   correction: "Reduce the load slightly and match both elbows.",
   cue: "Pull both handles through the same finish line.",
   severity: "important",
-  evidence: [{ startMs: 7_200, endMs: 8_100, repNumber: 3, phase: "concentric", visualEvidence: "The right elbow reaches the torso first.", visibleBodyAreas: ["left elbow", "right elbow"], confidence: 0.89 }],
+  evidence: [{ startMs: 7_200, peakMs: 7_650, endMs: 8_100, repNumber: 3, phase: "concentric", visualEvidence: "The right elbow reaches the torso first.", visibleBodyAreas: ["left elbow", "right elbow"], confidence: 0.89 }],
 };
 
 describe("FindingDetailScreen", () => {

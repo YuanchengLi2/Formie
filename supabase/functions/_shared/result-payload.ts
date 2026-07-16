@@ -11,7 +11,6 @@ export function resultPayload(session: Record<string, unknown>, result: Record<s
       confidence: Number(session.recognition_confidence ?? 0),
       alternatives: (session.recognition_alternatives ?? []) as string[],
       catalogExerciseId: (session.corrected_exercise_id ?? session.exercise_id ?? null) as number | null,
-      cameraView: (session.camera_view ?? "uncertain") as AnalysisCandidate["recognition"]["cameraView"],
       exerciseFamily: (session.exercise_family ?? "other") as AnalysisCandidate["recognition"]["exerciseFamily"],
     },
     videoCheck: result.video_check as AnalysisCandidate["videoCheck"],
@@ -21,7 +20,6 @@ export function resultPayload(session: Record<string, unknown>, result: Record<s
     didWell: (result.did_well ?? []) as AnalysisCandidate["didWell"],
     priorityCorrections: (result.priority_corrections ?? []) as AnalysisCandidate["priorityCorrections"],
     coachingCues: (result.coaching_cues ?? []) as AnalysisCandidate["coachingCues"],
-    viewNote: (result.view_note ?? null) as string | null,
     comparison: (result.comparison ?? null) as AnalysisCandidate["comparison"],
   };
 }

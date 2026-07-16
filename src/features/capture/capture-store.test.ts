@@ -12,7 +12,7 @@ describe("capture state", () => {
     state = captureReducer(state, { type: "recording_started", startedAt: 1_000 });
     state = captureReducer(state, {
       type: "recording_finished",
-      recording: { localUri: "file:///set.mp4", durationMs: 18_000, mimeType: "video/mp4", captureOrientation: "landscapeLeft", cameraFacing: "back", cameraLens: "wide" },
+      recording: { localUri: "file:///set.mp4", durationMs: 18_000, mimeType: "video/mp4" },
     });
     state = captureReducer(state, { type: "upload_started" });
     state = captureReducer(state, { type: "processing", sessionId: "session-1" });
@@ -28,7 +28,7 @@ describe("capture state", () => {
     let state: CaptureState = {
       ...initialCaptureState,
       phase: "recorded" as const,
-      recording: { localUri: "file:///set.mp4", durationMs: 12_000, mimeType: "video/mp4", captureOrientation: "portraitUp", cameraFacing: "back", cameraLens: null },
+      recording: { localUri: "file:///set.mp4", durationMs: 12_000, mimeType: "video/mp4" },
     };
 
     state = captureReducer(state, { type: "upload_started" });

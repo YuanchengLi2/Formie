@@ -7,16 +7,16 @@ const activeFile: GeminiFile = { name: "files/file-1", uri: "uri", mimeType: "vi
 function result(): AnalysisCandidate {
   return {
     status: "complete",
-    recognition: { label: "Curl", variation: null, equipment: ["dumbbells"], confidence: 0.9, alternatives: [], catalogExerciseId: null, cameraView: "side", exerciseFamily: "curl" },
+    recognition: { label: "Curl", variation: null, equipment: ["dumbbells"], confidence: 0.9, alternatives: [], catalogExerciseId: null, exerciseFamily: "curl" },
     videoCheck: { outcome: "usable", usableObservations: ["upper body"], limitations: [], retryReason: null, retryInstruction: null },
-    overallAssessment: "The visible set was controlled.", score: null, scoreRationale: [], didWell: [], priorityCorrections: [], coachingCues: [], viewNote: "The side view showed the torso.", comparison: null,
+    overallAssessment: "The visible set was controlled.", score: null, scoreRationale: [], didWell: [], priorityCorrections: [], coachingCues: [], comparison: null,
   };
 }
 
 function session(overrides: Partial<AnalyzeVideoSession> = {}): AnalyzeVideoSession {
   return {
     id: "session-1", userId: "user-1", status: "processing", stage: "video_check", videoPath: "user-1/session-1/original.mp4", durationMs: 10_000,
-    captureOrientation: "landscapeLeft", cameraFacing: "back", cameraLens: "wide", requestedFps: 24,
+    requestedFps: 24,
     geminiFileName: null, geminiFileUri: null, geminiFileState: null, preflightCheck: null, result: null,
     ...overrides,
   };

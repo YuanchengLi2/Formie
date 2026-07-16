@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
 import { useAudioPlayer } from "expo-audio";
 import { CameraView, useCameraPermissions, type CameraType } from "expo-camera";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import * as ScreenOrientation from "expo-screen-orientation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { FormButton } from "@/components/form-button";
 import { FormWordmark } from "@/components/form-wordmark";
@@ -19,9 +19,9 @@ import {
 import { useCaptureStore } from "@/features/capture/capture-store";
 import { normalizeRecordedDuration } from "@/features/capture/countdown";
 import { START_BEEP_URI } from "@/features/capture/start-beep";
-import type { CaptureOrientation, RecordedSet, UploadTarget } from "@/features/capture/types";
+import type { RecordedSet, UploadTarget } from "@/features/capture/types";
 import { captureVideoSettings } from "@/features/capture/video-settings";
-import { cameraZoomPresets, resolveCameraZoom, type CameraZoomLabel } from "@/features/capture/camera-zoom";
+import { cameraZoomPresets, pinchZoom, resolveCameraZoom, zoomDisplayLabel, type CameraZoomLabel } from "@/features/capture/camera-zoom";
 import { supabase } from "@/lib/supabase";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -34,21 +34,6 @@ const cameraPermissionArt = require("../../../assets/production/camera-permissio
 type CameraScreenProps = {
   previousSessionId?: string;
 };
-
-function captureOrientation(value: ScreenOrientation.Orientation): CaptureOrientation {
-  switch (value) {
-    case ScreenOrientation.Orientation.PORTRAIT_UP:
-      return "portraitUp";
-    case ScreenOrientation.Orientation.PORTRAIT_DOWN:
-      return "portraitDown";
-    case ScreenOrientation.Orientation.LANDSCAPE_LEFT:
-      return "landscapeLeft";
-    case ScreenOrientation.Orientation.LANDSCAPE_RIGHT:
-      return "landscapeRight";
-    default:
-      return "unknown";
-  }
-}
 
 async function getAccessToken(): Promise<string> {
   const existing = await supabase.auth.getSession();
@@ -73,6 +58,8 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const [selectedLens, setSelectedLens] = useState<string | undefined>();
   const [zoomLabel, setZoomLabel] = useState<CameraZoomLabel>("1x");
   const [zoom, setZoom] = useState(0);
+  const zoomRef = useRef(0);
+  const pinchStartZoomRef = useRef(0);
   const [elapsedMs, setElapsedMs] = useState(0);
   const beep = useAudioPlayer({ uri: START_BEEP_URI });
 
@@ -121,9 +108,6 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
           accessToken,
           sessionId: target.sessionId,
           durationMs: saved.durationMs,
-          captureOrientation: saved.captureOrientation,
-          cameraFacing: saved.cameraFacing,
-          cameraLens: saved.cameraLens,
         });
         dispatch({ type: "processing", sessionId: target.sessionId });
         router.replace({ pathname: "/analysis/[session-id]", params: { "session-id": target.sessionId } });
@@ -167,16 +151,12 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     void beep.seekTo(0).then(() => beep.play());
 
     try {
-      const orientation = await ScreenOrientation.getOrientationAsync().catch(() => ScreenOrientation.Orientation.UNKNOWN);
       const result = await cameraRef.current.recordAsync({ maxDuration: captureVideoSettings.maxDurationSeconds });
       if (!result?.uri) throw new Error("The camera did not save the recording");
       const saved: RecordedSet = {
         localUri: result.uri,
         durationMs: normalizeRecordedDuration(Date.now() - actualStart),
         mimeType: "video/mp4",
-        captureOrientation: captureOrientation(orientation),
-        cameraFacing: facing,
-        cameraLens: selectedLens ?? null,
       };
       dispatch({ type: "recording_finished", recording: saved });
       dispatch({ type: "upload_started" });
@@ -188,7 +168,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         dispatch({ type: "recording_failed", message });
       }
     }
-  }, [beep, dispatch, facing, selectedLens, uploadRecording]);
+  }, [beep, dispatch, uploadRecording]);
 
   useEffect(() => {
     if (phase !== "countingDown" || countdown === null) return;
@@ -213,6 +193,24 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
 
   const cameraCanClose = phase === "idle" || phase === "countingDown" || phase === "error";
 
+  const setCameraZoom = useCallback((nextZoom: number) => {
+    zoomRef.current = nextZoom;
+    setZoom(nextZoom);
+  }, []);
+
+  const pinchGesture = useMemo(
+    () => Gesture.Pinch()
+      .runOnJS(true)
+      .onBegin(() => {
+        pinchStartZoomRef.current = zoomRef.current;
+      })
+      .onUpdate((event) => {
+        setCameraZoom(pinchZoom(pinchStartZoomRef.current, event.scale));
+        setZoomLabel("1x");
+      }),
+    [setCameraZoom],
+  );
+
   if (permission && !permission.granted) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: spacing.xl, padding: spacing.xl, backgroundColor: colors.background }}>
@@ -235,28 +233,30 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cameraBlack }}>
-      <CameraView
-        ref={cameraRef}
-        active
-        enableTorch={torch}
-        facing={facing}
-        mirror={facing === "front"}
-        mode="video"
-        mute
-        onAvailableLensesChanged={({ lenses }) => {
-          setAvailableLenses(lenses);
-          if (!selectedLens) {
-            const initial = resolveCameraZoom("1x", lenses);
-            setSelectedLens(initial.lens);
-            setZoom(initial.zoom);
-          }
-        }}
-        selectedLens={selectedLens}
-        style={{ flex: 1 }}
-        videoQuality={captureVideoSettings.quality}
-        videoStabilizationMode="auto"
-        zoom={zoom}
-      />
+      <GestureDetector gesture={pinchGesture}>
+        <CameraView
+          ref={cameraRef}
+          active
+          enableTorch={torch}
+          facing={facing}
+          mirror={facing === "front"}
+          mode="video"
+          mute
+          onAvailableLensesChanged={({ lenses }) => {
+            setAvailableLenses(lenses);
+            if (!selectedLens) {
+              const initial = resolveCameraZoom("1x", lenses);
+              setSelectedLens(initial.lens);
+              setCameraZoom(initial.zoom);
+            }
+          }}
+          selectedLens={selectedLens}
+          style={{ flex: 1 }}
+          videoQuality={captureVideoSettings.quality}
+          videoStabilizationMode="auto"
+          zoom={zoom}
+        />
+      </GestureDetector>
 
       <View pointerEvents="box-none" style={{ position: "absolute", top: insets.top + spacing.md, left: spacing.lg, right: spacing.lg, flexDirection: "row", justifyContent: "space-between" }}>
         <Pressable
@@ -281,32 +281,11 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
           <Pressable accessibilityLabel="Flip camera" onPress={() => {
             setFacing((value) => (value === "back" ? "front" : "back"));
             setZoomLabel("1x");
-            setZoom(0);
+            setCameraZoom(0);
             setSelectedLens(undefined);
           }} style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)" }}>
             <Text selectable style={{ color: colors.text, fontSize: 18 }}>↻</Text>
           </Pressable>
-        </View>
-      </View>
-
-      <View pointerEvents="box-none" style={{ position: "absolute", top: insets.top + 62, left: 0, right: 0, alignItems: "center" }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: 5, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.62)" }}>
-          <ProductionIcon name="setupZoom" label="Camera zoom options" size={25} tintColor={colors.textSecondary} />
-          {zoomPresets.map((preset) => (
-            <Pressable
-              accessibilityLabel={`Set camera zoom to ${preset.label}`}
-              accessibilityRole="button"
-              key={preset.label}
-              onPress={() => {
-                setZoomLabel(preset.label);
-                setSelectedLens(preset.lens);
-                setZoom(preset.zoom);
-              }}
-              style={{ minWidth: 44, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 16, backgroundColor: zoomLabel === preset.label ? colors.gold : "transparent" }}
-            >
-              <Text selectable style={[typography.label, { color: zoomLabel === preset.label ? colors.background : colors.text }]}>{preset.label}</Text>
-            </Pressable>
-          ))}
         </View>
       </View>
 
@@ -326,6 +305,30 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         onDiscardRecording={discardRecording}
         topInset={insets.top}
         bottomInset={insets.bottom}
+        zoomControls={(
+          <View accessibilityLabel="Camera zoom" style={{ alignItems: "center", gap: spacing.xs }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: 5, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.68)" }}>
+              <ProductionIcon name="setupZoom" label="Camera zoom options" size={23} tintColor={colors.textSecondary} />
+              {zoomPresets.map((preset) => (
+                <Pressable
+                  accessibilityLabel={`Set camera zoom to ${preset.label}`}
+                  accessibilityRole="button"
+                  key={preset.label}
+                  onPress={() => {
+                    setZoomLabel(preset.label);
+                    setSelectedLens(preset.lens);
+                    setCameraZoom(preset.zoom);
+                  }}
+                  style={{ minWidth: 44, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 16, backgroundColor: zoomLabel === preset.label ? colors.gold : "transparent" }}
+                >
+                  <Text selectable style={[typography.label, { color: zoomLabel === preset.label ? colors.background : colors.text }]}>{preset.label}</Text>
+                </Pressable>
+              ))}
+              <Text selectable style={[typography.caption, { minWidth: 38, color: colors.textSecondary, textAlign: "right" }]}>{zoomDisplayLabel(zoom, selectedLens?.toLowerCase().includes("ultra") ? 0.5 : 1)}</Text>
+            </View>
+            <Text selectable style={[typography.caption, { color: colors.textSecondary, textShadowColor: colors.background, textShadowRadius: 4 }]}>Pinch anywhere to fine-tune</Text>
+          </View>
+        )}
       />
     </View>
   );

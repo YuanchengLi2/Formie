@@ -1,5 +1,3 @@
-export type CaptureOrientation = "portraitUp" | "portraitDown" | "landscapeLeft" | "landscapeRight" | "unknown";
-
 export type CompleteUploadSession = {
   id: string;
   videoPath: string | null;
@@ -14,14 +12,9 @@ export type CompleteUploadDependencies = {
     userId: string;
     videoPath: string;
     durationMs: number;
-    captureOrientation: CaptureOrientation;
-    cameraFacing: "front" | "back";
-    cameraLens: string | null;
     requestedFps: 24;
   }) => Promise<void>;
 };
-
-const orientations = new Set<CaptureOrientation>(["portraitUp", "portraitDown", "landscapeLeft", "landscapeRight", "unknown"]);
 
 function json(payload: unknown, status: number): Response {
   return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } });
@@ -37,13 +30,10 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
     return json({ message: "A JSON request body is required", code: "INVALID_BODY" }, 400);
   }
 
-  const { sessionId, durationMs, captureOrientation, cameraFacing, cameraLens } = body;
+  const { sessionId, durationMs } = body;
   if (
     typeof sessionId !== "string" || !sessionId ||
-    typeof durationMs !== "number" || !Number.isInteger(durationMs) || durationMs < 3_000 || durationMs > 60_000 ||
-    typeof captureOrientation !== "string" || !orientations.has(captureOrientation as CaptureOrientation) ||
-    (cameraFacing !== "front" && cameraFacing !== "back") ||
-    (cameraLens !== undefined && cameraLens !== null && (typeof cameraLens !== "string" || !cameraLens.trim()))
+    typeof durationMs !== "number" || !Number.isInteger(durationMs) || durationMs < 3_000 || durationMs > 60_000
   ) {
     return json({ message: "Invalid upload metadata", code: "INVALID_BODY" }, 400);
   }
@@ -63,9 +53,6 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
       userId,
       videoPath,
       durationMs,
-      captureOrientation: captureOrientation as CaptureOrientation,
-      cameraFacing,
-      cameraLens: typeof cameraLens === "string" ? cameraLens : null,
       requestedFps: 24,
     });
     return json({ processing: true }, 200);

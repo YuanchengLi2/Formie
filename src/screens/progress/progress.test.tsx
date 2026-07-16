@@ -21,26 +21,22 @@ const group: AnalysisHistoryGroup = {
 };
 
 describe("ProgressScreen", () => {
-  it("keeps a bounded blank movement graph when there is no exercise data", async () => {
+  it("uses search and filters without rendering the movement graph", async () => {
     const screen = await render(<ProgressScreen groups={[]} onOpenSession={jest.fn()} onRecord={jest.fn()} />);
-    expect(screen.getByText("Movement Quality")).toBeTruthy();
-    expect(screen.getByLabelText("No movement quality data yet")).toBeTruthy();
-    expect(screen.queryByText("Saved analyses")).toBeNull();
+    expect(screen.getByPlaceholderText("Search exercises")).toBeTruthy();
+    expect(screen.getByText("All")).toBeTruthy();
+    expect(screen.queryByText("Movement Quality")).toBeNull();
   });
 
-  it("renders automatic exercise history and opens a result", async () => {
+  it("renders every saved exercise separately and filters the list", async () => {
     const onOpen = jest.fn();
     const screen = await render(<ProgressScreen groups={[group]} onOpenSession={onOpen} />);
-    expect(screen.getByText("Row")).toBeTruthy();
-    expect(screen.getByText("Movement Quality")).toBeTruthy();
-    expect(screen.getByText("+8 average points")).toBeTruthy();
-    expect(screen.getByText("Recurring: Elbow path")).toBeTruthy();
-    expect(screen.getByText("Control improved.")).toBeTruthy();
-    expect(screen.getByLabelText("Movement quality trend from 74 to 82")).toBeTruthy();
-    expect(screen.queryByText("Saved analyses")).toBeNull();
+    expect(screen.getAllByText("Cable Row")).toHaveLength(2);
     await fireEvent.press(screen.getByLabelText("Open analysis from 7/12/2026"));
     expect(onOpen).toHaveBeenCalledWith("s0");
     await fireEvent.press(screen.getByLabelText("Open analysis from 7/15/2026"));
     expect(onOpen).toHaveBeenCalledWith("s1");
+    await fireEvent.changeText(screen.getByPlaceholderText("Search exercises"), "bench");
+    expect(screen.queryByText("Cable Row")).toBeNull();
   });
 });

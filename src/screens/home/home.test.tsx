@@ -18,6 +18,7 @@ describe("HomeScreen", () => {
   it("explains that recognition happens automatically", async () => {
     const screen = await render(<HomeScreen onRecord={jest.fn()} />);
     expect(screen.getByText("Record any movement. FORM identifies it and coaches what it can actually see.")).toBeTruthy();
+    expect(screen.getByText("Made for real sets")).toBeTruthy();
   });
 
   it("shows recent analyses when history exists", async () => {

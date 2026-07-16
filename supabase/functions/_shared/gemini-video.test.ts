@@ -2,10 +2,10 @@ import { GEMINI_ANALYSIS_JSON_SCHEMA } from "./analysis-contract";
 import { createGeminiVideoClient } from "./gemini-video";
 
 function validCandidate() {
-  const evidence = { startMs: 1_000, endMs: 1_500, repNumber: 1, phase: "concentric", visualEvidence: "The torso stays still.", visibleBodyAreas: ["torso"], confidence: 0.9 };
+  const evidence = { startMs: 1_000, peakMs: 1_280, endMs: 1_500, repNumber: 1, phase: "concentric", visualEvidence: "The torso stays still.", visibleBodyAreas: ["torso"], confidence: 0.9 };
   return {
     status: "complete",
-    recognition: { label: "Curl", variation: null, equipment: ["dumbbells"], confidence: 0.9, alternatives: [], catalogExerciseId: null, cameraView: "side", exerciseFamily: "curl" },
+    recognition: { label: "Curl", variation: null, equipment: ["dumbbells"], confidence: 0.9, alternatives: [], catalogExerciseId: null, exerciseFamily: "curl" },
     videoCheck: { outcome: "usable", usableObservations: ["upper body"], limitations: [], retryReason: null, retryInstruction: null },
     overallAssessment: "The visible repetition was controlled.",
     score: null,
@@ -13,7 +13,6 @@ function validCandidate() {
     didWell: [{ id: "stable", title: "Stable torso", detail: "The torso stayed still.", whyItMatters: "This keeps the curl focused.", correction: null, cue: null, severity: "note", evidence: [evidence] }],
     priorityCorrections: [],
     coachingCues: [],
-    viewNote: "The side view showed the torso.",
     comparison: null,
   };
 }
@@ -41,7 +40,7 @@ describe("Gemini video client", () => {
 
     await client.generateAnalysis({
       file: { name: "files/file-1", uri: "https://generativelanguage.googleapis.com/v1beta/files/file-1", mimeType: "video/mp4", state: "ACTIVE" },
-      prompt: "Identify the actual camera view and coach the visible set.",
+      prompt: "Identify the exercise attempt and coach the visible set.",
       durationMs: 5_000,
     });
 
@@ -51,12 +50,12 @@ describe("Gemini video client", () => {
       fileData: { mimeType: "video/mp4", fileUri: "https://generativelanguage.googleapis.com/v1beta/files/file-1" },
       videoMetadata: { fps: 24 },
     });
-    expect(parts[1]).toEqual({ text: expect.stringContaining("actual camera view") });
+    expect(parts[1]).toEqual({ text: expect.stringContaining("exercise attempt") });
     expect(request.generationConfig).toMatchObject({ responseMimeType: "application/json", responseJsonSchema: GEMINI_ANALYSIS_JSON_SCHEMA });
     expect(JSON.stringify(request)).not.toContain('"fps":45');
   });
 
-  it("runs a lightweight 2 fps usability check before full analysis", async () => {
+  it("runs a lenient media-only usability check before full analysis", async () => {
     const check = {
       outcome: "unable",
       usableObservations: [],
@@ -72,8 +71,9 @@ describe("Gemini video client", () => {
     })).resolves.toEqual(check);
 
     const request = JSON.parse(String(fetcher.mock.calls[0][1].body));
-    expect(request.contents[0].parts[0].videoMetadata).toEqual({ fps: 2 });
+    expect(request.contents[0].parts[0].videoMetadata).toEqual({ fps: 6 });
     expect(request.contents[0].parts[1].text).toContain("blatantly unusable");
+    expect(request.contents[0].parts[1].text.toLowerCase()).toContain("bad form, an unusual variation, or low recognition confidence");
     expect(request.generationConfig.responseJsonSchema.properties).toHaveProperty("outcome");
   });
 
@@ -88,6 +88,15 @@ describe("Gemini video client", () => {
     await expect(client.generateAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, prompt: "coach", durationMs: 5_000 })).resolves.toMatchObject({ status: "complete" });
     expect(fetcher).toHaveBeenCalledTimes(2);
     expect(String(JSON.parse(String(fetcher.mock.calls[1][1].body)).contents[0].parts[1].text)).toContain("failed validation");
+  });
+
+  it("pins a usable low-confidence attempt to its nearest named alternative", async () => {
+    const candidate: any = validCandidate();
+    candidate.recognition = { ...candidate.recognition, label: null, confidence: 0.58, alternatives: ["Hammer Curl"] };
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(candidate) }] } }] }), { status: 200 }));
+    const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
+
+    await expect(client.generateAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, prompt: "coach", durationMs: 5_000 })).resolves.toMatchObject({ recognition: { label: "Hammer Curl" } });
   });
 
   it("checks and deletes temporary Gemini files", async () => {

@@ -90,7 +90,7 @@ describe("analysis API", () => {
     expect(uploadRequest.headers.Authorization).toBeUndefined();
   });
 
-  it("completes upload with capture metadata and starts processing", async () => {
+  it("completes upload and starts processing without capture metadata", async () => {
     const fetcher = jest.fn(async () => new Response(JSON.stringify({ processing: true }), { status: 200, headers: { "Content-Type": "application/json" } }));
 
     await completeAnalysisUpload({
@@ -99,16 +99,13 @@ describe("analysis API", () => {
       fetcher,
       sessionId: "session-123",
       durationMs: 18_500,
-      captureOrientation: "landscapeLeft",
-      cameraFacing: "back",
-      cameraLens: "wideAngleCamera",
     });
 
     expect(fetcher).toHaveBeenCalledWith(
       "https://example.supabase.co/functions/v1/complete-upload",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ sessionId: "session-123", durationMs: 18_500, captureOrientation: "landscapeLeft", cameraFacing: "back", cameraLens: "wideAngleCamera" }),
+        body: JSON.stringify({ sessionId: "session-123", durationMs: 18_500 }),
       }),
     );
   });
@@ -126,7 +123,7 @@ describe("analysis API", () => {
   it("shows terminal results without waiting for a second evidence-video request", async () => {
     const result = {
       status: "unable",
-      recognition: { label: null, variation: null, equipment: [], confidence: 0, alternatives: [], catalogExerciseId: null, cameraView: "uncertain", exerciseFamily: "other" },
+      recognition: { label: null, variation: null, equipment: [], confidence: 0, alternatives: [], catalogExerciseId: null, exerciseFamily: "other" },
       videoCheck: { outcome: "unable", usableObservations: [], limitations: ["No person was visible"], retryReason: "No person was visible", retryInstruction: "Keep your full body in frame" },
       overallAssessment: null,
       score: null,
@@ -134,7 +131,6 @@ describe("analysis API", () => {
       didWell: [],
       priorityCorrections: [],
       coachingCues: [],
-      viewNote: null,
       comparison: null,
     };
     const fetcher = jest
@@ -151,7 +147,7 @@ describe("analysis API", () => {
   it("loads a private evidence video only when coaching detail requests it", async () => {
     const result = {
       status: "unable",
-      recognition: { label: null, variation: null, equipment: [], confidence: 0, alternatives: [], catalogExerciseId: null, cameraView: "uncertain", exerciseFamily: "other" },
+      recognition: { label: null, variation: null, equipment: [], confidence: 0, alternatives: [], catalogExerciseId: null, exerciseFamily: "other" },
       videoCheck: { outcome: "unable", usableObservations: [], limitations: ["No person was visible"], retryReason: "No person was visible", retryInstruction: "Keep your full body in frame" },
       overallAssessment: null,
       score: null,
@@ -159,7 +155,6 @@ describe("analysis API", () => {
       didWell: [],
       priorityCorrections: [],
       coachingCues: [],
-      viewNote: null,
       comparison: null,
     };
     const fetcher = jest

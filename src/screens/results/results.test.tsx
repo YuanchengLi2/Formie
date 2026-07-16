@@ -15,14 +15,14 @@ function finding(id: string, title: string): CoachingFinding {
     correction: `Improve ${title.toLowerCase()}.`,
     cue: `Think ${title.toLowerCase()}.`,
     severity: "important",
-    evidence: [{ startMs: 1_000, endMs: 1_600, repNumber: 1, phase: "concentric", visualEvidence: `${title} at rep 1.`, visibleBodyAreas: ["shoulders"], confidence: 0.9 }],
+    evidence: [{ startMs: 1_000, peakMs: 1_300, endMs: 1_600, repNumber: 1, phase: "concentric", visualEvidence: `${title} at rep 1.`, visibleBodyAreas: ["shoulders"], confidence: 0.9 }],
   };
 }
 
 function result(): AnalysisResult {
   return {
     status: "partial",
-    recognition: { label: "High-to-low cable row", variation: null, equipment: ["cable machine"], confidence: 0.76, alternatives: ["High row"], catalogExerciseId: null, cameraView: "low", exerciseFamily: "row" },
+    recognition: { label: "High-to-low cable row", variation: null, equipment: ["cable machine"], confidence: 0.76, alternatives: ["High row"], catalogExerciseId: null, exerciseFamily: "row" },
     videoCheck: { outcome: "partial", usableObservations: ["tempo", "elbow path"], limitations: ["hips obscured"], retryReason: null, retryInstruction: null },
     overallAssessment: "The visible repetitions were controlled and provided useful coaching evidence.",
     score: null,
@@ -30,7 +30,6 @@ function result(): AnalysisResult {
     didWell: Array.from({ length: 5 }, (_, index) => finding(`well-${index}`, `Did well ${index + 1}`)),
     priorityCorrections: Array.from({ length: 4 }, (_, index) => finding(`fix-${index}`, `Priority ${index + 1}`)),
     coachingCues: Array.from({ length: 4 }, (_, index) => finding(`cue-${index}`, `Coaching ${index + 1}`)),
-    viewNote: "This low angle showed tempo and elbow path; hip position was obscured.",
     comparison: null,
   };
 }
@@ -53,11 +52,12 @@ describe("ResultsScreen", () => {
     }
   });
 
-  it("omits an unsupported score while clearly explaining angle limits", async () => {
+  it("omits an unsupported score while keeping exercise-specific coaching", async () => {
     const screen = await renderResults();
     expect(screen.queryByLabelText(/Movement quality/)).toBeNull();
-    expect(screen.getByText(/low angle showed tempo and elbow path/i)).toBeTruthy();
-    expect(screen.getByText("Likely High-to-low cable row")).toBeTruthy();
+    expect(screen.queryByText(/low angle showed tempo and elbow path/i)).toBeNull();
+    expect(screen.getByText("High-to-low cable row")).toBeTruthy();
+    expect(screen.getByText("FIX FIRST")).toBeTruthy();
   });
 
   it("opens evidence and supports another recording", async () => {

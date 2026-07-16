@@ -33,9 +33,9 @@ const VIDEO_PREFLIGHT_JSON_SCHEMA = {
   },
 } as const;
 
-const VIDEO_PREFLIGHT_PROMPT = `Check only whether this exercise recording is blatantly unusable before full analysis.
-Return unable only when there is no person or exercise movement to evaluate, the view is overwhelmingly blocked or dark, the subject stays outside the frame, or the video is corrupted. If any meaningful exercise movement is visible, return usable even when the angle is imperfect or some joints leave frame briefly.
-Do not identify the exercise and do not provide form coaching. For unable, provide one short specific retryReason and one actionable retryInstruction. For usable, set retryReason and retryInstruction to null.`;
+const VIDEO_PREFLIGHT_PROMPT = `Check only whether this media is blatantly unusable before full exercise analysis.
+Return unable only when the file is blank or corrupted, no person appears, or there is no meaningful human movement at all. Return usable whenever a person attempts any exercise-like movement. Bad form, an unusual variation, or low recognition confidence are never reasons to reject the recording. Do not judge technique, identify the exercise, or discuss recording direction or device placement.
+For unable, provide one short factual retryReason and one actionable retryInstruction. For usable, set retryReason and retryInstruction to null.`;
 
 type ClientOptions = {
   apiKey: string;
@@ -66,6 +66,37 @@ function responseText(payload: Record<string, unknown>): string {
   const text = parts.map((part) => part && typeof part === "object" ? (part as Record<string, unknown>).text : null).find((value) => typeof value === "string");
   if (typeof text !== "string") throw new Error("Gemini returned no structured text");
   return text;
+}
+
+const fallbackFamilyLabels: Record<string, string> = {
+  curl: "Curl exercise",
+  triceps: "Triceps extension",
+  press: "Press exercise",
+  "overhead-press": "Overhead press",
+  fly: "Fly exercise",
+  raise: "Raise exercise",
+  row: "Row exercise",
+  "pull-down": "Vertical pull exercise",
+  squat: "Squat exercise",
+  lunge: "Lunge exercise",
+  hinge: "Hip hinge exercise",
+  "hip-thrust": "Hip thrust",
+  carry: "Loaded carry",
+  core: "Core exercise",
+  plank: "Plank exercise",
+};
+
+function pinUsableRecognition(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const result = value as Record<string, unknown>;
+  if (result.status === "unable" || !result.recognition || typeof result.recognition !== "object") return value;
+  const recognition = result.recognition as Record<string, unknown>;
+  if (typeof recognition.label === "string" && recognition.label.trim()) return value;
+  const alternative = Array.isArray(recognition.alternatives)
+    ? recognition.alternatives.find((item) => typeof item === "string" && item.trim())
+    : null;
+  recognition.label = alternative ?? fallbackFamilyLabels[String(recognition.exerciseFamily)] ?? "Strength exercise attempt";
+  return value;
 }
 
 function parsePreflight(value: unknown): VideoPreflightCheck {
@@ -134,7 +165,7 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
           contents: [{
             role: "user",
             parts: [
-              { fileData: { mimeType: input.file.mimeType, fileUri: input.file.uri }, videoMetadata: { fps: 2 } },
+              { fileData: { mimeType: input.file.mimeType, fileUri: input.file.uri }, videoMetadata: { fps: 6 } },
               { text: VIDEO_PREFLIGHT_PROMPT },
             ],
           }],
@@ -171,7 +202,7 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
         });
         const payload = await responseJson(response, "Gemini analysis failed");
         try {
-          return validateAnalysisCandidate(JSON.parse(responseText(payload)), input.durationMs);
+          return validateAnalysisCandidate(pinUsableRecognition(JSON.parse(responseText(payload))), input.durationMs);
         } catch (error) {
           lastError = error;
           if (attempt === 0) {

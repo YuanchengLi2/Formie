@@ -1,8 +1,8 @@
-export type CameraView = "front" | "side" | "diagonal" | "elevated" | "low" | "uncertain";
 export type ExerciseFamily = "curl" | "triceps" | "press" | "overhead-press" | "fly" | "raise" | "row" | "pull-down" | "squat" | "lunge" | "hinge" | "hip-thrust" | "carry" | "core" | "plank" | "other";
 
 export type EvidenceMoment = {
   startMs: number;
+  peakMs: number;
   endMs: number;
   repNumber: number | null;
   phase: string | null;
@@ -31,7 +31,6 @@ export type AnalysisCandidate = {
     confidence: number;
     alternatives: string[];
     catalogExerciseId: number | null;
-    cameraView: CameraView;
     exerciseFamily: ExerciseFamily;
   };
   videoCheck: {
@@ -47,15 +46,15 @@ export type AnalysisCandidate = {
   didWell: CoachingFinding[];
   priorityCorrections: CoachingFinding[];
   coachingCues: CoachingFinding[];
-  viewNote: string | null;
   comparison: { previousSessionId: string; summary: string; priorityIssueImproved: boolean | null } | null;
 };
 
 const evidenceSchema = {
   type: "object",
-  required: ["startMs", "endMs", "repNumber", "phase", "visualEvidence", "visibleBodyAreas", "confidence"],
+  required: ["startMs", "peakMs", "endMs", "repNumber", "phase", "visualEvidence", "visibleBodyAreas", "confidence"],
   properties: {
     startMs: { type: "integer", minimum: 0 },
+    peakMs: { type: "integer", minimum: 0 },
     endMs: { type: "integer", minimum: 1 },
     repNumber: { type: ["integer", "null"] },
     phase: { type: ["string", "null"] },
@@ -82,12 +81,12 @@ const findingSchema = {
 
 export const GEMINI_ANALYSIS_JSON_SCHEMA = {
   type: "object",
-  required: ["status", "recognition", "videoCheck", "overallAssessment", "score", "scoreRationale", "didWell", "priorityCorrections", "coachingCues", "viewNote", "comparison"],
+  required: ["status", "recognition", "videoCheck", "overallAssessment", "score", "scoreRationale", "didWell", "priorityCorrections", "coachingCues", "comparison"],
   properties: {
     status: { type: "string", enum: ["complete", "partial", "unable"] },
     recognition: {
       type: "object",
-      required: ["label", "variation", "equipment", "confidence", "alternatives", "catalogExerciseId", "cameraView", "exerciseFamily"],
+      required: ["label", "variation", "equipment", "confidence", "alternatives", "catalogExerciseId", "exerciseFamily"],
       properties: {
         label: { type: ["string", "null"] },
         variation: { type: ["string", "null"] },
@@ -95,7 +94,6 @@ export const GEMINI_ANALYSIS_JSON_SCHEMA = {
         confidence: { type: "number", minimum: 0, maximum: 1 },
         alternatives: { type: "array", items: { type: "string" } },
         catalogExerciseId: { type: ["integer", "null"] },
-        cameraView: { type: "string", enum: ["front", "side", "diagonal", "elevated", "low", "uncertain"] },
         exerciseFamily: { type: "string", enum: ["curl", "triceps", "press", "overhead-press", "fly", "raise", "row", "pull-down", "squat", "lunge", "hinge", "hip-thrust", "carry", "core", "plank", "other"] },
       },
     },
@@ -128,7 +126,6 @@ export const GEMINI_ANALYSIS_JSON_SCHEMA = {
     didWell: { type: "array", items: findingSchema },
     priorityCorrections: { type: "array", items: findingSchema },
     coachingCues: { type: "array", items: findingSchema },
-    viewNote: { type: ["string", "null"] },
     comparison: {
       anyOf: [
         { type: "null" },
@@ -185,7 +182,7 @@ function findings(value: unknown, label: string, durationMs: number): CoachingFi
     if (!Array.isArray(finding.evidence) || finding.evidence.length === 0) throw new Error(`${label} requires evidence`);
     for (const rawMoment of finding.evidence) {
       const moment = object(rawMoment, `${label}.evidence`);
-      if (!Number.isInteger(moment.startMs) || !Number.isInteger(moment.endMs) || Number(moment.startMs) < 0 || Number(moment.endMs) <= Number(moment.startMs) || Number(moment.endMs) > durationMs) {
+      if (!Number.isInteger(moment.startMs) || !Number.isInteger(moment.peakMs) || !Number.isInteger(moment.endMs) || Number(moment.startMs) < 0 || Number(moment.peakMs) < Number(moment.startMs) || Number(moment.peakMs) > Number(moment.endMs) || Number(moment.endMs) <= Number(moment.startMs) || Number(moment.endMs) > durationMs) {
         throw new Error("Evidence timestamp is outside the recorded video");
       }
       if (moment.repNumber !== null && (!Number.isInteger(moment.repNumber) || Number(moment.repNumber) < 1)) throw new Error("repNumber is invalid");
@@ -209,7 +206,6 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
   const recognitionConfidence = number(recognition.confidence, "recognition confidence", 0, 1) as number;
   strings(recognition.alternatives, "recognition.alternatives");
   if (recognition.catalogExerciseId !== null && (!Number.isInteger(recognition.catalogExerciseId) || Number(recognition.catalogExerciseId) < 1)) throw new Error("catalogExerciseId is invalid");
-  if (!["front", "side", "diagonal", "elevated", "low", "uncertain"].includes(String(recognition.cameraView))) throw new Error("cameraView is invalid");
   if (!["curl", "triceps", "press", "overhead-press", "fly", "raise", "row", "pull-down", "squat", "lunge", "hinge", "hip-thrust", "carry", "core", "plank", "other"].includes(String(recognition.exerciseFamily))) throw new Error("exerciseFamily is invalid");
 
   const videoCheck = object(result.videoCheck, "videoCheck");
@@ -233,7 +229,6 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
   const didWell = findings(result.didWell, "didWell", durationMs);
   const corrections = findings(result.priorityCorrections, "priorityCorrections", durationMs);
   const cues = findings(result.coachingCues, "coachingCues", durationMs);
-  string(result.viewNote, "viewNote", true);
 
   if (result.comparison !== null) {
     const comparison = object(result.comparison, "comparison");
@@ -242,7 +237,7 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
     if (comparison.priorityIssueImproved !== null && typeof comparison.priorityIssueImproved !== "boolean") throw new Error("priorityIssueImproved is invalid");
   }
 
-  if (score !== null && (recognitionConfidence < 0.8 || result.scoreRationale.length < 2)) throw new Error("score requires confident recognition and two supported criteria");
+  if (score !== null && (recognitionConfidence < 0.55 || result.scoreRationale.length < 2)) throw new Error("score requires usable recognition and two supported criteria");
   if (score === null && result.scoreRationale.length > 0) throw new Error("score rationale requires a score");
 
   if (result.status === "unable") {
@@ -250,6 +245,8 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
     if (result.overallAssessment !== null || score !== null || !videoCheck.retryReason || !videoCheck.retryInstruction) throw new Error("unable result requires retry guidance and no assessment");
   } else if (videoCheck.outcome === "unable" || !result.overallAssessment) {
     throw new Error("analyzed result requires visible assessment evidence");
+  } else if (!recognition.label) {
+    throw new Error("analyzed result requires the nearest exercise label");
   }
 
   return value as AnalysisCandidate;

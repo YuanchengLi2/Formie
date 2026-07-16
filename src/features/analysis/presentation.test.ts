@@ -14,6 +14,7 @@ function finding(id: string, severity: CoachingFinding["severity"] = "important"
     evidence: [
       {
         startMs: 1_000,
+        peakMs: 1_250,
         endMs: 1_500,
         repNumber: 1,
         phase: "concentric",
@@ -35,12 +36,11 @@ function result(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
       confidence: 0.94,
       alternatives: [],
       catalogExerciseId: 35,
-      cameraView: "side",
       exerciseFamily: "curl",
     },
     videoCheck: {
       outcome: "usable",
-      usableObservations: ["side view"],
+      usableObservations: ["working joints visible"],
       limitations: [],
       retryReason: null,
       retryInstruction: null,
@@ -51,7 +51,6 @@ function result(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
     didWell: [finding("Stable torso", "note")],
     priorityCorrections: [finding("Elbow drift", "high")],
     coachingCues: [finding("Wall cue", "important")],
-    viewNote: null,
     comparison: null,
     ...overrides,
   };
@@ -78,18 +77,18 @@ describe("result presentation", () => {
     }
   });
 
-  it("uses honest recognition language when the label is uncertain", () => {
+  it("uses the pinned exercise label without uncertainty copy", () => {
     expect(getRecognitionLabel(result())).toBe("Standing Dumbbell Curl");
     expect(
       getRecognitionLabel(
         result({ recognition: { ...result().recognition, label: "Curl variation", confidence: 0.61 } }),
       ),
-    ).toBe("Likely Curl variation");
+    ).toBe("Curl variation");
     expect(
       getRecognitionLabel(
         result({ recognition: { ...result().recognition, label: null, confidence: 0.2 } }),
       ),
-    ).toBe("Exercise not confidently identified");
+    ).toBe("Exercise attempt");
   });
 
   it("exposes all user-facing result sections", () => {
@@ -101,7 +100,6 @@ describe("result presentation", () => {
       didWell: [finding("Stable torso", "note")],
       priorityCorrections: [finding("Elbow drift", "high")],
       coachingCues: [finding("Wall cue", "important")],
-      viewNote: null,
       comparison: null,
       retryReason: null,
       retryInstruction: null,

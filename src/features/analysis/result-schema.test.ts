@@ -13,6 +13,7 @@ function validFinding(id = "elbow-drift"): CoachingFinding {
     evidence: [
       {
         startMs: 8_000,
+        peakMs: 8_350,
         endMs: 8_700,
         repNumber: 3,
         phase: "concentric",
@@ -34,12 +35,11 @@ function validResult(): AnalysisResult {
       confidence: 0.94,
       alternatives: ["Hammer curl"],
       catalogExerciseId: 35,
-      cameraView: "side",
       exerciseFamily: "curl",
     },
     videoCheck: {
       outcome: "usable",
-      usableObservations: ["side view", "upper body visible"],
+      usableObservations: ["upper body visible", "working joints visible"],
       limitations: [],
       retryReason: null,
       retryInstruction: null,
@@ -53,7 +53,6 @@ function validResult(): AnalysisResult {
     didWell: [validFinding("controlled-lowering")],
     priorityCorrections: [validFinding()],
     coachingCues: [validFinding("wall-cue")],
-    viewNote: "This angle clearly showed elbow and torso control.",
     comparison: null,
   };
 }
@@ -106,7 +105,7 @@ describe("analysisResultSchema", () => {
 
   it("rejects an exercise-specific score when recognition is uncertain", () => {
     const result = validResult();
-    result.recognition.confidence = 0.62;
+    result.recognition.confidence = 0.52;
     expect(analysisResultSchema.safeParse(result).success).toBe(false);
   });
 
@@ -129,7 +128,6 @@ describe("analysisResultSchema", () => {
       didWell: [],
       priorityCorrections: [],
       coachingCues: [],
-      viewNote: null,
     };
 
     expect(analysisResultSchema.safeParse(unable).success).toBe(true);

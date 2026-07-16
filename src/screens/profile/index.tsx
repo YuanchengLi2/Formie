@@ -12,11 +12,10 @@ function InfoRow({ icon, title, detail }: { icon: ProductionIconName; title: str
 }
 
 export function ProfileScreen() {
-  return <ScrollView bounces={false} overScrollMode="never" contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ gap: spacing.lg, padding: spacing.lg, paddingBottom: spacing.xl }}>
+  return <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ gap: spacing.lg, padding: spacing.lg, paddingBottom: spacing.xl }}>
     <FormWordmark /><Text selectable style={[typography.title, { color: colors.text }]}>Profile</Text>
     <FormCard style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, backgroundColor: colors.surfaceRaised }}><View style={{ width: 52, height: 52, alignItems: "center", justifyContent: "center", borderRadius: 26, borderWidth: 1, borderColor: colors.gold }}><Text selectable style={{ color: colors.gold, fontSize: 20 }}>F</Text></View><View style={{ flex: 1, gap: 2 }}><Text selectable style={[typography.heading, { color: colors.text }]}>Private Guest</Text><Text selectable style={[typography.caption, { color: colors.textMuted }]}>This device</Text></View></FormCard>
     <View><Text selectable style={[typography.caption, { marginBottom: spacing.sm, color: colors.textMuted, letterSpacing: 0.8 }]}>PRIVACY</Text><InfoRow icon="privacyLock" title="Private by default" detail="Only you can access your recordings" /><InfoRow icon="videoStorage" title="Video storage" detail="Original videos remain private" /></View>
-    <View><Text selectable style={[typography.caption, { marginBottom: spacing.sm, color: colors.textMuted, letterSpacing: 0.8 }]}>HOW FORM WORKS</Text><InfoRow icon="completeVideo" title="Complete-video analysis" detail="FORM reviews the recording as a whole" /><InfoRow icon="angleCoaching" title="Angle-tolerant coaching" detail="Only visible details are evaluated" /></View>
     <Text selectable style={[typography.body, { color: colors.textSecondary }]}>No public profile and no manual exercise log.</Text><Text selectable style={[typography.caption, { color: colors.textMuted, textAlign: "center" }]}>FORM 1.0</Text>
   </ScrollView>;
 }

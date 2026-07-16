@@ -6,10 +6,11 @@ describe("RecordingTipsScreen", () => {
   it("shows forgiving phone-placement guidance", async () => {
     const screen = await render(<RecordingTipsScreen onContinue={jest.fn()} onOpenSpaceHelp={jest.fn()} />);
 
-    expect(screen.getByText("Get a clear view.")).toBeTruthy();
-    expect(screen.getByText(/Place your phone anywhere stable/)).toBeTruthy();
+    expect(screen.getByText("Record your full set.")).toBeTruthy();
+    expect(screen.getByText(/let FORM identify and coach the attempt/)).toBeTruthy();
     expect(screen.queryByText(/Use the rear camera for better quality/)).toBeNull();
     expect(screen.getByText("Use 0.5x if space is limited")).toBeTruthy();
+    expect(screen.queryByText(/side or diagonal/i)).toBeNull();
     expect(screen.getByText("Keep the full movement visible")).toBeTruthy();
     expect(screen.getByLabelText("Phone placement from the production mockup")).toBeTruthy();
     expect(screen.getByText(/consent to private video upload for AI form analysis/i)).toBeTruthy();

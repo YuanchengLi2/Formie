@@ -8,9 +8,6 @@ export type AnalyzeVideoSession = {
   stage: string | null;
   videoPath: string | null;
   durationMs: number | null;
-  captureOrientation: string | null;
-  cameraFacing: string | null;
-  cameraLens: string | null;
   requestedFps: 24;
   geminiFileName: string | null;
   geminiFileUri: string | null;
@@ -56,7 +53,6 @@ function unableResult(check: VideoPreflightCheck): AnalysisCandidate {
       confidence: 0,
       alternatives: [],
       catalogExerciseId: null,
-      cameraView: "uncertain",
       exerciseFamily: "other",
     },
     videoCheck: check,
@@ -66,7 +62,6 @@ function unableResult(check: VideoPreflightCheck): AnalysisCandidate {
     didWell: [],
     priorityCorrections: [],
     coachingCues: [],
-    viewNote: null,
     comparison: null,
   };
 }

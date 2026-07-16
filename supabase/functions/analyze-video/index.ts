@@ -56,9 +56,6 @@ Deno.serve(async (request) => {
         stage: session.stage,
         videoPath: session.video_path,
         durationMs: session.duration_ms,
-        captureOrientation: session.capture_orientation,
-        cameraFacing: session.camera_facing,
-        cameraLens: session.camera_lens,
         requestedFps: 24,
         geminiFileName: session.gemini_file_name,
         geminiFileUri: session.gemini_file_uri,
@@ -129,13 +126,6 @@ Deno.serve(async (request) => {
       }
 
       return buildAnalysisPrompt({
-        capture: {
-          orientation: session.captureOrientation,
-          facing: session.cameraFacing,
-          lens: session.cameraLens,
-          durationMs: session.durationMs ?? 0,
-          requestedFps: 24,
-        },
         profiles,
         previousResult,
       });
@@ -156,7 +146,6 @@ Deno.serve(async (request) => {
       const { error: sessionError } = await admin.from("analysis_sessions").update({
         status: result.status,
         stage: result.status === "unable" ? "video_check" : "coaching",
-        camera_view: recognition.cameraView,
         exercise_family: recognition.exerciseFamily,
         detected_label: recognition.label,
         detected_variation: recognition.variation,
@@ -179,9 +168,8 @@ Deno.serve(async (request) => {
         did_well: result.didWell,
         priority_corrections: result.priorityCorrections,
         coaching_cues: result.coachingCues,
-        view_note: result.viewNote,
         comparison: result.comparison,
-        analysis_version: "gemini-video-1.0.0",
+        analysis_version: "gemini-video-2.0.0",
       }, { onConflict: "session_id" });
       if (resultError) throw resultError;
     },

@@ -5,6 +5,7 @@ import { EvidenceVideo } from "@/components/evidence-video";
 import { FormButton } from "@/components/form-button";
 import { FormCard } from "@/components/form-card";
 import type { CoachingFinding } from "@/features/analysis/result-schema";
+import { evidencePreviewMs } from "@/features/analysis/evidence-timestamp";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
@@ -28,14 +29,14 @@ export function FindingDetailScreen({ finding, videoUrl, onRecordAnother }: Find
   const context = [evidence.repNumber ? `Rep ${evidence.repNumber}` : null, evidence.phase, `${timestamp(evidence.startMs)}–${timestamp(evidence.endMs)}`].filter(Boolean).join(" · ");
 
   return (
-    <ScrollView bounces={false} overScrollMode="never" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.lg, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
+    <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.lg, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ gap: spacing.xs }}>
         <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 0.8 }]}>COACHING DETAIL</Text>
         <Text selectable style={[typography.title, { color: colors.text }]}>{finding.title}</Text>
         <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{context}</Text>
       </View>
 
-      {videoUrl ? <EvidenceVideo videoUrl={videoUrl} startMs={evidence.startMs} /> : <View style={{ height: 180, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}><Text selectable style={[typography.caption, { color: colors.textMuted }]}>Loading private video evidence…</Text></View>}
+      {videoUrl ? <EvidenceVideo videoUrl={videoUrl} startMs={evidencePreviewMs(evidence)} /> : <View style={{ height: 180, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}><Text selectable style={[typography.caption, { color: colors.textMuted }]}>Loading private video evidence…</Text></View>}
 
       <View style={{ gap: spacing.sm }}>
         <Text selectable style={[typography.caption, { color: colors.gold }]}>WHAT HAPPENED</Text>

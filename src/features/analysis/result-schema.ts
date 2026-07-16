@@ -11,6 +11,7 @@ const scoreRationaleSchema = z.object({
 export const evidenceMomentSchema = z
   .object({
     startMs: z.number().int().min(0),
+    peakMs: z.number().int().min(0).optional(),
     endMs: z.number().int().positive(),
     repNumber: z.number().int().positive().nullable(),
     phase: z.string().min(1).nullable(),
@@ -21,7 +22,8 @@ export const evidenceMomentSchema = z
   .refine((moment) => moment.endMs > moment.startMs, {
     message: "Evidence end time must follow its start time",
     path: ["endMs"],
-  });
+  })
+  .refine((moment) => moment.peakMs === undefined || (moment.peakMs >= moment.startMs && moment.peakMs <= moment.endMs), { message: "Evidence peak must fall inside its interval", path: ["peakMs"] });
 
 export const coachingFindingSchema = z.object({
   id: z.string().min(1),
@@ -41,7 +43,6 @@ const recognitionSchema = z.object({
   confidence: z.number().min(0).max(1),
   alternatives: z.array(z.string().min(1)),
   catalogExerciseId: z.number().int().positive().nullable(),
-  cameraView: z.enum(["front", "side", "diagonal", "elevated", "low", "uncertain"]),
   exerciseFamily: z.enum(exerciseFamilies),
 });
 
@@ -70,7 +71,6 @@ export const analysisResultSchema = z
     didWell: z.array(coachingFindingSchema),
     priorityCorrections: z.array(coachingFindingSchema),
     coachingCues: z.array(coachingFindingSchema),
-    viewNote: z.string().min(1).nullable(),
     comparison: comparisonSchema.nullable(),
   })
   .superRefine((result, context) => {
@@ -103,7 +103,7 @@ export const analysisResultSchema = z
     }
 
     if (result.score !== null) {
-      if (!result.recognition.label || result.recognition.confidence < 0.8) {
+      if (!result.recognition.label || result.recognition.confidence < 0.55) {
         context.addIssue({ code: "custom", path: ["score"], message: "A score requires confident exercise recognition" });
       }
       if (result.scoreRationale.length < 2) {
@@ -112,6 +112,7 @@ export const analysisResultSchema = z
     } else if (result.scoreRationale.length > 0) {
       context.addIssue({ code: "custom", path: ["scoreRationale"], message: "Score rationale must be empty when no score is shown" });
     }
+    if (!result.recognition.label) context.addIssue({ code: "custom", path: ["recognition", "label"], message: "Analyzed results require an exercise label" });
   });
 
 export type ScoreRationale = z.infer<typeof scoreRationaleSchema>;

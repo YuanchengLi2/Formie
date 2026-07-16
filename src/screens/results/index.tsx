@@ -30,8 +30,9 @@ export function ResultsScreen({ result, onFindingPress, onRecordAnother, tutoria
 
   return (
     <ScrollView
-      bounces={false}
-      overScrollMode="never"
+      alwaysBounceVertical
+      bounces
+      overScrollMode="auto"
       contentContainerStyle={{ gap: spacing.lg, paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.lg }}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
@@ -47,13 +48,11 @@ export function ResultsScreen({ result, onFindingPress, onRecordAnother, tutoria
 
       {presentation.overallAssessment ? <FormCard><Text selectable style={[typography.heading, { color: colors.text }]}>Overall assessment</Text><Text selectable style={[typography.body, { color: colors.textSecondary }]}>{presentation.overallAssessment}</Text></FormCard> : null}
 
-      {presentation.viewNote ? <FormCard style={{ borderColor: colors.goldSoft }}><Text selectable style={[typography.caption, { color: colors.gold }]}>WHAT THIS ANGLE SHOWED</Text><Text selectable style={[typography.body, { color: colors.textSecondary }]}>{presentation.viewNote}</Text></FormCard> : null}
-
       {presentation.status === "unable" ? <FormCard style={{ borderColor: colors.gold }}><Text selectable style={[typography.caption, { color: colors.gold }]}>RECORDING UNUSABLE</Text><Text selectable style={[typography.heading, { color: colors.text }]}>{presentation.retryReason ?? "The movement was not visible enough for form coaching."}</Text><Text selectable style={[typography.body, { color: colors.textSecondary }]}>{presentation.retryInstruction ?? "Keep the working joints in frame and try again."}</Text></FormCard> : null}
 
-      <FeedbackSection title="What you did well" findings={presentation.didWell} onFindingPress={onFindingPress} />
-      <FeedbackSection title="Priority improvements" findings={presentation.priorityCorrections} onFindingPress={onFindingPress} />
-      <FeedbackSection title="Coaching" findings={presentation.coachingCues} onFindingPress={onFindingPress} />
+      <FeedbackSection title="Fix first" findings={presentation.priorityCorrections} onFindingPress={onFindingPress} />
+      <FeedbackSection title="What worked" findings={presentation.didWell} onFindingPress={onFindingPress} />
+      <FeedbackSection title="Next-set cues" findings={presentation.coachingCues} onFindingPress={onFindingPress} />
 
       {presentation.comparison ? <FormCard><Text selectable style={[typography.caption, { color: colors.gold }]}>SINCE YOUR LAST SET</Text><Text selectable style={[typography.body, { color: colors.textSecondary }]}>{presentation.comparison.summary}</Text></FormCard> : null}
 

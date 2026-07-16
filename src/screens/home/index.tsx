@@ -3,7 +3,9 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";
+import { FormCard } from "@/components/form-card";
 import { FormWordmark } from "@/components/form-wordmark";
+import { ProductionIcon } from "@/components/production-icon";
 import type { ExerciseFamily } from "@/features/exercises/exercise-family";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
@@ -20,7 +22,7 @@ type HomeScreenProps = {
 
 export function HomeScreen({ onRecord, recentAnalyses = [], onOpenSession = () => undefined, onOpenProfile = () => undefined }: HomeScreenProps) {
   return (
-    <ScrollView bounces={false} overScrollMode="never" contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ gap: spacing.lg, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl }}>
+    <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ gap: spacing.lg, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.xl }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <FormWordmark />
         <Pressable accessibilityLabel="Open profile" accessibilityRole="button" onPress={onOpenProfile} style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: radii.pill, borderWidth: 1, borderColor: colors.gold }}><View style={{ width: 8, height: 8, borderRadius: 4, borderWidth: 1, borderColor: colors.gold }} /><View style={{ width: 15, height: 7, marginTop: 2, borderTopLeftRadius: 8, borderTopRightRadius: 8, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.gold }} /></Pressable>
@@ -36,6 +38,13 @@ export function HomeScreen({ onRecord, recentAnalyses = [], onOpenSession = () =
           <Image accessibilityLabel="Person squatting inside the FORM camera frame" source={recordCard} contentFit="cover" style={{ width: "100%", height: "100%" }} />
         </Pressable>
       </Animated.View>
+
+      <FormCard style={{ gap: spacing.md, backgroundColor: colors.surfaceRaised }}>
+        <Text selectable style={[typography.heading, { color: colors.text }]}>Made for real sets</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}><ProductionIcon name="completeVideo" label="Whole set" size={26} tintColor={colors.gold} /><Text selectable style={[typography.body, { flex: 1, color: colors.textSecondary }]}>Recognizes unusual variations and imperfect attempts</Text></View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}><ProductionIcon name="stageVideo" label="Evidence" size={26} tintColor={colors.gold} /><Text selectable style={[typography.body, { flex: 1, color: colors.textSecondary }]}>Shows the exact moment behind each coaching point</Text></View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}><ProductionIcon name="privacyLock" label="Private" size={26} tintColor={colors.gold} /><Text selectable style={[typography.body, { flex: 1, color: colors.textSecondary }]}>Keeps every recording and analysis private</Text></View>
+      </FormCard>
 
       <View style={{ gap: spacing.sm }}>
         <Text selectable style={[typography.caption, { color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.8 }]}>Recent</Text>
