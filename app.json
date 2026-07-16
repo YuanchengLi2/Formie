@@ -55,8 +55,6 @@
       "expo-video",
       "expo-secure-store",
       "expo-audio",
-      "expo-image",
-      "expo-status-bar",
       "expo-web-browser",
       "expo-asset"
     ],
