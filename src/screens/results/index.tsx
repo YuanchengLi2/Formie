@@ -25,7 +25,7 @@ type ResultsScreenProps = {
   onAskCoach?: () => void;
 };
 
-const PURPOSES: Array<{ id: ReviewPurpose; label: string }> = [
+const PURPOSES: { id: ReviewPurpose; label: string }[] = [
   { id: "observed", label: "What happened" },
   { id: "why", label: "Why it matters" },
   { id: "next", label: "What to do next" },
