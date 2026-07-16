@@ -6,6 +6,7 @@
 # JavaScript / Expo
 node_modules/
 .expo/
+.expo-export-check/
 dist/
 dist-final-check/
 web-build/

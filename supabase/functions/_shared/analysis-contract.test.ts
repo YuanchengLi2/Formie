@@ -20,6 +20,7 @@ function candidate() {
       alternatives: [],
       catalogExerciseId: 35,
       cameraView: "side",
+      exerciseFamily: "curl",
     },
     videoCheck: { outcome: "usable", usableObservations: ["upper body"], limitations: [], retryReason: null, retryInstruction: null },
     overallAssessment: "The set was controlled with some late elbow drift.",

@@ -18,6 +18,8 @@ type CameraControlsProps = {
   onStop: () => void;
   onRetryUpload: () => void;
   onDiscardRecording?: () => void;
+  topInset?: number;
+  bottomInset?: number;
 };
 
 export function CameraControls({
@@ -30,10 +32,12 @@ export function CameraControls({
   onStop,
   onRetryUpload,
   onDiscardRecording = () => undefined,
+  topInset = 0,
+  bottomInset = 0,
 }: CameraControlsProps) {
   return (
     <View pointerEvents="box-none" style={{ position: "absolute", inset: 0, justifyContent: "space-between", padding: spacing.xl }}>
-      <View style={{ alignItems: "center", paddingTop: spacing.xxl }}>
+      <View style={{ alignItems: "center", paddingTop: topInset + 76 }}>
         {phase === "recording" ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.pill, backgroundColor: "rgba(0,0,0,0.64)" }}>
             <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: colors.danger }} />
@@ -54,7 +58,7 @@ export function CameraControls({
         <View style={{ flex: 1 }} />
       )}
 
-      <View style={{ alignItems: "center", gap: spacing.md, paddingBottom: spacing.xl }}>
+      <View style={{ alignItems: "center", gap: spacing.md, paddingBottom: bottomInset + spacing.md }}>
         {phase === "idle" || phase === "processing" ? (
           <>
             <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.pill, backgroundColor: "rgba(0,0,0,0.58)" }}>

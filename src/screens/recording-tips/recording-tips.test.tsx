@@ -8,10 +8,10 @@ describe("RecordingTipsScreen", () => {
 
     expect(screen.getByText("Get a clear view.")).toBeTruthy();
     expect(screen.getByText(/Place your phone anywhere stable/)).toBeTruthy();
-    expect(screen.getByText(/Use the rear camera for better quality/)).toBeTruthy();
+    expect(screen.queryByText(/Use the rear camera for better quality/)).toBeNull();
     expect(screen.getByText("Use 0.5x if space is limited")).toBeTruthy();
     expect(screen.getByText("Keep the full movement visible")).toBeTruthy();
-    expect(screen.getByLabelText("General phone placement animation")).toBeTruthy();
+    expect(screen.getByLabelText("Phone placement from the production mockup")).toBeTruthy();
     expect(screen.getByText(/consent to private video upload for AI form analysis/i)).toBeTruthy();
     expect(screen.queryByText(/squat|curl|press/i)).toBeNull();
   });

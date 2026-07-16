@@ -2,6 +2,7 @@ import { fireEvent, render } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import type { AnalysisResult, CoachingFinding } from "@/features/analysis/result-schema";
+import type { TutorialVideo } from "@/features/analysis/api";
 
 import { ResultsScreen } from ".";
 
@@ -21,7 +22,7 @@ function finding(id: string, title: string): CoachingFinding {
 function result(): AnalysisResult {
   return {
     status: "partial",
-    recognition: { label: "High-to-low cable row", variation: null, equipment: ["cable machine"], confidence: 0.76, alternatives: ["High row"], catalogExerciseId: null, cameraView: "low" },
+    recognition: { label: "High-to-low cable row", variation: null, equipment: ["cable machine"], confidence: 0.76, alternatives: ["High row"], catalogExerciseId: null, cameraView: "low", exerciseFamily: "row" },
     videoCheck: { outcome: "partial", usableObservations: ["tempo", "elbow path"], limitations: ["hips obscured"], retryReason: null, retryInstruction: null },
     overallAssessment: "The visible repetitions were controlled and provided useful coaching evidence.",
     score: null,
@@ -34,10 +35,10 @@ function result(): AnalysisResult {
   };
 }
 
-function renderResults(onFindingPress = jest.fn(), onRecordAnother = jest.fn(), onCorrectLabel: (label: string) => void | Promise<void> = jest.fn()) {
+function renderResults(onFindingPress = jest.fn(), onRecordAnother = jest.fn()) {
   return render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-      <ResultsScreen result={result()} onFindingPress={onFindingPress} onRecordAnother={onRecordAnother} onCorrectLabel={onCorrectLabel} />
+      <ResultsScreen result={result()} onFindingPress={onFindingPress} onRecordAnother={onRecordAnother} />
     </SafeAreaProvider>,
   );
 }
@@ -69,16 +70,22 @@ describe("ResultsScreen", () => {
     expect(onRecordAnother).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps label correction open and explains a save failure", async () => {
-    const screen = await renderResults(jest.fn(), jest.fn(), async () => {
-      throw new Error("Connection lost");
-    });
+  it("removes exercise-name correction from the result flow", async () => {
+    const screen = await renderResults();
+    expect(screen.queryByText("Correct exercise name")).toBeNull();
+    expect(screen.queryByLabelText("Exercise name")).toBeNull();
+  });
 
-    await fireEvent.press(screen.getByText("Correct exercise name"));
-    await fireEvent.changeText(screen.getByLabelText("Exercise name"), "Cable Row");
-    await fireEvent.press(screen.getByText("Save Correction"));
-
-    expect(await screen.findByText("Connection lost")).toBeTruthy();
-    expect(screen.getAllByText("Correct exercise name").length).toBeGreaterThan(1);
+  it("opens the verified exercise tutorial selected after analysis", async () => {
+    const tutorial: TutorialVideo = { videoId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk", title: "Clear Cable Row Tutorial", channel: "Trusted Coach", whyChosen: "Shows setup and execution clearly.", thumbnailUrl: "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg", searchAttributionHtml: null };
+    const onOpenTutorial = jest.fn();
+    const screen = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
+        <ResultsScreen result={result()} tutorial={tutorial} onOpenTutorial={onOpenTutorial} onFindingPress={jest.fn()} onRecordAnother={jest.fn()} />
+      </SafeAreaProvider>,
+    );
+    expect(screen.getByText("How to do this exercise properly")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Watch Clear Cable Row Tutorial on YouTube"));
+    expect(onOpenTutorial).toHaveBeenCalledWith(tutorial);
   });
 });

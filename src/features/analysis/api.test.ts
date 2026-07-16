@@ -1,4 +1,4 @@
-import { AnalysisApiError, completeAnalysisUpload, correctAnalysisLabel, createAnalysisSession, processAnalysis, processAndLoadAnalysis, uploadAnalysisVideo } from "./api";
+import { AnalysisApiError, completeAnalysisUpload, createAnalysisSession, getExerciseTutorial, processAnalysis, processAndLoadAnalysis, uploadAnalysisVideo } from "./api";
 
 describe("analysis API", () => {
   it("creates a session without requiring exercise selection", async () => {
@@ -70,25 +70,6 @@ describe("analysis API", () => {
     );
   });
 
-  it("sends an optional user correction without replacing the detected label", async () => {
-    const fetcher = jest.fn(async () =>
-      new Response(JSON.stringify({ corrected: true }), { status: 200, headers: { "Content-Type": "application/json" } }),
-    );
-
-    await correctAnalysisLabel({
-      accessToken: "user-jwt",
-      baseUrl: "https://example.supabase.co/functions/v1",
-      fetcher,
-      sessionId: "session-123",
-      label: "FreeMotion high-to-low row",
-    });
-
-    expect(fetcher).toHaveBeenCalledWith(
-      "https://example.supabase.co/functions/v1/correct-analysis-label",
-      expect.objectContaining({ body: JSON.stringify({ sessionId: "session-123", label: "FreeMotion high-to-low row" }) }),
-    );
-  });
-
   it("uploads the original bytes through the signed URL token", async () => {
     const fetcher = jest
       .fn()
@@ -145,7 +126,7 @@ describe("analysis API", () => {
   it("shows terminal results without waiting for a second evidence-video request", async () => {
     const result = {
       status: "unable",
-      recognition: { label: null, variation: null, equipment: [], confidence: 0, alternatives: [], catalogExerciseId: null, cameraView: "uncertain" },
+      recognition: { label: null, variation: null, equipment: [], confidence: 0, alternatives: [], catalogExerciseId: null, cameraView: "uncertain", exerciseFamily: "other" },
       videoCheck: { outcome: "unable", usableObservations: [], limitations: ["No person was visible"], retryReason: "No person was visible", retryInstruction: "Keep your full body in frame" },
       overallAssessment: null,
       score: null,
@@ -170,7 +151,7 @@ describe("analysis API", () => {
   it("loads a private evidence video only when coaching detail requests it", async () => {
     const result = {
       status: "unable",
-      recognition: { label: null, variation: null, equipment: [], confidence: 0, alternatives: [], catalogExerciseId: null, cameraView: "uncertain" },
+      recognition: { label: null, variation: null, equipment: [], confidence: 0, alternatives: [], catalogExerciseId: null, cameraView: "uncertain", exerciseFamily: "other" },
       videoCheck: { outcome: "unable", usableObservations: [], limitations: ["No person was visible"], retryReason: "No person was visible", retryInstruction: "Keep your full body in frame" },
       overallAssessment: null,
       score: null,
@@ -191,5 +172,15 @@ describe("analysis API", () => {
     expect(response.videoUrl).toBe("https://storage.example/private-video");
     expect(fetcher.mock.calls[0][0]).toBe("https://example.supabase.co/functions/v1/analyze-video");
     expect(fetcher.mock.calls[1][0]).toBe("https://example.supabase.co/functions/v1/analysis-status?sessionId=session-123");
+  });
+
+  it("loads the AI-selected exercise tutorial without exposing the Gemini key", async () => {
+    const tutorial = { videoId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk", title: "Hammer Curl Tutorial", channel: "Trusted Coach", whyChosen: "Clear technique.", thumbnailUrl: "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg", searchAttributionHtml: null };
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ tutorial }), { status: 200 }));
+    await expect(getExerciseTutorial({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" })).resolves.toEqual(tutorial);
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://example.supabase.co/functions/v1/exercise-tutorial",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ sessionId: "session-123" }) }),
+    );
   });
 });

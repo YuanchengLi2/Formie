@@ -5,7 +5,7 @@ function validCandidate() {
   const evidence = { startMs: 1_000, endMs: 1_500, repNumber: 1, phase: "concentric", visualEvidence: "The torso stays still.", visibleBodyAreas: ["torso"], confidence: 0.9 };
   return {
     status: "complete",
-    recognition: { label: "Curl", variation: null, equipment: ["dumbbells"], confidence: 0.9, alternatives: [], catalogExerciseId: null, cameraView: "side" },
+    recognition: { label: "Curl", variation: null, equipment: ["dumbbells"], confidence: 0.9, alternatives: [], catalogExerciseId: null, cameraView: "side", exerciseFamily: "curl" },
     videoCheck: { outcome: "usable", usableObservations: ["upper body"], limitations: [], retryReason: null, retryInstruction: null },
     overallAssessment: "The visible repetition was controlled.",
     score: null,

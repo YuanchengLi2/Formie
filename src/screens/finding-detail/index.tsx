@@ -28,7 +28,7 @@ export function FindingDetailScreen({ finding, videoUrl, onRecordAnother }: Find
   const context = [evidence.repNumber ? `Rep ${evidence.repNumber}` : null, evidence.phase, `${timestamp(evidence.startMs)}–${timestamp(evidence.endMs)}`].filter(Boolean).join(" · ");
 
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.lg, paddingBottom: insets.bottom + spacing.xxl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
+    <ScrollView bounces={false} overScrollMode="never" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.lg, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ gap: spacing.xs }}>
         <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 0.8 }]}>COACHING DETAIL</Text>
         <Text selectable style={[typography.title, { color: colors.text }]}>{finding.title}</Text>

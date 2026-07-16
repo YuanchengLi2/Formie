@@ -7,17 +7,34 @@ const sessions: AnalysisHistoryItem[] = [
 ];
 
 describe("groupAnalysisSessions", () => {
-  it("uses corrections and normalizes case and spacing", () => {
+  it("groups exercise variations by the AI-assigned movement family", () => {
+    const familySessions = [
+      { ...sessions[0], sessionId: "press-1", detectedLabel: "Barbell Bench Press", exerciseFamily: "press" },
+      { ...sessions[0], sessionId: "press-2", detectedLabel: "Incline Dumbbell Press", exerciseFamily: "press" },
+      { ...sessions[0], sessionId: "squat-1", detectedLabel: "Goblet Squat", exerciseFamily: "squat" },
+    ] as unknown as AnalysisHistoryItem[];
+
+    const groups = groupAnalysisSessions(familySessions);
+    expect(groups.map((group) => [group.key, group.label, group.sessions.length])).toEqual([
+      ["press", "Press", 2],
+      ["squat", "Squat", 1],
+    ]);
+  });
+
+  it("uses the movement family instead of splitting exact label variations", () => {
     const groups = groupAnalysisSessions(sessions);
-    expect(groups).toHaveLength(2);
-    expect(groups.find((group) => group.label === "FreeMotion Row")?.sessions.map((session) => session.sessionId)).toEqual(["3", "2"]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].label).toBe("Row");
+    expect(groups[0].sessions.map((session) => session.sessionId)).toEqual(["3", "2", "1"]);
   });
 
   it("excludes null scores while preserving recurring corrections and improvements", () => {
-    const group = groupAnalysisSessions(sessions).find((item) => item.label === "FreeMotion Row");
-    expect(group?.scoreTrend).toEqual([{ sessionId: "3", createdAt: "2026-07-17T10:00:00Z", score: 84 }]);
-    expect(group?.improvements).toEqual(["Elbow timing improved."]);
-    expect(group?.recurringCorrections).toEqual([]);
-    expect(groupAnalysisSessions(sessions)[1].recurringCorrections).toEqual([{ title: "Elbow path", count: 1 }]);
+    const group = groupAnalysisSessions(sessions)[0];
+    expect(group.scoreTrend).toEqual([
+      { sessionId: "3", createdAt: "2026-07-17T10:00:00Z", score: 84 },
+      { sessionId: "1", createdAt: "2026-07-15T10:00:00Z", score: 75 },
+    ]);
+    expect(group.improvements).toEqual(["Elbow timing improved."]);
+    expect(group.recurringCorrections).toEqual([{ title: "Elbow path", count: 2 }]);
   });
 });

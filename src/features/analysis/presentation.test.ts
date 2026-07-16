@@ -36,6 +36,7 @@ function result(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
       alternatives: [],
       catalogExerciseId: 35,
       cameraView: "side",
+      exerciseFamily: "curl",
     },
     videoCheck: {
       outcome: "usable",

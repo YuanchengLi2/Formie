@@ -10,6 +10,7 @@ export default function HomeRoute() {
     label: item.correctedLabel ?? item.detectedLabel ?? "Unidentified movement",
     createdAt: item.createdAt,
     score: item.score,
+    exerciseFamily: item.exerciseFamily,
   }));
   return <HomeScreen onRecord={() => router.push("/recording-tips")} recentAnalyses={recentAnalyses} onOpenSession={(sessionId) => router.push(`/results/${sessionId}` as Href)} onOpenProfile={() => router.push("/(tabs)/(profile)")} />;
 }

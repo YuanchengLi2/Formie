@@ -1,6 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { supabase } from "@/lib/supabase";
+import { queryClient } from "@/lib/query-client";
+import { invalidateAnalysisHistory } from "@/features/progress/history-cache";
 
 import { processAndLoadAnalysis } from "./api";
 
@@ -23,7 +25,9 @@ export function useAnalysisStatus(sessionId: string, options: { includeVideoUrl?
     queryKey: ["analysis-status", sessionId, includeVideoUrl],
     queryFn: async ({ signal }) => {
       const accessToken = await getAccessToken();
-      return processAndLoadAnalysis({ accessToken, sessionId, signal, includeVideoUrl });
+      const response = await processAndLoadAnalysis({ accessToken, sessionId, signal, includeVideoUrl });
+      if (response.result) await invalidateAnalysisHistory(queryClient);
+      return response;
     },
     enabled: Boolean(sessionId),
     retry: 2,

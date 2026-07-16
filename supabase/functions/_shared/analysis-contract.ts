@@ -1,4 +1,5 @@
 export type CameraView = "front" | "side" | "diagonal" | "elevated" | "low" | "uncertain";
+export type ExerciseFamily = "curl" | "triceps" | "press" | "overhead-press" | "fly" | "raise" | "row" | "pull-down" | "squat" | "lunge" | "hinge" | "hip-thrust" | "carry" | "core" | "plank" | "other";
 
 export type EvidenceMoment = {
   startMs: number;
@@ -31,6 +32,7 @@ export type AnalysisCandidate = {
     alternatives: string[];
     catalogExerciseId: number | null;
     cameraView: CameraView;
+    exerciseFamily: ExerciseFamily;
   };
   videoCheck: {
     outcome: "usable" | "partial" | "unable";
@@ -85,7 +87,7 @@ export const GEMINI_ANALYSIS_JSON_SCHEMA = {
     status: { type: "string", enum: ["complete", "partial", "unable"] },
     recognition: {
       type: "object",
-      required: ["label", "variation", "equipment", "confidence", "alternatives", "catalogExerciseId", "cameraView"],
+      required: ["label", "variation", "equipment", "confidence", "alternatives", "catalogExerciseId", "cameraView", "exerciseFamily"],
       properties: {
         label: { type: ["string", "null"] },
         variation: { type: ["string", "null"] },
@@ -94,6 +96,7 @@ export const GEMINI_ANALYSIS_JSON_SCHEMA = {
         alternatives: { type: "array", items: { type: "string" } },
         catalogExerciseId: { type: ["integer", "null"] },
         cameraView: { type: "string", enum: ["front", "side", "diagonal", "elevated", "low", "uncertain"] },
+        exerciseFamily: { type: "string", enum: ["curl", "triceps", "press", "overhead-press", "fly", "raise", "row", "pull-down", "squat", "lunge", "hinge", "hip-thrust", "carry", "core", "plank", "other"] },
       },
     },
     videoCheck: {
@@ -207,6 +210,7 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
   strings(recognition.alternatives, "recognition.alternatives");
   if (recognition.catalogExerciseId !== null && (!Number.isInteger(recognition.catalogExerciseId) || Number(recognition.catalogExerciseId) < 1)) throw new Error("catalogExerciseId is invalid");
   if (!["front", "side", "diagonal", "elevated", "low", "uncertain"].includes(String(recognition.cameraView))) throw new Error("cameraView is invalid");
+  if (!["curl", "triceps", "press", "overhead-press", "fly", "raise", "row", "pull-down", "squat", "lunge", "hinge", "hip-thrust", "carry", "core", "plank", "other"].includes(String(recognition.exerciseFamily))) throw new Error("exerciseFamily is invalid");
 
   const videoCheck = object(result.videoCheck, "videoCheck");
   if (!["usable", "partial", "unable"].includes(String(videoCheck.outcome))) throw new Error("videoCheck outcome is invalid");

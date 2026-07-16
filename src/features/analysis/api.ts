@@ -21,6 +21,18 @@ const statusResponseSchema = z.object({
   result: analysisResultSchema.nullable(),
 });
 
+export const tutorialVideoSchema = z.object({
+  videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
+  url: z.string().url(),
+  title: z.string().min(1),
+  channel: z.string().min(1),
+  whyChosen: z.string().min(1),
+  thumbnailUrl: z.string().url(),
+  searchAttributionHtml: z.string().min(1).nullable(),
+});
+
+export type TutorialVideo = z.infer<typeof tutorialVideoSchema>;
+
 export type CreateAnalysisSessionResponse = z.infer<typeof createSessionResponseSchema>;
 export type AnalysisStatusResponse = z.infer<typeof statusResponseSchema>;
 
@@ -159,6 +171,16 @@ export async function processAnalysis(input: RequestContext & { sessionId: strin
   );
 }
 
+export async function getExerciseTutorial(input: RequestContext & { sessionId: string }): Promise<TutorialVideo | null> {
+  const response = await requestJson(
+    "exercise-tutorial",
+    input,
+    { method: "POST", body: JSON.stringify({ sessionId: input.sessionId }) },
+    z.object({ tutorial: tutorialVideoSchema.nullable() }),
+  );
+  return response.tutorial;
+}
+
 export async function getAnalysisStatus(input: RequestContext & { sessionId: string }): Promise<AnalysisStatusResponse> {
   return requestJson(
     `analysis-status?sessionId=${encodeURIComponent(input.sessionId)}`,
@@ -171,17 +193,6 @@ export async function getAnalysisStatus(input: RequestContext & { sessionId: str
 export async function processAndLoadAnalysis(input: RequestContext & { sessionId: string; includeVideoUrl?: boolean }): Promise<AnalysisStatusResponse> {
   const processed = await processAnalysis(input);
   return processed.result && input.includeVideoUrl ? getAnalysisStatus(input) : processed;
-}
-
-export async function correctAnalysisLabel(
-  input: RequestContext & { sessionId: string; label: string },
-): Promise<{ corrected: true }> {
-  return requestJson(
-    "correct-analysis-label",
-    input,
-    { method: "POST", body: JSON.stringify({ sessionId: input.sessionId, label: input.label }) },
-    z.object({ corrected: z.literal(true) }),
-  );
 }
 
 export function getCompletedResult(response: AnalysisStatusResponse): AnalysisResult | null {

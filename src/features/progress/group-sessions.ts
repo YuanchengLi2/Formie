@@ -1,8 +1,11 @@
+import { formatExerciseFamily, inferExerciseFamily, type ExerciseFamily } from "@/features/exercises/exercise-family";
+
 export type AnalysisHistoryItem = {
   sessionId: string;
   createdAt: string;
   detectedLabel: string | null;
   correctedLabel: string | null;
+  exerciseFamily?: ExerciseFamily | null;
   score: number | null;
   priorityCorrectionTitles: string[];
   comparisonSummary: string | null;
@@ -16,6 +19,7 @@ export type AnalysisHistoryGroup = {
   scoreTrend: { sessionId: string; createdAt: string; score: number }[];
   recurringCorrections: { title: string; count: number }[];
   improvements: string[];
+  exerciseFamily: ExerciseFamily;
 };
 
 export function normalizeExerciseLabel(label: string): string {
@@ -27,9 +31,9 @@ export function groupAnalysisSessions(items: AnalysisHistoryItem[]): AnalysisHis
   const groups = new Map<string, AnalysisHistoryGroup>();
   for (const item of sorted) {
     const effectiveLabel = item.correctedLabel?.trim() || item.detectedLabel?.trim() || "Unidentified movement";
-    const key = normalizeExerciseLabel(effectiveLabel);
-    const group = groups.get(key) ?? { key, label: effectiveLabel.replace(/\s+/g, " "), sessions: [], scoreTrend: [], recurringCorrections: [], improvements: [] };
-    if (item.correctedLabel?.trim()) group.label = item.correctedLabel.trim().replace(/\s+/g, " ");
+    const exerciseFamily = item.exerciseFamily ?? inferExerciseFamily(effectiveLabel);
+    const key = exerciseFamily;
+    const group = groups.get(key) ?? { key, label: formatExerciseFamily(exerciseFamily), exerciseFamily, sessions: [], scoreTrend: [], recurringCorrections: [], improvements: [] };
     group.sessions.push(item);
     if (item.score !== null) group.scoreTrend.push({ sessionId: item.sessionId, createdAt: item.createdAt, score: item.score });
     if (item.priorityIssueImproved && item.comparisonSummary) group.improvements.push(item.comparisonSummary);

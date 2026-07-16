@@ -7,7 +7,7 @@ const activeFile: GeminiFile = { name: "files/file-1", uri: "uri", mimeType: "vi
 function result(): AnalysisCandidate {
   return {
     status: "complete",
-    recognition: { label: "Curl", variation: null, equipment: ["dumbbells"], confidence: 0.9, alternatives: [], catalogExerciseId: null, cameraView: "side" },
+    recognition: { label: "Curl", variation: null, equipment: ["dumbbells"], confidence: 0.9, alternatives: [], catalogExerciseId: null, cameraView: "side", exerciseFamily: "curl" },
     videoCheck: { outcome: "usable", usableObservations: ["upper body"], limitations: [], retryReason: null, retryInstruction: null },
     overallAssessment: "The visible set was controlled.", score: null, scoreRationale: [], didWell: [], priorityCorrections: [], coachingCues: [], viewNote: "The side view showed the torso.", comparison: null,
   };
@@ -82,6 +82,7 @@ describe("analyzeVideoHandler", () => {
     });
     const response = await analyzeVideoHandler(request(), deps);
     expect(response.status).toBe(202);
+    expect((await response.json()).stage).toBe("video_check");
     expect(deps.generate).not.toHaveBeenCalled();
   });
 

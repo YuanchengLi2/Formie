@@ -57,6 +57,7 @@ function unableResult(check: VideoPreflightCheck): AnalysisCandidate {
       alternatives: [],
       catalogExerciseId: null,
       cameraView: "uncertain",
+      exerciseFamily: "other",
     },
     videoCheck: check,
     overallAssessment: null,
@@ -105,7 +106,7 @@ export async function analyzeVideoHandler(request: Request, dependencies: Analyz
       : [await dependencies.getFile(session.geminiFileName), null];
     await dependencies.saveFileState(session.id, file);
     if (file.state === "PROCESSING") {
-      return json(statusPayload(session, "processing", "video_processing", null), 202);
+      return json(statusPayload(session, "processing", session.preflightCheck ? "video_processing" : "video_check", null), 202);
     }
     if (file.state === "FAILED") {
       await dependencies.markFailed(session.id, "GEMINI_FILE_FAILED");

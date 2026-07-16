@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { exerciseFamilies } from "@/features/exercises/exercise-family";
 
 const scoreRationaleSchema = z.object({
   criterion: z.string().min(1),
@@ -41,6 +42,7 @@ const recognitionSchema = z.object({
   alternatives: z.array(z.string().min(1)),
   catalogExerciseId: z.number().int().positive().nullable(),
   cameraView: z.enum(["front", "side", "diagonal", "elevated", "low", "uncertain"]),
+  exerciseFamily: z.enum(exerciseFamilies),
 });
 
 const videoCheckSchema = z.object({

@@ -157,6 +157,7 @@ Deno.serve(async (request) => {
         status: result.status,
         stage: result.status === "unable" ? "video_check" : "coaching",
         camera_view: recognition.cameraView,
+        exercise_family: recognition.exerciseFamily,
         detected_label: recognition.label,
         detected_variation: recognition.variation,
         detected_equipment: recognition.equipment,

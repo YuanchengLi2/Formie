@@ -24,7 +24,9 @@ export function AnalysisProgressScreen({ stage, failureMessage, onRecordAgain, o
 
   return (
     <ScrollView
-      contentContainerStyle={{ flexGrow: 1, gap: spacing.xl, paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.xl }}
+      bounces={false}
+      overScrollMode="never"
+      contentContainerStyle={{ flexGrow: 1, gap: spacing.lg, paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.lg, paddingHorizontal: spacing.lg }}
       style={{ flex: 1, backgroundColor: colors.background }}
     >
       <View style={{ alignItems: "center" }}><FormWordmark /></View>

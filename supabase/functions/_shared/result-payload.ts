@@ -12,6 +12,7 @@ export function resultPayload(session: Record<string, unknown>, result: Record<s
       alternatives: (session.recognition_alternatives ?? []) as string[],
       catalogExerciseId: (session.corrected_exercise_id ?? session.exercise_id ?? null) as number | null,
       cameraView: (session.camera_view ?? "uncertain") as AnalysisCandidate["recognition"]["cameraView"],
+      exerciseFamily: (session.exercise_family ?? "other") as AnalysisCandidate["recognition"]["exerciseFamily"],
     },
     videoCheck: result.video_check as AnalysisCandidate["videoCheck"],
     overallAssessment: (result.overall_assessment ?? null) as string | null,

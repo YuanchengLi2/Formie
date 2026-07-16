@@ -35,6 +35,7 @@ function validResult(): AnalysisResult {
       alternatives: ["Hammer curl"],
       catalogExerciseId: 35,
       cameraView: "side",
+      exerciseFamily: "curl",
     },
     videoCheck: {
       outcome: "usable",

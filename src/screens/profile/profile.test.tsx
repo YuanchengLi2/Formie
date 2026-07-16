@@ -3,13 +3,14 @@ import { render } from "@testing-library/react-native";
 import { ProfileScreen } from ".";
 
 describe("ProfileScreen", () => {
-  it("shows truthful privacy and analysis information instead of placeholder copy", async () => {
+  it("uses the concise production sections without the redundant analysis explainer", async () => {
     const screen = await render(<ProfileScreen />);
 
     expect(screen.getByText("Private by default")).toBeTruthy();
-    expect(screen.getByText("How FORM analyzes")).toBeTruthy();
-    expect(screen.getByText(/Gemini reviews the complete recording at up to 24 sampled frames per second/i)).toBeTruthy();
+    expect(screen.queryByText("How FORM analyzes")).toBeNull();
+    expect(screen.queryByText(/Gemini reviews the complete recording/i)).toBeNull();
+    expect(screen.getByLabelText("Private by default")).toBeTruthy();
+    expect(screen.getByLabelText("Complete-video analysis")).toBeTruthy();
     expect(screen.queryByText(/MediaPipe/i)).toBeNull();
-    expect(screen.queryByText("Privacy, retention, and account controls live here.")).toBeNull();
   });
 });

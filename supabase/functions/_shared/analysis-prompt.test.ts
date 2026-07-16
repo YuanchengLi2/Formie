@@ -15,6 +15,9 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).toContain("Standing Dumbbell Curl");
     expect(prompt).toContain("overallAssessment, score, and comparison to null");
     expect(prompt).toContain("retryReason and retryInstruction to specific non-empty strings");
+    expect(prompt).toContain("exerciseFamily");
+    expect(prompt).toContain("one to three priority corrections");
+    expect(prompt).toContain("specific visible observation");
     expect(prompt).not.toContain("MediaPipe");
     expect(prompt).not.toContain("second pass");
   });

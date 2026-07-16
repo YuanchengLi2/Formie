@@ -7,11 +7,11 @@ describe("HomeScreen", () => {
     const onRecord = jest.fn();
     const screen = await render(<HomeScreen onRecord={onRecord} />);
 
-    expect(screen.getByText("Record an Exercise")).toBeTruthy();
+    expect(screen.getByLabelText("Record an Exercise")).toBeTruthy();
     expect(screen.queryByText("Search exercises")).toBeNull();
     expect(screen.queryByText("Choose Exercise")).toBeNull();
 
-    await fireEvent.press(screen.getByText("Record an Exercise"));
+    await fireEvent.press(screen.getByLabelText("Record an Exercise"));
     expect(onRecord).toHaveBeenCalledTimes(1);
   });
 
