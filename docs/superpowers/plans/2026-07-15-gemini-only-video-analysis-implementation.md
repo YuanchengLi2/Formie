@@ -151,7 +151,7 @@ git commit -m "refactor: make results video-only"
 **Interfaces:**
 - Consumes: `{ sessionId, durationMs, captureOrientation, cameraFacing, cameraLens }`.
 - Produces: `{ processing: true }` and session state `status = processing`, `stage = video_check`.
-- Produces DB fields: `capture_orientation`, `camera_facing`, `camera_lens`, `requested_fps`, `gemini_file_name`, `gemini_file_uri`, `gemini_file_state`, `analysis_attempts`, `cleanup_pending`.
+- Produces DB fields: `capture_orientation`, `camera_facing`, `camera_lens`, `requested_fps`, `gemini_file_name`, `gemini_file_uri`, `gemini_file_state`, `model_name`.
 
 - [ ] **Step 1: Write the failing complete-upload handler tests**
 
@@ -197,8 +197,7 @@ alter table public.analysis_sessions
   add column if not exists gemini_file_name text,
   add column if not exists gemini_file_uri text,
   add column if not exists gemini_file_state text check (gemini_file_state in ('PROCESSING', 'ACTIVE', 'FAILED')),
-  add column if not exists analysis_attempts integer not null default 0 check (analysis_attempts between 0 and 3),
-  add column if not exists cleanup_pending boolean not null default false;
+  add column if not exists model_name text;
 ```
 
 Update RLS assertions so users still cannot modify server-owned analysis state and no pose/job policy is expected.

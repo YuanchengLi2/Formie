@@ -43,5 +43,7 @@ Provide all meaningful strengths, priority corrections, and useful cues supporte
 
 Do not infer details hidden from the recorded camera view. Do not invent a rotated viewpoint, pain, muscle activation, internal forces, exact laboratory-grade angles, or body positions obscured by equipment. A poor angle limits only the claims it hides; continue coaching what remains visible. Explain briefly what the view revealed and what it limited.
 
-Return an unable result only when virtually no useful movement is visible. Otherwise return complete or partial coaching. Include a numeric score only when exercise recognition is at least 0.8 and at least two visible criteria support it.`;
+Return an unable result only when virtually no useful movement is visible. For status unable, set videoCheck.outcome to unable; set overallAssessment, score, and comparison to null; set scoreRationale, didWell, priorityCorrections, and coachingCues to empty arrays; and set videoCheck.retryReason and retryInstruction to specific non-empty strings that tell the user exactly why and how to re-record. Do not provide coaching or an assessment for an unable video.
+
+Otherwise return complete or partial coaching. Include a numeric score only when exercise recognition is at least 0.8 and at least two visible criteria support it.`;
 }

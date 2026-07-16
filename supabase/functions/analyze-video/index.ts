@@ -178,10 +178,6 @@ Deno.serve(async (request) => {
       if (error) throw error;
     },
     deleteFile: (name) => gemini.deleteFile(name),
-    markCleanupPending: async (sessionId) => {
-      const { error } = await admin.from("analysis_sessions").update({ cleanup_pending: true, updated_at: new Date().toISOString() }).eq("id", sessionId);
-      if (error) throw error;
-    },
   });
 
   return withCors(response);

@@ -1,5 +1,5 @@
-import type { AnalysisCandidate } from "../_shared/analysis-contract";
-import type { GeminiFile } from "../_shared/gemini-video";
+import type { AnalysisCandidate } from "../_shared/analysis-contract.ts";
+import type { GeminiFile } from "../_shared/gemini-video.ts";
 
 export type AnalyzeVideoSession = {
   id: string;
@@ -31,7 +31,6 @@ export type AnalyzeVideoDependencies = {
   saveResult: (sessionId: string, result: AnalysisCandidate) => Promise<void>;
   markFailed: (sessionId: string, code: string) => Promise<void>;
   deleteFile: (name: string) => Promise<void>;
-  markCleanupPending: (sessionId: string) => Promise<void>;
 };
 
 const terminalStatuses = new Set(["complete", "partial", "unable", "failed"]);
@@ -97,11 +96,7 @@ export async function analyzeVideoHandler(request: Request, dependencies: Analyz
 
     await dependencies.markStage(session.id, "coaching");
     await dependencies.saveResult(session.id, result);
-    try {
-      await dependencies.deleteFile(file.name);
-    } catch {
-      await dependencies.markCleanupPending(session.id);
-    }
+    await dependencies.deleteFile(file.name).catch(() => undefined);
     return json(statusPayload(session, result.status, "coaching", result), 200);
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);

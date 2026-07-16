@@ -7,6 +7,8 @@ import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
 
+const MIN_RECORDING_MS = 3_000;
+
 type CameraControlsProps = {
   phase: CapturePhase;
   countdown: number | null;
@@ -51,7 +53,7 @@ export function CameraControls({
       )}
 
       <View style={{ alignItems: "center", gap: spacing.md, paddingBottom: spacing.xl }}>
-        {phase === "idle" ? (
+        {phase === "idle" || phase === "processing" ? (
           <Pressable
             accessibilityLabel="Start countdown"
             accessibilityRole="button"
@@ -72,14 +74,19 @@ export function CameraControls({
         ) : null}
 
         {phase === "recording" ? (
-          <Pressable
-            accessibilityLabel="Stop recording"
-            accessibilityRole="button"
-            onPress={onStop}
-            style={{ width: 82, height: 82, alignItems: "center", justifyContent: "center", borderRadius: 41, borderWidth: 2, borderColor: colors.gold }}
-          >
-            <View style={{ width: 34, height: 34, borderRadius: 6, backgroundColor: colors.text }} />
-          </Pressable>
+          <>
+            <Pressable
+              accessibilityLabel="Stop recording"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: elapsedMs < MIN_RECORDING_MS }}
+              disabled={elapsedMs < MIN_RECORDING_MS}
+              onPress={onStop}
+              style={{ width: 82, height: 82, alignItems: "center", justifyContent: "center", borderRadius: 41, borderWidth: 2, borderColor: colors.gold, opacity: elapsedMs < MIN_RECORDING_MS ? 0.5 : 1 }}
+            >
+              <View style={{ width: 34, height: 34, borderRadius: 6, backgroundColor: colors.text }} />
+            </Pressable>
+            {elapsedMs < MIN_RECORDING_MS ? <Text selectable style={[typography.caption, { color: colors.text }]}>Keep recording for 3 seconds</Text> : null}
+          </>
         ) : null}
 
         {phase === "recorded" || phase === "uploading" ? (

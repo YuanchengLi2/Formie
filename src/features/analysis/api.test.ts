@@ -1,4 +1,4 @@
-import { AnalysisApiError, completeAnalysisUpload, correctAnalysisLabel, createAnalysisSession, processAnalysis, uploadAnalysisVideo } from "./api";
+import { AnalysisApiError, completeAnalysisUpload, correctAnalysisLabel, createAnalysisSession, processAnalysis, processAndLoadAnalysis, uploadAnalysisVideo } from "./api";
 
 describe("analysis API", () => {
   it("creates a session without requiring exercise selection", async () => {
@@ -140,5 +140,31 @@ describe("analysis API", () => {
       "https://example.supabase.co/functions/v1/analyze-video",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ sessionId: "session-123" }) }),
     );
+  });
+
+  it("loads a private evidence video URL after Gemini returns a terminal result", async () => {
+    const result = {
+      status: "unable",
+      recognition: { label: null, variation: null, equipment: [], confidence: 0, alternatives: [], catalogExerciseId: null, cameraView: "uncertain" },
+      videoCheck: { outcome: "unable", usableObservations: [], limitations: ["No person was visible"], retryReason: "No person was visible", retryInstruction: "Keep your full body in frame" },
+      overallAssessment: null,
+      score: null,
+      scoreRationale: [],
+      didWell: [],
+      priorityCorrections: [],
+      coachingCues: [],
+      viewNote: null,
+      comparison: null,
+    };
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sessionId: "session-123", status: "unable", stage: "coaching", videoUrl: null, result }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sessionId: "session-123", status: "unable", stage: "coaching", videoUrl: "https://storage.example/private-video", result }), { status: 200 }));
+
+    const response = await processAndLoadAnalysis({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" });
+
+    expect(response.videoUrl).toBe("https://storage.example/private-video");
+    expect(fetcher.mock.calls[0][0]).toBe("https://example.supabase.co/functions/v1/analyze-video");
+    expect(fetcher.mock.calls[1][0]).toBe("https://example.supabase.co/functions/v1/analysis-status?sessionId=session-123");
   });
 });

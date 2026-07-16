@@ -21,6 +21,25 @@ describe("CameraControls", () => {
     expect(onStop).toHaveBeenCalledTimes(1);
   });
 
+  it("does not stop before the backend minimum recording duration", async () => {
+    const onStop = jest.fn();
+    const screen = await render(
+      <CameraControls phase="recording" countdown={null} elapsedMs={2_000} error={null} hasRecording={false} onRecord={jest.fn()} onStop={onStop} onRetryUpload={jest.fn()} />,
+    );
+    expect(screen.getByText("Keep recording for 3 seconds")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Stop recording"));
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  it("can start a fresh recording after a previous analysis begins processing", async () => {
+    const onRecord = jest.fn();
+    const screen = await render(
+      <CameraControls phase="processing" countdown={null} elapsedMs={0} error={null} hasRecording onRecord={onRecord} onStop={jest.fn()} onRetryUpload={jest.fn()} />,
+    );
+    await fireEvent.press(screen.getByLabelText("Start countdown"));
+    expect(onRecord).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps a retry action visible when upload fails", async () => {
     const onRetryUpload = jest.fn();
     const onDiscardRecording = jest.fn();

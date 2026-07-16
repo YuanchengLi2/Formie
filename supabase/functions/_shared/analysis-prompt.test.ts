@@ -13,6 +13,8 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).toContain("qualitative or estimated");
     expect(prompt).toContain("24 frames per second");
     expect(prompt).toContain("Standing Dumbbell Curl");
+    expect(prompt).toContain("overallAssessment, score, and comparison to null");
+    expect(prompt).toContain("retryReason and retryInstruction to specific non-empty strings");
     expect(prompt).not.toContain("MediaPipe");
     expect(prompt).not.toContain("second pass");
   });

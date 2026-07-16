@@ -168,6 +168,11 @@ export async function getAnalysisStatus(input: RequestContext & { sessionId: str
   );
 }
 
+export async function processAndLoadAnalysis(input: RequestContext & { sessionId: string }): Promise<AnalysisStatusResponse> {
+  const processed = await processAnalysis(input);
+  return processed.result ? getAnalysisStatus(input) : processed;
+}
+
 export async function correctAnalysisLabel(
   input: RequestContext & { sessionId: string; label: string },
 ): Promise<{ corrected: true }> {

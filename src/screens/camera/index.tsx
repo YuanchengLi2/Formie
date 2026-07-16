@@ -14,6 +14,7 @@ import {
   uploadAnalysisVideo,
 } from "@/features/analysis/api";
 import { useCaptureStore } from "@/features/capture/capture-store";
+import { normalizeRecordedDuration } from "@/features/capture/countdown";
 import { START_BEEP_URI } from "@/features/capture/start-beep";
 import type { CaptureOrientation, RecordedSet, UploadTarget } from "@/features/capture/types";
 import { supabase } from "@/lib/supabase";
@@ -138,7 +139,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
       if (!result?.uri) throw new Error("The camera did not save the recording");
       const saved: RecordedSet = {
         localUri: result.uri,
-        durationMs: Date.now() - actualStart,
+        durationMs: normalizeRecordedDuration(Date.now() - actualStart),
         mimeType: "video/mp4",
         captureOrientation: captureOrientation(orientation),
         cameraFacing: facing,

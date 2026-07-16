@@ -9,3 +9,7 @@ export function formatElapsed(durationMs: number): string {
   const seconds = totalSeconds % 60;
   return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 }
+
+export function normalizeRecordedDuration(durationMs: number): number {
+  return Math.min(60_000, Math.max(0, Math.round(durationMs)));
+}

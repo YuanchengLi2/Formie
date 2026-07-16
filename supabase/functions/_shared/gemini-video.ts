@@ -1,4 +1,4 @@
-import { GEMINI_ANALYSIS_JSON_SCHEMA, type AnalysisCandidate, validateAnalysisCandidate } from "./analysis-contract";
+import { GEMINI_ANALYSIS_JSON_SCHEMA, type AnalysisCandidate, validateAnalysisCandidate } from "./analysis-contract.ts";
 
 const API = "https://generativelanguage.googleapis.com/v1beta";
 const UPLOAD_API = "https://generativelanguage.googleapis.com/upload/v1beta/files";

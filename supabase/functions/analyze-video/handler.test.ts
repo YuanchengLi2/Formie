@@ -40,7 +40,6 @@ function dependencies(current = session(), overrides: Partial<AnalyzeVideoDepend
     saveResult: jest.fn(async () => undefined),
     markFailed: jest.fn(async () => undefined),
     deleteFile: jest.fn(async () => undefined),
-    markCleanupPending: jest.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -92,6 +91,18 @@ describe("analyzeVideoHandler", () => {
     expect(deps.saveResult).toHaveBeenCalledWith("session-1", result());
     expect(deps.deleteFile).toHaveBeenCalledWith("files/file-1");
     expect((await response.json()).result).toEqual(result());
+  });
+
+  it("keeps a completed result when best-effort Gemini cleanup fails", async () => {
+    const deps = dependencies(session({ geminiFileName: "files/file-1", geminiFileUri: "uri", geminiFileState: "ACTIVE" }), {
+      deleteFile: jest.fn(async () => { throw new Error("cleanup unavailable"); }),
+    });
+
+    const response = await analyzeVideoHandler(request(), deps);
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).result).toEqual(result());
+    expect(deps.saveResult).toHaveBeenCalledWith("session-1", result());
   });
 
   it("persists failure when Gemini rejects a file or invalid output", async () => {
