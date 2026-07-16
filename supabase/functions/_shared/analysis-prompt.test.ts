@@ -28,7 +28,9 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).toContain("Never add a weaker duplicate or filler finding");
     expect(prompt).toContain("early, middle, and late repetitions");
     expect(prompt).toContain("Multiple distinct findings may belong to the same repetition");
-    expect(prompt).toContain("one to four evidence moments");
+    expect(prompt).toContain("one or more evidence moments");
+    expect(prompt).toContain("Do not cap recurring evidence at four moments");
+    expect(prompt).not.toContain("one to four evidence moments");
     expect(prompt).toContain("repNumber to null for setup or between-rep moments");
     expect(prompt).toContain("Do not create a coaching point for a repetition that has no material issue");
     expect(prompt).toContain("focusRegion");

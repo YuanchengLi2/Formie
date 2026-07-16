@@ -265,12 +265,24 @@ describe("Gemini video client", () => {
     expect(secondRequest.generationConfig.mediaResolution).toBe("MEDIA_RESOLUTION_HIGH");
   });
 
-  it("skips the verifier for a confident result with strong evidence", async () => {
-    const fetcher = jest.fn();
+  it("audits a praise-only first pass and can recover a correction it initially missed", async () => {
+    const draft: any = validCandidate();
+    const audited = structuredClone(draft);
+    audited.priorityCorrections = [{
+      ...audited.didWell[0],
+      id: "missed-elbow-drift",
+      title: "Elbow drift",
+      correction: "Keep the upper arm beside the torso.",
+      cue: "Only the forearm moves.",
+      evidence: [{ ...audited.didWell[0].evidence[0], coachingNote: "the elbow moves forward; keep the upper arm beside the torso." }],
+    }];
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(audited) }] } }] }), { status: 200 }));
     const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
-    const result = await client.verifyAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, draft: validCandidate(), durationMs: 10_000 });
-    expect(fetcher).not.toHaveBeenCalled();
-    expect(result.precisionReview).toMatchObject({ runsRequested: 0, runsUsed: 0, status: "not-needed" });
+    const result = await client.verifyAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, draft, durationMs: 10_000 });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.priorityCorrections).toEqual([expect.objectContaining({ id: "missed-elbow-drift" })]);
+    expect(result.precisionReview).toMatchObject({ runsRequested: 1, runsUsed: 1, status: "completed", passes: [{ kind: "technique", checkedFindingId: null, outcome: "revised" }] });
   });
 
   it("removes a rejected finding and replaces its unsupported action with verified advice", async () => {
@@ -314,7 +326,7 @@ describe("Gemini video client", () => {
     const result = await client.verifyAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, draft, durationMs: 10_000 });
 
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(result.precisionReview).toMatchObject({ runsRequested: 2, runsUsed: 1, status: "failed", summary: "Evidence review stopped after the first failed request." });
+    expect(result.precisionReview).toMatchObject({ runsRequested: 1, runsUsed: 1, status: "failed", summary: "Evidence review stopped after the first failed request." });
     expect(result.precisionReview?.passes).toEqual([expect.objectContaining({ passNumber: 1, outcome: "failed" })]);
   });
 

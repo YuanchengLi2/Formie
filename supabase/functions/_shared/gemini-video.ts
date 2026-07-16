@@ -342,8 +342,7 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
 
     async verifyAnalysis(input: { file: GeminiFile; draft: AnalysisCandidate; durationMs: number }): Promise<AnalysisCandidate> {
       const request = input.draft.precisionRequest;
-      const needsWholeCoachingAudit = input.draft.status !== "unable"
-        && (input.draft.priorityCorrections.length > 0 || input.draft.coachingCues.length > 0);
+      const needsWholeCoachingAudit = input.draft.status !== "unable";
       const requestedTargets = (request?.targets ?? []).slice(0, needsWholeCoachingAudit ? 2 : 3);
       if (!needsWholeCoachingAudit && requestedTargets.length === 0) {
         return {
@@ -363,7 +362,7 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
 
 Current coaching result: ${JSON.stringify(input.draft)}
 
-Audit every finding and every evidence moment, not only the first correction. Preserve every distinct material finding that the recording supports, remove unsupported or duplicate findings, and add any clearly visible material correction the first analysis missed. There is no numeric cap on supported corrections. Systematically check setup and bracing, timing and tempo, joint and implement placement, range of motion, stability, symmetry, sequencing, and rep-to-rep consistency across the entire set.
+Audit every finding and every evidence moment, not only the first correction. Preserve every distinct material finding that the recording supports, remove unsupported or duplicate findings, and add any clearly visible material correction the first analysis missed, including when the first analysis returned only praise. There is no numeric cap on supported corrections or on the distinct material evidence moments needed to show where a recurring issue appears. Systematically check setup and bracing, timing and tempo, joint and implement placement, range of motion, stability, symmetry, sequencing, and rep-to-rep consistency across the entire set.
 
 For each finding, verify that its observation, explanation, correction, and cue are specific to the recognized exercise and mutually consistent. For each evidence moment, compare nearby frames and place peakMs on the clearest frame with the largest visible displacement or contrast that proves that exact claim; keep startMs and endMs tight, set repNumber and phase accurately, and rewrite coachingNote so it describes the visible event and one reproducible physical change. Verify every focusRegion against the original uncropped source frame and keep it only when the exact joint, body area, or implement is localizable with confidence of at least 0.8; otherwise set it to null.
 
