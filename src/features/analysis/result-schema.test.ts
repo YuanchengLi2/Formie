@@ -54,8 +54,10 @@ function validResult(): AnalysisResult {
     priorityCorrections: [validFinding()],
     coachingCues: [validFinding("wall-cue")],
     setSummary: { totalReps: 8, consistentReps: 6, verdict: "Control changed during the final two repetitions." },
-    repTimeline: [{ repNumber: 1, startMs: 500, peakMs: 900, endMs: 1_300, assessment: "consistent", note: "Elbow position stayed steady." }],
+    repTimeline: [{ repNumber: 3, startMs: 7_600, peakMs: 8_350, endMs: 9_000, assessment: "breakdown", note: "Elbow position moved forward." }],
     nextSetPlan: [{ id: "plan-1", action: "Keep the upper arms still", rationale: "Reduce shoulder assistance.", relatedFindingId: "elbow-drift" }],
+    precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
+    precisionReview: { runsRequested: 2, runsUsed: 2, status: "completed", summary: "Two premium precision runs completed.", passes: [{ passNumber: 1, kind: "recognition", outcome: "confirmed", reason: "Exercise identity was confirmed.", checkedFindingId: null, startMs: null, endMs: null, usage: { promptTokens: 100, outputTokens: 20, thinkingTokens: 10 } }, { passNumber: 2, kind: "timestamp", outcome: "confirmed", reason: "The peak timestamp was confirmed.", checkedFindingId: "elbow-drift", startMs: 7_000, endMs: 9_000, usage: { promptTokens: 80, outputTokens: 20, thinkingTokens: 10 } }] },
     verification: { performed: true, reason: "Subtle joint-path claim", outcome: "confirmed", checkedFindingId: "elbow-drift" },
     comparison: null,
   };
@@ -65,9 +67,10 @@ describe("analysisResultSchema", () => {
   it("accepts a complete result with timestamped evidence", () => {
     const parsed = analysisResultSchema.parse(validResult());
     expect(parsed.setSummary).toMatchObject({ totalReps: 8, consistentReps: 6 });
-    expect(parsed.repTimeline?.[0]).toMatchObject({ repNumber: 1, assessment: "consistent" });
+    expect(parsed.repTimeline?.[0]).toMatchObject({ repNumber: 3, assessment: "breakdown" });
     expect(parsed.nextSetPlan?.[0]).toMatchObject({ relatedFindingId: "elbow-drift" });
     expect(parsed.verification).toMatchObject({ performed: true, outcome: "confirmed" });
+    expect(parsed.precisionReview).toMatchObject({ runsUsed: 2, status: "completed" });
   });
 
   it("accepts every evidence-backed finding without a fixed count cap", () => {
@@ -91,6 +94,13 @@ describe("analysisResultSchema", () => {
   it("rejects evidence below the accepted confidence threshold", () => {
     const result = validResult();
     result.priorityCorrections[0].evidence[0].confidence = 0.74;
+    expect(analysisResultSchema.safeParse(result).success).toBe(false);
+  });
+
+  it("rejects a finding timestamp outside its referenced repetition", () => {
+    const result = validResult();
+    result.priorityCorrections[0].evidence[0].peakMs = 9_500;
+    result.priorityCorrections[0].evidence[0].endMs = 9_800;
     expect(analysisResultSchema.safeParse(result).success).toBe(false);
   });
 

@@ -41,7 +41,7 @@ function json(payload: unknown, status: number): Response {
 }
 
 function statusPayload(session: AnalyzeVideoSession, status: string, stage: string | null, result: AnalysisCandidate | null) {
-  return { sessionId: session.id, status, stage, videoUrl: null, result };
+  return { sessionId: session.id, status, stage, durationMs: session.durationMs, videoUrl: null, result };
 }
 
 function unableResult(check: VideoPreflightCheck): AnalysisCandidate {
@@ -66,6 +66,8 @@ function unableResult(check: VideoPreflightCheck): AnalysisCandidate {
     setSummary: { totalReps: null, consistentReps: null, verdict: null },
     repTimeline: [],
     nextSetPlan: [],
+    precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
+    precisionReview: { runsRequested: 0, runsUsed: 0, status: "not-needed", summary: null, passes: [] },
     comparison: null,
   };
 }
@@ -146,6 +148,14 @@ export async function analyzeVideoHandler(request: Request, dependencies: Analyz
     } catch {
       result = {
         ...result,
+        precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
+        precisionReview: {
+          runsRequested: result.precisionRequest.requestedRuns,
+          runsUsed: 0,
+          status: "failed",
+          summary: "The requested premium precision review was unavailable.",
+          passes: [],
+        },
         verification: {
           performed: true,
           reason: "Precision verification was unavailable; the primary analysis was retained.",

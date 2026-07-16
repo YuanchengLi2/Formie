@@ -23,6 +23,8 @@ export function resultPayload(session: Record<string, unknown>, result: Record<s
     setSummary: (result.set_summary ?? { totalReps: null, consistentReps: null, verdict: null }) as AnalysisCandidate["setSummary"],
     repTimeline: (result.rep_timeline ?? []) as AnalysisCandidate["repTimeline"],
     nextSetPlan: (result.next_set_plan ?? []) as AnalysisCandidate["nextSetPlan"],
+    precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
+    precisionReview: (result.precision_review ?? { runsRequested: 0, runsUsed: Number(result.premium_runs_used ?? 0), status: "not-needed", summary: null, passes: [] }) as AnalysisCandidate["precisionReview"],
     verification: (result.verification ?? undefined) as AnalysisCandidate["verification"],
     comparison: (result.comparison ?? null) as AnalysisCandidate["comparison"],
   };

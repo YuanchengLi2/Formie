@@ -17,6 +17,7 @@ function evaluateRows(rows, toleranceMs = 750) {
   let evidenceMatches = 0;
   let cameraComments = 0;
   let verifierInvocations = 0;
+  let premiumRuns = 0;
   const verifierUsage = { promptTokens: 0, outputTokens: 0, thinkingTokens: 0 };
   const failures = [];
 
@@ -51,8 +52,15 @@ function evaluateRows(rows, toleranceMs = 750) {
     const cameraCommentary = CAMERA_LANGUAGE.test(coachingText);
     if (cameraCommentary) cameraComments += 1;
 
-    if (result.verification?.performed) verifierInvocations += 1;
-    for (const key of Object.keys(verifierUsage)) verifierUsage[key] += Number(result.verification?.usage?.[key] ?? 0);
+    const runsUsed = Number(result.precisionReview?.runsUsed ?? (result.verification?.performed ? 1 : 0));
+    premiumRuns += runsUsed;
+    if (runsUsed > 0) verifierInvocations += 1;
+    const passUsage = Array.isArray(result.precisionReview?.passes)
+      ? result.precisionReview.passes.map((pass) => pass?.usage ?? {})
+      : [result.verification?.usage ?? {}];
+    for (const usage of passUsage) {
+      for (const key of Object.keys(verifierUsage)) verifierUsage[key] += Number(usage[key] ?? 0);
+    }
 
     const checks = [];
     if (!exerciseOk) checks.push("exercise");
@@ -70,6 +78,7 @@ function evaluateRows(rows, toleranceMs = 750) {
     evidenceWithinToleranceRate: ratio(evidenceMatches, timedExamples),
     cameraCommentaryRate: ratio(cameraComments, rows.length),
     verifierInvocationRate: ratio(verifierInvocations, rows.length),
+    premiumRunsAverage: ratio(premiumRuns, rows.length),
     verifierUsage,
     failures,
   };

@@ -49,6 +49,27 @@ export type AnalysisCandidate = {
   setSummary: { totalReps: number | null; consistentReps: number | null; verdict: string | null };
   repTimeline: Array<{ repNumber: number; startMs: number; peakMs: number; endMs: number; assessment: "strong" | "consistent" | "breakdown" | "uncertain"; note: string }>;
   nextSetPlan: Array<{ id: string; action: string; rationale: string; relatedFindingId: string | null }>;
+  precisionRequest: {
+    requestedRuns: number;
+    reason: string | null;
+    targets: Array<{ kind: "recognition" | "timestamp" | "technique"; findingId: string | null; startMs: number | null; endMs: number | null; question: string }>;
+  };
+  precisionReview?: {
+    runsRequested: number;
+    runsUsed: number;
+    status: "not-needed" | "completed" | "partial" | "failed";
+    summary: string | null;
+    passes: Array<{
+      passNumber: number;
+      kind: "recognition" | "timestamp" | "technique";
+      outcome: "confirmed" | "revised" | "rejected" | "inconclusive" | "failed";
+      reason: string;
+      checkedFindingId: string | null;
+      startMs: number | null;
+      endMs: number | null;
+      usage: { promptTokens: number; outputTokens: number; thinkingTokens: number };
+    }>;
+  };
   verification?: {
     performed: boolean;
     reason: string | null;
@@ -113,9 +134,21 @@ const nextSetPlanSchema = {
   },
 } as const;
 
+const precisionTargetSchema = {
+  type: "object",
+  required: ["kind", "findingId", "startMs", "endMs", "question"],
+  properties: {
+    kind: { type: "string", enum: ["recognition", "timestamp", "technique"] },
+    findingId: { type: ["string", "null"] },
+    startMs: { type: ["integer", "null"], minimum: 0 },
+    endMs: { type: ["integer", "null"], minimum: 1 },
+    question: { type: "string" },
+  },
+} as const;
+
 export const GEMINI_ANALYSIS_JSON_SCHEMA = {
   type: "object",
-  required: ["status", "recognition", "videoCheck", "overallAssessment", "score", "scoreRationale", "didWell", "priorityCorrections", "coachingCues", "setSummary", "repTimeline", "nextSetPlan", "comparison"],
+  required: ["status", "recognition", "videoCheck", "overallAssessment", "score", "scoreRationale", "didWell", "priorityCorrections", "coachingCues", "setSummary", "repTimeline", "nextSetPlan", "precisionRequest", "comparison"],
   properties: {
     status: { type: "string", enum: ["complete", "partial", "unable"] },
     recognition: {
@@ -171,6 +204,15 @@ export const GEMINI_ANALYSIS_JSON_SCHEMA = {
     },
     repTimeline: { type: "array", items: repTimelineSchema },
     nextSetPlan: { type: "array", maxItems: 5, items: nextSetPlanSchema },
+    precisionRequest: {
+      type: "object",
+      required: ["requestedRuns", "reason", "targets"],
+      properties: {
+        requestedRuns: { type: "integer", minimum: 0, maximum: 3 },
+        reason: { type: ["string", "null"] },
+        targets: { type: "array", maxItems: 3, items: precisionTargetSchema },
+      },
+    },
     comparison: {
       anyOf: [
         { type: "null" },
@@ -282,22 +324,54 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
   if (totalReps !== null && consistentReps !== null && consistentReps > totalReps) throw new Error("consistent repetitions cannot exceed total repetitions");
 
   if (!Array.isArray(result.repTimeline)) throw new Error("repTimeline must be an array");
+  let previousRepNumber = 0;
+  let previousRepEnd = -1;
   for (const rawRep of result.repTimeline) {
     const rep = object(rawRep, "repTimeline item");
     if (!Number.isInteger(rep.repNumber) || Number(rep.repNumber) < 1) throw new Error("repTimeline repNumber is invalid");
-    if (!Number.isInteger(rep.startMs) || !Number.isInteger(rep.peakMs) || !Number.isInteger(rep.endMs) || Number(rep.startMs) < 0 || Number(rep.startMs) > Number(rep.peakMs) || Number(rep.peakMs) > Number(rep.endMs) || Number(rep.endMs) > durationMs) throw new Error("repTimeline timestamp is outside the recorded video");
+    if (!Number.isInteger(rep.startMs) || !Number.isInteger(rep.peakMs) || !Number.isInteger(rep.endMs) || Number(rep.startMs) < 0 || Number(rep.startMs) >= Number(rep.endMs) || Number(rep.startMs) > Number(rep.peakMs) || Number(rep.peakMs) > Number(rep.endMs) || Number(rep.endMs) > durationMs) throw new Error("repTimeline timestamp is outside the recorded video");
+    if (Number(rep.repNumber) <= previousRepNumber || Number(rep.startMs) < previousRepEnd) throw new Error("repTimeline must be ordered with unique non-overlapping repetitions");
+    previousRepNumber = Number(rep.repNumber);
+    previousRepEnd = Number(rep.endMs);
     if (!["strong", "consistent", "breakdown", "uncertain"].includes(String(rep.assessment))) throw new Error("repTimeline assessment is invalid");
     string(rep.note, "repTimeline.note");
   }
 
   if (!Array.isArray(result.nextSetPlan) || result.nextSetPlan.length > 5) throw new Error("nextSetPlan must contain at most five actions");
+  const findingIds = new Set([...didWell, ...corrections, ...cues].map((finding) => finding.id));
   for (const rawItem of result.nextSetPlan) {
     const item = object(rawItem, "nextSetPlan item");
     string(item.id, "nextSetPlan.id");
     string(item.action, "nextSetPlan.action");
     string(item.rationale, "nextSetPlan.rationale");
     string(item.relatedFindingId, "nextSetPlan.relatedFindingId", true);
+    if (item.relatedFindingId !== null && !findingIds.has(String(item.relatedFindingId))) throw new Error("nextSetPlan references an unknown finding");
   }
+
+  const repByNumber = new Map((result.repTimeline as AnalysisCandidate["repTimeline"]).map((rep) => [rep.repNumber, rep]));
+  for (const finding of [...didWell, ...corrections, ...cues]) {
+    for (const moment of finding.evidence) {
+      if (moment.repNumber === null) continue;
+      const rep = repByNumber.get(moment.repNumber);
+      if (!rep || moment.peakMs < rep.startMs || moment.peakMs > rep.endMs) throw new Error("Finding evidence does not fall inside its referenced repetition");
+    }
+  }
+
+  const precisionRequest = object(result.precisionRequest, "precisionRequest");
+  if (!Number.isInteger(precisionRequest.requestedRuns) || Number(precisionRequest.requestedRuns) < 0 || Number(precisionRequest.requestedRuns) > 3) throw new Error("precisionRequest.requestedRuns must be between 0 and 3");
+  string(precisionRequest.reason, "precisionRequest.reason", true);
+  if (!Array.isArray(precisionRequest.targets) || precisionRequest.targets.length !== Number(precisionRequest.requestedRuns)) throw new Error("precisionRequest targets must match requested runs");
+  for (const rawTarget of precisionRequest.targets) {
+    const target = object(rawTarget, "precisionRequest target");
+    if (!["recognition", "timestamp", "technique"].includes(String(target.kind))) throw new Error("precisionRequest target kind is invalid");
+    string(target.findingId, "precisionRequest.findingId", true);
+    string(target.question, "precisionRequest.question");
+    const hasWindow = target.startMs !== null || target.endMs !== null;
+    if (target.kind !== "recognition" && !hasWindow) throw new Error("precisionRequest timestamp and technique targets require a window");
+    if (hasWindow && (!Number.isInteger(target.startMs) || !Number.isInteger(target.endMs) || Number(target.startMs) < 0 || Number(target.endMs) <= Number(target.startMs) || Number(target.endMs) > durationMs)) throw new Error("precisionRequest target window is outside the recorded video");
+    if (target.kind !== "recognition" && (target.findingId === null || !findingIds.has(String(target.findingId)))) throw new Error("precisionRequest target references an unknown finding");
+  }
+  if (Number(precisionRequest.requestedRuns) > 0 && !precisionRequest.reason) throw new Error("precisionRequest requires a reason when premium runs are requested");
 
   if (result.comparison !== null) {
     const comparison = object(result.comparison, "comparison");
@@ -311,7 +385,7 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
 
   if (result.status === "unable") {
     if (videoCheck.outcome !== "unable" || didWell.length || corrections.length || cues.length) throw new Error("unable result cannot contain coaching");
-    if (result.overallAssessment !== null || score !== null || !videoCheck.retryReason || !videoCheck.retryInstruction || totalReps !== null || consistentReps !== null || result.repTimeline.length || result.nextSetPlan.length) throw new Error("unable result requires retry guidance and no assessment");
+    if (result.overallAssessment !== null || score !== null || !videoCheck.retryReason || !videoCheck.retryInstruction || totalReps !== null || consistentReps !== null || result.repTimeline.length || result.nextSetPlan.length || Number(precisionRequest.requestedRuns) !== 0) throw new Error("unable result requires retry guidance and no assessment");
   } else if (videoCheck.outcome === "unable" || !result.overallAssessment) {
     throw new Error("analyzed result requires visible assessment evidence");
   } else if (!recognition.label) {

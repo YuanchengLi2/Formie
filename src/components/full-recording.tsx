@@ -6,9 +6,12 @@ import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
 
-export function FullRecording({ videoUrl, reps }: { videoUrl: string; reps: RepTimelineItem[] }) {
+export function timelineMarkerPercent(peakMs: number, durationMs: number): number {
+  return Math.min(98, Math.max(2, (peakMs / Math.max(1, durationMs)) * 100));
+}
+
+export function FullRecording({ videoUrl, reps, durationMs }: { videoUrl: string; reps: RepTimelineItem[]; durationMs: number }) {
   const player = useVideoPlayer(videoUrl);
-  const timelineEnd = Math.max(1, ...reps.map((rep) => rep.endMs));
 
   return (
     <View style={{ overflow: "hidden", borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
@@ -25,7 +28,7 @@ export function FullRecording({ videoUrl, reps }: { videoUrl: string; reps: RepT
                   player.currentTime = rep.peakMs / 1_000;
                   player.pause();
                 }}
-                style={{ position: "absolute", left: `${Math.min(98, Math.max(2, (rep.peakMs / timelineEnd) * 100))}%`, top: -7, width: 17, height: 17, marginLeft: -8, borderRadius: 9, borderWidth: 2, borderColor: colors.background, backgroundColor: rep.assessment === "breakdown" ? colors.gold : colors.textSecondary }}
+                style={{ position: "absolute", left: `${timelineMarkerPercent(rep.peakMs, durationMs)}%`, top: -7, width: 17, height: 17, marginLeft: -8, borderRadius: 9, borderWidth: 2, borderColor: colors.background, backgroundColor: rep.assessment === "breakdown" ? colors.gold : colors.textSecondary }}
               />
             ))}
           </View>

@@ -18,6 +18,7 @@ import { typography } from "@/theme/type";
 type ResultsScreenProps = {
   result: AnalysisResult;
   videoUrl?: string | null;
+  durationMs?: number | null;
   onFindingPress: (finding: CoachingFinding) => void;
   onRecordAnother: () => void;
   tutorial?: TutorialVideo | null;
@@ -44,7 +45,14 @@ function FindingRow({ finding, onPress, checked = false }: { finding: CoachingFi
   );
 }
 
-export function ResultsScreen({ result, videoUrl = null, onFindingPress, onRecordAnother, tutorial = null, tutorialLoading = false, onOpenTutorial = () => undefined }: ResultsScreenProps) {
+export function formatAnalysisTimestamp(milliseconds: number): string {
+  const totalTenths = Math.max(0, Math.round(milliseconds / 100));
+  const minutes = Math.floor(totalTenths / 600);
+  const seconds = (totalTenths % 600) / 10;
+  return `${minutes.toString().padStart(2, "0")}:${seconds.toFixed(1).padStart(4, "0")}`;
+}
+
+export function ResultsScreen({ result, videoUrl = null, durationMs = null, onFindingPress, onRecordAnother, tutorial = null, tutorialLoading = false, onOpenTutorial = () => undefined }: ResultsScreenProps) {
   const insets = useSafeAreaInsets();
   const [showScope, setShowScope] = useState(false);
   const presentation = getResultPresentation(result);
@@ -85,7 +93,9 @@ export function ResultsScreen({ result, videoUrl = null, onFindingPress, onRecor
             {consistency ? <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{consistency}</Text> : null}
           </FormCard>
 
-          {videoUrl ? <View style={{ gap: spacing.sm }}><Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>FULL RECORDING</Text><FullRecording videoUrl={videoUrl} reps={repTimeline} /></View> : null}
+          {result.precisionReview && result.precisionReview.runsUsed > 0 ? <FormCard style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}><View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 1, borderColor: colors.gold }}><Text selectable style={[typography.label, { color: colors.gold, fontVariant: ["tabular-nums"] }]}>{result.precisionReview.runsUsed}</Text></View><View style={{ flex: 1, gap: 2 }}><Text selectable style={[typography.label, { color: colors.text }]}>Premium precision review</Text><Text selectable style={[typography.caption, { color: colors.textSecondary }]}>{result.precisionReview.runsUsed} additional evidence {result.precisionReview.runsUsed === 1 ? "run" : "runs"} completed</Text></View></FormCard> : null}
+
+          {videoUrl && durationMs ? <View style={{ gap: spacing.sm }}><Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>FULL RECORDING</Text><FullRecording videoUrl={videoUrl} reps={repTimeline} durationMs={durationMs} /></View> : null}
 
           <View style={{ gap: spacing.sm }}>
             <Text selectable style={[typography.heading, { color: colors.text }]}>COACH’S REVIEW</Text>
@@ -95,7 +105,7 @@ export function ResultsScreen({ result, videoUrl = null, onFindingPress, onRecor
                 <Text selectable style={[typography.heading, { color: colors.text }]}>{priority.correction ?? priority.title}</Text>
                 <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{priority.detail}</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                  <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{priority.evidence.map((item) => item.repNumber ? `Rep ${item.repNumber}` : null).filter(Boolean).join(", ") || "Video evidence"}</Text>
+                  <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{priority.evidence.map((item) => `${item.repNumber ? `Rep ${item.repNumber} · ` : ""}${formatAnalysisTimestamp(item.peakMs ?? item.startMs)}`).join(", ")}</Text>
                   <Text selectable style={[typography.label, { color: colors.gold }]}>See full explanation  ›</Text>
                 </View>
                 {result.verification?.performed && ["confirmed", "revised"].includes(result.verification.outcome) && result.verification.checkedFindingId === priority.id ? <Text selectable style={[typography.caption, { color: colors.gold }]}>Evidence checked</Text> : null}

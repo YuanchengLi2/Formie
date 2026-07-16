@@ -111,9 +111,9 @@ describe("analysis API", () => {
   });
 
   it("advances one analysis session through the Gemini endpoint", async () => {
-    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "processing", stage: "video_processing", videoUrl: null, result: null }), { status: 202, headers: { "Content-Type": "application/json" } }));
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "processing", stage: "video_processing", durationMs: 18_500, videoUrl: null, result: null }), { status: 202, headers: { "Content-Type": "application/json" } }));
 
-    await expect(processAnalysis({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" })).resolves.toMatchObject({ stage: "video_processing" });
+    await expect(processAnalysis({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" })).resolves.toMatchObject({ stage: "video_processing", durationMs: 18_500 });
     expect(fetcher).toHaveBeenCalledWith(
       "https://example.supabase.co/functions/v1/analyze-video",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ sessionId: "session-123" }) }),

@@ -99,6 +99,35 @@ const verificationSchema = z.object({
   usage: usageSchema.optional(),
 });
 
+const precisionRequestSchema = z.object({
+  requestedRuns: z.number().int().min(0).max(3),
+  reason: z.string().min(1).nullable(),
+  targets: z.array(z.object({
+    kind: z.enum(["recognition", "timestamp", "technique"]),
+    findingId: z.string().min(1).nullable(),
+    startMs: z.number().int().nonnegative().nullable(),
+    endMs: z.number().int().positive().nullable(),
+    question: z.string().min(1),
+  })).max(3),
+});
+
+const precisionReviewSchema = z.object({
+  runsRequested: z.number().int().min(0).max(3),
+  runsUsed: z.number().int().min(0).max(3),
+  status: z.enum(["not-needed", "completed", "partial", "failed"]),
+  summary: z.string().min(1).nullable(),
+  passes: z.array(z.object({
+    passNumber: z.number().int().positive(),
+    kind: z.enum(["recognition", "timestamp", "technique"]),
+    outcome: z.enum(["confirmed", "revised", "rejected", "inconclusive", "failed"]),
+    reason: z.string().min(1),
+    checkedFindingId: z.string().min(1).nullable(),
+    startMs: z.number().int().nonnegative().nullable(),
+    endMs: z.number().int().positive().nullable(),
+    usage: usageSchema,
+  })).max(3),
+});
+
 export const analysisResultSchema = z
   .object({
     status: z.enum(["complete", "partial", "unable"]),
@@ -113,11 +142,24 @@ export const analysisResultSchema = z
     setSummary: setSummarySchema.optional(),
     repTimeline: z.array(repTimelineItemSchema).optional(),
     nextSetPlan: z.array(nextSetPlanItemSchema).max(5).optional(),
+    precisionRequest: precisionRequestSchema.optional(),
+    precisionReview: precisionReviewSchema.optional(),
     verification: verificationSchema.optional(),
     comparison: comparisonSchema.nullable(),
   })
   .superRefine((result, context) => {
     const findings = [...result.didWell, ...result.priorityCorrections, ...result.coachingCues];
+    if ((result.repTimeline ?? []).length > 0) {
+      const reps = new Map((result.repTimeline ?? []).map((rep) => [rep.repNumber, rep]));
+      for (const finding of findings) {
+        for (const evidence of finding.evidence) {
+          if (evidence.repNumber === null) continue;
+          const rep = reps.get(evidence.repNumber);
+          const peak = evidence.peakMs ?? evidence.startMs;
+          if (!rep || peak < rep.startMs || peak > rep.endMs) context.addIssue({ code: "custom", path: ["repTimeline"], message: "Finding evidence must fall inside its referenced repetition" });
+        }
+      }
+    }
 
     if (result.status === "unable") {
       if (result.videoCheck.outcome !== "unable") {
@@ -164,3 +206,4 @@ export type CoachingFinding = z.infer<typeof coachingFindingSchema>;
 export type AnalysisResult = z.infer<typeof analysisResultSchema>;
 export type RepTimelineItem = z.infer<typeof repTimelineItemSchema>;
 export type NextSetPlanItem = z.infer<typeof nextSetPlanItemSchema>;
+export type PrecisionReview = z.infer<typeof precisionReviewSchema>;

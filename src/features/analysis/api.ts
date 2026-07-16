@@ -17,6 +17,7 @@ const statusResponseSchema = z.object({
   sessionId: z.string().min(1),
   status: z.enum(["created", "uploading", "queued", "processing", "complete", "partial", "unable", "failed"]),
   stage: z.string().min(1).nullable(),
+  durationMs: z.number().int().positive().nullable().optional().default(null),
   videoUrl: z.string().url().nullable().optional().default(null),
   result: analysisResultSchema.nullable(),
 });

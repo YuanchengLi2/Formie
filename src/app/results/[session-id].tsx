@@ -42,6 +42,7 @@ export default function ResultsRoute() {
     <ResultsScreen
       result={status.data.result}
       videoUrl={status.data.videoUrl}
+      durationMs={status.data.durationMs}
       tutorial={tutorial.data}
       tutorialLoading={tutorial.isLoading}
       onOpenTutorial={(video) => void WebBrowser.openBrowserAsync(video.url)}

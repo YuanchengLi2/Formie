@@ -172,9 +172,11 @@ Deno.serve(async (request) => {
         set_summary: result.setSummary,
         rep_timeline: result.repTimeline,
         next_set_plan: result.nextSetPlan,
+        precision_review: result.precisionReview ?? null,
+        premium_runs_used: result.precisionReview?.runsUsed ?? 0,
         verification: result.verification ?? null,
         comparison: result.comparison,
-        analysis_version: "gemini-video-3.0.0",
+        analysis_version: "gemini-video-4.0.0",
       }, { onConflict: "session_id" });
       if (resultError) throw resultError;
     },

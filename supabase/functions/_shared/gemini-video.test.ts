@@ -16,6 +16,7 @@ function validCandidate() {
     setSummary: { totalReps: 3, consistentReps: 2, verdict: "The final repetition changed." },
     repTimeline: [{ repNumber: 1, startMs: 500, peakMs: 900, endMs: 1_300, assessment: "consistent", note: "The repetition stayed controlled." }],
     nextSetPlan: [{ id: "plan-1", action: "Keep the upper arms still", rationale: "Reduce elbow drift.", relatedFindingId: "stable" }],
+    precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
     comparison: null,
   };
 }
@@ -102,21 +103,40 @@ describe("Gemini video client", () => {
     await expect(client.generateAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, prompt: "coach", durationMs: 5_000 })).resolves.toMatchObject({ recognition: { label: "Hammer Curl" } });
   });
 
-  it("runs a clipped high-detail verifier for a subtle priority correction", async () => {
+  it("runs the AI-requested premium reviews with the full coaching result and prior review context", async () => {
     const draft: any = validCandidate();
     draft.recognition.confidence = 0.72;
     draft.priorityCorrections = [{ ...draft.didWell[0], id: "elbow-drift", title: "Late elbow drift", evidence: [{ ...draft.didWell[0].evidence[0], startMs: 2_000, peakMs: 2_400, endMs: 2_800, confidence: 0.82 }] }];
-    const verification = { outcome: "confirmed", reason: "The elbow path changes at the cited frame.", finding: draft.priorityCorrections[0] };
-    const fetcher = jest.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(verification) }] } }], usageMetadata: { promptTokenCount: 1200, candidatesTokenCount: 180, thoughtsTokenCount: 90 } }), { status: 200 }));
+    draft.repTimeline = [{ repNumber: 1, startMs: 500, peakMs: 2_400, endMs: 3_000, assessment: "breakdown", note: "Elbow travel increased." }];
+    draft.precisionRequest = {
+      requestedRuns: 2,
+      reason: "Recognition and the late-set timestamp both need review.",
+      targets: [
+        { kind: "recognition", findingId: null, startMs: null, endMs: null, question: "Is this specifically a hammer curl?" },
+        { kind: "timestamp", findingId: "elbow-drift", startMs: 2_000, endMs: 2_800, question: "Does elbow drift peak at 2.4 seconds?" },
+      ],
+    };
+    const recognition = { ...draft.recognition, label: "Hammer Curl", variation: "Late shoulder-assisted reps", confidence: 0.88 };
+    const first = { outcome: "revised", reason: "The neutral grip identifies a hammer curl.", finding: null, recognition };
+    const second = { outcome: "confirmed", reason: "The elbow path changes at the cited frame.", finding: draft.priorityCorrections[0], recognition: null };
+    const fetcher = jest.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(first) }] } }], usageMetadata: { promptTokenCount: 1000, candidatesTokenCount: 100, thoughtsTokenCount: 50 } }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(second) }] } }], usageMetadata: { promptTokenCount: 1200, candidatesTokenCount: 180, thoughtsTokenCount: 90 } }), { status: 200 }));
     const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
 
     const result = await client.verifyAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, draft, durationMs: 10_000 });
 
-    expect(result.verification).toMatchObject({ performed: true, outcome: "confirmed", checkedFindingId: "elbow-drift", usage: { promptTokens: 1200, outputTokens: 180, thinkingTokens: 90 } });
-    const request = JSON.parse(String(fetcher.mock.calls[0][1].body));
-    expect(request.contents[0].parts[0].videoMetadata).toMatchObject({ fps: 24, startOffset: "1s", endOffset: "3.8s" });
-    expect(request.contents[0].parts[1].text).toContain("absolute milliseconds from the start of the original video");
-    expect(request.generationConfig.mediaResolution).toBe("MEDIA_RESOLUTION_HIGH");
+    expect(result.recognition).toMatchObject({ label: "Hammer Curl", confidence: 0.88 });
+    expect(result.precisionReview).toMatchObject({ runsRequested: 2, runsUsed: 2, status: "completed", passes: [{ kind: "recognition", outcome: "revised" }, { kind: "timestamp", outcome: "confirmed" }] });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    const firstRequest = JSON.parse(String(fetcher.mock.calls[0][1].body));
+    const secondRequest = JSON.parse(String(fetcher.mock.calls[1][1].body));
+    expect(firstRequest.contents[0].parts[0].videoMetadata).toMatchObject({ fps: 24 });
+    expect(firstRequest.contents[0].parts[0].videoMetadata.startOffset).toBeUndefined();
+    expect(secondRequest.contents[0].parts[0].videoMetadata).toMatchObject({ fps: 24, startOffset: "1s", endOffset: "3.8s" });
+    expect(secondRequest.contents[0].parts[1].text).toContain("The neutral grip identifies a hammer curl");
+    expect(secondRequest.contents[0].parts[1].text).toContain("entire current coaching result");
+    expect(secondRequest.generationConfig.mediaResolution).toBe("MEDIA_RESOLUTION_HIGH");
   });
 
   it("skips the verifier for a confident result with strong evidence", async () => {
@@ -124,7 +144,7 @@ describe("Gemini video client", () => {
     const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
     const result = await client.verifyAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, draft: validCandidate(), durationMs: 10_000 });
     expect(fetcher).not.toHaveBeenCalled();
-    expect(result.verification).toMatchObject({ performed: false, outcome: "not-needed" });
+    expect(result.precisionReview).toMatchObject({ runsRequested: 0, runsUsed: 0, status: "not-needed" });
   });
 
   it("removes a rejected finding and its now-unsupported next-set action", async () => {
@@ -132,7 +152,8 @@ describe("Gemini video client", () => {
     draft.recognition.confidence = 0.7;
     draft.priorityCorrections = [{ ...draft.didWell[0], id: "elbow-drift", title: "Elbow drift" }];
     draft.nextSetPlan = [{ id: "plan-1", action: "Pin the elbows", rationale: "Reduce drift", relatedFindingId: "elbow-drift" }];
-    const fetcher = jest.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ outcome: "rejected", reason: "The clip does not show the claimed drift.", finding: null }) }] } }] }), { status: 200 }));
+    draft.precisionRequest = { requestedRuns: 1, reason: "The correction needs review.", targets: [{ kind: "technique", findingId: "elbow-drift", startMs: 1_000, endMs: 1_500, question: "Is elbow drift visible?" }] };
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ outcome: "rejected", reason: "The clip does not show the claimed drift.", finding: null, recognition: null }) }] } }] }), { status: 200 }));
     const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
 
     const result = await client.verifyAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, draft, durationMs: 10_000 });

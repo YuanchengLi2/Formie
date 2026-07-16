@@ -23,7 +23,7 @@ Deno.serve(async (request) => {
       videoUrl = signed.data?.signedUrl ?? null;
     }
 
-    return jsonResponse({ sessionId, status: session.status, stage: session.stage, videoUrl, result: resultPayload(session, result) });
+    return jsonResponse({ sessionId, status: session.status, stage: session.stage, durationMs: session.duration_ms, videoUrl, result: resultPayload(session, result) });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") return errorResponse("Sign in again", 401, "UNAUTHORIZED");
     return errorResponse("Analysis status could not be loaded", 500, "STATUS_FAILED");

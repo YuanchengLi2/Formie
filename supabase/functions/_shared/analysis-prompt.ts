@@ -32,6 +32,8 @@ exerciseFamily must be exactly one of: curl, triceps, press, overhead-press, fly
 Curated reference profiles: ${JSON.stringify(catalog)}
 Previous linked result: ${JSON.stringify(input.previousResult)}
 
+Previous-set timestamps belong only to the previous recording. You may reference an earlier correction, cue, rep phase, or coaching conclusion when comparing sets, but never copy an earlier absolute timestamp into the current video. The comparison must explain whether the earlier priority issue visibly improved, stayed the same, worsened, or cannot be compared, using current-video evidence.
+
 COACH THE ACTUAL EXERCISE
 Judge the attempt against the identified exercise and variation, not a generic movement checklist. First segment the visible reps into setup, lowering, transition, lifting, and finish as applicable. Select only observations that materially affect safety, control, range, stability, or the intended implement path.
 
@@ -42,6 +44,9 @@ Set setSummary.totalReps and consistentReps only when the repetitions can be cou
 
 Create a nextSetPlan with one to five ordered physical actions the user can apply immediately. Every action must be short, specific, and tied to this exercise. relatedFindingId must reference the correction or cue it comes from when applicable. Do not add generic filler or six simultaneous corrections.
 
+REQUEST ONLY NECESSARY PREMIUM PRECISION RUNS
+Set precisionRequest.requestedRuns from 0 to 3 and create exactly one target for each requested premium run. Use 0 when the exercise identity, rep segmentation, top correction, and its timestamp are already well supported. Use 1 for one material uncertainty, 2 for two distinct uncertainties, and 3 only when several material questions remain and focused high-detail review can realistically resolve them. A difficult viewpoint or partial occlusion may justify another run only when it affects a specific recognition, timestamp, or technique claim. Do not request repeated reviews of the same already-clear claim. Each target must be recognition, timestamp, or technique, contain one direct question, and use absolute current-video milliseconds for its window. Recognition targets may use null windows; timestamp and technique targets must reference an existing finding and its tight evidence window. State one concise internal reason. This precision reason is metadata and must not leak camera commentary into the coaching.
+
 CHOOSE EVIDENCE THAT PROVES EACH CLAIM
 Every finding needs one tight evidence interval around the clearest single frame. Set peakMs to the exact moment where the claim is most visually obvious, startMs shortly before it, and endMs shortly after it. Keep the interval between 400 and 1200 milliseconds and ensure startMs <= peakMs <= endMs. Do not select setup footage for a mid-rep claim or a transition frame for an end-range claim. visualEvidence must describe exactly what is visible at peakMs and name the relevant body area or implement.
 
@@ -49,5 +54,5 @@ Do not discuss recording direction, device position, framing, viewpoint, or how 
 
 Return unable only if the media is blank, corrupted, contains no person, or contains no meaningful human movement at all. Never return unable because of bad form, an unusual variation, partial range, failed repetitions, unfamiliar equipment, low recognition confidence, or an exercise performed very poorly. A poor attempt should receive a low assessment and direct coaching.
 
-For status unable, set videoCheck.outcome to unable; set overallAssessment, score, comparison, setSummary.totalReps, setSummary.consistentReps, and setSummary.verdict to null; set scoreRationale, didWell, priorityCorrections, coachingCues, repTimeline, and nextSetPlan to empty arrays; and set videoCheck.retryReason and retryInstruction to specific non-empty strings. Otherwise return complete or partial coaching. Include a numeric score when recognition confidence is at least 0.55 and at least two visible exercise-specific criteria support it.`;
+For status unable, set videoCheck.outcome to unable; set overallAssessment, score, comparison, setSummary.totalReps, setSummary.consistentReps, and setSummary.verdict to null; set scoreRationale, didWell, priorityCorrections, coachingCues, repTimeline, nextSetPlan, and precisionRequest.targets to empty arrays; set precisionRequest.requestedRuns to 0 and reason to null; and set videoCheck.retryReason and retryInstruction to specific non-empty strings. Otherwise return complete or partial coaching. Include a numeric score when recognition confidence is at least 0.55 and at least two visible exercise-specific criteria support it.`;
 }

@@ -4,7 +4,13 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { AnalysisResult, CoachingFinding } from "@/features/analysis/result-schema";
 import type { TutorialVideo } from "@/features/analysis/api";
 
-import { ResultsScreen } from ".";
+import { formatAnalysisTimestamp, ResultsScreen } from ".";
+
+describe("formatAnalysisTimestamp", () => {
+  it("carries rounded seconds into the next minute", () => {
+    expect(formatAnalysisTimestamp(59_990)).toBe("01:00.0");
+  });
+});
 
 function finding(id: string, title: string): CoachingFinding {
   return {
@@ -39,6 +45,8 @@ function result(): AnalysisResult {
       { id: "plan-1", action: "Keep your upper arms beside your torso", rationale: "Reduce late elbow travel.", relatedFindingId: "fix-0" },
       { id: "plan-2", action: "Lower each rep for two seconds", rationale: "Keep the tempo repeatable.", relatedFindingId: "cue-0" },
     ],
+    precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
+    precisionReview: { runsRequested: 2, runsUsed: 2, status: "completed", summary: "Two premium precision runs completed.", passes: [{ passNumber: 1, kind: "recognition", outcome: "confirmed", reason: "Exercise identity confirmed.", checkedFindingId: null, startMs: null, endMs: null, usage: { promptTokens: 100, outputTokens: 20, thinkingTokens: 10 } }, { passNumber: 2, kind: "timestamp", outcome: "revised", reason: "Timestamp tightened.", checkedFindingId: "fix-0", startMs: 500, endMs: 2_000, usage: { promptTokens: 100, outputTokens: 20, thinkingTokens: 10 } }] },
     verification: { performed: true, reason: "Subtle late-set change", outcome: "revised", checkedFindingId: "fix-0" },
     comparison: null,
   };
@@ -47,7 +55,7 @@ function result(): AnalysisResult {
 function renderResults(onFindingPress = jest.fn(), onRecordAnother = jest.fn()) {
   return render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-      <ResultsScreen result={result()} videoUrl="https://storage.example/private-set.mp4" onFindingPress={onFindingPress} onRecordAnother={onRecordAnother} />
+      <ResultsScreen result={result()} videoUrl="https://storage.example/private-set.mp4" durationMs={12_000} onFindingPress={onFindingPress} onRecordAnother={onRecordAnother} />
     </SafeAreaProvider>,
   );
 }
@@ -89,6 +97,9 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("6 of 8 reps consistent")).toBeTruthy();
     expect(screen.getByText("NEXT SET PLAN")).toBeTruthy();
     expect(screen.getByText("Evidence checked")).toBeTruthy();
+    expect(screen.getByText("Premium precision review")).toBeTruthy();
+    expect(screen.getByText("2 additional evidence runs completed")).toBeTruthy();
+    expect(screen.getByText("Rep 1 · 00:01.3")).toBeTruthy();
     expect(screen.getByText("See if your correction worked")).toBeTruthy();
 
     await fireEvent.press(screen.getByText("Did well 1"));

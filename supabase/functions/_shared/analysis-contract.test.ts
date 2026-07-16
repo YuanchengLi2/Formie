@@ -33,8 +33,9 @@ function candidate() {
     priorityCorrections: [{ id: "drift", title: "Reduce elbow drift", detail: "The elbows moved forward.", whyItMatters: "Shoulder motion replaces part of the curl.", correction: "Keep the upper arms quiet.", cue: "Elbows against a wall.", severity: "important", evidence: [evidence] }],
     coachingCues: [],
     setSummary: { totalReps: 3, consistentReps: 2, verdict: "The last repetition changed." },
-    repTimeline: [{ repNumber: 1, startMs: 500, peakMs: 900, endMs: 1_300, assessment: "consistent", note: "The repetition stayed controlled." }],
+    repTimeline: [{ repNumber: 1, startMs: 500, peakMs: 900, endMs: 1_800, assessment: "consistent", note: "The repetition stayed controlled." }],
     nextSetPlan: [{ id: "plan-1", action: "Keep the upper arms still", rationale: "Reduce elbow drift.", relatedFindingId: "drift" }],
+    precisionRequest: { requestedRuns: 1, reason: "The late elbow path needs a tighter timestamp check.", targets: [{ kind: "timestamp", findingId: "drift", startMs: 1_000, endMs: 1_700, question: "Does the elbow move forward at the cited peak?" }] },
     comparison: null,
   };
 }
@@ -43,7 +44,7 @@ describe("Gemini analysis contract", () => {
   it("accepts one complete evidence-backed video result", () => {
     expect(validateAnalysisCandidate(candidate(), 10_000)).toEqual(candidate());
     expect(GEMINI_ANALYSIS_JSON_SCHEMA.required).toContain("recognition");
-    expect(GEMINI_ANALYSIS_JSON_SCHEMA.required).toEqual(expect.arrayContaining(["setSummary", "repTimeline", "nextSetPlan"]));
+    expect(GEMINI_ANALYSIS_JSON_SCHEMA.required).toEqual(expect.arrayContaining(["setSummary", "repTimeline", "nextSetPlan", "precisionRequest"]));
   });
 
   it("rejects evidence outside the recording", () => {
@@ -60,6 +61,32 @@ describe("Gemini analysis contract", () => {
     const noVisibleAreas = candidate();
     noVisibleAreas.priorityCorrections[0].evidence[0].visibleBodyAreas = [];
     expect(() => validateAnalysisCandidate(noVisibleAreas, 10_000)).toThrow("visible body area");
+  });
+
+  it("rejects finding timestamps that disagree with the referenced repetition", () => {
+    const value = candidate();
+    value.priorityCorrections[0].evidence[0].peakMs = 2_400;
+    value.priorityCorrections[0].evidence[0].endMs = 2_700;
+    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("does not fall inside its referenced repetition");
+  });
+
+  it("requires one valid review target for every AI-requested premium run", () => {
+    const value = candidate();
+    value.precisionRequest.requestedRuns = 2;
+    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("precisionRequest targets must match requested runs");
+  });
+
+  it("requires a bounded video window for timestamp and technique review targets", () => {
+    const value = candidate();
+    value.precisionRequest.targets[0].startMs = null;
+    value.precisionRequest.targets[0].endMs = null;
+    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("precisionRequest timestamp and technique targets require a window");
+  });
+
+  it("rejects duplicate or overlapping repetition intervals", () => {
+    const value = candidate();
+    value.repTimeline.push({ repNumber: 1, startMs: 1_600, peakMs: 1_900, endMs: 2_200, assessment: "breakdown", note: "Duplicate rep." });
+    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("repTimeline must be ordered with unique non-overlapping repetitions");
   });
 
   it("rejects a score when recognition is uncertain", () => {

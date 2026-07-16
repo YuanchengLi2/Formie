@@ -10,7 +10,7 @@ function result(): AnalysisCandidate {
     recognition: { label: "Curl", variation: null, equipment: ["dumbbells"], confidence: 0.9, alternatives: [], catalogExerciseId: null, exerciseFamily: "curl" },
     videoCheck: { outcome: "usable", usableObservations: ["upper body"], limitations: [], retryReason: null, retryInstruction: null },
     overallAssessment: "The visible set was controlled.", score: null, scoreRationale: [], didWell: [], priorityCorrections: [], coachingCues: [],
-    setSummary: { totalReps: 8, consistentReps: 7, verdict: "Seven of eight reps stayed controlled." }, repTimeline: [], nextSetPlan: [], comparison: null,
+    setSummary: { totalReps: 8, consistentReps: 7, verdict: "Seven of eight reps stayed controlled." }, repTimeline: [], nextSetPlan: [], precisionRequest: { requestedRuns: 0, reason: null, targets: [] }, comparison: null,
   };
 }
 
@@ -41,6 +41,7 @@ function dependencies(current = session(), overrides: Partial<AnalyzeVideoDepend
     generate: jest.fn(async () => result()),
     verify: jest.fn(async (_session, _file, draft) => ({
       ...draft,
+      precisionReview: { runsRequested: 0, runsUsed: 0, status: "not-needed", summary: null, passes: [] },
       verification: { performed: false, reason: null, outcome: "not-needed", checkedFindingId: null },
     })),
     markStage: jest.fn(async () => undefined),
@@ -103,6 +104,7 @@ describe("analyzeVideoHandler", () => {
     expect(deps.generate).toHaveBeenCalledTimes(1);
     expect(deps.verify).toHaveBeenCalledWith(expect.objectContaining({ id: "session-1" }), activeFile, result());
     expect(deps.saveResult).toHaveBeenCalledWith("session-1", expect.objectContaining({
+      precisionReview: expect.objectContaining({ runsUsed: 0 }),
       verification: expect.objectContaining({ outcome: "not-needed" }),
     }));
     expect(deps.deleteFile).toHaveBeenCalledWith("files/file-1");
@@ -156,6 +158,7 @@ describe("analyzeVideoHandler", () => {
     expect(response.status).toBe(200);
     expect((await response.json()).result).toMatchObject(result());
     expect(deps.saveResult).toHaveBeenCalledWith("session-1", expect.objectContaining({
+      precisionReview: expect.objectContaining({ runsUsed: 0 }),
       verification: expect.objectContaining({ outcome: "not-needed" }),
     }));
   });
@@ -174,6 +177,7 @@ describe("analyzeVideoHandler", () => {
 
     expect(response.status).toBe(200);
     expect(deps.saveResult).toHaveBeenCalledWith("session-1", expect.objectContaining({
+      precisionReview: expect.objectContaining({ status: "failed", runsUsed: 0 }),
       verification: expect.objectContaining({ performed: true, outcome: "failed" }),
     }));
     expect(deps.markFailed).not.toHaveBeenCalled();

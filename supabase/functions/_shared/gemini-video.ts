@@ -37,17 +37,23 @@ const VIDEO_PREFLIGHT_PROMPT = `Check only whether this media is blatantly unusa
 Return unable only when the file is blank or corrupted, no person appears, or there is no meaningful human movement at all. Return usable whenever a person attempts any exercise-like movement. Bad form, an unusual variation, or low recognition confidence are never reasons to reject the recording. Do not judge technique, identify the exercise, or discuss recording direction or device placement.
 For unable, provide one short factual retryReason and one actionable retryInstruction. For usable, set retryReason and retryInstruction to null.`;
 
-const VERIFICATION_JSON_SCHEMA = {
+const PREMIUM_REVIEW_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["outcome", "reason", "finding"],
+  required: ["outcome", "reason", "finding", "recognition"],
   properties: {
-    outcome: { type: "string", enum: ["confirmed", "revised", "rejected"] },
+    outcome: { type: "string", enum: ["confirmed", "revised", "rejected", "inconclusive"] },
     reason: { type: "string" },
     finding: {
       anyOf: [
         { type: "null" },
         GEMINI_ANALYSIS_JSON_SCHEMA.properties.priorityCorrections.items,
+      ],
+    },
+    recognition: {
+      anyOf: [
+        { type: "null" },
+        GEMINI_ANALYSIS_JSON_SCHEMA.properties.recognition,
       ],
     },
   },
@@ -142,24 +148,14 @@ function usage(payload: Record<string, unknown>) {
   };
 }
 
-function verificationReason(draft: AnalysisCandidate): string | null {
-  const finding = draft.priorityCorrections[0];
-  if (!finding) return null;
-  if (draft.recognition.confidence < 0.82) return "Exercise or variation confidence needs a closer evidence check";
-  if (draft.status === "partial") return "Partial analysis needs a closer evidence check";
-  if (draft.recognition.variation) return "The detected variation needs a closer evidence check";
-  if (finding.evidence.some((moment) => moment.confidence < 0.88)) return "Priority evidence confidence needs a closer check";
-  const subtleClaim = `${finding.title} ${finding.detail} ${finding.correction ?? ""}`;
-  if (/asymmetr|left|right|slight|subtle|late|final|drift|shift|changes?/i.test(subtleClaim)) return "The priority correction describes a subtle movement change";
-  return null;
-}
-
-function verificationWindow(draft: AnalysisCandidate, durationMs: number) {
-  const evidence = draft.priorityCorrections[0]?.evidence[0];
-  if (!evidence) return null;
+function replaceFinding(draft: AnalysisCandidate, findingId: string, finding: AnalysisCandidate["priorityCorrections"][number] | null): AnalysisCandidate {
+  const update = (items: AnalysisCandidate["priorityCorrections"]) => items.flatMap((item) => item.id !== findingId ? [item] : finding ? [{ ...finding, id: findingId }] : []);
   return {
-    startSeconds: Math.max(0, evidence.startMs - 1_000) / 1_000,
-    endSeconds: Math.min(durationMs, evidence.endMs + 1_000) / 1_000,
+    ...draft,
+    didWell: update(draft.didWell),
+    priorityCorrections: update(draft.priorityCorrections),
+    coachingCues: update(draft.coachingCues),
+    nextSetPlan: finding ? draft.nextSetPlan : draft.nextSetPlan.filter((item) => item.relatedFindingId !== findingId),
   };
 }
 
@@ -261,79 +257,84 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
     },
 
     async verifyAnalysis(input: { file: GeminiFile; draft: AnalysisCandidate; durationMs: number }): Promise<AnalysisCandidate> {
-      const reason = verificationReason(input.draft);
-      const window = verificationWindow(input.draft, input.durationMs);
-      const checkedFinding = input.draft.priorityCorrections[0];
-      if (!reason || !window || !checkedFinding) {
+      const request = input.draft.precisionRequest;
+      const runsRequested = Math.min(3, Math.max(0, request?.requestedRuns ?? 0));
+      if (runsRequested === 0) {
         return {
           ...input.draft,
+          precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
+          precisionReview: { runsRequested: 0, runsUsed: 0, status: "not-needed", summary: null, passes: [] },
           verification: { performed: false, reason: null, outcome: "not-needed", checkedFindingId: null },
         };
       }
-
-      const prompt = `You are the evidence verifier for a strength-coaching result. Inspect only the supplied short interval from the original recording and audit the single priority correction below.
-
-Confirm it only when the cited joint, body segment, or implement path is clearly visible. Revise the finding when the movement is visible but its wording or evidence timestamp is imprecise. Reject it when the clip does not visually prove the claim. Do not infer muscle activation, pain, hidden positions, intent, or internal forces. Do not discuss the camera or recording setup. A small change must be described conservatively and specifically.
-
-Exercise: ${input.draft.recognition.label}
-Variation: ${input.draft.recognition.variation ?? "none"}
-Original-video interval supplied: ${window.startSeconds}s to ${window.endSeconds}s.
-Draft finding: ${JSON.stringify(checkedFinding)}
-
-For confirmed, return the original finding. For revised, return one complete corrected finding whose evidence timestamps remain absolute milliseconds from the start of the original video and fall inside the original-video interval above. For rejected, return finding as null.`;
-      const response = await fetcher(`${API}/models/${encodeURIComponent(model)}:generateContent?key=${key}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{
-            role: "user",
-            parts: [
-              {
-                fileData: { mimeType: input.file.mimeType, fileUri: input.file.uri },
-                videoMetadata: { fps: 24, startOffset: `${window.startSeconds}s`, endOffset: `${window.endSeconds}s` },
-              },
-              { text: prompt },
-            ],
-          }],
-          generationConfig: {
-            mediaResolution: "MEDIA_RESOLUTION_HIGH",
-            responseMimeType: "application/json",
-            responseJsonSchema: VERIFICATION_JSON_SCHEMA,
-          },
-        }),
-      });
-      const payload = await responseJson(response, "Gemini evidence verification failed");
-      const raw = JSON.parse(responseText(payload)) as Record<string, unknown>;
-      if (!["confirmed", "revised", "rejected"].includes(String(raw.outcome)) || typeof raw.reason !== "string" || !raw.reason.trim()) throw new Error("Gemini returned an invalid evidence verification");
-
       let merged: AnalysisCandidate = input.draft;
-      if (raw.outcome === "revised") {
-        if (!raw.finding || typeof raw.finding !== "object") throw new Error("A revised verification requires a finding");
-        merged = {
-          ...input.draft,
-          priorityCorrections: [
-            { ...raw.finding as AnalysisCandidate["priorityCorrections"][number], id: checkedFinding.id },
-            ...input.draft.priorityCorrections.slice(1),
-          ],
-        };
-      } else if (raw.outcome === "rejected") {
-        merged = {
-          ...input.draft,
-          priorityCorrections: input.draft.priorityCorrections.slice(1),
-          nextSetPlan: input.draft.nextSetPlan.filter((item) => item.relatedFindingId !== checkedFinding.id),
-        };
+      const passes: NonNullable<AnalysisCandidate["precisionReview"]>["passes"] = [];
+      let latestVerification: AnalysisCandidate["verification"] = { performed: false, reason: null, outcome: "not-needed", checkedFindingId: null };
+
+      for (let index = 0; index < runsRequested; index += 1) {
+        const target = request.targets[index];
+        if (!target) break;
+        const hasWindow = target.startMs !== null && target.endMs !== null;
+        const startMs = hasWindow ? Math.max(0, Number(target.startMs) - 1_000) : null;
+        const endMs = hasWindow ? Math.min(input.durationMs, Number(target.endMs) + 1_000) : null;
+        const priorDecisions = passes.map(({ passNumber, kind, outcome, reason, checkedFindingId }) => ({ passNumber, kind, outcome, reason, checkedFindingId }));
+        const prompt = `You are premium precision reviewer ${index + 1} for FORM. Audit exactly one unresolved question against the original recording.
+
+Target: ${JSON.stringify(target)}
+The entire current coaching result is provided below. Keep every supported part, and do not introduce a new issue outside the target.
+Entire current coaching result: ${JSON.stringify(merged)}
+Earlier premium review decisions: ${JSON.stringify(priorDecisions)}
+
+For recognition, confirm the existing nearest standard exercise or revise recognition to the most specific supported exercise and variation, even when the attempt is performed badly. For timestamp or technique, inspect the cited joint, body segment, or implement path and return a complete revised finding only if needed. All evidence timestamps must be absolute milliseconds from the start of the original video. Confirm only what is visible; reject an unsupported finding; use inconclusive when the supplied view cannot decide. Never infer pain, muscle activation, hidden positions, intent, or internal forces. Never put recording or camera advice into coaching. Return recognition only for a revised recognition target, and finding only for a revised timestamp or technique target.`;
+        const videoMetadata: Record<string, unknown> = { fps: 24 };
+        if (startMs !== null && endMs !== null) {
+          videoMetadata.startOffset = `${startMs / 1_000}s`;
+          videoMetadata.endOffset = `${endMs / 1_000}s`;
+        }
+
+        try {
+          const response = await fetcher(`${API}/models/${encodeURIComponent(model)}:generateContent?key=${key}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ fileData: { mimeType: input.file.mimeType, fileUri: input.file.uri }, videoMetadata }, { text: prompt }] }],
+              generationConfig: { mediaResolution: "MEDIA_RESOLUTION_HIGH", responseMimeType: "application/json", responseJsonSchema: PREMIUM_REVIEW_JSON_SCHEMA },
+            }),
+          });
+          const payload = await responseJson(response, "Gemini premium review failed");
+          const raw = JSON.parse(responseText(payload)) as Record<string, unknown>;
+          if (!["confirmed", "revised", "rejected", "inconclusive"].includes(String(raw.outcome)) || typeof raw.reason !== "string" || !raw.reason.trim()) throw new Error("Gemini returned an invalid premium review");
+
+          if (raw.outcome === "revised" && target.kind === "recognition") {
+            if (!raw.recognition || typeof raw.recognition !== "object") throw new Error("A revised recognition review requires recognition");
+            const recognition = raw.recognition as AnalysisCandidate["recognition"];
+            merged = { ...merged, recognition, ...(recognition.confidence < 0.55 ? { score: null, scoreRationale: [] } : {}) };
+          } else if (target.kind !== "recognition" && target.findingId) {
+            if (raw.outcome === "revised" && (!raw.finding || typeof raw.finding !== "object")) throw new Error("A revised coaching review requires a finding");
+            if (raw.outcome === "revised" || raw.outcome === "rejected") merged = replaceFinding(merged, target.findingId, raw.outcome === "revised" ? raw.finding as AnalysisCandidate["priorityCorrections"][number] : null);
+            latestVerification = { performed: true, reason: raw.reason, outcome: raw.outcome === "inconclusive" ? "failed" : raw.outcome as "confirmed" | "revised" | "rejected", checkedFindingId: target.findingId, usage: usage(payload) };
+          }
+          passes.push({ passNumber: index + 1, kind: target.kind, outcome: raw.outcome as "confirmed" | "revised" | "rejected" | "inconclusive", reason: raw.reason, checkedFindingId: target.findingId, startMs, endMs, usage: usage(payload) });
+        } catch (error) {
+          passes.push({ passNumber: index + 1, kind: target.kind, outcome: "failed", reason: error instanceof Error ? error.message : "Premium review failed", checkedFindingId: target.findingId, startMs, endMs, usage: { promptTokens: 0, outputTokens: 0, thinkingTokens: 0 } });
+          break;
+        }
       }
-      const validated = validateAnalysisCandidate(merged, input.durationMs);
-      return {
-        ...validated,
-        verification: {
-          performed: true,
-          reason,
-          outcome: raw.outcome as "confirmed" | "revised" | "rejected",
-          checkedFindingId: checkedFinding.id,
-          usage: usage(payload),
+
+      const failed = passes.some((pass) => pass.outcome === "failed");
+      const reviewed: AnalysisCandidate = {
+        ...merged,
+        precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
+        precisionReview: {
+          runsRequested,
+          runsUsed: passes.length,
+          status: failed ? (passes.length > 1 ? "partial" : "failed") : "completed",
+          summary: failed ? "Some requested precision review could not be completed." : `${passes.length} premium precision ${passes.length === 1 ? "run" : "runs"} completed.`,
+          passes,
         },
+        verification: latestVerification,
       };
+      return validateAnalysisCandidate(reviewed, input.durationMs);
     },
 
     async deleteFile(name: string): Promise<void> {

@@ -25,11 +25,30 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).toContain("Create repTimeline entries");
     expect(prompt).toContain("Create a nextSetPlan with one to five ordered physical actions");
     expect(prompt).toContain("six simultaneous corrections");
+    expect(prompt).toContain("Previous-set timestamps belong only to the previous recording");
+    expect(prompt).toContain("precisionRequest.requestedRuns from 0 to 3");
+    expect(prompt).toContain("one target for each requested premium run");
     expect(prompt).not.toContain("Capture metadata");
     expect(prompt).not.toContain("camera view");
     expect(prompt).not.toContain("angle");
     expect(prompt).not.toContain("orientation");
     expect(prompt).not.toContain("MediaPipe");
     expect(prompt).not.toContain("second pass");
+  });
+
+  it("provides the complete earlier coaching result without treating its timestamps as current evidence", () => {
+    const prompt = buildAnalysisPrompt({
+      profiles: [],
+      previousResult: {
+        status: "complete",
+        priorityCorrections: [{ title: "Elbow drift", cue: "Only the forearms move.", evidence: [{ peakMs: 8_300 }] }],
+        nextSetPlan: [{ action: "Pin the upper arms beside the torso." }],
+      },
+    });
+
+    expect(prompt).toContain("Elbow drift");
+    expect(prompt).toContain("Only the forearms move.");
+    expect(prompt).toContain("Pin the upper arms beside the torso.");
+    expect(prompt).toContain("Previous-set timestamps belong only to the previous recording");
   });
 });
