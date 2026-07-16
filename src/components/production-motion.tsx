@@ -21,7 +21,7 @@ export function ProductionMotion({ kind, accessibilityLabel, style }: Production
   return (
     <VideoView
       accessibilityLabel={accessibilityLabel}
-      contentFit="cover"
+      contentFit="contain"
       nativeControls={false}
       player={player}
       style={style}
