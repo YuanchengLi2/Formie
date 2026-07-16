@@ -5,6 +5,7 @@ describe("buildAnalysisPrompt", () => {
     const prompt = buildAnalysisPrompt({
       profiles: [{ id: 35, name: "Standing Dumbbell Curl", aliases: ["curl"], phases: ["setup", "curl", "lower"], attentionAreas: ["elbow drift"], commonFaults: ["torso swing"] }],
       previousResult: null,
+      poseSummary: null,
     });
 
     expect(prompt).toContain("A badly performed exercise is still that exercise");
@@ -36,6 +37,19 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).not.toContain("second pass");
   });
 
+  it("uses Thunder trajectories only as supplemental two-dimensional evidence", () => {
+    const prompt = buildAnalysisPrompt({
+      profiles: [],
+      previousResult: null,
+      poseSummary: { model: "MoveNet.SinglePose.Thunder", seriesColumns: ["timeMs", "leftElbowAngle"], series: [[500, 91], [750, 84]] },
+    });
+    expect(prompt).toContain("MoveNet.SinglePose.Thunder");
+    expect(prompt).toContain("supplemental 2D estimates");
+    expect(prompt).toContain("original video remains authoritative");
+    expect(prompt).toContain("never infer depth");
+    expect(prompt).toContain("500");
+  });
+
   it("provides the complete earlier coaching result without treating its timestamps as current evidence", () => {
     const prompt = buildAnalysisPrompt({
       profiles: [],
@@ -44,6 +58,7 @@ describe("buildAnalysisPrompt", () => {
         priorityCorrections: [{ title: "Elbow drift", cue: "Only the forearms move.", evidence: [{ peakMs: 8_300 }] }],
         nextSetPlan: [{ action: "Pin the upper arms beside the torso." }],
       },
+      poseSummary: null,
     });
 
     expect(prompt).toContain("Elbow drift");

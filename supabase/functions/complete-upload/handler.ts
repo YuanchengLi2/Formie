@@ -1,3 +1,5 @@
+import { validatePoseSummary, type PoseSummary } from "../_shared/pose-summary.ts";
+
 export type CompleteUploadSession = {
   id: string;
   videoPath: string | null;
@@ -13,6 +15,7 @@ export type CompleteUploadDependencies = {
     videoPath: string;
     durationMs: number;
     requestedFps: 24;
+    poseSummary: PoseSummary | null;
   }) => Promise<void>;
 };
 
@@ -37,6 +40,14 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
   ) {
     return json({ message: "Invalid upload metadata", code: "INVALID_BODY" }, 400);
   }
+  let poseSummary: PoseSummary | null = null;
+  if (body.poseSummary !== undefined && body.poseSummary !== null) {
+    try {
+      poseSummary = validatePoseSummary(body.poseSummary, durationMs);
+    } catch {
+      return json({ message: "Invalid pose metadata", code: "INVALID_BODY" }, 400);
+    }
+  }
 
   try {
     const userId = await dependencies.authenticate(request);
@@ -54,6 +65,7 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
       videoPath,
       durationMs,
       requestedFps: 24,
+      poseSummary,
     });
     return json({ processing: true }, 200);
   } catch (error) {

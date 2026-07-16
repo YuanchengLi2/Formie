@@ -8,7 +8,7 @@ import { FormCard } from "@/components/form-card";
 import { FormWordmark } from "@/components/form-wordmark";
 import { FullRecording } from "@/components/full-recording";
 import { ScoreRing } from "@/components/score-ring";
-import type { TutorialVideo } from "@/features/analysis/api";
+import type { PoseTracking, TutorialVideo } from "@/features/analysis/api";
 import { getResultPresentation } from "@/features/analysis/presentation";
 import type { AnalysisResult, CoachingFinding } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
@@ -19,6 +19,7 @@ type ResultsScreenProps = {
   result: AnalysisResult;
   videoUrl?: string | null;
   durationMs?: number | null;
+  poseTracking?: PoseTracking | null;
   onFindingPress: (finding: CoachingFinding) => void;
   onRecordAnother: () => void;
   tutorial?: TutorialVideo | null;
@@ -52,7 +53,7 @@ export function formatAnalysisTimestamp(milliseconds: number): string {
   return `${minutes.toString().padStart(2, "0")}:${seconds.toFixed(1).padStart(4, "0")}`;
 }
 
-export function ResultsScreen({ result, videoUrl = null, durationMs = null, onFindingPress, onRecordAnother, tutorial = null, tutorialLoading = false, onOpenTutorial = () => undefined }: ResultsScreenProps) {
+export function ResultsScreen({ result, videoUrl = null, durationMs = null, poseTracking = null, onFindingPress, onRecordAnother, tutorial = null, tutorialLoading = false, onOpenTutorial = () => undefined }: ResultsScreenProps) {
   const insets = useSafeAreaInsets();
   const [showScope, setShowScope] = useState(false);
   const presentation = getResultPresentation(result);
@@ -94,6 +95,8 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, onFi
           </FormCard>
 
           {result.precisionReview && result.precisionReview.runsUsed > 0 ? <FormCard style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}><View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 1, borderColor: colors.gold }}><Text selectable style={[typography.label, { color: colors.gold, fontVariant: ["tabular-nums"] }]}>{result.precisionReview.runsUsed}</Text></View><View style={{ flex: 1, gap: 2 }}><Text selectable style={[typography.label, { color: colors.text }]}>Premium precision review</Text><Text selectable style={[typography.caption, { color: colors.textSecondary }]}>{result.precisionReview.runsUsed} additional evidence {result.precisionReview.runsUsed === 1 ? "run" : "runs"} completed</Text></View></FormCard> : null}
+
+          {poseTracking ? <FormCard style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}><View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 1, borderColor: colors.gold }}><Text selectable style={[typography.label, { color: colors.gold }]}>2D</Text></View><View style={{ flex: 1, gap: 2 }}><Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 0.8 }]}>Movement tracking</Text><Text selectable style={[typography.label, { color: colors.text }]}>MoveNet Thunder</Text><Text selectable style={[typography.caption, { color: colors.textSecondary }]}>{poseTracking.framesAnalyzed} frames analyzed at {poseTracking.sampleFps} fps</Text></View></FormCard> : null}
 
           {videoUrl && durationMs ? <View style={{ gap: spacing.sm }}><Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>FULL RECORDING</Text><FullRecording videoUrl={videoUrl} reps={repTimeline} durationMs={durationMs} /></View> : null}
 

@@ -1,5 +1,6 @@
 import type { AnalysisCandidate } from "../_shared/analysis-contract.ts";
 import type { GeminiFile, VideoPreflightCheck } from "../_shared/gemini-video.ts";
+import { poseTrackingFromSummary, type PoseSummary } from "../_shared/pose-summary.ts";
 
 export type AnalyzeVideoSession = {
   id: string;
@@ -13,6 +14,7 @@ export type AnalyzeVideoSession = {
   geminiFileUri: string | null;
   geminiFileState: GeminiFile["state"] | null;
   preflightCheck: VideoPreflightCheck | null;
+  poseSummary: PoseSummary | null;
   result: AnalysisCandidate | null;
 };
 
@@ -41,7 +43,7 @@ function json(payload: unknown, status: number): Response {
 }
 
 function statusPayload(session: AnalyzeVideoSession, status: string, stage: string | null, result: AnalysisCandidate | null) {
-  return { sessionId: session.id, status, stage, durationMs: session.durationMs, videoUrl: null, result };
+  return { sessionId: session.id, status, stage, durationMs: session.durationMs, videoUrl: null, poseTracking: poseTrackingFromSummary(session.poseSummary), result };
 }
 
 function unableResult(check: VideoPreflightCheck): AnalysisCandidate {

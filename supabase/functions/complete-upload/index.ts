@@ -25,6 +25,7 @@ Deno.serve(async (request) => {
         video_path: input.videoPath,
         duration_ms: input.durationMs,
         requested_fps: input.requestedFps,
+        pose_summary: input.poseSummary,
         failure_code: null,
         updated_at: new Date().toISOString(),
       }).eq("id", input.sessionId).eq("user_id", input.userId);

@@ -2,6 +2,7 @@ import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { errorResponse, jsonResponse } from "../_shared/responses.ts";
 import { resultPayload } from "../_shared/result-payload.ts";
+import { poseTrackingFromSummary, validatePoseSummary } from "../_shared/pose-summary.ts";
 
 Deno.serve(async (request) => {
   const options = preflight(request);
@@ -23,7 +24,16 @@ Deno.serve(async (request) => {
       videoUrl = signed.data?.signedUrl ?? null;
     }
 
-    return jsonResponse({ sessionId, status: session.status, stage: session.stage, durationMs: session.duration_ms, videoUrl, result: resultPayload(session, result) });
+    let poseTracking = null;
+    if (session.pose_summary && session.duration_ms) {
+      try {
+        poseTracking = poseTrackingFromSummary(validatePoseSummary(session.pose_summary, session.duration_ms));
+      } catch {
+        poseTracking = null;
+      }
+    }
+
+    return jsonResponse({ sessionId, status: session.status, stage: session.stage, durationMs: session.duration_ms, videoUrl, poseTracking, result: resultPayload(session, result) });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") return errorResponse("Sign in again", 401, "UNAUTHORIZED");
     return errorResponse("Analysis status could not be loaded", 500, "STATUS_FAILED");

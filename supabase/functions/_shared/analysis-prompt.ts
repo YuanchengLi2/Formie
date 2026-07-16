@@ -10,6 +10,7 @@ export type CompactExerciseProfile = {
 export type PromptInput = {
   profiles: CompactExerciseProfile[];
   previousResult: unknown | null;
+  poseSummary: unknown | null;
 };
 
 export function buildAnalysisPrompt(input: PromptInput): string {
@@ -31,6 +32,9 @@ exerciseFamily must be exactly one of: curl, triceps, press, overhead-press, fly
 
 Curated reference profiles: ${JSON.stringify(catalog)}
 Previous linked result: ${JSON.stringify(input.previousResult)}
+
+Supplemental local movement estimates: ${JSON.stringify(input.poseSummary)}
+When supplemental movement estimates are present, they come from MoveNet Thunder and are supplemental 2D estimates only. The original video remains authoritative. Use the timestamped series to locate possible rep transitions, joint-path changes, range changes, or left/right differences, then verify every coaching claim in the original pixels. Low-confidence or missing landmarks are not technique faults. The measurements describe image-plane positions and joint bend values; never infer depth, pain, muscle activation, or hidden joint positions from them. Use original-video milliseconds for final evidence.
 
 Previous-set timestamps belong only to the previous recording. You may reference an earlier correction, cue, rep phase, or coaching conclusion when comparing sets, but never copy an earlier absolute timestamp into the current video. The comparison must explain whether the earlier priority issue visibly improved, stayed the same, worsened, or cannot be compared, using current-video evidence.
 

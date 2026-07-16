@@ -110,6 +110,25 @@ describe("analysis API", () => {
     );
   });
 
+  it("attaches an optional local Thunder movement summary to upload completion", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ processing: true }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const poseSummary = {
+      version: 1 as const,
+      model: "MoveNet.SinglePose.Thunder" as const,
+      durationMs: 18_500,
+      requestedFrames: 72,
+      framesAnalyzed: 68,
+      sampleFps: 3.68,
+      overallVisibility: 0.91,
+      seriesColumns: ["timeMs", "confidence", "leftWristX"] as ("timeMs" | "confidence" | "leftWristX")[],
+      series: [[0, 0.9, 0.2], [250, 0.91, 0.21], [500, 0.92, 0.24], [750, 0.9, 0.26]],
+    };
+
+    await completeAnalysisUpload({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123", durationMs: 18_500, poseSummary });
+
+    expect(fetcher).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ body: JSON.stringify({ sessionId: "session-123", durationMs: 18_500, poseSummary }) }));
+  });
+
   it("advances one analysis session through the Gemini endpoint", async () => {
     const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "processing", stage: "video_processing", durationMs: 18_500, videoUrl: null, result: null }), { status: 202, headers: { "Content-Type": "application/json" } }));
 
@@ -118,6 +137,28 @@ describe("analysis API", () => {
       "https://example.supabase.co/functions/v1/analyze-video",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ sessionId: "session-123" }) }),
     );
+  });
+
+  it("parses the compact Thunder tracking status returned with analysis", async () => {
+    const poseTracking = {
+      model: "MoveNet.SinglePose.Thunder",
+      requestedFrames: 40,
+      framesAnalyzed: 36,
+      sampleFps: 3.6,
+      overallVisibility: 0.88,
+    };
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({
+      sessionId: "session-123",
+      status: "processing",
+      stage: "video_processing",
+      durationMs: 10_000,
+      videoUrl: null,
+      poseTracking,
+      result: null,
+    }), { status: 202, headers: { "Content-Type": "application/json" } }));
+
+    await expect(processAnalysis({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" }))
+      .resolves.toMatchObject({ poseTracking });
   });
 
   it("shows terminal results without waiting for a second evidence-video request", async () => {

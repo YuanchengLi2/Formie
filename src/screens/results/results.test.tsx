@@ -113,6 +113,22 @@ describe("ResultsScreen", () => {
     expect(screen.getByTestId("record-another-loop")).toHaveStyle({ minHeight: 92 });
   });
 
+  it("shows when local MoveNet Thunder tracking contributed evidence", async () => {
+    const screen = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
+        <ResultsScreen
+          result={result()}
+          poseTracking={{ model: "MoveNet.SinglePose.Thunder", requestedFrames: 40, framesAnalyzed: 36, sampleFps: 3.6, overallVisibility: 0.88 }}
+          onFindingPress={jest.fn()}
+          onRecordAnother={jest.fn()}
+        />
+      </SafeAreaProvider>,
+    );
+    expect(screen.getByText("Movement tracking")).toBeTruthy();
+    expect(screen.getByText("MoveNet Thunder")).toBeTruthy();
+    expect(screen.getByText("36 frames analyzed at 3.6 fps")).toBeTruthy();
+  });
+
   it("does not claim evidence was checked when the verifier failed", async () => {
     const failed = result();
     failed.verification = { performed: true, reason: "Verifier unavailable", outcome: "failed", checkedFindingId: "fix-0" };

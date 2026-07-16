@@ -22,6 +22,9 @@ import { START_BEEP_URI } from "@/features/capture/start-beep";
 import type { RecordedSet, UploadTarget } from "@/features/capture/types";
 import { captureVideoSettings } from "@/features/capture/video-settings";
 import { cameraZoomPresets, pinchZoom, resolveCameraZoom, zoomDisplayLabel, type CameraZoomLabel } from "@/features/capture/camera-zoom";
+import { PoseAnalysisCoordinator, type PoseAnalysisJob } from "@/features/pose/pose-analysis-coordinator";
+import { optionalPoseResult } from "@/features/pose/pose-runner";
+import type { PoseSummary } from "@/features/pose/pose-summary";
 import { supabase } from "@/lib/supabase";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -61,6 +64,9 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const zoomRef = useRef(0);
   const pinchStartZoomRef = useRef(0);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [poseJob, setPoseJob] = useState<PoseAnalysisJob | null>(null);
+  const poseCacheRef = useRef(new Map<string, PoseSummary | null>());
+  const poseRequestRef = useRef<{ jobId: string; localUri: string; promise: Promise<PoseSummary | null>; resolve: (summary: PoseSummary | null) => void } | null>(null);
   const beep = useAudioPlayer({ uri: START_BEEP_URI });
 
   const phase = useCaptureStore((state) => state.phase);
@@ -83,9 +89,37 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     return () => clearInterval(timer);
   }, [phase, startedAt]);
 
+  const requestPoseAnalysis = useCallback((saved: RecordedSet): Promise<PoseSummary | null> => {
+    if (poseCacheRef.current.has(saved.localUri)) return Promise.resolve(poseCacheRef.current.get(saved.localUri) ?? null);
+    if (poseRequestRef.current?.localUri === saved.localUri) return poseRequestRef.current.promise;
+    const jobId = `thunder-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let resolve!: (summary: PoseSummary | null) => void;
+    const promise = new Promise<PoseSummary | null>((done) => {
+      resolve = done;
+    });
+    poseRequestRef.current = { jobId, localUri: saved.localUri, promise, resolve };
+    setPoseJob({ id: jobId, localUri: saved.localUri, durationMs: saved.durationMs });
+    return promise;
+  }, []);
+
+  const completePoseAnalysis = useCallback((jobId: string, summary: PoseSummary | null) => {
+    const pending = poseRequestRef.current;
+    if (!pending || pending.jobId !== jobId) return;
+    poseCacheRef.current.set(pending.localUri, summary);
+    pending.resolve(summary);
+    poseRequestRef.current = null;
+    setPoseJob(null);
+  }, []);
+
+  useEffect(() => () => {
+    poseRequestRef.current?.resolve(null);
+    poseRequestRef.current = null;
+  }, []);
+
   const uploadRecording = useCallback(
     async (saved: RecordedSet, existingTarget?: UploadTarget | null) => {
       try {
+        const posePromise = optionalPoseResult(requestPoseAnalysis(saved), 25_000);
         const accessToken = await getAccessToken();
         let target = existingTarget ?? useCaptureStore.getState().uploadTarget ?? null;
         if (!target && preparedUploadRef.current) target = await preparedUploadRef.current;
@@ -104,10 +138,12 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
           signedUrl: target.signedUrl,
           uploadToken: target.uploadToken,
         });
+        const poseSummary = await posePromise;
         await completeAnalysisUpload({
           accessToken,
           sessionId: target.sessionId,
           durationMs: saved.durationMs,
+          poseSummary,
         });
         dispatch({ type: "processing", sessionId: target.sessionId });
         router.replace({ pathname: "/analysis/[session-id]", params: { "session-id": target.sessionId } });
@@ -118,7 +154,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         });
       }
     },
-    [dispatch, previousSessionId, router],
+    [dispatch, previousSessionId, requestPoseAnalysis, router],
   );
 
   const prepareUploadTarget = useCallback((repeatSessionId?: string) => {
@@ -330,6 +366,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
           </View>
         )}
       />
+      <PoseAnalysisCoordinator job={poseJob} onComplete={completePoseAnalysis} />
     </View>
   );
 }

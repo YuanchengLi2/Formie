@@ -34,6 +34,7 @@ describe("completeUploadHandler", () => {
       videoPath: "user-1/session-1/original.mp4",
       durationMs: 18_500,
       requestedFps: 24,
+      poseSummary: null,
     });
   });
 
@@ -44,6 +45,32 @@ describe("completeUploadHandler", () => {
       deps,
     );
 
+    expect(response.status).toBe(400);
+    expect(deps.markProcessing).not.toHaveBeenCalled();
+  });
+
+  it("validates and stores an optional MoveNet Thunder summary", async () => {
+    const deps = dependencies();
+    const poseSummary = {
+      version: 1,
+      model: "MoveNet.SinglePose.Thunder",
+      durationMs: 10_000,
+      requestedFrames: 40,
+      framesAnalyzed: 36,
+      sampleFps: 3.6,
+      overallVisibility: 0.88,
+      seriesColumns: ["timeMs", "confidence", "leftWristX"],
+      series: [[0, 0.9, 0.2], [250, 0.91, 0.21], [500, 0.92, 0.23], [750, 0.9, 0.25]],
+    };
+    const response = await completeUploadHandler(request({ sessionId: "session-1", durationMs: 10_000, poseSummary }), deps);
+
+    expect(response.status).toBe(200);
+    expect(deps.markProcessing).toHaveBeenCalledWith(expect.objectContaining({ poseSummary }));
+  });
+
+  it("rejects malformed pose metadata without blocking uploads that omit it", async () => {
+    const deps = dependencies();
+    const response = await completeUploadHandler(request({ sessionId: "session-1", durationMs: 10_000, poseSummary: { model: "fake" } }), deps);
     expect(response.status).toBe(400);
     expect(deps.markProcessing).not.toHaveBeenCalled();
   });
