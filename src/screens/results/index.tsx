@@ -10,7 +10,7 @@ import { FullRecording } from "@/components/full-recording";
 import { ScoreRing } from "@/components/score-ring";
 import type { PoseTracking, TutorialVideo } from "@/features/analysis/api";
 import { getResultPresentation } from "@/features/analysis/presentation";
-import type { AnalysisResult, CoachingFinding } from "@/features/analysis/result-schema";
+import type { AnalysisResult, CoachingFinding, PrecisionReview } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
@@ -43,6 +43,46 @@ function FindingRow({ finding, onPress, checked = false }: { finding: CoachingFi
       <Text selectable numberOfLines={2} style={[typography.caption, { paddingLeft: 30, color: colors.textSecondary }]}>{finding.detail}</Text>
       {checked ? <Text selectable style={[typography.caption, { paddingLeft: 30, color: colors.gold }]}>Evidence checked</Text> : null}
     </Pressable>
+  );
+}
+
+function PremiumReviewReceipt({ review }: { review: PrecisionReview }) {
+  const completed = review.passes.filter((pass) => pass.outcome !== "failed").length;
+  const failed = review.status === "failed" || review.status === "partial";
+  const detail = review.status === "completed"
+    ? `${review.runsUsed} additional evidence ${review.runsUsed === 1 ? "run" : "runs"} completed`
+    : review.status === "not-needed"
+      ? "No additional evidence runs needed"
+      : `${review.runsUsed} attempted · ${completed} completed`;
+  const status = review.status === "failed"
+    ? "Stopped after review failure"
+    : review.status === "partial"
+      ? "Stopped after a partial review"
+      : null;
+
+  return (
+    <FormCard style={{ gap: spacing.sm, borderColor: failed ? colors.danger : colors.border }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+        <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 1, borderColor: failed ? colors.danger : colors.gold }}>
+          <Text selectable style={[typography.label, { color: failed ? colors.danger : colors.gold, fontVariant: ["tabular-nums"] }]}>{review.runsUsed}</Text>
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text selectable style={[typography.label, { color: colors.text }]}>Premium precision review</Text>
+          <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>{detail}</Text>
+          {status ? <Text selectable style={[typography.caption, { color: colors.danger }]}>{status}</Text> : null}
+        </View>
+      </View>
+      {review.passes.map((pass) => {
+        const tokens = pass.usage.promptTokens + pass.usage.outputTokens + pass.usage.thinkingTokens;
+        return (
+          <View key={pass.passNumber} style={{ flexDirection: "row", gap: spacing.sm, paddingTop: spacing.xs, borderTopWidth: 1, borderColor: colors.border }}>
+            <Text selectable style={[typography.caption, { color: colors.gold }]}>RUN {pass.passNumber}</Text>
+            <Text selectable style={[typography.caption, { flex: 1, color: colors.textSecondary }]}>{pass.kind} · {pass.outcome}</Text>
+            <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{tokens > 0 ? `${tokens} tokens` : "usage unavailable"}</Text>
+          </View>
+        );
+      })}
+    </FormCard>
   );
 }
 
@@ -94,7 +134,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, pose
             {consistency ? <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{consistency}</Text> : null}
           </FormCard>
 
-          {result.precisionReview && result.precisionReview.runsUsed > 0 ? <FormCard style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}><View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 1, borderColor: colors.gold }}><Text selectable style={[typography.label, { color: colors.gold, fontVariant: ["tabular-nums"] }]}>{result.precisionReview.runsUsed}</Text></View><View style={{ flex: 1, gap: 2 }}><Text selectable style={[typography.label, { color: colors.text }]}>Premium precision review</Text><Text selectable style={[typography.caption, { color: colors.textSecondary }]}>{result.precisionReview.runsUsed} additional evidence {result.precisionReview.runsUsed === 1 ? "run" : "runs"} completed</Text></View></FormCard> : null}
+          {result.precisionReview ? <PremiumReviewReceipt review={result.precisionReview} /> : null}
 
           {poseTracking ? <FormCard style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}><View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 1, borderColor: colors.gold }}><Text selectable style={[typography.label, { color: colors.gold }]}>2D</Text></View><View style={{ flex: 1, gap: 2 }}><Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 0.8 }]}>Movement tracking</Text><Text selectable style={[typography.label, { color: colors.text }]}>MoveNet Thunder</Text><Text selectable style={[typography.caption, { color: colors.textSecondary }]}>{poseTracking.framesAnalyzed} frames analyzed at {poseTracking.sampleFps} fps</Text></View></FormCard> : null}
 

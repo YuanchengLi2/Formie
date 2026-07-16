@@ -64,7 +64,8 @@
     "seed:render": "node scripts/render-exercise-seed.cjs",
     "evaluate:coaching": "node scripts/evaluate-coaching.cjs",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "test:premium": "jest --runInBand supabase/functions/_shared/gemini-video.test.ts supabase/functions/analyze-video/handler.test.ts supabase/functions/_shared/analysis-contract.test.ts src/features/analysis/result-schema.test.ts src/screens/results/results.test.tsx supabase/functions/_shared/evidence-overlay.test.ts src/screens/finding-detail/finding-detail.test.tsx"
   },
   "private": true
 }

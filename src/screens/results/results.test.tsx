@@ -140,6 +140,26 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("Evidence checked")).toBeNull();
   });
 
+  it("shows an honest premium receipt when a review fails and remaining runs are stopped", async () => {
+    const failed = result();
+    failed.precisionReview = {
+      runsRequested: 2,
+      runsUsed: 1,
+      status: "failed",
+      summary: "Premium review stopped after the first failed request.",
+      passes: [{ passNumber: 1, kind: "technique", outcome: "failed", reason: "Gemini premium review failed: 503", checkedFindingId: "fix-0", startMs: 500, endMs: 2_000, usage: { promptTokens: 0, outputTokens: 0, thinkingTokens: 0 } }],
+    };
+    const screen = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
+        <ResultsScreen result={failed} onFindingPress={jest.fn()} onRecordAnother={jest.fn()} />
+      </SafeAreaProvider>,
+    );
+
+    expect(screen.getByText("1 attempted · 0 completed")).toBeTruthy();
+    expect(screen.getByText("Stopped after review failure")).toBeTruthy();
+    expect(screen.queryByText("1 additional evidence run completed")).toBeNull();
+  });
+
   it("removes exercise-name correction from the result flow", async () => {
     const screen = await renderResults();
     expect(screen.queryByText("Correct exercise name")).toBeNull();

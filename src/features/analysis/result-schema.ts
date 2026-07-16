@@ -149,6 +149,16 @@ export const analysisResultSchema = z
   })
   .superRefine((result, context) => {
     const findings = [...result.didWell, ...result.priorityCorrections, ...result.coachingCues];
+    const review = result.precisionReview;
+    if (review) {
+      const failedPasses = review.passes.filter((pass) => pass.outcome === "failed").length;
+      if (review.runsUsed !== review.passes.length) context.addIssue({ code: "custom", path: ["precisionReview", "runsUsed"], message: "Premium runs used must match recorded passes" });
+      if (review.runsUsed > review.runsRequested) context.addIssue({ code: "custom", path: ["precisionReview", "runsUsed"], message: "Premium runs used cannot exceed requested runs" });
+      if (review.status === "not-needed" && (review.runsRequested !== 0 || review.runsUsed !== 0)) context.addIssue({ code: "custom", path: ["precisionReview", "status"], message: "A not-needed review cannot use runs" });
+      if (review.status === "completed" && (review.runsUsed !== review.runsRequested || failedPasses > 0)) context.addIssue({ code: "custom", path: ["precisionReview", "status"], message: "A completed review requires every requested pass" });
+      if (review.status === "partial" && (failedPasses === 0 || failedPasses === review.passes.length)) context.addIssue({ code: "custom", path: ["precisionReview", "status"], message: "A partial review requires successful and failed passes" });
+      if (review.status === "failed" && review.passes.length > 0 && failedPasses === 0) context.addIssue({ code: "custom", path: ["precisionReview", "status"], message: "A failed review requires a failed pass" });
+    }
     if ((result.repTimeline ?? []).length > 0) {
       const reps = new Map((result.repTimeline ?? []).map((rep) => [rep.repNumber, rep]));
       for (const finding of findings) {

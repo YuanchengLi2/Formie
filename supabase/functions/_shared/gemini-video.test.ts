@@ -228,6 +228,26 @@ describe("Gemini video client", () => {
     expect(result.verification).toMatchObject({ outcome: "rejected", checkedFindingId: "elbow-drift" });
   });
 
+  it("stops premium spending after the first failed review and reports the attempted run honestly", async () => {
+    const draft: any = validCandidate();
+    draft.precisionRequest = {
+      requestedRuns: 2,
+      reason: "Two claims need review.",
+      targets: [
+        { kind: "recognition", findingId: null, startMs: null, endMs: null, question: "Confirm the exercise." },
+        { kind: "technique", findingId: "stable", startMs: 500, endMs: 1_500, question: "Confirm the torso path." },
+      ],
+    };
+    const fetcher = jest.fn(async () => new Response("unavailable", { status: 503 }));
+    const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
+
+    const result = await client.verifyAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, draft, durationMs: 10_000 });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.precisionReview).toMatchObject({ runsRequested: 2, runsUsed: 1, status: "failed", summary: "Premium review stopped after the first failed request." });
+    expect(result.precisionReview?.passes).toEqual([expect.objectContaining({ passNumber: 1, outcome: "failed" })]);
+  });
+
   it("checks and deletes temporary Gemini files", async () => {
     const fetcher = jest
       .fn()

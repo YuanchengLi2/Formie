@@ -167,4 +167,11 @@ describe("analysisResultSchema", () => {
 
     expect(analysisResultSchema.safeParse(result).success).toBe(false);
   });
+
+  it("rejects a premium receipt that claims more used runs than it records", () => {
+    const result = validResult();
+    result.precisionReview = { ...result.precisionReview!, runsUsed: 1 };
+
+    expect(analysisResultSchema.safeParse(result).success).toBe(false);
+  });
 });

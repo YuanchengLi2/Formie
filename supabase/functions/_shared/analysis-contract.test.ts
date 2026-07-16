@@ -110,4 +110,17 @@ describe("Gemini analysis contract", () => {
 
     expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("analyzed result requires at least one next-set action");
   });
+
+  it("rejects a premium receipt whose used-run count does not match its recorded passes", () => {
+    const value = candidate() as ReturnType<typeof candidate> & { precisionReview: Record<string, unknown> };
+    value.precisionReview = {
+      runsRequested: 2,
+      runsUsed: 2,
+      status: "partial",
+      summary: "One review completed before a failure.",
+      passes: [{ passNumber: 1, kind: "recognition", outcome: "confirmed", reason: "Identity confirmed.", checkedFindingId: null, startMs: null, endMs: null, usage: { promptTokens: 10, outputTokens: 5, thinkingTokens: 2 } }],
+    };
+
+    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("premium runs used must match recorded passes");
+  });
 });

@@ -373,6 +373,33 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
   }
   if (Number(precisionRequest.requestedRuns) > 0 && !precisionRequest.reason) throw new Error("precisionRequest requires a reason when premium runs are requested");
 
+  if (result.precisionReview !== undefined) {
+    const review = object(result.precisionReview, "precisionReview");
+    if (!Number.isInteger(review.runsRequested) || Number(review.runsRequested) < 0 || Number(review.runsRequested) > 3) throw new Error("precisionReview.runsRequested must be between 0 and 3");
+    if (!Number.isInteger(review.runsUsed) || Number(review.runsUsed) < 0 || Number(review.runsUsed) > Number(review.runsRequested)) throw new Error("precisionReview.runsUsed must not exceed requested runs");
+    if (!Array.isArray(review.passes) || review.passes.length !== Number(review.runsUsed)) throw new Error("premium runs used must match recorded passes");
+    if (!["not-needed", "completed", "partial", "failed"].includes(String(review.status))) throw new Error("precisionReview status is invalid");
+    string(review.summary, "precisionReview.summary", true);
+    let failedPasses = 0;
+    for (const rawPass of review.passes) {
+      const pass = object(rawPass, "precisionReview pass");
+      if (!Number.isInteger(pass.passNumber) || Number(pass.passNumber) < 1) throw new Error("precisionReview pass number is invalid");
+      if (!["recognition", "timestamp", "technique"].includes(String(pass.kind))) throw new Error("precisionReview pass kind is invalid");
+      if (!["confirmed", "revised", "rejected", "inconclusive", "failed"].includes(String(pass.outcome))) throw new Error("precisionReview pass outcome is invalid");
+      if (pass.outcome === "failed") failedPasses += 1;
+      string(pass.reason, "precisionReview pass reason");
+      string(pass.checkedFindingId, "precisionReview checked finding", true);
+      const passUsage = object(pass.usage, "precisionReview usage");
+      for (const key of ["promptTokens", "outputTokens", "thinkingTokens"] as const) {
+        if (!Number.isInteger(passUsage[key]) || Number(passUsage[key]) < 0) throw new Error("precisionReview token usage is invalid");
+      }
+    }
+    if (review.status === "not-needed" && (Number(review.runsRequested) !== 0 || Number(review.runsUsed) !== 0)) throw new Error("not-needed premium review cannot use runs");
+    if (review.status === "completed" && (Number(review.runsUsed) !== Number(review.runsRequested) || failedPasses > 0)) throw new Error("completed premium review requires every requested pass");
+    if (review.status === "partial" && (failedPasses === 0 || failedPasses === review.passes.length)) throw new Error("partial premium review requires successful and failed passes");
+    if (review.status === "failed" && review.passes.length > 0 && failedPasses === 0) throw new Error("failed premium review requires a failed pass");
+  }
+
   if (result.comparison !== null) {
     const comparison = object(result.comparison, "comparison");
     string(comparison.previousSessionId, "previousSessionId");

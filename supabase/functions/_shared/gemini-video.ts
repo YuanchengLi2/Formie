@@ -413,7 +413,7 @@ For recognition, confirm the existing nearest standard exercise or revise recogn
           runsRequested,
           runsUsed: passes.length,
           status: failed ? (passes.length > 1 ? "partial" : "failed") : "completed",
-          summary: failed ? "Some requested precision review could not be completed." : `${passes.length} premium precision ${passes.length === 1 ? "run" : "runs"} completed.`,
+          summary: failed ? "Premium review stopped after the first failed request." : `${passes.length} premium precision ${passes.length === 1 ? "run" : "runs"} completed.`,
           passes,
         },
         verification: latestVerification,
