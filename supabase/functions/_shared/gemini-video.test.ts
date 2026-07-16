@@ -163,7 +163,7 @@ describe("Gemini video client", () => {
     });
   });
 
-  it("always precision-checks the top correction peak frame even when the first pass sounds confident", async () => {
+  it("does not create a top-only precision target that leaves later corrections unaudited", async () => {
     const candidate: any = validCandidate();
     candidate.priorityCorrections = [{
       ...candidate.didWell[0],
@@ -187,17 +187,43 @@ describe("Gemini video client", () => {
 
     const result = await client.generateAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, prompt: "coach", durationMs: 5_000 });
 
-    expect(result.precisionRequest).toMatchObject({
-      requestedRuns: 1,
-      reason: expect.stringContaining("top correction"),
-      targets: [{
-        kind: "technique",
-        findingId: "torso-swing",
-        startMs: 2_000,
-        endMs: 2_700,
-        question: expect.stringContaining("exact peak frame"),
-      }],
-    });
+    expect(result.precisionRequest).toEqual({ requestedRuns: 0, reason: null, targets: [] });
+  });
+
+  it("audits every correction and evidence frame together with no four-finding cap", async () => {
+    const draft: any = validCandidate();
+    draft.priorityCorrections = Array.from({ length: 6 }, (_, index) => ({
+      ...draft.didWell[0],
+      id: `correction-${index + 1}`,
+      title: `Correction ${index + 1}`,
+      correction: `Make physical change ${index + 1}.`,
+      cue: `Cue ${index + 1}.`,
+      evidence: [{ ...draft.didWell[0].evidence[0], peakMs: 1_250 + index * 10, coachingNote: `the visible position changes; make physical change ${index + 1}.` }],
+    }));
+    draft.repTimeline = [{ ...draft.repTimeline[0], endMs: 2_000 }];
+    draft.nextSetPlan = [{ id: "plan-1", action: "Apply the clearest correction", rationale: "Improve the set.", relatedFindingId: "correction-1" }];
+    const audited = structuredClone(draft);
+    audited.priorityCorrections = audited.priorityCorrections.map((finding: any, index: number) => ({
+      ...finding,
+      evidence: finding.evidence.map((moment: any) => ({ ...moment, peakMs: 1_300 + index * 10 })),
+    }));
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: JSON.stringify(audited) }] } }],
+      usageMetadata: { promptTokenCount: 2400, candidatesTokenCount: 900, thoughtsTokenCount: 300 },
+    }), { status: 200 }));
+    const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
+
+    const result = await client.verifyAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, draft, durationMs: 10_000 });
+
+    expect(result.priorityCorrections).toHaveLength(6);
+    expect(result.priorityCorrections.map((finding) => finding.evidence[0].peakMs)).toEqual([1_300, 1_310, 1_320, 1_330, 1_340, 1_350]);
+    expect(result.precisionReview).toMatchObject({ runsRequested: 1, runsUsed: 1, status: "completed", passes: [{ kind: "technique", checkedFindingId: null, outcome: "revised" }] });
+    const request = JSON.parse(String(fetcher.mock.calls[0][1].body));
+    expect(request.contents[0].parts[0].videoMetadata).toEqual({ fps: 24 });
+    expect(request.contents[0].parts[1].text).toContain("Audit every finding and every evidence moment");
+    expect(request.contents[0].parts[1].text).toContain("correction-6");
+    expect(request.contents[0].parts[1].text).toContain("timing and tempo");
+    expect(request.generationConfig).toMatchObject({ mediaResolution: "MEDIA_RESOLUTION_HIGH", responseJsonSchema: GEMINI_ANALYSIS_JSON_SCHEMA });
   });
 
   it("runs the AI-requested premium reviews with the full coaching result and prior review context", async () => {
@@ -214,9 +240,12 @@ describe("Gemini video client", () => {
       ],
     };
     const recognition = { ...draft.recognition, label: "Hammer Curl", variation: "Late shoulder-assisted reps", confidence: 0.88 };
+    const audited = structuredClone(draft);
+    audited.precisionRequest = { requestedRuns: 0, reason: null, targets: [] };
     const first = { outcome: "revised", reason: "The neutral grip identifies a hammer curl.", finding: null, recognition };
     const second = { outcome: "confirmed", reason: "The elbow path changes at the cited frame.", finding: draft.priorityCorrections[0], recognition: null };
     const fetcher = jest.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(audited) }] } }], usageMetadata: { promptTokenCount: 2000, candidatesTokenCount: 500, thoughtsTokenCount: 150 } }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(first) }] } }], usageMetadata: { promptTokenCount: 1000, candidatesTokenCount: 100, thoughtsTokenCount: 50 } }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(second) }] } }], usageMetadata: { promptTokenCount: 1200, candidatesTokenCount: 180, thoughtsTokenCount: 90 } }), { status: 200 }));
     const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
@@ -224,10 +253,10 @@ describe("Gemini video client", () => {
     const result = await client.verifyAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, draft, durationMs: 10_000 });
 
     expect(result.recognition).toMatchObject({ label: "Hammer Curl", confidence: 0.88 });
-    expect(result.precisionReview).toMatchObject({ runsRequested: 2, runsUsed: 2, status: "completed", passes: [{ kind: "recognition", outcome: "revised" }, { kind: "timestamp", outcome: "confirmed" }] });
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(result.precisionReview).toMatchObject({ runsRequested: 3, runsUsed: 3, status: "completed", passes: [{ kind: "technique", checkedFindingId: null }, { kind: "recognition", outcome: "revised" }, { kind: "timestamp", outcome: "confirmed" }] });
+    expect(fetcher).toHaveBeenCalledTimes(3);
     const firstRequest = JSON.parse(String(fetcher.mock.calls[0][1].body));
-    const secondRequest = JSON.parse(String(fetcher.mock.calls[1][1].body));
+    const secondRequest = JSON.parse(String(fetcher.mock.calls[2][1].body));
     expect(firstRequest.contents[0].parts[0].videoMetadata).toMatchObject({ fps: 24 });
     expect(firstRequest.contents[0].parts[0].videoMetadata.startOffset).toBeUndefined();
     expect(secondRequest.contents[0].parts[0].videoMetadata).toMatchObject({ fps: 24, startOffset: "1s", endOffset: "3.8s" });
@@ -250,7 +279,11 @@ describe("Gemini video client", () => {
     draft.priorityCorrections = [{ ...draft.didWell[0], id: "elbow-drift", title: "Elbow drift" }];
     draft.nextSetPlan = [{ id: "plan-1", action: "Pin the elbows", rationale: "Reduce drift", relatedFindingId: "elbow-drift" }];
     draft.precisionRequest = { requestedRuns: 1, reason: "The correction needs review.", targets: [{ kind: "technique", findingId: "elbow-drift", startMs: 1_000, endMs: 1_500, question: "Is elbow drift visible?" }] };
-    const fetcher = jest.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ outcome: "rejected", reason: "The clip does not show the claimed drift.", finding: null, recognition: null }) }] } }] }), { status: 200 }));
+    const audited = structuredClone(draft);
+    audited.precisionRequest = { requestedRuns: 0, reason: null, targets: [] };
+    const fetcher = jest.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(audited) }] } }] }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ outcome: "rejected", reason: "The clip does not show the claimed drift.", finding: null, recognition: null }) }] } }] }), { status: 200 }));
     const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
 
     const result = await client.verifyAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, draft, durationMs: 10_000 });
@@ -281,7 +314,7 @@ describe("Gemini video client", () => {
     const result = await client.verifyAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, draft, durationMs: 10_000 });
 
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(result.precisionReview).toMatchObject({ runsRequested: 2, runsUsed: 1, status: "failed", summary: "Premium review stopped after the first failed request." });
+    expect(result.precisionReview).toMatchObject({ runsRequested: 2, runsUsed: 1, status: "failed", summary: "Evidence review stopped after the first failed request." });
     expect(result.precisionReview?.passes).toEqual([expect.objectContaining({ passNumber: 1, outcome: "failed" })]);
   });
 

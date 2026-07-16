@@ -18,8 +18,11 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).toContain("set overallAssessment, score, comparison, setSummary.totalReps");
     expect(prompt).toContain("retryReason and retryInstruction to specific non-empty strings");
     expect(prompt).toContain("exerciseFamily");
-    expect(prompt).toContain("zero to four priority corrections");
-    expect(prompt).toContain("Do not stop at two findings");
+    expect(prompt).toContain("every distinct material correction");
+    expect(prompt).toContain("There is no numeric cap on genuine findings");
+    expect(prompt).toContain("setup and bracing, timing and tempo, joint and implement placement, range of motion, stability, symmetry, sequencing, and rep-to-rep consistency");
+    expect(prompt).toContain("evaluate every factor that is actually visible");
+    expect(prompt).toContain("state which factors cannot be judged");
     expect(prompt).toContain("setup, early, middle, and late phases");
     expect(prompt).toContain("largest visible displacement");
     expect(prompt).toContain("Never add a weaker duplicate or filler finding");

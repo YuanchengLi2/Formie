@@ -180,33 +180,6 @@ function ensureSubtleTechniquePrecision(value: unknown): unknown {
   return value;
 }
 
-function ensureTopCorrectionPrecision(value: unknown): unknown {
-  if (!value || typeof value !== "object") return value;
-  const result = value as Record<string, unknown>;
-  if (result.status === "unable" || !result.precisionRequest || typeof result.precisionRequest !== "object" || !Array.isArray(result.priorityCorrections)) return value;
-  const correction = result.priorityCorrections.find((item) => item && typeof item === "object") as Record<string, unknown> | undefined;
-  if (!correction || typeof correction.id !== "string" || !Array.isArray(correction.evidence) || !correction.evidence[0] || typeof correction.evidence[0] !== "object") return value;
-  const request = result.precisionRequest as Record<string, unknown>;
-  const targets = Array.isArray(request.targets) ? request.targets.filter((target) => target && typeof target === "object") as Record<string, unknown>[] : [];
-  if (targets.length >= 3 || targets.some((target) => target.findingId === correction.id && (target.kind === "technique" || target.kind === "timestamp"))) return value;
-  const evidence = correction.evidence[0] as Record<string, unknown>;
-  if (!Number.isInteger(evidence.startMs) || !Number.isInteger(evidence.endMs)) return value;
-
-  targets.push({
-    kind: "technique",
-    findingId: correction.id,
-    startMs: evidence.startMs,
-    endMs: evidence.endMs,
-    question: `Re-check the exact peak frame, evidence interval, visual focus point, and point-specific advice for the top correction "${String(correction.title)}". Does the selected frame show the largest visible displacement that proves this claim?`,
-  });
-  request.requestedRuns = targets.length;
-  request.targets = targets;
-  request.reason = typeof request.reason === "string" && request.reason.trim()
-    ? `${request.reason.trim()} The top correction frame and pointer also need precise confirmation.`
-    : "The top correction frame, pointer, and point-specific advice need precise confirmation.";
-  return value;
-}
-
 function parsePreflight(value: unknown): VideoPreflightCheck {
   if (!value || typeof value !== "object") throw new Error("Gemini returned an invalid video check");
   const check = value as Record<string, unknown>;
@@ -355,7 +328,7 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
         });
         const payload = await responseJson(response, "Gemini analysis failed");
         try {
-          return validateAnalysisCandidate(ensureTopCorrectionPrecision(ensureSubtleTechniquePrecision(ensureRecognitionPrecision(pinUsableRecognition(JSON.parse(responseText(payload)))))), input.durationMs);
+          return validateAnalysisCandidate(ensureSubtleTechniquePrecision(ensureRecognitionPrecision(pinUsableRecognition(JSON.parse(responseText(payload))))), input.durationMs);
         } catch (error) {
           lastError = error;
           if (attempt === 0) {
@@ -369,8 +342,10 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
 
     async verifyAnalysis(input: { file: GeminiFile; draft: AnalysisCandidate; durationMs: number }): Promise<AnalysisCandidate> {
       const request = input.draft.precisionRequest;
-      const runsRequested = Math.min(3, Math.max(0, request?.requestedRuns ?? 0));
-      if (runsRequested === 0) {
+      const needsWholeCoachingAudit = input.draft.status !== "unable"
+        && (input.draft.priorityCorrections.length > 0 || input.draft.coachingCues.length > 0);
+      const requestedTargets = (request?.targets ?? []).slice(0, needsWholeCoachingAudit ? 2 : 3);
+      if (!needsWholeCoachingAudit && requestedTargets.length === 0) {
         return {
           ...input.draft,
           precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
@@ -381,15 +356,66 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
       let merged: AnalysisCandidate = input.draft;
       const passes: NonNullable<AnalysisCandidate["precisionReview"]>["passes"] = [];
       let latestVerification: AnalysisCandidate["verification"] = { performed: false, reason: null, outcome: "not-needed", checkedFindingId: null };
+      let auditFailed = false;
 
-      for (let index = 0; index < runsRequested; index += 1) {
-        const target = request.targets[index];
-        if (!target) break;
+      if (needsWholeCoachingAudit) {
+        const prompt = `You are FORM's whole-analysis evidence auditor. Rewatch the complete original recording at high detail and return one complete corrected coaching result.
+
+Current coaching result: ${JSON.stringify(input.draft)}
+
+Audit every finding and every evidence moment, not only the first correction. Preserve every distinct material finding that the recording supports, remove unsupported or duplicate findings, and add any clearly visible material correction the first analysis missed. There is no numeric cap on supported corrections. Systematically check setup and bracing, timing and tempo, joint and implement placement, range of motion, stability, symmetry, sequencing, and rep-to-rep consistency across the entire set.
+
+For each finding, verify that its observation, explanation, correction, and cue are specific to the recognized exercise and mutually consistent. For each evidence moment, compare nearby frames and place peakMs on the clearest frame with the largest visible displacement or contrast that proves that exact claim; keep startMs and endMs tight, set repNumber and phase accurately, and rewrite coachingNote so it describes the visible event and one reproducible physical change. Verify every focusRegion against the original uncropped source frame and keep it only when the exact joint, body area, or implement is localizable with confidence of at least 0.8; otherwise set it to null.
+
+Use every usable part of the recording even when some body areas are hidden. In videoCheck.usableObservations, state which evaluation factors are visible. In videoCheck.limitations, state only the factors that genuinely cannot be judged. Never fabricate hidden joint position, muscle activation, pressure, pain, intent, or internal force. A limited view must not erase useful advice about timing, visible placement, range, stability, sequencing, or consistency. Only call fatigue or reduce load when repeated late-set deterioration visibly supports it. Return absolute milliseconds from the original video. Set precisionRequest to zero because this response is the whole-result audit.`;
+
+        try {
+          const response = await fetcher(`${API}/models/${encodeURIComponent(model)}:generateContent?key=${key}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ fileData: { mimeType: input.file.mimeType, fileUri: input.file.uri }, videoMetadata: { fps: 24 } }, { text: prompt }] }],
+              generationConfig: { mediaResolution: "MEDIA_RESOLUTION_HIGH", responseMimeType: "application/json", responseJsonSchema: GEMINI_ANALYSIS_JSON_SCHEMA },
+            }),
+          });
+          const payload = await responseJson(response, "Gemini whole-analysis audit failed");
+          const parsed = pinUsableRecognition(JSON.parse(responseText(payload))) as Record<string, unknown>;
+          parsed.precisionRequest = { requestedRuns: 0, reason: null, targets: [] };
+          delete parsed.precisionReview;
+          delete parsed.verification;
+          const audited = validateAnalysisCandidate(parsed, input.durationMs);
+          const comparableDraft = {
+            ...input.draft,
+            precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
+            precisionReview: undefined,
+            verification: undefined,
+          };
+          const changed = JSON.stringify(audited) !== JSON.stringify(comparableDraft);
+          merged = audited;
+          const outcome = changed ? "revised" : "confirmed";
+          const reason = changed
+            ? "The complete coaching result was revised after checking every finding and evidence frame."
+            : "Every coaching finding and evidence frame was confirmed against the complete recording.";
+          passes.push({ passNumber: 1, kind: "technique", outcome, reason, checkedFindingId: null, startMs: null, endMs: null, usage: usage(payload) });
+          latestVerification = { performed: true, reason, outcome, checkedFindingId: null, usage: usage(payload) };
+        } catch (error) {
+          auditFailed = true;
+          passes.push({ passNumber: 1, kind: "technique", outcome: "failed", reason: error instanceof Error ? error.message : "Whole-analysis evidence audit failed", checkedFindingId: null, startMs: null, endMs: null, usage: { promptTokens: 0, outputTokens: 0, thinkingTokens: 0 } });
+          latestVerification = { performed: true, reason: "The whole-analysis evidence audit was unavailable; the primary analysis was retained.", outcome: "failed", checkedFindingId: null };
+        }
+      }
+
+      const findingIds = new Set([...merged.didWell, ...merged.priorityCorrections, ...merged.coachingCues].map((finding) => finding.id));
+      const targets = auditFailed ? [] : requestedTargets.filter((target) => target.kind === "recognition" || (target.findingId !== null && findingIds.has(target.findingId)));
+
+      for (let index = 0; index < targets.length; index += 1) {
+        const target = targets[index];
+        const passNumber = passes.length + 1;
         const hasWindow = target.startMs !== null && target.endMs !== null;
         const startMs = hasWindow ? Math.max(0, Number(target.startMs) - 1_000) : null;
         const endMs = hasWindow ? Math.min(input.durationMs, Number(target.endMs) + 1_000) : null;
         const priorDecisions = passes.map(({ passNumber, kind, outcome, reason, checkedFindingId }) => ({ passNumber, kind, outcome, reason, checkedFindingId }));
-        const prompt = `You are premium precision reviewer ${index + 1} for FORM. Audit exactly one unresolved question against the original recording.
+        const prompt = `You are premium precision reviewer ${passNumber} for FORM. Audit exactly one unresolved question against the original recording.
 
 Target: ${JSON.stringify(target)}
 The entire current coaching result is provided below. Keep every supported part, and do not introduce a new issue outside the target.
@@ -425,14 +451,15 @@ For recognition, confirm the existing nearest standard exercise or revise recogn
             if (raw.outcome === "revised" || raw.outcome === "rejected") merged = replaceFinding(merged, target.findingId, raw.outcome === "revised" ? raw.finding as AnalysisCandidate["priorityCorrections"][number] : null);
             latestVerification = { performed: true, reason: raw.reason, outcome: raw.outcome === "inconclusive" ? "failed" : raw.outcome as "confirmed" | "revised" | "rejected", checkedFindingId: target.findingId, usage: usage(payload) };
           }
-          passes.push({ passNumber: index + 1, kind: target.kind, outcome: raw.outcome as "confirmed" | "revised" | "rejected" | "inconclusive", reason: raw.reason, checkedFindingId: target.findingId, startMs, endMs, usage: usage(payload) });
+          passes.push({ passNumber, kind: target.kind, outcome: raw.outcome as "confirmed" | "revised" | "rejected" | "inconclusive", reason: raw.reason, checkedFindingId: target.findingId, startMs, endMs, usage: usage(payload) });
         } catch (error) {
-          passes.push({ passNumber: index + 1, kind: target.kind, outcome: "failed", reason: error instanceof Error ? error.message : "Premium review failed", checkedFindingId: target.findingId, startMs, endMs, usage: { promptTokens: 0, outputTokens: 0, thinkingTokens: 0 } });
+          passes.push({ passNumber, kind: target.kind, outcome: "failed", reason: error instanceof Error ? error.message : "Premium review failed", checkedFindingId: target.findingId, startMs, endMs, usage: { promptTokens: 0, outputTokens: 0, thinkingTokens: 0 } });
           break;
         }
       }
 
       const failed = passes.some((pass) => pass.outcome === "failed");
+      const runsRequested = (needsWholeCoachingAudit ? 1 : 0) + targets.length;
       const reviewed: AnalysisCandidate = ensureActionablePlan({
         ...merged,
         precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
@@ -440,7 +467,7 @@ For recognition, confirm the existing nearest standard exercise or revise recogn
           runsRequested,
           runsUsed: passes.length,
           status: failed ? (passes.length > 1 ? "partial" : "failed") : "completed",
-          summary: failed ? "Premium review stopped after the first failed request." : `${passes.length} premium precision ${passes.length === 1 ? "run" : "runs"} completed.`,
+          summary: failed ? "Evidence review stopped after the first failed request." : `${passes.length} evidence ${passes.length === 1 ? "audit" : "audits"} completed across the coaching result.`,
           passes,
         },
         verification: latestVerification,
