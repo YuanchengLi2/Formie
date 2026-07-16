@@ -40,6 +40,10 @@ export function clampPlaybackZoom(value: number): number {
 
 export type FocusMode = "auto" | "manual" | "full";
 
+export function pinchStartZoom(mode: FocusMode, manualZoom = 1): number {
+  return mode === "auto" ? 1.7 : mode === "manual" ? clampPlaybackZoom(manualZoom) : 1;
+}
+
 export function nextFrameIndex(index: number, length: number, direction: -1 | 1): number {
   if (length <= 0) return 0;
   return (index + direction + length) % length;
@@ -88,6 +92,8 @@ export function FullRecording({ videoUrl, reps, durationMs, coachingFindings = [
   const [internalSelectedFrame, setInternalSelectedFrame] = useState<ReviewFrame | null>(null);
   const scaleRef = useRef(1);
   const pinchStartRef = useRef(1);
+  const pinchStateRef = useRef<{ mode: FocusMode; manualZoom: number }>({ mode: "full", manualZoom: 1 });
+  pinchStateRef.current = { mode: focusMode, manualZoom };
   const coachingMoments = useMemo(() => buildPlaybackCoachingMoments(coachingFindings), [coachingFindings]);
   const timelineFrames = useMemo<ReviewFrame[]>(() => reviewFrames
     ? reviewFrames.filter((frame) => frame.purpose === "observed")
@@ -124,7 +130,10 @@ export function FullRecording({ videoUrl, reps, durationMs, coachingFindings = [
   }, [activeFrame, player]);
 
   const pinch = useMemo(() => Gesture.Pinch().runOnJS(true).onBegin(() => {
-    pinchStartRef.current = scaleRef.current;
+    const start = pinchStartZoom(pinchStateRef.current.mode, pinchStateRef.current.manualZoom);
+    pinchStartRef.current = start;
+    scaleRef.current = start;
+    setManualZoom(start);
     setFocusMode("manual");
   }).onUpdate((event) => {
     const next = clampPlaybackZoom(pinchStartRef.current * event.scale);

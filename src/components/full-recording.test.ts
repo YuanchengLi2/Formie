@@ -1,4 +1,4 @@
-import { buildPlaybackCoachingMoments, clampPlaybackZoom, focusPresentation, formatPlaybackTime, nextFrameIndex, reviewPurposeLabel, timelineMarkerPercent, timelineSeekMs } from "./full-recording";
+import { buildPlaybackCoachingMoments, clampPlaybackZoom, focusPresentation, formatPlaybackTime, nextFrameIndex, pinchStartZoom, reviewPurposeLabel, timelineMarkerPercent, timelineSeekMs } from "./full-recording";
 
 describe("full recording timeline", () => {
   it("positions rep markers against the complete recording duration", () => {
@@ -24,6 +24,12 @@ describe("full recording timeline", () => {
     expect(clampPlaybackZoom(0.4)).toBe(1);
     expect(clampPlaybackZoom(1.8)).toBe(1.8);
     expect(clampPlaybackZoom(4)).toBe(2.5);
+  });
+
+  it("starts an inward pinch from the visible AI zoom so dezoom returns smoothly to full frame", () => {
+    expect(pinchStartZoom("auto", 1)).toBe(1.7);
+    expect(pinchStartZoom("manual", 2.2)).toBe(2.2);
+    expect(pinchStartZoom("full", 2.2)).toBe(1);
   });
 
   it("wraps review frames and labels their coaching purpose", () => {
