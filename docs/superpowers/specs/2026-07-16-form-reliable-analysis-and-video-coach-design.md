@@ -103,6 +103,7 @@ type ReviewFrame = {
   title: string;
   body: string;
   findingId: string;
+  finding: CoachingFinding;
   evidence: EvidenceMoment;
   timeMs: number;
 };
