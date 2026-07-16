@@ -1,5 +1,5 @@
 import type { AnalysisResult, CoachingFinding } from "./result-schema";
-import { buildReviewFrames } from "./review-frames";
+import { buildCoachingReviewPoints, buildReviewFrames } from "./review-frames";
 
 function resultWithTwoMoments(): AnalysisResult {
   const finding: CoachingFinding = {
@@ -44,5 +44,20 @@ describe("buildReviewFrames", () => {
     const result = resultWithTwoMoments();
     result.nextSetPlan = [{ id: "unsupported", action: "Sleep eight hours", rationale: "Recover.", relatedFindingId: null }];
     expect(buildReviewFrames(result).next).toEqual([]);
+  });
+
+  it("keeps every supported correction and cue as one synchronized coaching-point sequence", () => {
+    const value = resultWithTwoMoments();
+    const source = value.priorityCorrections[0];
+    const second = { ...source, id: "tempo", title: "Control the lowering", evidence: [{ ...source.evidence[0], startMs: 3_000, peakMs: 3_200, endMs: 3_400 }] };
+    value.coachingCues = [second];
+    value.nextSetPlan!.push({ id: "next-2", action: "Lower for two seconds", rationale: "Keep every rep repeatable.", relatedFindingId: second.id });
+
+    const points = buildCoachingReviewPoints(value);
+
+    expect(points).toHaveLength(3);
+    expect(points.map((point) => point.observed.timeMs)).toEqual([1_200, 2_200, 3_200]);
+    expect(points[2].why.timeMs).toBe(3_200);
+    expect(points[2].next?.timeMs).toBe(3_200);
   });
 });

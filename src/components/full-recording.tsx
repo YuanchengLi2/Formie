@@ -215,7 +215,7 @@ export function FullRecording({ videoUrl, reps, durationMs, coachingFindings = [
           </Pressable>
         ) : null}
         {reps.length > 0 ? <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>{reps.map((rep) => <Pressable accessibilityLabel={`Jump to rep ${rep.repNumber}: ${rep.note}`} accessibilityRole="button" key={`${rep.repNumber}-button`} onPress={() => { if (!controlled) setInternalSelectedFrame(null); setFocusMode("full"); seekTo(rep.peakMs, true); }} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.sm, borderRadius: radii.pill, borderWidth: 1, borderColor: rep.assessment === "breakdown" ? colors.gold : colors.border }}><Text style={[typography.caption, { color: rep.assessment === "breakdown" ? colors.gold : colors.textSecondary }]}>Rep {rep.repNumber}</Text></Pressable>)}</View> : null}
-        <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Gold points are coaching moments · tap any time · pinch to zoom</Text>
+        <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Pinch out to zoom · pinch in to return to full frame</Text>
       </View>
     </View>
   );

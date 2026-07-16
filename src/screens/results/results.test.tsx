@@ -64,18 +64,30 @@ function renderResults(onFindingPress = jest.fn(), onRecordAnother = jest.fn()) 
 }
 
 describe("ResultsScreen", () => {
+  it("matches the focused Coaching Review hierarchy and includes every supported improvement point", async () => {
+    const screen = await renderResults();
+
+    expect(screen.getByText("COACHING REVIEW")).toBeTruthy();
+    expect(screen.getByText("16 coaching points")).toBeTruthy();
+    expect(screen.getByText("Review what happened, why it matters, and what to change next.")).toBeTruthy();
+    expect(screen.getByText("What happened")).toBeTruthy();
+    expect(screen.getByText("Why it matters")).toBeTruthy();
+    expect(screen.getByText("What to do next")).toBeTruthy();
+    expect(screen.getByText("Set Summary")).toBeTruthy();
+    expect(screen.getByText("Ask FORM Coach")).toBeTruthy();
+    expect(screen.getByText("Camera visibility note")).toBeTruthy();
+    expect(screen.getByText("Pinch out to zoom · pinch in to return to full frame")).toBeTruthy();
+  });
+
   it("renders the supported strengths and focused next-set plan", async () => {
     const screen = await renderResults();
     for (let index = 1; index <= 5; index += 1) expect(screen.getByText(`Did well ${index}`)).toBeTruthy();
     expect(screen.getByText("Improve priority 1.")).toBeTruthy();
+    await fireEvent.press(screen.getByText("What to do next"));
     expect(screen.getByText("Keep your upper arms beside your torso")).toBeTruthy();
-    expect(screen.getByText("1 of 8")).toBeTruthy();
+    expect(screen.getByText("1 of 16")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Next coaching point"));
-    expect(screen.getByText("Improve priority 2.")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Next coaching point"));
-    await fireEvent.press(screen.getByLabelText("Next coaching point"));
-    await fireEvent.press(screen.getByLabelText("Next coaching point"));
-    expect(screen.getByText("At 0:02, the shoulders stay uneven during the reset. Re-square before starting the next repetition.")).toBeTruthy();
+    expect(screen.getAllByText("Priority 2").length).toBeGreaterThanOrEqual(1);
   });
 
   it("omits an unsupported score while keeping exercise-specific coaching", async () => {
@@ -83,14 +95,14 @@ describe("ResultsScreen", () => {
     expect(screen.queryByLabelText(/Movement quality/)).toBeNull();
     expect(screen.queryByText(/low angle showed tempo and elbow path/i)).toBeNull();
     expect(screen.getByText("High-to-low cable row")).toBeTruthy();
-    expect(screen.getByText("COACH’S REVIEW")).toBeTruthy();
+    expect(screen.getByText("COACHING REVIEW")).toBeTruthy();
   });
 
   it("opens evidence and supports another recording", async () => {
     const onFindingPress = jest.fn();
     const onRecordAnother = jest.fn();
     const screen = await renderResults(onFindingPress, onRecordAnother);
-    await fireEvent.press(screen.getByText("Improve priority 1."));
+    await fireEvent.press(screen.getByText("Priority: priority 1"));
     await fireEvent.press(screen.getByText("Record Another Set"));
     expect(onFindingPress).toHaveBeenCalledWith(expect.objectContaining({ id: "fix-0" }));
     expect(onRecordAnother).toHaveBeenCalledTimes(1);
@@ -128,35 +140,31 @@ describe("ResultsScreen", () => {
     const onFindingPress = jest.fn();
     const screen = await renderResults(onFindingPress);
 
-    expect(screen.getByText("COACH’S REVIEW")).toBeTruthy();
-    expect(screen.getByText("BIGGEST IMPROVEMENT")).toBeTruthy();
-    expect(screen.getByText("FULL RECORDING")).toBeTruthy();
+    expect(screen.getByText("COACHING REVIEW")).toBeTruthy();
+    expect(screen.getByText("What happened")).toBeTruthy();
+    expect(screen.getByText("Why it matters")).toBeTruthy();
+    expect(screen.getByText("What to do next")).toBeTruthy();
     expect(screen.getByText("6 of 8 reps consistent")).toBeTruthy();
-    expect(screen.getByText("NEXT SET PLAN")).toBeTruthy();
-    expect(screen.getByText("1 of 8")).toBeTruthy();
-    expect(screen.getByText("At 0:01, your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.")).toBeTruthy();
+    expect(screen.getByText("Set Summary")).toBeTruthy();
+    expect(screen.getByText("1 of 16")).toBeTruthy();
+    expect(screen.getByText("your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.")).toBeTruthy();
     expect(screen.getByText("Evidence checked")).toBeTruthy();
     expect(screen.getByText("2 premium runs")).toBeTruthy();
     expect(screen.queryByText(/tokens/)).toBeNull();
-    expect(screen.getByLabelText("Coach summary cards")).toBeTruthy();
-    expect(screen.getByText("Ask AI Coach about this video")).toBeTruthy();
-    expect(screen.getByText("Rep 1 · 00:01.3, 00:02.3")).toBeTruthy();
-    expect(screen.getByText("See if your correction worked")).toBeTruthy();
+    expect(screen.getByText("Ask FORM Coach")).toBeTruthy();
     expect(screen.getByLabelText("Coaching point: Priority 1 at 00:02")).toHaveStyle({ width: 44, height: 44 });
 
     await fireEvent.press(screen.getByLabelText("Coaching point: Priority 1 at 00:01"));
     expect(screen.getByLabelText("AI focus: right shoulder")).toBeTruthy();
-    expect(screen.getAllByText("At 0:01, your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.").length).toBeGreaterThanOrEqual(1);
 
     await fireEvent.press(screen.getByText("Did well 1"));
-    await fireEvent.press(screen.getByText("Keep your upper arms beside your torso"));
     expect(onFindingPress).toHaveBeenCalledWith(expect.objectContaining({ id: "well-0" }));
-    expect(onFindingPress).toHaveBeenCalledWith(expect.objectContaining({ id: "fix-0" }));
   });
 
   it("makes record another set the dominant result action", async () => {
     const screen = await renderResults();
-    expect(screen.getByTestId("record-another-loop")).toHaveStyle({ minHeight: 92 });
+    expect(screen.getByTestId("record-another-loop")).toHaveStyle({ minHeight: 72 });
   });
 
   it("does not expose the removed body-analysis pipeline", async () => {
@@ -218,8 +226,8 @@ describe("ResultsScreen", () => {
         <ResultsScreen result={result()} tutorial={tutorial} onOpenTutorial={onOpenTutorial} onFindingPress={jest.fn()} onRecordAnother={jest.fn()} />
       </SafeAreaProvider>,
     );
-    expect(screen.getByText("How to do this exercise properly")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Watch Clear Cable Row Tutorial on YouTube"));
+    expect(screen.getByText("Watch Example")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Watch Clear Cable Row Tutorial example"));
     expect(onOpenTutorial).toHaveBeenCalledWith(tutorial);
   });
 });

@@ -15,6 +15,13 @@ export type ReviewFrame = {
 
 export type ReviewFrameGroups = Record<ReviewPurpose, ReviewFrame[]>;
 
+export type CoachingReviewPoint = {
+  id: string;
+  observed: ReviewFrame;
+  why: ReviewFrame;
+  next: ReviewFrame;
+};
+
 function frameFor(
   purpose: ReviewPurpose,
   finding: CoachingFinding,
@@ -71,4 +78,28 @@ export function buildReviewFrames(result: AnalysisResult): ReviewFrameGroups {
 
   const byTime = (left: ReviewFrame, right: ReviewFrame) => left.timeMs - right.timeMs;
   return { observed: observed.sort(byTime), why: why.sort(byTime), next: next.sort(byTime) };
+}
+
+export function buildCoachingReviewPoints(result: AnalysisResult): CoachingReviewPoint[] {
+  const groups = buildReviewFrames(result);
+  return groups.observed.map((observed, index) => {
+    const why = groups.why.find((frame) => frame.findingId === observed.findingId && frame.timeMs === observed.timeMs) ?? frameFor(
+      "why",
+      observed.finding,
+      observed.evidence,
+      index,
+      observed.finding.title,
+      observed.finding.whyItMatters,
+    );
+    const planned = groups.next.find((frame) => frame.findingId === observed.findingId && frame.timeMs === observed.timeMs);
+    const next = planned ?? frameFor(
+      "next",
+      observed.finding,
+      observed.evidence,
+      index,
+      observed.finding.correction ?? observed.finding.cue ?? observed.finding.title,
+      observed.finding.cue ? `Remember: ${observed.finding.cue}` : observed.finding.correction ?? observed.finding.detail,
+    );
+    return { id: `${observed.findingId}-${observed.timeMs}-${index}`, observed, why, next };
+  });
 }
