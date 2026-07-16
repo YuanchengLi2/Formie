@@ -390,6 +390,8 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
     throw new Error("analyzed result requires visible assessment evidence");
   } else if (!recognition.label) {
     throw new Error("analyzed result requires the nearest exercise label");
+  } else if (result.nextSetPlan.length === 0) {
+    throw new Error("analyzed result requires at least one next-set action");
   }
 
   return value as AnalysisCandidate;

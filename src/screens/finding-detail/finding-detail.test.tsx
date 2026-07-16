@@ -32,4 +32,20 @@ describe("FindingDetailScreen", () => {
     await fireEvent.press(screen.getByText("Record Another Set"));
     expect(onRecordAnother).toHaveBeenCalledTimes(1);
   });
+
+  it("shows a deterministic zoom focus when Thunder grounded the evidence area", async () => {
+    const screen = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
+        <FindingDetailScreen
+          finding={finding}
+          videoUrl="https://storage.example/evidence.mp4"
+          evidenceOverlay={{ findingId: "elbow-path", timeMs: 7_650, centerX: 0.58, centerY: 0.36, radius: 0.11, trackedAreas: ["right elbow"] }}
+          onRecordAnother={jest.fn()}
+        />
+      </SafeAreaProvider>,
+    );
+
+    expect(screen.getByText("LOOK HERE")).toBeTruthy();
+    expect(screen.getByLabelText("Tracked evidence focus at right elbow")).toBeTruthy();
+  });
 });

@@ -103,4 +103,11 @@ describe("Gemini analysis contract", () => {
     value.videoCheck.retryInstruction = "Move the phone farther away.";
     expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("unable result cannot contain coaching");
   });
+
+  it("requires every analyzed set to include actionable next-set advice", () => {
+    const value = candidate();
+    value.nextSetPlan = [];
+
+    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("analyzed result requires at least one next-set action");
+  });
 });

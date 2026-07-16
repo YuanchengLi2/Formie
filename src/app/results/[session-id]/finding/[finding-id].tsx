@@ -15,6 +15,7 @@ export default function FindingDetailRoute() {
   const status = useAnalysisStatus(sessionId, { includeVideoUrl: true });
   const resetCapture = useCaptureStore((state) => state.dispatch);
   const finding = status.data?.result ? findResultFinding(status.data.result, findingId) : null;
+  const evidenceOverlay = status.data?.evidenceOverlays.find((overlay) => overlay.findingId === findingId) ?? null;
 
   if (!finding) {
     return (
@@ -28,6 +29,7 @@ export default function FindingDetailRoute() {
     <FindingDetailScreen
       finding={finding}
       videoUrl={status.data?.videoUrl ?? null}
+      evidenceOverlay={evidenceOverlay}
       onRecordAnother={() => {
         resetCapture({ type: "reset" });
         router.replace({ pathname: "/recording-tips", params: { previousSessionId: sessionId } });

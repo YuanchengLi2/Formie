@@ -100,7 +100,67 @@ describe("Gemini video client", () => {
     const fetcher = jest.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(candidate) }] } }] }), { status: 200 }));
     const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
 
-    await expect(client.generateAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, prompt: "coach", durationMs: 5_000 })).resolves.toMatchObject({ recognition: { label: "Hammer Curl" } });
+    await expect(client.generateAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, prompt: "coach", durationMs: 5_000 })).resolves.toMatchObject({
+      recognition: { label: "Hammer Curl" },
+      precisionRequest: {
+        requestedRuns: 1,
+        targets: [{ kind: "recognition", findingId: null, startMs: null, endMs: null }],
+      },
+    });
+  });
+
+  it("adds a recognition premium run when the primary analysis is materially uncertain", async () => {
+    const candidate: any = validCandidate();
+    candidate.recognition = { ...candidate.recognition, confidence: 0.64 };
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(candidate) }] } }] }), { status: 200 }));
+    const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
+
+    const result = await client.generateAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, prompt: "coach", durationMs: 5_000 });
+
+    expect(result.precisionRequest).toMatchObject({
+      requestedRuns: 1,
+      reason: expect.stringContaining("recognition"),
+      targets: [{ kind: "recognition", question: expect.stringContaining("nearest standard exercise") }],
+    });
+  });
+
+  it("does not spend a recognition premium run when identity is already confident", async () => {
+    const response = { candidates: [{ content: { parts: [{ text: JSON.stringify(validCandidate()) }] } }] };
+    const fetcher = jest.fn(async () => new Response(JSON.stringify(response), { status: 200 }));
+    const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
+
+    const result = await client.generateAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, prompt: "coach", durationMs: 5_000 });
+
+    expect(result.precisionRequest).toEqual({ requestedRuns: 0, reason: null, targets: [] });
+  });
+
+  it("adds a focused premium technique run for a marginal subtle correction", async () => {
+    const candidate: any = validCandidate();
+    candidate.priorityCorrections = [{
+      ...candidate.didWell[0],
+      id: "late-elbow-drift",
+      title: "Late elbow drift",
+      correction: "Keep the upper arm beside the torso.",
+      cue: "Only the forearm moves.",
+      evidence: [{ ...candidate.didWell[0].evidence[0], startMs: 2_000, peakMs: 2_300, endMs: 2_700, repNumber: null, confidence: 0.8 }],
+    }];
+    candidate.nextSetPlan = [{ id: "plan-1", action: "Keep the upper arm beside the torso", rationale: "Reduce late elbow drift.", relatedFindingId: "late-elbow-drift" }];
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(candidate) }] } }] }), { status: 200 }));
+    const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
+
+    const result = await client.generateAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, prompt: "coach", durationMs: 5_000 });
+
+    expect(result.precisionRequest).toMatchObject({
+      requestedRuns: 1,
+      reason: expect.stringContaining("subtle technique"),
+      targets: [{
+        kind: "technique",
+        findingId: "late-elbow-drift",
+        startMs: 2_000,
+        endMs: 2_700,
+        question: expect.stringContaining("Late elbow drift"),
+      }],
+    });
   });
 
   it("runs the AI-requested premium reviews with the full coaching result and prior review context", async () => {
@@ -147,7 +207,7 @@ describe("Gemini video client", () => {
     expect(result.precisionReview).toMatchObject({ runsRequested: 0, runsUsed: 0, status: "not-needed" });
   });
 
-  it("removes a rejected finding and its now-unsupported next-set action", async () => {
+  it("removes a rejected finding and replaces its unsupported action with verified advice", async () => {
     const draft: any = validCandidate();
     draft.recognition.confidence = 0.7;
     draft.priorityCorrections = [{ ...draft.didWell[0], id: "elbow-drift", title: "Elbow drift" }];
@@ -159,7 +219,12 @@ describe("Gemini video client", () => {
     const result = await client.verifyAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, draft, durationMs: 10_000 });
 
     expect(result.priorityCorrections).toEqual([]);
-    expect(result.nextSetPlan).toEqual([]);
+    expect(result.nextSetPlan).toEqual([{
+      id: "plan-verified-pattern",
+      action: "Maintain stable torso on every rep",
+      rationale: "This keeps the curl focused.",
+      relatedFindingId: "stable",
+    }]);
     expect(result.verification).toMatchObject({ outcome: "rejected", checkedFindingId: "elbow-drift" });
   });
 

@@ -160,4 +160,11 @@ describe("analysisResultSchema", () => {
       }).success,
     ).toBe(false);
   });
+
+  it("rejects analyzed coaching with no actionable next-set advice", () => {
+    const result = validResult();
+    result.nextSetPlan = [];
+
+    expect(analysisResultSchema.safeParse(result).success).toBe(false);
+  });
 });

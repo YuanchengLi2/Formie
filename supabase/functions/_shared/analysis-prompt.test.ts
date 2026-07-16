@@ -19,7 +19,9 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).toContain("set overallAssessment, score, comparison, setSummary.totalReps");
     expect(prompt).toContain("retryReason and retryInstruction to specific non-empty strings");
     expect(prompt).toContain("exerciseFamily");
-    expect(prompt).toContain("one or two priority corrections");
+    expect(prompt).toContain("zero to two priority corrections");
+    expect(prompt).toContain("If the movement is already technically strong");
+    expect(prompt).toContain("at least one useful next-set action");
     expect(prompt).toContain("specific visible observation");
     expect(prompt).toContain("STRUCTURE THE SET FOR COACHING");
     expect(prompt).toContain("setSummary.totalReps");
@@ -47,6 +49,9 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).toContain("supplemental 2D estimates");
     expect(prompt).toContain("original video remains authoritative");
     expect(prompt).toContain("never infer depth");
+    expect(prompt).toContain("x runs from 0 at image-left to 1 at image-right");
+    expect(prompt).toContain("y runs from 0 at image-top to 1 at image-bottom");
+    expect(prompt).toContain("Treat changes across several reliable frames as stronger evidence");
     expect(prompt).toContain("500");
   });
 

@@ -22,6 +22,15 @@ export const poseTrackingSchema = z.object({
   overallVisibility: z.number().min(0).max(1),
 });
 
+export const evidenceOverlaySchema = z.object({
+  findingId: z.string().min(1),
+  timeMs: z.number().int().nonnegative(),
+  centerX: z.number().min(0).max(1),
+  centerY: z.number().min(0).max(1),
+  radius: z.number().min(0.08).max(0.3),
+  trackedAreas: z.array(z.string().min(1)).min(1),
+});
+
 const statusResponseSchema = z.object({
   sessionId: z.string().min(1),
   status: z.enum(["created", "uploading", "queued", "processing", "complete", "partial", "unable", "failed"]),
@@ -29,6 +38,7 @@ const statusResponseSchema = z.object({
   durationMs: z.number().int().positive().nullable().optional().default(null),
   videoUrl: z.string().url().nullable().optional().default(null),
   poseTracking: poseTrackingSchema.nullable().optional().default(null),
+  evidenceOverlays: z.array(evidenceOverlaySchema).optional().default([]),
   result: analysisResultSchema.nullable(),
 });
 
@@ -44,6 +54,7 @@ export const tutorialVideoSchema = z.object({
 
 export type TutorialVideo = z.infer<typeof tutorialVideoSchema>;
 export type PoseTracking = z.infer<typeof poseTrackingSchema>;
+export type EvidenceOverlay = z.infer<typeof evidenceOverlaySchema>;
 
 export type CreateAnalysisSessionResponse = z.infer<typeof createSessionResponseSchema>;
 export type AnalysisStatusResponse = z.infer<typeof statusResponseSchema>;

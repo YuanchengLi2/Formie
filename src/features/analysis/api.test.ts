@@ -161,6 +161,22 @@ describe("analysis API", () => {
       .resolves.toMatchObject({ poseTracking });
   });
 
+  it("parses deterministic evidence focus overlays without exposing pose rows", async () => {
+    const evidenceOverlays = [{ findingId: "elbow-drift", timeMs: 2_300, centerX: 0.62, centerY: 0.38, radius: 0.12, trackedAreas: ["right elbow"] }];
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({
+      sessionId: "session-123",
+      status: "complete",
+      stage: "coaching",
+      durationMs: 10_000,
+      videoUrl: null,
+      evidenceOverlays,
+      result: null,
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await expect(processAnalysis({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" }))
+      .resolves.toMatchObject({ evidenceOverlays });
+  });
+
   it("shows terminal results without waiting for a second evidence-video request", async () => {
     const result = {
       status: "unable",

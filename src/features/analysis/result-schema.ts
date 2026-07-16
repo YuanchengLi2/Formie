@@ -186,6 +186,9 @@ export const analysisResultSchema = z
     if (!result.overallAssessment) {
       context.addIssue({ code: "custom", path: ["overallAssessment"], message: "Analyzed results require an overall assessment" });
     }
+    if ((result.nextSetPlan ?? []).length === 0) {
+      context.addIssue({ code: "custom", path: ["nextSetPlan"], message: "Analyzed results require at least one next-set action" });
+    }
 
     if (result.score !== null) {
       if (!result.recognition.label || result.recognition.confidence < 0.55) {

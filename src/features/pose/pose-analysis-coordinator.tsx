@@ -5,6 +5,7 @@ import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import * as VideoThumbnails from "expo-video-thumbnails";
 
 import MoveNetThunderDom from "./movenet-thunder.dom";
+import { fulfilledFrameValues } from "./pose-frame-batch";
 import { buildPoseSummary, poseFrameTimestamps, type PoseSummary, type ThunderPoseFrame } from "./pose-summary";
 
 export type PoseAnalysisJob = { id: string; localUri: string; durationMs: number };
@@ -49,11 +50,12 @@ export function PoseAnalysisCoordinator({ job, onComplete }: { job: PoseAnalysis
         const timestamps = poseFrameTimestamps(job.durationMs, { targetFps: 4, maxFrames: 96 });
         const frames: PreparedFrame[] = [];
         for (let index = 0; index < timestamps.length; index += 4) {
-          const batch = await Promise.all(timestamps.slice(index, index + 4).map((timeMs) => prepareFrame(job.localUri, timeMs)));
+          const batch = await fulfilledFrameValues(timestamps.slice(index, index + 4).map((timeMs) => prepareFrame(job.localUri, timeMs)));
           if (cancelled) return;
           frames.push(...batch);
         }
-        if (!cancelled) setPrepared({ jobId: job.id, frames });
+        if (!cancelled && frames.length >= 4) setPrepared({ jobId: job.id, frames });
+        else if (!cancelled) onComplete(job.id, null);
       } catch {
         if (!cancelled) onComplete(job.id, null);
       }

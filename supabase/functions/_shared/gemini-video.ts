@@ -121,6 +121,65 @@ function pinUsableRecognition(value: unknown): unknown {
   return value;
 }
 
+function ensureRecognitionPrecision(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const result = value as Record<string, unknown>;
+  if (result.status === "unable" || !result.recognition || typeof result.recognition !== "object" || !result.precisionRequest || typeof result.precisionRequest !== "object") return value;
+  const recognition = result.recognition as Record<string, unknown>;
+  const request = result.precisionRequest as Record<string, unknown>;
+  const targets = Array.isArray(request.targets) ? request.targets.filter((target) => target && typeof target === "object") as Record<string, unknown>[] : [];
+  const label = typeof recognition.label === "string" ? recognition.label.trim().toLowerCase() : "";
+  const uncertain = Number(recognition.confidence) < 0.7 || recognition.exerciseFamily === "other" || label === "strength exercise attempt";
+  if (!uncertain || targets.some((target) => target.kind === "recognition")) return value;
+
+  const recognitionTarget = {
+    kind: "recognition",
+    findingId: null,
+    startMs: null,
+    endMs: null,
+    question: "Which nearest standard exercise and variation best match this usable attempt?",
+  };
+  const prioritizedTargets = [recognitionTarget, ...targets].slice(0, 3);
+  request.requestedRuns = prioritizedTargets.length;
+  request.targets = prioritizedTargets;
+  request.reason = typeof request.reason === "string" && request.reason.trim()
+    ? `Exercise recognition remains materially uncertain. ${request.reason.trim()}`
+    : "Exercise recognition remains materially uncertain and needs one focused review.";
+  return value;
+}
+
+function ensureSubtleTechniquePrecision(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const result = value as Record<string, unknown>;
+  if (result.status === "unable" || !result.precisionRequest || typeof result.precisionRequest !== "object" || !Array.isArray(result.priorityCorrections)) return value;
+  const request = result.precisionRequest as Record<string, unknown>;
+  const targets = Array.isArray(request.targets) ? request.targets.filter((target) => target && typeof target === "object") as Record<string, unknown>[] : [];
+  if (targets.length >= 3) return value;
+
+  const correction = result.priorityCorrections
+    .filter((item) => item && typeof item === "object")
+    .map((item) => item as Record<string, unknown>)
+    .find((item) => Array.isArray(item.evidence) && item.evidence.some((moment) => moment && typeof moment === "object" && Number((moment as Record<string, unknown>).confidence) < 0.85));
+  if (!correction || typeof correction.id !== "string") return value;
+  if (targets.some((target) => target.findingId === correction.id && (target.kind === "technique" || target.kind === "timestamp"))) return value;
+  const evidence = (correction.evidence as Record<string, unknown>[]).find((moment) => Number(moment.confidence) < 0.85);
+  if (!evidence || !Number.isInteger(evidence.startMs) || !Number.isInteger(evidence.endMs)) return value;
+
+  targets.push({
+    kind: "technique",
+    findingId: correction.id,
+    startMs: evidence.startMs,
+    endMs: evidence.endMs,
+    question: `Is "${String(correction.title)}" visibly supported at the cited moment, and is the correction specific to the identified exercise?`,
+  });
+  request.requestedRuns = targets.length;
+  request.targets = targets;
+  request.reason = typeof request.reason === "string" && request.reason.trim()
+    ? `${request.reason.trim()} A subtle technique claim also needs focused confirmation.`
+    : "A subtle technique claim needs focused confirmation before coaching.";
+  return value;
+}
+
 function parsePreflight(value: unknown): VideoPreflightCheck {
   if (!value || typeof value !== "object") throw new Error("Gemini returned an invalid video check");
   const check = value as Record<string, unknown>;
@@ -156,6 +215,31 @@ function replaceFinding(draft: AnalysisCandidate, findingId: string, finding: An
     priorityCorrections: update(draft.priorityCorrections),
     coachingCues: update(draft.coachingCues),
     nextSetPlan: finding ? draft.nextSetPlan : draft.nextSetPlan.filter((item) => item.relatedFindingId !== findingId),
+  };
+}
+
+function ensureActionablePlan(draft: AnalysisCandidate): AnalysisCandidate {
+  if (draft.status === "unable" || draft.nextSetPlan.length > 0) return draft;
+  const supported = draft.coachingCues[0] ?? draft.didWell[0] ?? null;
+  if (supported) {
+    return {
+      ...draft,
+      nextSetPlan: [{
+        id: "plan-verified-pattern",
+        action: supported.correction ?? supported.cue ?? `Maintain ${supported.title.toLowerCase()} on every rep`,
+        rationale: supported.whyItMatters,
+        relatedFindingId: supported.id,
+      }],
+    };
+  }
+  return {
+    ...draft,
+    nextSetPlan: [{
+      id: "plan-repeat-supported-pattern",
+      action: "Repeat the set at the same load with a consistent rep path",
+      rationale: "The proposed correction was not confirmed, so avoid adding load until a repeatable pattern is visible.",
+      relatedFindingId: null,
+    }],
   };
 }
 
@@ -244,7 +328,7 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
         });
         const payload = await responseJson(response, "Gemini analysis failed");
         try {
-          return validateAnalysisCandidate(pinUsableRecognition(JSON.parse(responseText(payload))), input.durationMs);
+          return validateAnalysisCandidate(ensureSubtleTechniquePrecision(ensureRecognitionPrecision(pinUsableRecognition(JSON.parse(responseText(payload))))), input.durationMs);
         } catch (error) {
           lastError = error;
           if (attempt === 0) {
@@ -322,7 +406,7 @@ For recognition, confirm the existing nearest standard exercise or revise recogn
       }
 
       const failed = passes.some((pass) => pass.outcome === "failed");
-      const reviewed: AnalysisCandidate = {
+      const reviewed: AnalysisCandidate = ensureActionablePlan({
         ...merged,
         precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
         precisionReview: {
@@ -333,7 +417,7 @@ For recognition, confirm the existing nearest standard exercise or revise recogn
           passes,
         },
         verification: latestVerification,
-      };
+      });
       return validateAnalysisCandidate(reviewed, input.durationMs);
     },
 

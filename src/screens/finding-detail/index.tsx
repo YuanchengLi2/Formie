@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { EvidenceVideo } from "@/components/evidence-video";
 import { FormButton } from "@/components/form-button";
 import { FormCard } from "@/components/form-card";
+import type { EvidenceOverlay } from "@/features/analysis/api";
 import type { CoachingFinding } from "@/features/analysis/result-schema";
 import { evidencePreviewMs } from "@/features/analysis/evidence-timestamp";
 import { colors } from "@/theme/colors";
@@ -20,10 +21,11 @@ function timestamp(milliseconds: number): string {
 type FindingDetailScreenProps = {
   finding: CoachingFinding;
   videoUrl: string | null;
+  evidenceOverlay?: EvidenceOverlay | null;
   onRecordAnother: () => void;
 };
 
-export function FindingDetailScreen({ finding, videoUrl, onRecordAnother }: FindingDetailScreenProps) {
+export function FindingDetailScreen({ finding, videoUrl, evidenceOverlay = null, onRecordAnother }: FindingDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const evidence = finding.evidence[0];
   const context = [evidence.repNumber ? `Rep ${evidence.repNumber}` : null, evidence.phase, `${timestamp(evidence.startMs)}–${timestamp(evidence.endMs)}`].filter(Boolean).join(" · ");
@@ -36,7 +38,7 @@ export function FindingDetailScreen({ finding, videoUrl, onRecordAnother }: Find
         <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{context}</Text>
       </View>
 
-      {videoUrl ? <EvidenceVideo videoUrl={videoUrl} startMs={evidencePreviewMs(evidence)} /> : <View style={{ height: 180, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}><Text selectable style={[typography.caption, { color: colors.textMuted }]}>Loading private video evidence…</Text></View>}
+      {videoUrl ? <EvidenceVideo videoUrl={videoUrl} startMs={evidencePreviewMs(evidence)} overlay={evidenceOverlay} /> : <View style={{ height: 180, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}><Text selectable style={[typography.caption, { color: colors.textMuted }]}>Loading private video evidence…</Text></View>}
 
       <View style={{ gap: spacing.sm }}>
         <Text selectable style={[typography.caption, { color: colors.gold }]}>WHAT HAPPENED</Text>
