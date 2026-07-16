@@ -67,7 +67,8 @@ function PremiumReviewReceipt({ review }: { review: PrecisionReview }) {
           <Text selectable style={[typography.label, { color: failed ? colors.danger : colors.gold, fontVariant: ["tabular-nums"] }]}>{review.runsUsed}</Text>
         </View>
         <View style={{ flex: 1, gap: 2 }}>
-          <Text selectable style={[typography.label, { color: colors.text }]}>Premium precision review</Text>
+          <Text selectable style={[typography.caption, { color: colors.gold }]}>Premium precision review</Text>
+          <Text selectable style={[typography.label, { color: colors.text }]}>Premium runs used: {review.runsUsed}</Text>
           <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>{detail}</Text>
           {status ? <Text selectable style={[typography.caption, { color: colors.danger }]}>{status}</Text> : null}
         </View>

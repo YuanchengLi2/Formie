@@ -98,6 +98,7 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("NEXT SET PLAN")).toBeTruthy();
     expect(screen.getByText("Evidence checked")).toBeTruthy();
     expect(screen.getByText("Premium precision review")).toBeTruthy();
+    expect(screen.getByText("Premium runs used: 2")).toBeTruthy();
     expect(screen.getByText("2 additional evidence runs completed")).toBeTruthy();
     expect(screen.getByText("Rep 1 · 00:01.3")).toBeTruthy();
     expect(screen.getByText("See if your correction worked")).toBeTruthy();
