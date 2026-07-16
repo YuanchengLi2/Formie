@@ -8,6 +8,16 @@ const scoreRationaleSchema = z.object({
   confidence: z.number().min(0.75).max(1),
 });
 
+export const visualFocusRegionSchema = z.object({
+  centerX: z.number().min(0).max(1),
+  centerY: z.number().min(0).max(1),
+  radius: z.number().min(0.06).max(0.3),
+  arrowFromX: z.number().min(0).max(1),
+  arrowFromY: z.number().min(0).max(1),
+  label: z.string().min(1),
+  confidence: z.number().min(0.8).max(1),
+});
+
 export const evidenceMomentSchema = z
   .object({
     startMs: z.number().int().min(0),
@@ -16,8 +26,10 @@ export const evidenceMomentSchema = z
     repNumber: z.number().int().positive().nullable(),
     phase: z.string().min(1).nullable(),
     visualEvidence: z.string().min(1),
+    coachingNote: z.string().min(1).max(360).optional(),
     visibleBodyAreas: z.array(z.string().min(1)).min(1),
     confidence: z.number().min(0.75).max(1),
+    focusRegion: visualFocusRegionSchema.nullable().optional(),
   })
   .refine((moment) => moment.endMs > moment.startMs, {
     message: "Evidence end time must follow its start time",
@@ -215,6 +227,7 @@ export const analysisResultSchema = z
 
 export type ScoreRationale = z.infer<typeof scoreRationaleSchema>;
 export type EvidenceMoment = z.infer<typeof evidenceMomentSchema>;
+export type VisualFocusRegion = z.infer<typeof visualFocusRegionSchema>;
 export type CoachingFinding = z.infer<typeof coachingFindingSchema>;
 export type AnalysisResult = z.infer<typeof analysisResultSchema>;
 export type RepTimelineItem = z.infer<typeof repTimelineItemSchema>;

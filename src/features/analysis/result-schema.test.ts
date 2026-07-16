@@ -18,8 +18,10 @@ function validFinding(id = "elbow-drift"): CoachingFinding {
         repNumber: 3,
         phase: "concentric",
         visualEvidence: "Both elbows move forward between 00:08.0 and 00:08.7.",
+        coachingNote: "both elbows move forward as the dumbbells pass mid-range. Keep your upper arms beside your torso.",
         visibleBodyAreas: ["shoulders", "elbows", "torso"],
         confidence: 0.88,
+        focusRegion: { centerX: 0.58, centerY: 0.36, radius: 0.12, arrowFromX: 0.82, arrowFromY: 0.18, label: "right elbow", confidence: 0.9 },
       },
     ],
   };
@@ -71,6 +73,20 @@ describe("analysisResultSchema", () => {
     expect(parsed.nextSetPlan?.[0]).toMatchObject({ relatedFindingId: "elbow-drift" });
     expect(parsed.verification).toMatchObject({ performed: true, outcome: "confirmed" });
     expect(parsed.precisionReview).toMatchObject({ runsUsed: 2, status: "completed" });
+    expect(parsed.priorityCorrections[0].evidence[0].focusRegion).toMatchObject({ label: "right elbow", centerX: 0.58 });
+    expect(parsed.priorityCorrections[0].evidence[0].coachingNote).toContain("both elbows move forward");
+  });
+
+  it("keeps legacy saved evidence compatible by defaulting visual focus to null", () => {
+    const result = validResult();
+    delete (result.priorityCorrections[0].evidence[0] as { focusRegion?: unknown }).focusRegion;
+    expect(analysisResultSchema.parse(result).priorityCorrections[0].evidence[0].focusRegion).toBeUndefined();
+  });
+
+  it("keeps legacy saved evidence compatible when point-specific coaching is absent", () => {
+    const result = validResult();
+    delete (result.priorityCorrections[0].evidence[0] as { coachingNote?: unknown }).coachingNote;
+    expect(analysisResultSchema.parse(result).priorityCorrections[0].evidence[0].coachingNote).toBeUndefined();
   });
 
   it("accepts every evidence-backed finding without a fixed count cap", () => {

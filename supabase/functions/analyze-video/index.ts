@@ -1,10 +1,10 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { type AnalysisCandidate } from "../_shared/analysis-contract.ts";
+import { REQUESTED_ANALYSIS_FPS } from "../_shared/analysis-settings.ts";
 import { buildAnalysisPrompt, type CompactExerciseProfile } from "../_shared/analysis-prompt.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
 import { createGeminiVideoClient } from "../_shared/gemini-video.ts";
 import { resultPayload } from "../_shared/result-payload.ts";
-import { validatePoseSummary } from "../_shared/pose-summary.ts";
 import { analyzeVideoHandler, type AnalyzeVideoSession } from "./handler.ts";
 
 const gemini = createGeminiVideoClient({
@@ -57,12 +57,11 @@ Deno.serve(async (request) => {
         stage: session.stage,
         videoPath: session.video_path,
         durationMs: session.duration_ms,
-        requestedFps: 24,
+        requestedFps: REQUESTED_ANALYSIS_FPS,
         geminiFileName: session.gemini_file_name,
         geminiFileUri: session.gemini_file_uri,
         geminiFileState: session.gemini_file_state,
         preflightCheck: session.preflight_check,
-        poseSummary: session.pose_summary && session.duration_ms ? validatePoseSummary(session.pose_summary, session.duration_ms) : null,
         result: resultPayload(session, result),
       } as AnalyzeVideoSession;
     },
@@ -130,7 +129,6 @@ Deno.serve(async (request) => {
       return buildAnalysisPrompt({
         profiles,
         previousResult,
-        poseSummary: session.poseSummary,
       });
     },
     generate: (session, file, prompt) => gemini.generateAnalysis({ file, prompt, durationMs: session.durationMs ?? 0 }),

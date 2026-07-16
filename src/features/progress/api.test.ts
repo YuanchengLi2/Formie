@@ -5,6 +5,7 @@ it("maps owner-visible completed analysis rows into history items", async () => 
     query: async () => ({
       data: [{
         id: "s1",
+        status: "processing",
         created_at: "2026-07-15T10:00:00Z",
         detected_label: "Cable Row",
         corrected_label: null,
@@ -14,5 +15,5 @@ it("maps owner-visible completed analysis rows into history items", async () => 
       error: null,
     }),
   });
-  expect(history).toEqual([{ sessionId: "s1", createdAt: "2026-07-15T10:00:00Z", detectedLabel: "Cable Row", correctedLabel: null, exerciseFamily: "row", score: 82, priorityCorrectionTitles: ["Elbow path"], comparisonSummary: "Timing improved.", priorityIssueImproved: true }]);
+  expect(history).toEqual([{ sessionId: "s1", status: "processing", createdAt: "2026-07-15T10:00:00Z", detectedLabel: "Cable Row", correctedLabel: null, exerciseFamily: "row", score: 82, priorityCorrectionTitles: ["Elbow path"], comparisonSummary: "Timing improved.", priorityIssueImproved: true }]);
 });

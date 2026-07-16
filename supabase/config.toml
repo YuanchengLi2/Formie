@@ -24,3 +24,6 @@ enable_anonymous_sign_ins = true
 [storage]
 enabled = true
 file_size_limit = "250MiB"
+
+[functions.coach-chat]
+verify_jwt = true

@@ -4,17 +4,20 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AnalysisProgressScreen } from ".";
 
 describe("AnalysisProgressScreen", () => {
-  it("shows real persisted stages and never a fake percentage", async () => {
+  it("shows native persisted stages and never a fake percentage", async () => {
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
         <AnalysisProgressScreen stage="video_processing" failureMessage={null} />
       </SafeAreaProvider>,
     );
 
+    expect(screen.queryByText(/%/)).toBeNull();
+    expect(screen.getByLabelText("Analysis figure")).toBeTruthy();
     expect(screen.getByText("Checking your recording")).toBeTruthy();
     expect(screen.getByText("Preparing the full video")).toBeTruthy();
-    expect(screen.getByText("Reviewing visible technique")).toBeTruthy();
-    expect(screen.queryByText(/%/)).toBeNull();
+    expect(screen.getByLabelText("Preparing the full video").props.accessibilityState).toEqual({ selected: true });
+    expect(screen.queryByLabelText("FORM analysis progress animation")).toBeNull();
+    expect(screen.queryByText("This usually takes a moment")).toBeNull();
   });
 
   it("explains an analysis failure without discarding the recording", async () => {
@@ -36,5 +39,21 @@ describe("AnalysisProgressScreen", () => {
     await fireEvent.press(screen.getByText("Back to Home"));
     expect(onRecordAgain).toHaveBeenCalledTimes(1);
     expect(onGoHome).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers upload retry on the analysis surface", async () => {
+    const onRetryUpload = jest.fn();
+    const screen = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
+        <AnalysisProgressScreen
+          stage="uploading"
+          failureMessage="Video upload failed"
+          onRetryUpload={onRetryUpload}
+        />
+      </SafeAreaProvider>,
+    );
+
+    await fireEvent.press(screen.getByText("Retry Upload"));
+    expect(onRetryUpload).toHaveBeenCalledTimes(1);
   });
 });

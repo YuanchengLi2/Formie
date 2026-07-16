@@ -1,4 +1,5 @@
 import { completeUploadHandler, type CompleteUploadDependencies } from "./handler";
+import { REQUESTED_ANALYSIS_FPS } from "../_shared/analysis-settings";
 
 function request(body: unknown) {
   return new Request("https://example.test/complete-upload", {
@@ -14,6 +15,7 @@ function dependencies(overrides: Partial<CompleteUploadDependencies> = {}): Comp
     findSession: jest.fn(async () => ({ id: "session-1", videoPath: null })),
     videoExists: jest.fn(async () => true),
     markProcessing: jest.fn(async () => undefined),
+    wait: jest.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -33,8 +35,7 @@ describe("completeUploadHandler", () => {
       userId: "user-1",
       videoPath: "user-1/session-1/original.mp4",
       durationMs: 18_500,
-      requestedFps: 24,
-      poseSummary: null,
+      requestedFps: REQUESTED_ANALYSIS_FPS,
     });
   });
 
@@ -45,32 +46,6 @@ describe("completeUploadHandler", () => {
       deps,
     );
 
-    expect(response.status).toBe(400);
-    expect(deps.markProcessing).not.toHaveBeenCalled();
-  });
-
-  it("validates and stores an optional MoveNet Thunder summary", async () => {
-    const deps = dependencies();
-    const poseSummary = {
-      version: 1,
-      model: "MoveNet.SinglePose.Thunder",
-      durationMs: 10_000,
-      requestedFrames: 40,
-      framesAnalyzed: 36,
-      sampleFps: 3.6,
-      overallVisibility: 0.88,
-      seriesColumns: ["timeMs", "confidence", "leftWristX"],
-      series: [[0, 0.9, 0.2], [250, 0.91, 0.21], [500, 0.92, 0.23], [750, 0.9, 0.25]],
-    };
-    const response = await completeUploadHandler(request({ sessionId: "session-1", durationMs: 10_000, poseSummary }), deps);
-
-    expect(response.status).toBe(200);
-    expect(deps.markProcessing).toHaveBeenCalledWith(expect.objectContaining({ poseSummary }));
-  });
-
-  it("rejects malformed pose metadata without blocking uploads that omit it", async () => {
-    const deps = dependencies();
-    const response = await completeUploadHandler(request({ sessionId: "session-1", durationMs: 10_000, poseSummary: { model: "fake" } }), deps);
     expect(response.status).toBe(400);
     expect(deps.markProcessing).not.toHaveBeenCalled();
   });
@@ -89,5 +64,23 @@ describe("completeUploadHandler", () => {
       missingVideo,
     );
     expect(conflict.status).toBe(409);
+  });
+
+  it("waits briefly for a completed signed upload to become visible", async () => {
+    const videoExists = jest
+      .fn<Promise<boolean>, [string]>()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const deps = dependencies({ videoExists });
+
+    const response = await completeUploadHandler(
+      request({ sessionId: "session-1", durationMs: 18_500 }),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(videoExists).toHaveBeenCalledTimes(3);
+    expect(deps.markProcessing).toHaveBeenCalledTimes(1);
   });
 });

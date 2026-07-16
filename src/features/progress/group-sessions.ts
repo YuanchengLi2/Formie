@@ -1,7 +1,10 @@
 import { formatExerciseFamily, inferExerciseFamily, type ExerciseFamily } from "@/features/exercises/exercise-family";
 
+export type AnalysisHistoryStatus = "processing" | "complete" | "partial" | "unable";
+
 export type AnalysisHistoryItem = {
   sessionId: string;
+  status: AnalysisHistoryStatus;
   createdAt: string;
   detectedLabel: string | null;
   correctedLabel: string | null;

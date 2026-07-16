@@ -37,7 +37,7 @@ describe("Gemini video client", () => {
     expect(fetcher.mock.calls[1][1]).toEqual(expect.objectContaining({ method: "POST", body: expect.any(Uint8Array) }));
   });
 
-  it("places the original video before one prompt and requests 24 fps", async () => {
+  it("places the original video before one prompt and uses a faster whole-set sample", async () => {
     const response = { candidates: [{ content: { parts: [{ text: JSON.stringify(validCandidate()) }] } }] };
     const fetcher = jest.fn(async () => new Response(JSON.stringify(response), { status: 200 }));
     const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
@@ -52,7 +52,7 @@ describe("Gemini video client", () => {
     const parts = request.contents[0].parts;
     expect(parts[0]).toEqual({
       fileData: { mimeType: "video/mp4", fileUri: "https://generativelanguage.googleapis.com/v1beta/files/file-1" },
-      videoMetadata: { fps: 24 },
+      videoMetadata: { fps: 12 },
     });
     expect(parts[1]).toEqual({ text: expect.stringContaining("exercise attempt") });
     expect(request.generationConfig).toMatchObject({ responseMimeType: "application/json", responseJsonSchema: GEMINI_ANALYSIS_JSON_SCHEMA });

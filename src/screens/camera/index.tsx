@@ -10,22 +10,13 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { FormButton } from "@/components/form-button";
 import { FormWordmark } from "@/components/form-wordmark";
-import { ProductionIcon } from "@/components/production-icon";
-import {
-  completeAnalysisUpload,
-  createAnalysisSession,
-  uploadAnalysisVideo,
-} from "@/features/analysis/api";
 import { useCaptureStore } from "@/features/capture/capture-store";
+import { analysisUploadCoordinator } from "@/features/capture/analysis-upload-coordinator";
 import { normalizeRecordedDuration } from "@/features/capture/countdown";
 import { START_BEEP_URI } from "@/features/capture/start-beep";
-import type { RecordedSet, UploadTarget } from "@/features/capture/types";
+import type { RecordedSet } from "@/features/capture/types";
 import { captureVideoSettings } from "@/features/capture/video-settings";
-import { cameraZoomPresets, pinchZoom, resolveCameraZoom, zoomDisplayLabel, type CameraZoomLabel } from "@/features/capture/camera-zoom";
-import { PoseAnalysisCoordinator, type PoseAnalysisJob } from "@/features/pose/pose-analysis-coordinator";
-import { optionalPoseResult } from "@/features/pose/pose-runner";
-import type { PoseSummary } from "@/features/pose/pose-summary";
-import { supabase } from "@/lib/supabase";
+import { pinchZoom } from "@/features/capture/camera-zoom";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
@@ -38,42 +29,23 @@ type CameraScreenProps = {
   previousSessionId?: string;
 };
 
-async function getAccessToken(): Promise<string> {
-  const existing = await supabase.auth.getSession();
-  if (existing.data.session?.access_token) return existing.data.session.access_token;
-
-  const created = await supabase.auth.signInAnonymously();
-  if (created.error || !created.data.session?.access_token) {
-    throw new Error(created.error?.message ?? "A private session could not be created");
-  }
-  return created.data.session.access_token;
-}
-
 export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
-  const preparedUploadRef = useRef<Promise<UploadTarget | null> | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>("back");
   const [torch, setTorch] = useState(false);
-  const [availableLenses, setAvailableLenses] = useState<string[]>([]);
-  const [selectedLens, setSelectedLens] = useState<string | undefined>();
-  const [zoomLabel, setZoomLabel] = useState<CameraZoomLabel>("1x");
   const [zoom, setZoom] = useState(0);
   const zoomRef = useRef(0);
   const pinchStartZoomRef = useRef(0);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [poseJob, setPoseJob] = useState<PoseAnalysisJob | null>(null);
-  const poseCacheRef = useRef(new Map<string, PoseSummary | null>());
-  const poseRequestRef = useRef<{ jobId: string; localUri: string; promise: Promise<PoseSummary | null>; resolve: (summary: PoseSummary | null) => void } | null>(null);
   const beep = useAudioPlayer({ uri: START_BEEP_URI });
 
   const phase = useCaptureStore((state) => state.phase);
   const countdown = useCaptureStore((state) => state.countdown);
   const startedAt = useCaptureStore((state) => state.startedAt);
   const recording = useCaptureStore((state) => state.recording);
-  const uploadTarget = useCaptureStore((state) => state.uploadTarget);
   const error = useCaptureStore((state) => state.error);
   const dispatch = useCaptureStore((state) => state.dispatch);
 
@@ -89,95 +61,9 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     return () => clearInterval(timer);
   }, [phase, startedAt]);
 
-  const requestPoseAnalysis = useCallback((saved: RecordedSet): Promise<PoseSummary | null> => {
-    if (poseCacheRef.current.has(saved.localUri)) return Promise.resolve(poseCacheRef.current.get(saved.localUri) ?? null);
-    if (poseRequestRef.current?.localUri === saved.localUri) return poseRequestRef.current.promise;
-    const jobId = `thunder-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    let resolve!: (summary: PoseSummary | null) => void;
-    const promise = new Promise<PoseSummary | null>((done) => {
-      resolve = done;
-    });
-    poseRequestRef.current = { jobId, localUri: saved.localUri, promise, resolve };
-    setPoseJob({ id: jobId, localUri: saved.localUri, durationMs: saved.durationMs });
-    return promise;
-  }, []);
-
-  const completePoseAnalysis = useCallback((jobId: string, summary: PoseSummary | null) => {
-    const pending = poseRequestRef.current;
-    if (!pending || pending.jobId !== jobId) return;
-    poseCacheRef.current.set(pending.localUri, summary);
-    pending.resolve(summary);
-    poseRequestRef.current = null;
-    setPoseJob(null);
-  }, []);
-
-  useEffect(() => () => {
-    poseRequestRef.current?.resolve(null);
-    poseRequestRef.current = null;
-  }, []);
-
-  const uploadRecording = useCallback(
-    async (saved: RecordedSet, existingTarget?: UploadTarget | null) => {
-      try {
-        const posePromise = optionalPoseResult(requestPoseAnalysis(saved), 25_000);
-        const accessToken = await getAccessToken();
-        let target = existingTarget ?? useCaptureStore.getState().uploadTarget ?? null;
-        if (!target && preparedUploadRef.current) target = await preparedUploadRef.current;
-        if (!target) {
-          const session = await createAnalysisSession({ accessToken, previousSessionId });
-          target = {
-            sessionId: session.sessionId,
-            signedUrl: session.upload.signedUrl,
-            uploadToken: session.upload.token,
-            path: session.upload.path,
-          };
-          dispatch({ type: "upload_target_created", target });
-        }
-        await uploadAnalysisVideo({
-          localUri: saved.localUri,
-          signedUrl: target.signedUrl,
-          uploadToken: target.uploadToken,
-        });
-        const poseSummary = await posePromise;
-        await completeAnalysisUpload({
-          accessToken,
-          sessionId: target.sessionId,
-          durationMs: saved.durationMs,
-          poseSummary,
-        });
-        dispatch({ type: "processing", sessionId: target.sessionId });
-        router.replace({ pathname: "/analysis/[session-id]", params: { "session-id": target.sessionId } });
-      } catch (uploadError) {
-        dispatch({
-          type: "upload_failed",
-          message: uploadError instanceof Error ? uploadError.message : "The original video could not be uploaded",
-        });
-      }
-    },
-    [dispatch, previousSessionId, requestPoseAnalysis, router],
-  );
-
   const prepareUploadTarget = useCallback((repeatSessionId?: string) => {
-    if (preparedUploadRef.current) return preparedUploadRef.current;
-    preparedUploadRef.current = (async () => {
-      try {
-        const accessToken = await getAccessToken();
-        const session = await createAnalysisSession({ accessToken, previousSessionId: repeatSessionId });
-        const target: UploadTarget = {
-          sessionId: session.sessionId,
-          signedUrl: session.upload.signedUrl,
-          uploadToken: session.upload.token,
-          path: session.upload.path,
-        };
-        const current = useCaptureStore.getState();
-        if (["countingDown", "recording", "recorded", "uploading"].includes(current.phase)) dispatch({ type: "upload_target_created", target });
-        return target;
-      } catch {
-        return null;
-      }
-    })();
-    return preparedUploadRef.current;
-  }, [dispatch]);
+    return analysisUploadCoordinator.prepare(repeatSessionId);
+  }, []);
 
   const startNativeRecording = useCallback(async () => {
     if (!cameraRef.current) return;
@@ -196,7 +82,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
       };
       dispatch({ type: "recording_finished", recording: saved });
       dispatch({ type: "upload_started" });
-      await uploadRecording(saved);
+      router.replace("/analysis/upload");
     } catch (recordingError) {
       const current = useCaptureStore.getState();
       if (current.phase === "recording") {
@@ -204,7 +90,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         dispatch({ type: "recording_failed", message });
       }
     }
-  }, [beep, dispatch, uploadRecording]);
+  }, [beep, dispatch, router]);
 
   useEffect(() => {
     if (phase !== "countingDown" || countdown === null) return;
@@ -216,14 +102,8 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     return () => clearTimeout(timer);
   }, [countdown, dispatch, phase, startNativeRecording]);
 
-  const retryUpload = () => {
-    if (!recording?.localUri) return;
-    dispatch({ type: "retry_upload" });
-    void uploadRecording(recording, uploadTarget);
-  };
-
   const discardRecording = () => {
-    preparedUploadRef.current = null;
+    analysisUploadCoordinator.reset();
     dispatch({ type: "reset" });
   };
 
@@ -242,7 +122,6 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
       })
       .onUpdate((event) => {
         setCameraZoom(pinchZoom(pinchStartZoomRef.current, event.scale));
-        setZoomLabel("1x");
       }),
     [setCameraZoom],
   );
@@ -265,33 +144,23 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     );
   }
 
-  const zoomPresets = cameraZoomPresets(availableLenses);
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.cameraBlack }}>
+      <CameraView
+        ref={cameraRef}
+        active
+        enableTorch={torch}
+        facing={facing}
+        mirror={facing === "front"}
+        mode="video"
+        mute
+        style={{ flex: 1 }}
+        videoQuality={captureVideoSettings.quality}
+        videoStabilizationMode="auto"
+        zoom={zoom}
+      />
       <GestureDetector gesture={pinchGesture}>
-        <CameraView
-          ref={cameraRef}
-          active
-          enableTorch={torch}
-          facing={facing}
-          mirror={facing === "front"}
-          mode="video"
-          mute
-          onAvailableLensesChanged={({ lenses }) => {
-            setAvailableLenses(lenses);
-            if (!selectedLens) {
-              const initial = resolveCameraZoom("1x", lenses);
-              setSelectedLens(initial.lens);
-              setCameraZoom(initial.zoom);
-            }
-          }}
-          selectedLens={selectedLens}
-          style={{ flex: 1 }}
-          videoQuality={captureVideoSettings.quality}
-          videoStabilizationMode="auto"
-          zoom={zoom}
-        />
+        <View accessibilityLabel="Pinch camera preview to zoom" collapsable={false} style={{ position: "absolute", inset: 0 }} />
       </GestureDetector>
 
       <View pointerEvents="box-none" style={{ position: "absolute", top: insets.top + spacing.md, left: spacing.lg, right: spacing.lg, flexDirection: "row", justifyContent: "space-between" }}>
@@ -316,9 +185,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
           </Pressable>
           <Pressable accessibilityLabel="Flip camera" onPress={() => {
             setFacing((value) => (value === "back" ? "front" : "back"));
-            setZoomLabel("1x");
             setCameraZoom(0);
-            setSelectedLens(undefined);
           }} style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)" }}>
             <Text selectable style={{ color: colors.text, fontSize: 18 }}>↻</Text>
           </Pressable>
@@ -337,36 +204,11 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
           void prepareUploadTarget(previousSessionId);
         }}
         onStop={() => cameraRef.current?.stopRecording()}
-        onRetryUpload={retryUpload}
+        onRetryUpload={() => undefined}
         onDiscardRecording={discardRecording}
         topInset={insets.top}
         bottomInset={insets.bottom}
-        zoomControls={(
-          <View accessibilityLabel="Camera zoom" style={{ alignItems: "center", gap: spacing.xs }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: 5, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.68)" }}>
-              <ProductionIcon name="setupZoom" label="Camera zoom options" size={23} tintColor={colors.textSecondary} />
-              {zoomPresets.map((preset) => (
-                <Pressable
-                  accessibilityLabel={`Set camera zoom to ${preset.label}`}
-                  accessibilityRole="button"
-                  key={preset.label}
-                  onPress={() => {
-                    setZoomLabel(preset.label);
-                    setSelectedLens(preset.lens);
-                    setCameraZoom(preset.zoom);
-                  }}
-                  style={{ minWidth: 44, height: 32, alignItems: "center", justifyContent: "center", borderRadius: 16, backgroundColor: zoomLabel === preset.label ? colors.gold : "transparent" }}
-                >
-                  <Text selectable style={[typography.label, { color: zoomLabel === preset.label ? colors.background : colors.text }]}>{preset.label}</Text>
-                </Pressable>
-              ))}
-              <Text selectable style={[typography.caption, { minWidth: 38, color: colors.textSecondary, textAlign: "right" }]}>{zoomDisplayLabel(zoom, selectedLens?.toLowerCase().includes("ultra") ? 0.5 : 1)}</Text>
-            </View>
-            <Text selectable style={[typography.caption, { color: colors.textSecondary, textShadowColor: colors.background, textShadowRadius: 4 }]}>Pinch anywhere to fine-tune</Text>
-          </View>
-        )}
       />
-      <PoseAnalysisCoordinator job={poseJob} onComplete={completePoseAnalysis} />
     </View>
   );
 }

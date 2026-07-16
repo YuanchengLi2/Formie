@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { PoseSummary } from "@/features/pose/pose-summary";
 
 import { analysisResultSchema, type AnalysisResult } from "./result-schema";
 
@@ -14,31 +13,12 @@ const createSessionResponseSchema = z.object({
   }),
 });
 
-export const poseTrackingSchema = z.object({
-  model: z.literal("MoveNet.SinglePose.Thunder"),
-  requestedFrames: z.number().int().min(4).max(96),
-  framesAnalyzed: z.number().int().min(4).max(96),
-  sampleFps: z.number().positive().max(24),
-  overallVisibility: z.number().min(0).max(1),
-});
-
-export const evidenceOverlaySchema = z.object({
-  findingId: z.string().min(1),
-  timeMs: z.number().int().nonnegative(),
-  centerX: z.number().min(0).max(1),
-  centerY: z.number().min(0).max(1),
-  radius: z.number().min(0.08).max(0.3),
-  trackedAreas: z.array(z.string().min(1)).min(1),
-});
-
 const statusResponseSchema = z.object({
   sessionId: z.string().min(1),
   status: z.enum(["created", "uploading", "queued", "processing", "complete", "partial", "unable", "failed"]),
   stage: z.string().min(1).nullable(),
   durationMs: z.number().int().positive().nullable().optional().default(null),
   videoUrl: z.string().url().nullable().optional().default(null),
-  poseTracking: poseTrackingSchema.nullable().optional().default(null),
-  evidenceOverlays: z.array(evidenceOverlaySchema).optional().default([]),
   result: analysisResultSchema.nullable(),
 });
 
@@ -53,9 +33,6 @@ export const tutorialVideoSchema = z.object({
 });
 
 export type TutorialVideo = z.infer<typeof tutorialVideoSchema>;
-export type PoseTracking = z.infer<typeof poseTrackingSchema>;
-export type EvidenceOverlay = z.infer<typeof evidenceOverlaySchema>;
-
 export type CreateAnalysisSessionResponse = z.infer<typeof createSessionResponseSchema>;
 export type AnalysisStatusResponse = z.infer<typeof statusResponseSchema>;
 
@@ -173,14 +150,11 @@ export async function uploadAnalysisVideo(input: {
 export async function completeAnalysisUpload(input: RequestContext & {
   sessionId: string;
   durationMs: number;
-  poseSummary?: PoseSummary | null;
 }): Promise<{ processing: true }> {
-  const body: Record<string, unknown> = { sessionId: input.sessionId, durationMs: input.durationMs };
-  if (input.poseSummary) body.poseSummary = input.poseSummary;
   return requestJson(
     "complete-upload",
     input,
-    { method: "POST", body: JSON.stringify(body) },
+    { method: "POST", body: JSON.stringify({ sessionId: input.sessionId, durationMs: input.durationMs }) },
     z.object({ processing: z.literal(true) }),
   );
 }

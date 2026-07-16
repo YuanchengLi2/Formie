@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { FormButton } from "@/components/form-button";
@@ -21,7 +20,6 @@ type CameraControlsProps = {
   onDiscardRecording?: () => void;
   topInset?: number;
   bottomInset?: number;
-  zoomControls?: ReactNode;
 };
 
 export function CameraControls({
@@ -36,7 +34,6 @@ export function CameraControls({
   onDiscardRecording = () => undefined,
   topInset = 0,
   bottomInset = 0,
-  zoomControls = null,
 }: CameraControlsProps) {
   return (
     <View pointerEvents="box-none" style={{ position: "absolute", inset: 0, justifyContent: "space-between", padding: spacing.xl }}>
@@ -64,9 +61,8 @@ export function CameraControls({
       <View style={{ alignItems: "center", gap: spacing.md, paddingBottom: bottomInset + spacing.md }}>
         {phase === "idle" || phase === "processing" ? (
           <>
-            {zoomControls}
             <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.pill, backgroundColor: "rgba(0,0,0,0.58)" }}>
-              <Text selectable style={[typography.caption, { color: colors.text }]}>Keep the full movement visible</Text>
+              <Text selectable style={[typography.caption, { color: colors.text }]}>Keep the full movement visible · pinch to zoom</Text>
             </View>
             <Pressable
               accessibilityLabel="Start countdown"

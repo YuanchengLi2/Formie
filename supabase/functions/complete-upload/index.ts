@@ -18,6 +18,7 @@ Deno.serve(async (request) => {
       if (error) throw error;
       return data;
     },
+    wait: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
     markProcessing: async (input) => {
       const { error } = await admin.from("analysis_sessions").update({
         status: "processing",
@@ -25,7 +26,7 @@ Deno.serve(async (request) => {
         video_path: input.videoPath,
         duration_ms: input.durationMs,
         requested_fps: input.requestedFps,
-        pose_summary: input.poseSummary,
+        pose_summary: null,
         failure_code: null,
         updated_at: new Date().toISOString(),
       }).eq("id", input.sessionId).eq("user_id", input.userId);

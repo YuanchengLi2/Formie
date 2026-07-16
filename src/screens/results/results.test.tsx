@@ -21,7 +21,10 @@ function finding(id: string, title: string): CoachingFinding {
     correction: `Improve ${title.toLowerCase()}.`,
     cue: `Think ${title.toLowerCase()}.`,
     severity: "important",
-    evidence: [{ startMs: 1_000, peakMs: 1_300, endMs: 1_600, repNumber: 1, phase: "concentric", visualEvidence: `${title} at rep 1.`, visibleBodyAreas: ["shoulders"], confidence: 0.9 }],
+    evidence: [
+      { startMs: 1_000, peakMs: 1_300, endMs: 1_600, repNumber: 1, phase: "concentric", visualEvidence: `${title} at rep 1.`, coachingNote: "your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.", visibleBodyAreas: ["shoulders"], confidence: 0.9, focusRegion: { centerX: 0.58, centerY: 0.36, radius: 0.12, arrowFromX: 0.82, arrowFromY: 0.18, label: "right shoulder", confidence: 0.9 } },
+      { startMs: 2_000, peakMs: 2_300, endMs: 2_600, repNumber: null, phase: "reset", visualEvidence: `${title} between reps.`, coachingNote: "the shoulders stay uneven during the reset. Re-square before starting the next repetition.", visibleBodyAreas: ["shoulders"], confidence: 0.86, focusRegion: null },
+    ],
   };
 }
 
@@ -66,7 +69,13 @@ describe("ResultsScreen", () => {
     for (let index = 1; index <= 5; index += 1) expect(screen.getByText(`Did well ${index}`)).toBeTruthy();
     expect(screen.getByText("Improve priority 1.")).toBeTruthy();
     expect(screen.getByText("Keep your upper arms beside your torso")).toBeTruthy();
-    expect(screen.queryByText("Priority 4")).toBeNull();
+    expect(screen.getByText("1 of 8")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Next coaching point"));
+    expect(screen.getByText("Improve priority 2.")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Next coaching point"));
+    await fireEvent.press(screen.getByLabelText("Next coaching point"));
+    await fireEvent.press(screen.getByLabelText("Next coaching point"));
+    expect(screen.getByText("At 0:02, the shoulders stay uneven during the reset. Re-square before starting the next repetition.")).toBeTruthy();
   });
 
   it("omits an unsupported score while keeping exercise-specific coaching", async () => {
@@ -87,6 +96,34 @@ describe("ResultsScreen", () => {
     expect(onRecordAnother).toHaveBeenCalledTimes(1);
   });
 
+  it("lets the user immediately retry an unusable recording", async () => {
+    const unusable = result();
+    unusable.status = "unable";
+    unusable.recognition = { label: null, variation: null, equipment: [], confidence: 0, alternatives: [], catalogExerciseId: null, exerciseFamily: "other" };
+    unusable.videoCheck = { outcome: "unable", usableObservations: [], limitations: [], retryReason: "The full movement was not visible.", retryInstruction: "Record again with your full body and equipment visible." };
+    unusable.overallAssessment = null;
+    unusable.didWell = [];
+    unusable.priorityCorrections = [];
+    unusable.coachingCues = [];
+    unusable.score = null;
+    unusable.scoreRationale = [];
+    unusable.setSummary = { totalReps: null, consistentReps: null, verdict: null };
+    unusable.repTimeline = [];
+    unusable.nextSetPlan = [];
+    unusable.precisionReview = { runsRequested: 0, runsUsed: 0, status: "not-needed", summary: null, passes: [] };
+
+    const onRecordAnother = jest.fn();
+    const screen = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
+        <ResultsScreen result={unusable} onFindingPress={jest.fn()} onRecordAnother={onRecordAnother} />
+      </SafeAreaProvider>,
+    );
+
+    expect(screen.getByText("RECORDING UNUSABLE")).toBeTruthy();
+    await fireEvent.press(screen.getByText("Record Again"));
+    expect(onRecordAnother).toHaveBeenCalledTimes(1);
+  });
+
   it("turns the result into an evidence-led coaching loop", async () => {
     const onFindingPress = jest.fn();
     const screen = await renderResults(onFindingPress);
@@ -96,12 +133,20 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("FULL RECORDING")).toBeTruthy();
     expect(screen.getByText("6 of 8 reps consistent")).toBeTruthy();
     expect(screen.getByText("NEXT SET PLAN")).toBeTruthy();
+    expect(screen.getByText("1 of 8")).toBeTruthy();
+    expect(screen.getByText("At 0:01, your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.")).toBeTruthy();
     expect(screen.getByText("Evidence checked")).toBeTruthy();
-    expect(screen.getByText("Premium precision review")).toBeTruthy();
-    expect(screen.getByText("Premium runs used: 2")).toBeTruthy();
-    expect(screen.getByText("2 additional evidence runs completed")).toBeTruthy();
-    expect(screen.getByText("Rep 1 · 00:01.3")).toBeTruthy();
+    expect(screen.getByText("2 premium runs")).toBeTruthy();
+    expect(screen.queryByText(/tokens/)).toBeNull();
+    expect(screen.getByLabelText("Coach summary cards")).toBeTruthy();
+    expect(screen.getByText("Ask AI Coach about this video")).toBeTruthy();
+    expect(screen.getByText("Rep 1 · 00:01.3, 00:02.3")).toBeTruthy();
     expect(screen.getByText("See if your correction worked")).toBeTruthy();
+    expect(screen.getByLabelText("Coaching point: Priority 1 at 00:02")).toHaveStyle({ width: 44, height: 44 });
+
+    await fireEvent.press(screen.getByLabelText("Coaching point: Priority 1 at 00:01"));
+    expect(screen.getByLabelText("AI focus: right shoulder")).toBeTruthy();
+    expect(screen.getAllByText("At 0:01, your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.").length).toBeGreaterThanOrEqual(1);
 
     await fireEvent.press(screen.getByText("Did well 1"));
     await fireEvent.press(screen.getByText("Keep your upper arms beside your torso"));
@@ -114,20 +159,18 @@ describe("ResultsScreen", () => {
     expect(screen.getByTestId("record-another-loop")).toHaveStyle({ minHeight: 92 });
   });
 
-  it("shows when local MoveNet Thunder tracking contributed evidence", async () => {
+  it("does not expose the removed body-analysis pipeline", async () => {
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
         <ResultsScreen
           result={result()}
-          poseTracking={{ model: "MoveNet.SinglePose.Thunder", requestedFrames: 40, framesAnalyzed: 36, sampleFps: 3.6, overallVisibility: 0.88 }}
           onFindingPress={jest.fn()}
           onRecordAnother={jest.fn()}
         />
       </SafeAreaProvider>,
     );
-    expect(screen.getByText("Movement tracking")).toBeTruthy();
-    expect(screen.getByText("MoveNet Thunder")).toBeTruthy();
-    expect(screen.getByText("36 frames analyzed at 3.6 fps")).toBeTruthy();
+    expect(screen.queryByText("Movement tracking")).toBeNull();
+    expect(screen.queryByText("MoveNet Thunder")).toBeNull();
   });
 
   it("does not claim evidence was checked when the verifier failed", async () => {

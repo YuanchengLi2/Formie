@@ -38,7 +38,7 @@ const secureSessionStorage: SupportedStorage = {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: secureSessionStorage,
-    autoRefreshToken: true,
+    autoRefreshToken: process.env.EXPO_OS === "web",
     persistSession: true,
     detectSessionInUrl: false,
   },

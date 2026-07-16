@@ -1,4 +1,4 @@
-import { validatePoseSummary, type PoseSummary } from "../_shared/pose-summary.ts";
+import { REQUESTED_ANALYSIS_FPS } from "../_shared/analysis-settings.ts";
 
 export type CompleteUploadSession = {
   id: string;
@@ -14,13 +14,25 @@ export type CompleteUploadDependencies = {
     userId: string;
     videoPath: string;
     durationMs: number;
-    requestedFps: 24;
-    poseSummary: PoseSummary | null;
+    requestedFps: typeof REQUESTED_ANALYSIS_FPS;
   }) => Promise<void>;
+  wait: (milliseconds: number) => Promise<void>;
 };
 
 function json(payload: unknown, status: number): Response {
   return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } });
+}
+
+export async function uploadedVideoIsVisible(
+  path: string,
+  videoExists: (path: string) => Promise<boolean>,
+  wait: (milliseconds: number) => Promise<void>,
+): Promise<boolean> {
+  for (const delayMs of [0, 150, 350, 750]) {
+    if (delayMs > 0) await wait(delayMs);
+    if (await videoExists(path)) return true;
+  }
+  return false;
 }
 
 export async function completeUploadHandler(request: Request, dependencies: CompleteUploadDependencies): Promise<Response> {
@@ -40,22 +52,13 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
   ) {
     return json({ message: "Invalid upload metadata", code: "INVALID_BODY" }, 400);
   }
-  let poseSummary: PoseSummary | null = null;
-  if (body.poseSummary !== undefined && body.poseSummary !== null) {
-    try {
-      poseSummary = validatePoseSummary(body.poseSummary, durationMs);
-    } catch {
-      return json({ message: "Invalid pose metadata", code: "INVALID_BODY" }, 400);
-    }
-  }
-
   try {
     const userId = await dependencies.authenticate(request);
     const session = await dependencies.findSession(sessionId, userId);
     if (!session) return json({ message: "Analysis not found", code: "NOT_FOUND" }, 404);
 
     const videoPath = session.videoPath ?? `${userId}/${sessionId}/original.mp4`;
-    if (!(await dependencies.videoExists(videoPath))) {
+    if (!(await uploadedVideoIsVisible(videoPath, dependencies.videoExists, dependencies.wait))) {
       return json({ message: "The uploaded video was not found", code: "VIDEO_NOT_FOUND" }, 409);
     }
 
@@ -64,8 +67,7 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
       userId,
       videoPath,
       durationMs,
-      requestedFps: 24,
-      poseSummary,
+      requestedFps: REQUESTED_ANALYSIS_FPS,
     });
     return json({ processing: true }, 200);
   } catch (error) {

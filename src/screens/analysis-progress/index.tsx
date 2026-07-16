@@ -1,72 +1,124 @@
+import { Image } from "expo-image";
 import { ScrollView, Text, View } from "react-native";
-import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AnalysisFigure } from "@/components/analysis-figure";
 import { FormButton } from "@/components/form-button";
 import { FormCard } from "@/components/form-card";
 import { FormWordmark } from "@/components/form-wordmark";
-import { analysisStages, getAnalysisStageState } from "@/features/analysis/stages";
+import { analysisProgress } from "@/features/analysis/progress-stages";
 import { colors } from "@/theme/colors";
-import { spacing } from "@/theme/spacing";
+import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+
+const analysisFigure = require("../../../assets/production/analysis-figure.png");
 
 type AnalysisProgressScreenProps = {
   stage: string | null;
   failureMessage: string | null;
   onRecordAgain?: () => void;
   onGoHome?: () => void;
+  onRetryUpload?: () => void;
 };
 
-export function AnalysisProgressScreen({ stage, failureMessage, onRecordAgain, onGoHome }: AnalysisProgressScreenProps) {
+export function AnalysisProgressScreen({ stage, failureMessage, onRecordAgain, onGoHome, onRetryUpload }: AnalysisProgressScreenProps) {
   const insets = useSafeAreaInsets();
-  const states = getAnalysisStageState(stage);
+  const progress = analysisProgress(stage);
 
   return (
-    <ScrollView
-      alwaysBounceVertical
-      bounces
-      overScrollMode="auto"
-      contentContainerStyle={{ flexGrow: 1, gap: spacing.lg, paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.lg, paddingHorizontal: spacing.lg }}
-      style={{ flex: 1, backgroundColor: colors.background }}
-    >
-      <View style={{ alignItems: "center" }}><FormWordmark /></View>
-      <Animated.View entering={FadeInDown.duration(220)} style={{ alignItems: "center", gap: spacing.xs }}>
-        <Text selectable style={[typography.title, { color: colors.text, textAlign: "center" }]}>Analyzing your set</Text>
-        <Text selectable style={[typography.caption, { color: colors.textSecondary, textAlign: "center" }]}>Reviewing everything your recording makes visible.</Text>
-      </Animated.View>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: insets.top + spacing.lg,
+          paddingBottom: insets.bottom + spacing.xl,
+          paddingHorizontal: spacing.xl,
+        }}
+      >
+        <FormWordmark />
+        <Animated.View entering={FadeInDown.duration(380)} style={{ flex: 1, justifyContent: "center", gap: spacing.xl }}>
+          <View style={{ gap: spacing.sm }}>
+            <Text selectable style={[typography.title, { color: colors.text }]}>Analyzing your movement</Text>
+            <Text selectable style={[typography.body, { color: colors.textSecondary }]}>Your recording is ready. FORM is working through each coaching stage.</Text>
+          </View>
 
-      <AnalysisFigure />
+          <View
+            style={{
+              minHeight: 180,
+              overflow: "hidden",
+              borderRadius: radii.lg,
+              borderCurve: "continuous",
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surface,
+            }}
+          >
+            <Image
+              source={analysisFigure}
+              accessibilityLabel="Analysis figure"
+              contentFit="cover"
+              style={{ width: "100%", height: 210 }}
+            />
+          </View>
 
-      <View style={{ gap: 0 }}>
-        {analysisStages.map((item, index) => {
-          const itemState = states[index];
-          return (
-            <Animated.View entering={FadeIn.duration(180).delay(index * 35)} key={item.id} style={{ minHeight: 58, flexDirection: "row", gap: spacing.md }}>
-              <View style={{ width: 24, alignItems: "center" }}>
-                <View style={{ width: 20, height: 20, alignItems: "center", justifyContent: "center", borderRadius: 10, borderWidth: itemState === "active" ? 0 : 1, borderColor: itemState === "pending" ? colors.textMuted : colors.gold, backgroundColor: itemState === "active" ? colors.gold : "transparent" }}>
-                  <Text selectable style={{ color: itemState === "active" ? colors.background : itemState === "complete" ? colors.gold : colors.textMuted, fontSize: 11 }}>{itemState === "complete" ? "✓" : ""}</Text>
+          <View accessibilityRole="list" style={{ gap: spacing.sm }}>
+            {progress.items.map((item, index) => (
+              <Animated.View
+                key={item.key}
+                entering={FadeInDown.delay(index * 45).duration(280)}
+                accessibilityLabel={item.label}
+                accessibilityState={{ selected: item.state === "active" }}
+                style={{
+                  minHeight: 48,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: spacing.md,
+                  paddingHorizontal: spacing.md,
+                  borderRadius: radii.md,
+                  borderCurve: "continuous",
+                  borderWidth: 1,
+                  borderColor: item.state === "active" ? colors.gold : colors.border,
+                  backgroundColor: item.state === "active" ? colors.goldSoft : "transparent",
+                  opacity: item.state === "pending" ? 0.58 : 1,
+                }}
+              >
+                <View
+                  style={{
+                    width: 22,
+                    height: 22,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 11,
+                    borderWidth: item.state === "pending" ? 1 : 0,
+                    borderColor: colors.textMuted,
+                    backgroundColor: item.state === "complete" ? colors.gold : item.state === "active" ? colors.gold : "transparent",
+                  }}
+                >
+                  {item.state === "complete" ? <Text style={{ color: colors.background, fontSize: 13, fontWeight: "800" }}>✓</Text> : null}
+                  {item.state === "active" ? <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors.background }} /> : null}
                 </View>
-                {index < analysisStages.length - 1 ? <View style={{ flex: 1, width: 1, marginVertical: 4, backgroundColor: itemState === "complete" ? colors.gold : colors.border }} /> : null}
-              </View>
-              <View style={{ flex: 1, paddingBottom: spacing.md }}>
-                <Text selectable style={[typography.body, { color: itemState === "pending" ? colors.textMuted : colors.text }]}>{item.label}</Text>
-                {itemState === "active" ? <View style={{ height: 2, marginTop: spacing.sm, overflow: "hidden", backgroundColor: colors.border }}><View style={{ width: "68%", height: 2, backgroundColor: colors.gold }} /></View> : null}
-              </View>
-            </Animated.View>
-          );
-        })}
-      </View>
-
+                <Text selectable style={[typography.label, { flex: 1, color: item.state === "pending" ? colors.textMuted : colors.text }]}>
+                  {item.label}
+                </Text>
+                {item.state === "active" ? <Text style={[typography.caption, { color: colors.gold }]}>NOW</Text> : null}
+              </Animated.View>
+            ))}
+          </View>
+        </Animated.View>
+      </ScrollView>
       {failureMessage ? (
-        <FormCard style={{ gap: spacing.md, borderColor: colors.danger }}>
-          <Text selectable style={[typography.heading, { color: colors.text }]}>Analysis paused</Text>
-          <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{failureMessage}</Text>
-          <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Your recording is still saved securely.</Text>
-          {onRecordAgain ? <FormButton label="Record Again" onPress={onRecordAgain} /> : null}
-          {onGoHome ? <FormButton label="Back to Home" variant="ghost" onPress={onGoHome} /> : null}
-        </FormCard>
-      ) : <Text selectable style={[typography.caption, { color: colors.textMuted, textAlign: "center" }]}>This usually takes a moment</Text>}
-    </ScrollView>
+        <View style={{ position: "absolute", left: spacing.lg, right: spacing.lg, bottom: insets.bottom + spacing.lg }}>
+          <FormCard style={{ gap: spacing.md, borderColor: colors.danger, backgroundColor: "rgba(15,15,15,0.97)" }}>
+            <Text selectable style={[typography.heading, { color: colors.text }]}>Analysis paused</Text>
+            <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{failureMessage}</Text>
+            <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Your recording is still saved securely.</Text>
+            {onRetryUpload ? <FormButton label="Retry Upload" onPress={onRetryUpload} /> : null}
+            {onRecordAgain ? <FormButton label="Record Again" onPress={onRecordAgain} /> : null}
+            {onGoHome ? <FormButton label="Back to Home" variant="ghost" onPress={onGoHome} /> : null}
+          </FormCard>
+        </View>
+      ) : null}
+      <Text accessibilityElementsHidden style={{ position: "absolute", width: 1, height: 1, opacity: 0 }}>{stage}</Text>
+    </View>
   );
 }

@@ -5,21 +5,38 @@ describe("buildAnalysisPrompt", () => {
     const prompt = buildAnalysisPrompt({
       profiles: [{ id: 35, name: "Standing Dumbbell Curl", aliases: ["curl"], phases: ["setup", "curl", "lower"], attentionAreas: ["elbow drift"], commonFaults: ["torso swing"] }],
       previousResult: null,
-      poseSummary: null,
     });
 
     expect(prompt).toContain("A badly performed exercise is still that exercise");
     expect(prompt).toContain("nearest standard exercise");
     expect(prompt).toContain("peakMs");
-    expect(prompt).toContain("clearest single frame");
+    expect(prompt).toContain("clearest peak frame");
     expect(prompt).toContain("specific joint or implement path");
     expect(prompt).toContain("qualitative or estimated");
-    expect(prompt).toContain("24 frames per second");
+    expect(prompt).toContain("entire original recording");
     expect(prompt).toContain("Standing Dumbbell Curl");
     expect(prompt).toContain("set overallAssessment, score, comparison, setSummary.totalReps");
     expect(prompt).toContain("retryReason and retryInstruction to specific non-empty strings");
     expect(prompt).toContain("exerciseFamily");
-    expect(prompt).toContain("zero to two priority corrections");
+    expect(prompt).toContain("zero to four priority corrections");
+    expect(prompt).toContain("early, middle, and late repetitions");
+    expect(prompt).toContain("Multiple distinct findings may belong to the same repetition");
+    expect(prompt).toContain("one to four evidence moments");
+    expect(prompt).toContain("repNumber to null for setup or between-rep moments");
+    expect(prompt).toContain("Do not create a coaching point for a repetition that has no material issue");
+    expect(prompt).toContain("focusRegion");
+    expect(prompt).toContain("normalized source-frame coordinates");
+    expect(prompt).toContain("set focusRegion to null");
+    expect(prompt).toContain("coachingNote");
+    expect(prompt).toContain("The app adds the timestamp");
+    expect(prompt).toContain("visible event at that exact moment");
+    expect(prompt).toContain("Do not claim that a muscle stopped contributing");
+    expect(prompt).toContain("Use repeated late-set deterioration before calling fatigue");
+    expect(prompt).toContain("point-specific correction");
+    expect(prompt).toContain("compare early, middle, and late repetitions");
+    expect(prompt).toContain("Do not call one isolated poor repetition fatigue");
+    expect(prompt).toContain("Recommend reducing load only when repeated visible breakdown");
+    expect(prompt).toContain("detail to one short sentence");
     expect(prompt).toContain("If the movement is already technically strong");
     expect(prompt).toContain("at least one useful next-set action");
     expect(prompt).toContain("specific visible observation");
@@ -36,23 +53,18 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).not.toContain("angle");
     expect(prompt).not.toContain("orientation");
     expect(prompt).not.toContain("MediaPipe");
+    expect(prompt).not.toContain("MoveNet");
+    expect(prompt).not.toContain("pose");
     expect(prompt).not.toContain("second pass");
   });
 
-  it("uses Thunder trajectories only as supplemental two-dimensional evidence", () => {
+  it("does not add a body-tracking layer to Gemini coaching", () => {
     const prompt = buildAnalysisPrompt({
       profiles: [],
       previousResult: null,
-      poseSummary: { model: "MoveNet.SinglePose.Thunder", seriesColumns: ["timeMs", "leftElbowAngle"], series: [[500, 91], [750, 84]] },
     });
-    expect(prompt).toContain("MoveNet.SinglePose.Thunder");
-    expect(prompt).toContain("supplemental 2D estimates");
-    expect(prompt).toContain("original video remains authoritative");
-    expect(prompt).toContain("never infer depth");
-    expect(prompt).toContain("x runs from 0 at image-left to 1 at image-right");
-    expect(prompt).toContain("y runs from 0 at image-top to 1 at image-bottom");
-    expect(prompt).toContain("Treat changes across several reliable frames as stronger evidence");
-    expect(prompt).toContain("500");
+    expect(prompt).not.toContain("MoveNet");
+    expect(prompt).not.toContain("Supplemental local movement estimates");
   });
 
   it("provides the complete earlier coaching result without treating its timestamps as current evidence", () => {
@@ -63,7 +75,6 @@ describe("buildAnalysisPrompt", () => {
         priorityCorrections: [{ title: "Elbow drift", cue: "Only the forearms move.", evidence: [{ peakMs: 8_300 }] }],
         nextSetPlan: [{ action: "Pin the upper arms beside the torso." }],
       },
-      poseSummary: null,
     });
 
     expect(prompt).toContain("Elbow drift");

@@ -7,7 +7,19 @@ export type EvidenceMoment = {
   repNumber: number | null;
   phase: string | null;
   visualEvidence: string;
+  coachingNote?: string;
   visibleBodyAreas: string[];
+  confidence: number;
+  focusRegion?: VisualFocusRegion | null;
+};
+
+export type VisualFocusRegion = {
+  centerX: number;
+  centerY: number;
+  radius: number;
+  arrowFromX: number;
+  arrowFromY: number;
+  label: string;
   confidence: number;
 };
 
@@ -82,7 +94,7 @@ export type AnalysisCandidate = {
 
 const evidenceSchema = {
   type: "object",
-  required: ["startMs", "peakMs", "endMs", "repNumber", "phase", "visualEvidence", "visibleBodyAreas", "confidence"],
+  required: ["startMs", "peakMs", "endMs", "repNumber", "phase", "visualEvidence", "coachingNote", "visibleBodyAreas", "confidence", "focusRegion"],
   properties: {
     startMs: { type: "integer", minimum: 0 },
     peakMs: { type: "integer", minimum: 0 },
@@ -90,8 +102,27 @@ const evidenceSchema = {
     repNumber: { type: ["integer", "null"] },
     phase: { type: ["string", "null"] },
     visualEvidence: { type: "string" },
+    coachingNote: { type: "string", minLength: 1, maxLength: 360 },
     visibleBodyAreas: { type: "array", items: { type: "string" }, minItems: 1 },
     confidence: { type: "number", minimum: 0.75, maximum: 1 },
+    focusRegion: {
+      anyOf: [
+        { type: "null" },
+        {
+          type: "object",
+          required: ["centerX", "centerY", "radius", "arrowFromX", "arrowFromY", "label", "confidence"],
+          properties: {
+            centerX: { type: "number", minimum: 0, maximum: 1 },
+            centerY: { type: "number", minimum: 0, maximum: 1 },
+            radius: { type: "number", minimum: 0.06, maximum: 0.3 },
+            arrowFromX: { type: "number", minimum: 0, maximum: 1 },
+            arrowFromY: { type: "number", minimum: 0, maximum: 1 },
+            label: { type: "string" },
+            confidence: { type: "number", minimum: 0.8, maximum: 1 },
+          },
+        },
+      ],
+    },
   },
 } as const;
 
@@ -267,6 +298,9 @@ function findings(value: unknown, label: string, durationMs: number): CoachingFi
     string(finding.cue, `${label}.cue`, true);
     if (!["note", "important", "high"].includes(String(finding.severity))) throw new Error(`${label}.severity is invalid`);
     if (!Array.isArray(finding.evidence) || finding.evidence.length === 0) throw new Error(`${label} requires evidence`);
+    let needsRepeatedEvidence = false;
+    const evidenceReps = new Set<number>();
+    const evidencePeaks: number[] = [];
     for (const rawMoment of finding.evidence) {
       const moment = object(rawMoment, `${label}.evidence`);
       if (!Number.isInteger(moment.startMs) || !Number.isInteger(moment.peakMs) || !Number.isInteger(moment.endMs) || Number(moment.startMs) < 0 || Number(moment.peakMs) < Number(moment.startMs) || Number(moment.peakMs) > Number(moment.endMs) || Number(moment.endMs) <= Number(moment.startMs) || Number(moment.endMs) > durationMs) {
@@ -275,8 +309,32 @@ function findings(value: unknown, label: string, durationMs: number): CoachingFi
       if (moment.repNumber !== null && (!Number.isInteger(moment.repNumber) || Number(moment.repNumber) < 1)) throw new Error("repNumber is invalid");
       string(moment.phase, "phase", true);
       string(moment.visualEvidence, "visualEvidence");
+      if (moment.coachingNote !== undefined) {
+        const note = string(moment.coachingNote, "coachingNote") as string;
+        if (note.length > 360) throw new Error("coachingNote must be no longer than 360 characters");
+        if (/^\s*at\s+\d+:\d{2}(?:\.\d+)?\s*,?/i.test(note)) throw new Error("coachingNote must not repeat the timestamp");
+        if (/\b(camera|phone|framing|viewpoint|orientation|recording angle)\b/i.test(note)) throw new Error("coachingNote must not contain camera commentary");
+        if (/\b(glutes?|quads?|hamstrings?|pecs?|lats?|muscles?|core)\b.{0,50}\b(stop(?:ped|s)?\s+contribut|not\s+contribut|activat|deactivat|disengag)/i.test(note)) throw new Error("coachingNote must not claim hidden muscle activation");
+        if (/\b(fatigue|fatigued|tired|reduce\s+(?:the\s+)?(?:load|weight)|lower\s+(?:the\s+)?(?:load|weight))\b/i.test(note)) needsRepeatedEvidence = true;
+      }
+      if (typeof moment.repNumber === "number") evidenceReps.add(moment.repNumber);
+      evidencePeaks.push(Number(moment.peakMs));
       strings(moment.visibleBodyAreas, "visibleBodyAreas", true);
       number(moment.confidence, "evidence confidence", 0.75, 1);
+      if (moment.focusRegion !== undefined && moment.focusRegion !== null) {
+        const focus = object(moment.focusRegion, "focusRegion");
+        number(focus.centerX, "focus region centerX", 0, 1);
+        number(focus.centerY, "focus region centerY", 0, 1);
+        number(focus.radius, "focus region radius", 0.06, 0.3);
+        number(focus.arrowFromX, "focus region arrowFromX", 0, 1);
+        number(focus.arrowFromY, "focus region arrowFromY", 0, 1);
+        string(focus.label, "focus region label");
+        number(focus.confidence, "focus region confidence", 0.8, 1);
+      }
+    }
+    const evidenceSpan = evidencePeaks.length > 1 ? Math.max(...evidencePeaks) - Math.min(...evidencePeaks) : 0;
+    if (needsRepeatedEvidence && !(finding.evidence.length >= 2 && (evidenceReps.size >= 2 || evidenceSpan >= 1_500))) {
+      throw new Error("Fatigue and load-reduction advice requires repeated evidence");
     }
   }
   return value as CoachingFinding[];

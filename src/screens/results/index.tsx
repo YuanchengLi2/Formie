@@ -1,16 +1,20 @@
 import { useMemo, useState } from "react";
 import { Image } from "expo-image";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";
+import { CoachingReviewCarousel } from "@/components/coaching-review-carousel";
+import { FormButton } from "@/components/form-button";
 import { FormCard } from "@/components/form-card";
 import { FormWordmark } from "@/components/form-wordmark";
-import { FullRecording } from "@/components/full-recording";
+import { buildPlaybackCoachingMoments, FullRecording } from "@/components/full-recording";
 import { ScoreRing } from "@/components/score-ring";
-import type { PoseTracking, TutorialVideo } from "@/features/analysis/api";
+import type { TutorialVideo } from "@/features/analysis/api";
 import { getResultPresentation } from "@/features/analysis/presentation";
+import { buildReviewFrames, type ReviewFrame } from "@/features/analysis/review-frames";
 import type { AnalysisResult, CoachingFinding, PrecisionReview } from "@/features/analysis/result-schema";
+import { formatPointAdvice } from "@/features/analysis/evidence-timestamp";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
@@ -19,12 +23,12 @@ type ResultsScreenProps = {
   result: AnalysisResult;
   videoUrl?: string | null;
   durationMs?: number | null;
-  poseTracking?: PoseTracking | null;
   onFindingPress: (finding: CoachingFinding) => void;
   onRecordAnother: () => void;
   tutorial?: TutorialVideo | null;
   tutorialLoading?: boolean;
   onOpenTutorial?: (tutorial: TutorialVideo) => void;
+  onAskCoach?: () => void;
 };
 
 function findingById(result: AnalysisResult, id: string | null): CoachingFinding | null {
@@ -46,14 +50,10 @@ function FindingRow({ finding, onPress, checked = false }: { finding: CoachingFi
   );
 }
 
-function PremiumReviewReceipt({ review }: { review: PrecisionReview }) {
+function PremiumRunsBadge({ review }: { review: PrecisionReview }) {
   const completed = review.passes.filter((pass) => pass.outcome !== "failed").length;
   const failed = review.status === "failed" || review.status === "partial";
-  const detail = review.status === "completed"
-    ? `${review.runsUsed} additional evidence ${review.runsUsed === 1 ? "run" : "runs"} completed`
-    : review.status === "not-needed"
-      ? "No additional evidence runs needed"
-      : `${review.runsUsed} attempted · ${completed} completed`;
+  const detail = failed ? `${review.runsUsed} attempted · ${completed} completed` : null;
   const status = review.status === "failed"
     ? "Stopped after review failure"
     : review.status === "partial"
@@ -61,29 +61,11 @@ function PremiumReviewReceipt({ review }: { review: PrecisionReview }) {
       : null;
 
   return (
-    <FormCard style={{ gap: spacing.sm, borderColor: failed ? colors.danger : colors.border }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-        <View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 1, borderColor: failed ? colors.danger : colors.gold }}>
-          <Text selectable style={[typography.label, { color: failed ? colors.danger : colors.gold, fontVariant: ["tabular-nums"] }]}>{review.runsUsed}</Text>
-        </View>
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text selectable style={[typography.caption, { color: colors.gold }]}>Premium precision review</Text>
-          <Text selectable style={[typography.label, { color: colors.text }]}>Premium runs used: {review.runsUsed}</Text>
-          <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>{detail}</Text>
-          {status ? <Text selectable style={[typography.caption, { color: colors.danger }]}>{status}</Text> : null}
-        </View>
-      </View>
-      {review.passes.map((pass) => {
-        const tokens = pass.usage.promptTokens + pass.usage.outputTokens + pass.usage.thinkingTokens;
-        return (
-          <View key={pass.passNumber} style={{ flexDirection: "row", gap: spacing.sm, paddingTop: spacing.xs, borderTopWidth: 1, borderColor: colors.border }}>
-            <Text selectable style={[typography.caption, { color: colors.gold }]}>RUN {pass.passNumber}</Text>
-            <Text selectable style={[typography.caption, { flex: 1, color: colors.textSecondary }]}>{pass.kind} · {pass.outcome}</Text>
-            <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{tokens > 0 ? `${tokens} tokens` : "usage unavailable"}</Text>
-          </View>
-        );
-      })}
-    </FormCard>
+    <View accessibilityLabel="Premium review usage" style={{ minWidth: 112, gap: 2, padding: spacing.sm, borderRadius: radii.sm, borderWidth: 1, borderColor: failed ? colors.danger : colors.border, backgroundColor: colors.surface }}>
+      <Text selectable style={[typography.label, { color: colors.gold }]}>{review.runsUsed} {review.runsUsed === 1 ? "premium run" : "premium runs"}</Text>
+      {detail ? <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>{detail}</Text> : null}
+      {status ? <Text selectable style={[typography.caption, { color: colors.danger }]}>{status}</Text> : null}
+    </View>
   );
 }
 
@@ -94,11 +76,23 @@ export function formatAnalysisTimestamp(milliseconds: number): string {
   return `${minutes.toString().padStart(2, "0")}:${seconds.toFixed(1).padStart(4, "0")}`;
 }
 
-export function ResultsScreen({ result, videoUrl = null, durationMs = null, poseTracking = null, onFindingPress, onRecordAnother, tutorial = null, tutorialLoading = false, onOpenTutorial = () => undefined }: ResultsScreenProps) {
+export function ResultsScreen({ result, videoUrl = null, durationMs = null, onFindingPress, onRecordAnother, tutorial = null, tutorialLoading = false, onOpenTutorial = () => undefined, onAskCoach = () => undefined }: ResultsScreenProps) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const [showScope, setShowScope] = useState(false);
+  const [activeReviewPointIndex, setActiveReviewPointIndex] = useState(0);
   const presentation = getResultPresentation(result);
-  const priority = presentation.priorityCorrections[0] ?? null;
+  const reviewFrameGroups = useMemo(() => buildReviewFrames(result), [result]);
+  const allReviewFrames = useMemo(() => [...reviewFrameGroups.observed, ...reviewFrameGroups.why, ...reviewFrameGroups.next], [reviewFrameGroups]);
+  const [selectedReviewFrameId, setSelectedReviewFrameId] = useState<string | null>(null);
+  const selectedReviewFrame = allReviewFrames.find((frame) => frame.id === selectedReviewFrameId) ?? reviewFrameGroups.observed[0] ?? null;
+  const selectReviewFrame = (frame: ReviewFrame) => setSelectedReviewFrameId(frame.id);
+  const corrections = presentation.priorityCorrections;
+  const reviewPoints = useMemo(() => buildPlaybackCoachingMoments(corrections), [corrections]);
+  const selectedReviewPointIndex = Math.min(activeReviewPointIndex, Math.max(0, reviewPoints.length - 1));
+  const selectedReviewPoint = reviewPoints[selectedReviewPointIndex] ?? null;
+  const priority = selectedReviewPoint?.finding ?? corrections[0] ?? null;
+  const priorityEvidence = selectedReviewPoint?.evidence ?? priority?.evidence[0] ?? null;
   const repTimeline = result.repTimeline ?? [];
   const nextSetPlan = result.nextSetPlan ?? [];
   const scope = useMemo(() => [
@@ -126,28 +120,44 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, pose
         <FormCard style={{ gap: spacing.sm, borderColor: colors.gold }}>
           <Text selectable style={[typography.heading, { color: colors.text }]}>{presentation.retryReason ?? "The movement could not be reviewed."}</Text>
           <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{presentation.retryInstruction ?? "Record the movement again."}</Text>
+          <FormButton label="Record Again" onPress={onRecordAnother} />
         </FormCard>
       ) : (
         <>
-          <FormCard style={{ gap: spacing.sm, backgroundColor: colors.surfaceRaised }}>
-            <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>COACH’S VERDICT</Text>
-            <Text selectable style={[typography.heading, { color: colors.text }]}>{result.setSummary?.verdict ?? presentation.overallAssessment}</Text>
-            {consistency ? <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{consistency}</Text> : null}
-          </FormCard>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md }}>
+            <FormCard style={{ flexGrow: 1, flexBasis: width >= 720 ? "65%" : 230, gap: spacing.sm, backgroundColor: colors.surfaceRaised }}>
+              <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>COACH’S VERDICT</Text>
+              <Text selectable style={[typography.heading, { color: colors.text }]}>{result.setSummary?.verdict ?? presentation.overallAssessment}</Text>
+              {consistency ? <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{consistency}</Text> : null}
+            </FormCard>
+            {result.precisionReview ? <PremiumRunsBadge review={result.precisionReview} /> : null}
+          </View>
 
-          {result.precisionReview ? <PremiumReviewReceipt review={result.precisionReview} /> : null}
-
-          {poseTracking ? <FormCard style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}><View style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 1, borderColor: colors.gold }}><Text selectable style={[typography.label, { color: colors.gold }]}>2D</Text></View><View style={{ flex: 1, gap: 2 }}><Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 0.8 }]}>Movement tracking</Text><Text selectable style={[typography.label, { color: colors.text }]}>MoveNet Thunder</Text><Text selectable style={[typography.caption, { color: colors.textSecondary }]}>{poseTracking.framesAnalyzed} frames analyzed at {poseTracking.sampleFps} fps</Text></View></FormCard> : null}
-
-          {videoUrl && durationMs ? <View style={{ gap: spacing.sm }}><Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>FULL RECORDING</Text><FullRecording videoUrl={videoUrl} reps={repTimeline} durationMs={durationMs} /></View> : null}
+          {videoUrl && durationMs ? (
+            <View style={{ gap: spacing.md }}>
+              <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>FULL RECORDING</Text>
+              <FullRecording videoUrl={videoUrl} reps={repTimeline} durationMs={durationMs} reviewFrames={allReviewFrames} selectedReviewFrame={selectedReviewFrame} onSelectReviewFrame={selectReviewFrame} onOpenFinding={onFindingPress} />
+              <CoachingReviewCarousel groups={reviewFrameGroups} onSelectFrame={selectReviewFrame} />
+              <FormButton label="Ask AI Coach about this video" onPress={onAskCoach} />
+            </View>
+          ) : null}
 
           <View style={{ gap: spacing.sm }}>
-            <Text selectable style={[typography.heading, { color: colors.text }]}>COACH’S REVIEW</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
+              <Text selectable style={[typography.heading, { color: colors.text }]}>COACH’S REVIEW</Text>
+              {reviewPoints.length > 1 ? (
+                <View accessibilityLabel="Coaching point selector" style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                  <Pressable accessibilityLabel="Previous coaching point" accessibilityRole="button" onPress={() => setActiveReviewPointIndex((selectedReviewPointIndex - 1 + reviewPoints.length) % reviewPoints.length)} style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 1, borderColor: colors.border }}><Text style={{ color: colors.gold, fontSize: 20 }}>‹</Text></Pressable>
+                  <Text selectable style={[typography.caption, { minWidth: 42, color: colors.textSecondary, textAlign: "center", fontVariant: ["tabular-nums"] }]}>{selectedReviewPointIndex + 1} of {reviewPoints.length}</Text>
+                  <Pressable accessibilityLabel="Next coaching point" accessibilityRole="button" onPress={() => setActiveReviewPointIndex((selectedReviewPointIndex + 1) % reviewPoints.length)} style={{ width: 34, height: 34, alignItems: "center", justifyContent: "center", borderRadius: 17, borderWidth: 1, borderColor: colors.border }}><Text style={{ color: colors.gold, fontSize: 20 }}>›</Text></Pressable>
+                </View>
+              ) : null}
+            </View>
             {priority ? (
               <Pressable accessibilityRole="button" onPress={() => onFindingPress(priority)} style={({ pressed }) => ({ overflow: "hidden", gap: spacing.sm, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised, opacity: pressed ? 0.7 : 1 })}>
                 <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>BIGGEST IMPROVEMENT</Text>
                 <Text selectable style={[typography.heading, { color: colors.text }]}>{priority.correction ?? priority.title}</Text>
-                <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{priority.detail}</Text>
+                {priorityEvidence ? <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{formatPointAdvice(priorityEvidence)}</Text> : <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{priority.detail}</Text>}
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                   <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{priority.evidence.map((item) => `${item.repNumber ? `Rep ${item.repNumber} · ` : ""}${formatAnalysisTimestamp(item.peakMs ?? item.startMs)}`).join(", ")}</Text>
                   <Text selectable style={[typography.label, { color: colors.gold }]}>See full explanation  ›</Text>
@@ -157,29 +167,31 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, pose
             ) : null}
           </View>
 
-          {presentation.didWell.length > 0 ? (
-            <FormCard style={{ gap: 0 }}>
-              <Text selectable style={[typography.heading, { paddingBottom: spacing.sm, color: colors.text }]}>WHAT WORKED</Text>
-              {presentation.didWell.map((finding) => <FindingRow key={finding.id} finding={finding} onPress={() => onFindingPress(finding)} />)}
-            </FormCard>
-          ) : null}
+          <ScrollView accessibilityLabel="Coach summary cards" horizontal={width < 720} showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1, flexDirection: "row", gap: spacing.md }}>
+            {presentation.didWell.length > 0 ? (
+              <FormCard style={{ width: width >= 720 ? undefined : Math.min(width - 48, 330), flex: width >= 720 ? 1 : undefined, gap: 0 }}>
+                <Text selectable style={[typography.heading, { paddingBottom: spacing.sm, color: colors.text }]}>WHAT WORKED</Text>
+                {presentation.didWell.map((finding) => <FindingRow key={finding.id} finding={finding} onPress={() => onFindingPress(finding)} />)}
+              </FormCard>
+            ) : null}
 
-          {nextSetPlan.length > 0 ? (
-            <FormCard style={{ gap: 0, backgroundColor: colors.surfaceRaised }}>
-              <Text selectable style={[typography.caption, { paddingBottom: spacing.sm, color: colors.gold, letterSpacing: 1.2 }]}>NEXT SET PLAN</Text>
-              {nextSetPlan.map((item, index) => {
-                const related = findingById(result, item.relatedFindingId);
-                return (
-                  <Pressable accessibilityRole={related ? "button" : undefined} key={item.id} onPress={related ? () => onFindingPress(related) : undefined} style={({ pressed }) => ({ minHeight: 54, flexDirection: "row", alignItems: "center", gap: spacing.md, borderBottomWidth: index < nextSetPlan.length - 1 ? 1 : 0, borderColor: colors.border, opacity: pressed ? 0.65 : 1 })}>
-                    <Text selectable style={[typography.heading, { width: 24, color: colors.gold }]}>{index + 1}</Text>
-                    <View style={{ flex: 1, gap: 2 }}><Text selectable style={[typography.label, { color: colors.text }]}>{item.action}</Text><Text selectable numberOfLines={1} style={[typography.caption, { color: colors.textMuted }]}>{item.rationale}</Text></View>
-                    {related ? <Text style={{ color: colors.gold, fontSize: 20 }}>›</Text> : null}
-                  </Pressable>
-                );
-              })}
-              {presentation.coachingCues[0]?.cue ? <View style={{ gap: spacing.xs, paddingTop: spacing.md }}><Text selectable style={[typography.caption, { color: colors.gold }]}>REMEMBER</Text><Text selectable style={[typography.heading, { color: colors.text }]}>“{presentation.coachingCues[0].cue}”</Text></View> : null}
-            </FormCard>
-          ) : null}
+            {nextSetPlan.length > 0 ? (
+              <FormCard style={{ width: width >= 720 ? undefined : Math.min(width - 48, 330), flex: width >= 720 ? 1 : undefined, gap: 0, backgroundColor: colors.surfaceRaised }}>
+                <Text selectable style={[typography.caption, { paddingBottom: spacing.sm, color: colors.gold, letterSpacing: 1.2 }]}>NEXT SET PLAN</Text>
+                {nextSetPlan.map((item, index) => {
+                  const related = findingById(result, item.relatedFindingId);
+                  return (
+                    <Pressable accessibilityRole={related ? "button" : undefined} key={item.id} onPress={related ? () => onFindingPress(related) : undefined} style={({ pressed }) => ({ minHeight: 54, flexDirection: "row", alignItems: "center", gap: spacing.md, borderBottomWidth: index < nextSetPlan.length - 1 ? 1 : 0, borderColor: colors.border, opacity: pressed ? 0.65 : 1 })}>
+                      <Text selectable style={[typography.heading, { width: 24, color: colors.gold }]}>{index + 1}</Text>
+                      <View style={{ flex: 1, gap: 2 }}><Text selectable style={[typography.label, { color: colors.text }]}>{item.action}</Text><Text selectable numberOfLines={1} style={[typography.caption, { color: colors.textMuted }]}>{item.rationale}</Text></View>
+                      {related ? <Text style={{ color: colors.gold, fontSize: 20 }}>›</Text> : null}
+                    </Pressable>
+                  );
+                })}
+                {presentation.coachingCues[0]?.cue ? <View style={{ gap: spacing.xs, paddingTop: spacing.md }}><Text selectable style={[typography.caption, { color: colors.gold }]}>REMEMBER</Text><Text selectable style={[typography.heading, { color: colors.text }]}>“{presentation.coachingCues[0].cue}”</Text></View> : null}
+              </FormCard>
+            ) : null}
+          </ScrollView>
 
           {priority ? (
             <Pressable accessibilityRole="button" onPress={() => onFindingPress(priority)} style={({ pressed }) => ({ minHeight: 52, flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.65 : 1 })}><Text selectable style={[typography.body, { flex: 1, color: colors.text }]}>Why {priority.title.toLocaleLowerCase()} matters</Text><Text style={{ color: colors.gold, fontSize: 22 }}>›</Text></Pressable>

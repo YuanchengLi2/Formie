@@ -1,4 +1,5 @@
 import type { AnalysisCandidate } from "../_shared/analysis-contract";
+import { REQUESTED_ANALYSIS_FPS } from "../_shared/analysis-settings";
 import type { GeminiFile } from "../_shared/gemini-video";
 import { analyzeVideoHandler, type AnalyzeVideoDependencies, type AnalyzeVideoSession } from "./handler";
 
@@ -17,8 +18,8 @@ function result(): AnalysisCandidate {
 function session(overrides: Partial<AnalyzeVideoSession> = {}): AnalyzeVideoSession {
   return {
     id: "session-1", userId: "user-1", status: "processing", stage: "video_check", videoPath: "user-1/session-1/original.mp4", durationMs: 10_000,
-    requestedFps: 24,
-    geminiFileName: null, geminiFileUri: null, geminiFileState: null, preflightCheck: null, poseSummary: null, result: null,
+    requestedFps: REQUESTED_ANALYSIS_FPS,
+    geminiFileName: null, geminiFileUri: null, geminiFileState: null, preflightCheck: null, result: null,
     ...overrides,
   };
 }
@@ -82,31 +83,11 @@ describe("analyzeVideoHandler", () => {
     expect(deps.generate).not.toHaveBeenCalled();
   });
 
-  it("returns compact Thunder tracking status without exposing the full pose series", async () => {
-    const poseSummary = {
-      version: 1 as const,
-      model: "MoveNet.SinglePose.Thunder" as const,
-      durationMs: 10_000,
-      requestedFrames: 40,
-      framesAnalyzed: 36,
-      sampleFps: 3.6,
-      overallVisibility: 0.88,
-      seriesColumns: ["timeMs", "confidence", "leftWristX"],
-      series: [[0, 0.88, 0.2], [250, 0.9, 0.22], [500, 0.86, 0.25], [750, 0.89, 0.27]],
-    };
-    const deps = dependencies(session({ poseSummary }));
-
+  it("returns no legacy body-analysis payload", async () => {
+    const deps = dependencies();
     const response = await analyzeVideoHandler(request(), deps);
     const payload = await response.json();
-
-    expect(payload.poseTracking).toEqual({
-      model: "MoveNet.SinglePose.Thunder",
-      requestedFrames: 40,
-      framesAnalyzed: 36,
-      sampleFps: 3.6,
-      overallVisibility: 0.88,
-    });
-    expect(JSON.stringify(payload)).not.toContain("seriesColumns");
+    expect(payload).not.toHaveProperty("poseTracking");
   });
 
   it("waits while Gemini is processing the existing file", async () => {

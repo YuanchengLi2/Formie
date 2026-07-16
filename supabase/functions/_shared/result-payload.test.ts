@@ -23,7 +23,27 @@ describe("resultPayload", () => {
     )).toMatchObject({
       setSummary: { totalReps: null, consistentReps: null, verdict: null },
       repTimeline: [],
-      nextSetPlan: [],
+      nextSetPlan: [{ id: "legacy-next-set" }],
+    });
+  });
+
+  it("reuses legacy coaching as an actionable next-set plan so old analyses still open", () => {
+    const correction = {
+      id: "legacy-drift",
+      title: "Elbow drift",
+      detail: "The elbows moved forward late in the set.",
+      whyItMatters: "The curl becomes less repeatable.",
+      correction: "Keep your upper arms beside your torso.",
+      cue: "Only the forearms move.",
+      severity: "important",
+      evidence: [{ startMs: 1_000, peakMs: 1_300, endMs: 1_600, repNumber: null, phase: "lifting", visualEvidence: "Elbows move forward.", visibleBodyAreas: ["elbows"], confidence: 0.9 }],
+    };
+    expect(resultPayload(
+      { detected_label: "Curl", detected_equipment: [], recognition_confidence: 0.8, recognition_alternatives: [], exercise_family: "curl" },
+      { status: "complete", video_check: { outcome: "usable", usableObservations: [], limitations: [], retryReason: null, retryInstruction: null }, overall_assessment: "Useful set", score: null, score_rationale: [], did_well: [], priority_corrections: [correction], coaching_cues: [], next_set_plan: [], comparison: null },
+    )).toMatchObject({
+      nextSetPlan: [{ id: "legacy-next-set", action: correction.correction, rationale: correction.whyItMatters, relatedFindingId: correction.id }],
+      priorityCorrections: [{ evidence: [{ focusRegion: null, coachingNote: "Elbows move forward." }] }],
     });
   });
 });

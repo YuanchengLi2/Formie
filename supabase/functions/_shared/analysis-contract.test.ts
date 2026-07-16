@@ -8,8 +8,10 @@ function candidate() {
     repNumber: 1,
     phase: "concentric",
     visualEvidence: "The elbows move ahead of the torso during the first repetition.",
+    coachingNote: "your elbows move ahead as the dumbbells pass mid-range. Keep your upper arms beside your torso on the next rep.",
     visibleBodyAreas: ["elbows", "torso"],
     confidence: 0.88,
+    focusRegion: { centerX: 0.58, centerY: 0.36, radius: 0.12, arrowFromX: 0.82, arrowFromY: 0.18, label: "right elbow", confidence: 0.9 },
   };
   return {
     status: "complete",
@@ -45,6 +47,14 @@ describe("Gemini analysis contract", () => {
     expect(validateAnalysisCandidate(candidate(), 10_000)).toEqual(candidate());
     expect(GEMINI_ANALYSIS_JSON_SCHEMA.required).toContain("recognition");
     expect(GEMINI_ANALYSIS_JSON_SCHEMA.required).toEqual(expect.arrayContaining(["setSummary", "repTimeline", "nextSetPlan", "precisionRequest"]));
+    expect(GEMINI_ANALYSIS_JSON_SCHEMA.properties.priorityCorrections.items.properties.evidence.items.required).toContain("focusRegion");
+    expect(GEMINI_ANALYSIS_JSON_SCHEMA.properties.priorityCorrections.items.properties.evidence.items.required).toContain("coachingNote");
+  });
+
+  it("rejects an out-of-frame visual focus target", () => {
+    const value = candidate();
+    value.priorityCorrections[0].evidence[0].focusRegion.centerX = 1.2;
+    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("focus region");
   });
 
   it("rejects evidence outside the recording", () => {
@@ -61,6 +71,22 @@ describe("Gemini analysis contract", () => {
     const noVisibleAreas = candidate();
     noVisibleAreas.priorityCorrections[0].evidence[0].visibleBodyAreas = [];
     expect(() => validateAnalysisCandidate(noVisibleAreas, 10_000)).toThrow("visible body area");
+  });
+
+  it("rejects point advice that repeats a timestamp or claims hidden muscle activation", () => {
+    const timestamped = candidate();
+    timestamped.priorityCorrections[0].evidence[0].coachingNote = "At 0:01, your elbows move forward. Keep your upper arms beside your torso.";
+    expect(() => validateAnalysisCandidate(timestamped, 10_000)).toThrow("must not repeat the timestamp");
+
+    const hidden = candidate();
+    hidden.priorityCorrections[0].evidence[0].coachingNote = "your glutes stop contributing, so drive harder through the floor.";
+    expect(() => validateAnalysisCandidate(hidden, 10_000)).toThrow("hidden muscle activation");
+  });
+
+  it("requires repeated evidence before point advice blames fatigue or reduces load", () => {
+    const value = candidate();
+    value.priorityCorrections[0].evidence[0].coachingNote = "your elbows drift forward as fatigue develops. Reduce the load and keep your arms beside your torso.";
+    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("repeated evidence");
   });
 
   it("rejects finding timestamps that disagree with the referenced repetition", () => {

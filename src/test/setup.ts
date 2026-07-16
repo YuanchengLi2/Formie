@@ -4,7 +4,7 @@ jest.mock("expo-video", () => {
   const { View } = require("react-native");
   return {
     VideoView: View,
-    useVideoPlayer: () => ({ currentTime: 0, pause: jest.fn() }),
+    useVideoPlayer: () => ({ currentTime: 0, duration: 12, playing: false, play: jest.fn(), pause: jest.fn() }),
   };
 });
 

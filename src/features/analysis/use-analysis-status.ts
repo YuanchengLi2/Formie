@@ -1,31 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { supabase } from "@/lib/supabase";
 import { queryClient } from "@/lib/query-client";
 import { invalidateAnalysisHistory } from "@/features/progress/history-cache";
+import { getAccessToken } from "@/features/auth/access-token";
 
-import { processAndLoadAnalysis } from "./api";
+import { getAnalysisStatus, processAndLoadAnalysis } from "./api";
 
 const terminalStatuses = new Set(["complete", "partial", "unable", "failed"]);
 
-async function getAccessToken(): Promise<string> {
-  const existing = await supabase.auth.getSession();
-  if (existing.data.session?.access_token) return existing.data.session.access_token;
-
-  const created = await supabase.auth.signInAnonymously();
-  if (created.error || !created.data.session?.access_token) {
-    throw new Error(created.error?.message ?? "A private session could not be created");
-  }
-  return created.data.session.access_token;
-}
-
-export function useAnalysisStatus(sessionId: string, options: { includeVideoUrl?: boolean } = {}) {
+export function useAnalysisStatus(sessionId: string, options: { includeVideoUrl?: boolean; mode?: "process" | "status" } = {}) {
   const includeVideoUrl = options.includeVideoUrl ?? false;
+  const mode = options.mode ?? "process";
   return useQuery({
-    queryKey: ["analysis-status", sessionId, includeVideoUrl],
+    queryKey: ["analysis-status", sessionId, includeVideoUrl, mode],
     queryFn: async ({ signal }) => {
       const accessToken = await getAccessToken();
-      const response = await processAndLoadAnalysis({ accessToken, sessionId, signal, includeVideoUrl });
+      const response = mode === "status"
+        ? await getAnalysisStatus({ accessToken, sessionId, signal })
+        : await processAndLoadAnalysis({ accessToken, sessionId, signal, includeVideoUrl });
       if (response.result) await invalidateAnalysisHistory(queryClient);
       return response;
     },

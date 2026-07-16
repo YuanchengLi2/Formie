@@ -1,4 +1,4 @@
-import type { AnalysisHistoryItem } from "./group-sessions";
+import type { AnalysisHistoryItem, AnalysisHistoryStatus } from "./group-sessions";
 import { isExerciseFamily } from "@/features/exercises/exercise-family";
 
 type QueryResult = { data: unknown[] | null; error: { message: string } | null };
@@ -12,6 +12,7 @@ type HistoryResultRow = {
 
 type HistoryRow = {
   id: string;
+  status: AnalysisHistoryStatus;
   created_at: string;
   detected_label: string | null;
   corrected_label: string | null;
@@ -23,8 +24,8 @@ async function defaultHistoryQuery(): Promise<QueryResult> {
   const { supabase } = await import("@/lib/supabase");
   return supabase
     .from("analysis_sessions")
-    .select("id,created_at,detected_label,corrected_label,exercise_family,analysis_results(score,priority_corrections,comparison)")
-    .in("status", ["complete", "partial", "unable"])
+    .select("id,status,created_at,detected_label,corrected_label,exercise_family,analysis_results(score,priority_corrections,comparison)")
+    .in("status", ["processing", "complete", "partial", "unable"])
     .order("created_at", { ascending: false })
     .limit(100);
 }
@@ -38,6 +39,7 @@ export async function fetchAnalysisHistory({ query = defaultHistoryQuery }: { qu
     const score = rawScore === null || rawScore === undefined ? null : Number(rawScore);
     return {
       sessionId: row.id,
+      status: row.status,
       createdAt: row.created_at,
       detectedLabel: row.detected_label,
       correctedLabel: row.corrected_label,

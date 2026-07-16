@@ -9,7 +9,7 @@ import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
 
 const setupArt = require("../../../assets/production/recording-setup.png");
-const CHECKLIST = ["Keep the full movement visible", "Set the phone somewhere stable", "Use 0.5x if space is limited"] as const;
+const CHECKLIST = ["Keep the full movement visible", "Capture most of your body or the area you want coached", "Set the phone somewhere stable", "Use 0.5x if space is limited"] as const;
 
 export function RecordingTipsScreen({ onContinue, onOpenSpaceHelp }: { onContinue: () => void; onOpenSpaceHelp: () => void }) {
   return (

@@ -316,7 +316,7 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
             contents: [{
               role: "user",
               parts: [
-                { fileData: { mimeType: input.file.mimeType, fileUri: input.file.uri }, videoMetadata: { fps: 24 } },
+                { fileData: { mimeType: input.file.mimeType, fileUri: input.file.uri }, videoMetadata: { fps: 12 } },
                 { text: prompt },
               ],
             }],
@@ -369,7 +369,7 @@ The entire current coaching result is provided below. Keep every supported part,
 Entire current coaching result: ${JSON.stringify(merged)}
 Earlier premium review decisions: ${JSON.stringify(priorDecisions)}
 
-For recognition, confirm the existing nearest standard exercise or revise recognition to the most specific supported exercise and variation, even when the attempt is performed badly. For timestamp or technique, inspect the cited joint, body segment, or implement path and return a complete revised finding only if needed. All evidence timestamps must be absolute milliseconds from the start of the original video. Confirm only what is visible; reject an unsupported finding; use inconclusive when the supplied view cannot decide. Never infer pain, muscle activation, hidden positions, intent, or internal forces. Never put recording or camera advice into coaching. Return recognition only for a revised recognition target, and finding only for a revised timestamp or technique target.`;
+For recognition, confirm the existing nearest standard exercise or revise recognition to the most specific supported exercise and variation, even when the attempt is performed badly. For timestamp or technique, inspect the cited joint, body segment, or implement path and return a complete revised finding only if needed. All evidence timestamps must be absolute milliseconds from the start of the original video. Every revised evidence moment needs a coachingNote that describes the visible event at that moment and one reproducible correction; do not repeat the timestamp because the app adds it. Only call fatigue or recommend reducing load when repeated late-set deterioration supports it. Never claim hidden muscle activation or internal pressure. For every revised evidence moment, return focusRegion in normalized original source-frame coordinates only when the exact visible target is localizable with at least 0.8 confidence; otherwise set focusRegion to null. Confirm only what is visible; reject an unsupported finding; use inconclusive when the supplied view cannot decide. Never infer pain, muscle activation, hidden positions, intent, or internal forces. Never put recording or camera advice into coaching. Return recognition only for a revised recognition target, and finding only for a revised timestamp or technique target.`;
         const videoMetadata: Record<string, unknown> = { fps: 24 };
         if (startMs !== null && endMs !== null) {
           videoMetadata.startOffset = `${startMs / 1_000}s`;

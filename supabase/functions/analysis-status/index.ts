@@ -2,8 +2,6 @@ import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { errorResponse, jsonResponse } from "../_shared/responses.ts";
 import { resultPayload } from "../_shared/result-payload.ts";
-import { buildEvidenceOverlays } from "../_shared/evidence-overlay.ts";
-import { poseTrackingFromSummary, validatePoseSummary, type PoseSummary } from "../_shared/pose-summary.ts";
 
 Deno.serve(async (request) => {
   const options = preflight(request);
@@ -25,23 +23,8 @@ Deno.serve(async (request) => {
       videoUrl = signed.data?.signedUrl ?? null;
     }
 
-    let poseSummary: PoseSummary | null = null;
-    let poseTracking = null;
-    if (session.pose_summary && session.duration_ms) {
-      try {
-        poseSummary = validatePoseSummary(session.pose_summary, session.duration_ms);
-        poseTracking = poseTrackingFromSummary(poseSummary);
-      } catch {
-        poseSummary = null;
-        poseTracking = null;
-      }
-    }
-
     const payload = resultPayload(session, result);
-    const findings = payload ? [...payload.didWell, ...payload.priorityCorrections, ...payload.coachingCues] : [];
-    const evidenceOverlays = poseSummary ? buildEvidenceOverlays(poseSummary, findings) : [];
-
-    return jsonResponse({ sessionId, status: session.status, stage: session.stage, durationMs: session.duration_ms, videoUrl, poseTracking, evidenceOverlays, result: payload });
+    return jsonResponse({ sessionId, status: session.status, stage: session.stage, durationMs: session.duration_ms, videoUrl, result: payload });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") return errorResponse("Sign in again", 401, "UNAUTHORIZED");
     return errorResponse("Analysis status could not be loaded", 500, "STATUS_FAILED");

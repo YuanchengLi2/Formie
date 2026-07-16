@@ -1,9 +1,9 @@
 import { groupAnalysisSessions, type AnalysisHistoryItem } from "./group-sessions";
 
 const sessions: AnalysisHistoryItem[] = [
-  { sessionId: "1", createdAt: "2026-07-15T10:00:00Z", detectedLabel: " Cable Row ", correctedLabel: null, score: 75, priorityCorrectionTitles: ["Elbow path"], comparisonSummary: null, priorityIssueImproved: null },
-  { sessionId: "2", createdAt: "2026-07-16T10:00:00Z", detectedLabel: "cable   row", correctedLabel: "FreeMotion Row", score: null, priorityCorrectionTitles: ["Elbow path"], comparisonSummary: "Elbow timing improved.", priorityIssueImproved: true },
-  { sessionId: "3", createdAt: "2026-07-17T10:00:00Z", detectedLabel: "freemotion row", correctedLabel: null, score: 84, priorityCorrectionTitles: ["Torso control"], comparisonSummary: null, priorityIssueImproved: null },
+  { sessionId: "1", status: "complete", createdAt: "2026-07-15T10:00:00Z", detectedLabel: " Cable Row ", correctedLabel: null, score: 75, priorityCorrectionTitles: ["Elbow path"], comparisonSummary: null, priorityIssueImproved: null },
+  { sessionId: "2", status: "partial", createdAt: "2026-07-16T10:00:00Z", detectedLabel: "cable   row", correctedLabel: "FreeMotion Row", score: null, priorityCorrectionTitles: ["Elbow path"], comparisonSummary: "Elbow timing improved.", priorityIssueImproved: true },
+  { sessionId: "3", status: "complete", createdAt: "2026-07-17T10:00:00Z", detectedLabel: "freemotion row", correctedLabel: null, score: 84, priorityCorrectionTitles: ["Torso control"], comparisonSummary: null, priorityIssueImproved: null },
 ];
 
 describe("groupAnalysisSessions", () => {
