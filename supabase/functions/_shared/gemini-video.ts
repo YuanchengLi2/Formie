@@ -180,6 +180,33 @@ function ensureSubtleTechniquePrecision(value: unknown): unknown {
   return value;
 }
 
+function ensureTopCorrectionPrecision(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const result = value as Record<string, unknown>;
+  if (result.status === "unable" || !result.precisionRequest || typeof result.precisionRequest !== "object" || !Array.isArray(result.priorityCorrections)) return value;
+  const correction = result.priorityCorrections.find((item) => item && typeof item === "object") as Record<string, unknown> | undefined;
+  if (!correction || typeof correction.id !== "string" || !Array.isArray(correction.evidence) || !correction.evidence[0] || typeof correction.evidence[0] !== "object") return value;
+  const request = result.precisionRequest as Record<string, unknown>;
+  const targets = Array.isArray(request.targets) ? request.targets.filter((target) => target && typeof target === "object") as Record<string, unknown>[] : [];
+  if (targets.length >= 3 || targets.some((target) => target.findingId === correction.id && (target.kind === "technique" || target.kind === "timestamp"))) return value;
+  const evidence = correction.evidence[0] as Record<string, unknown>;
+  if (!Number.isInteger(evidence.startMs) || !Number.isInteger(evidence.endMs)) return value;
+
+  targets.push({
+    kind: "technique",
+    findingId: correction.id,
+    startMs: evidence.startMs,
+    endMs: evidence.endMs,
+    question: `Re-check the exact peak frame, evidence interval, visual focus point, and point-specific advice for the top correction "${String(correction.title)}". Does the selected frame show the largest visible displacement that proves this claim?`,
+  });
+  request.requestedRuns = targets.length;
+  request.targets = targets;
+  request.reason = typeof request.reason === "string" && request.reason.trim()
+    ? `${request.reason.trim()} The top correction frame and pointer also need precise confirmation.`
+    : "The top correction frame, pointer, and point-specific advice need precise confirmation.";
+  return value;
+}
+
 function parsePreflight(value: unknown): VideoPreflightCheck {
   if (!value || typeof value !== "object") throw new Error("Gemini returned an invalid video check");
   const check = value as Record<string, unknown>;
@@ -328,7 +355,7 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
         });
         const payload = await responseJson(response, "Gemini analysis failed");
         try {
-          return validateAnalysisCandidate(ensureSubtleTechniquePrecision(ensureRecognitionPrecision(pinUsableRecognition(JSON.parse(responseText(payload))))), input.durationMs);
+          return validateAnalysisCandidate(ensureTopCorrectionPrecision(ensureSubtleTechniquePrecision(ensureRecognitionPrecision(pinUsableRecognition(JSON.parse(responseText(payload)))))), input.durationMs);
         } catch (error) {
           lastError = error;
           if (attempt === 0) {

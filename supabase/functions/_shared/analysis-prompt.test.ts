@@ -19,6 +19,10 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).toContain("retryReason and retryInstruction to specific non-empty strings");
     expect(prompt).toContain("exerciseFamily");
     expect(prompt).toContain("zero to four priority corrections");
+    expect(prompt).toContain("Do not stop at two findings");
+    expect(prompt).toContain("setup, early, middle, and late phases");
+    expect(prompt).toContain("largest visible displacement");
+    expect(prompt).toContain("Never add a weaker duplicate or filler finding");
     expect(prompt).toContain("early, middle, and late repetitions");
     expect(prompt).toContain("Multiple distinct findings may belong to the same repetition");
     expect(prompt).toContain("one to four evidence moments");

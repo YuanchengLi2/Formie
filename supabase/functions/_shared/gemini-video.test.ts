@@ -163,6 +163,43 @@ describe("Gemini video client", () => {
     });
   });
 
+  it("always precision-checks the top correction peak frame even when the first pass sounds confident", async () => {
+    const candidate: any = validCandidate();
+    candidate.priorityCorrections = [{
+      ...candidate.didWell[0],
+      id: "torso-swing",
+      title: "Reduce torso swing",
+      correction: "Keep the ribs stacked over the hips.",
+      cue: "Stay tall.",
+      evidence: [{
+        ...candidate.didWell[0].evidence[0],
+        startMs: 2_000,
+        peakMs: 2_350,
+        endMs: 2_700,
+        repNumber: null,
+        confidence: 0.94,
+        focusRegion: { centerX: 0.5, centerY: 0.48, radius: 0.18, arrowFromX: 0.78, arrowFromY: 0.2, label: "torso", confidence: 0.92 },
+      }],
+    }];
+    candidate.nextSetPlan = [{ id: "plan-1", action: "Keep the ribs stacked", rationale: "Limit torso swing.", relatedFindingId: "torso-swing" }];
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(candidate) }] } }] }), { status: 200 }));
+    const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
+
+    const result = await client.generateAnalysis({ file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" }, prompt: "coach", durationMs: 5_000 });
+
+    expect(result.precisionRequest).toMatchObject({
+      requestedRuns: 1,
+      reason: expect.stringContaining("top correction"),
+      targets: [{
+        kind: "technique",
+        findingId: "torso-swing",
+        startMs: 2_000,
+        endMs: 2_700,
+        question: expect.stringContaining("exact peak frame"),
+      }],
+    });
+  });
+
   it("runs the AI-requested premium reviews with the full coaching result and prior review context", async () => {
     const draft: any = validCandidate();
     draft.recognition.confidence = 0.72;
