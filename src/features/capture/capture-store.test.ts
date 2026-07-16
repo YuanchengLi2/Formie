@@ -56,6 +56,25 @@ describe("capture state", () => {
     });
   });
 
+  it("prepares the signed upload target during the countdown", () => {
+    let state = captureReducer(initialCaptureState, { type: "begin_countdown" });
+    state = captureReducer(state, {
+      type: "upload_target_created",
+      target: {
+        sessionId: "session-prepared",
+        signedUrl: "https://storage.example/upload",
+        uploadToken: "upload-token",
+        path: "user/session-prepared/original.mp4",
+      },
+    });
+
+    expect(state).toMatchObject({
+      phase: "countingDown",
+      sessionId: "session-prepared",
+      uploadTarget: { sessionId: "session-prepared" },
+    });
+  });
+
   it("rejects impossible transitions", () => {
     expect(() => captureReducer(initialCaptureState, { type: "recording_started", startedAt: 1_000 })).toThrow(
       "Cannot start recording from idle",

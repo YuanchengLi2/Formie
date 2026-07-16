@@ -142,7 +142,7 @@ describe("analysis API", () => {
     );
   });
 
-  it("loads a private evidence video URL after Gemini returns a terminal result", async () => {
+  it("shows terminal results without waiting for a second evidence-video request", async () => {
     const result = {
       status: "unable",
       recognition: { label: null, variation: null, equipment: [], confidence: 0, alternatives: [], catalogExerciseId: null, cameraView: "uncertain" },
@@ -162,6 +162,31 @@ describe("analysis API", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ sessionId: "session-123", status: "unable", stage: "coaching", videoUrl: "https://storage.example/private-video", result }), { status: 200 }));
 
     const response = await processAndLoadAnalysis({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" });
+
+    expect(response.videoUrl).toBeNull();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads a private evidence video only when coaching detail requests it", async () => {
+    const result = {
+      status: "unable",
+      recognition: { label: null, variation: null, equipment: [], confidence: 0, alternatives: [], catalogExerciseId: null, cameraView: "uncertain" },
+      videoCheck: { outcome: "unable", usableObservations: [], limitations: ["No person was visible"], retryReason: "No person was visible", retryInstruction: "Keep your full body in frame" },
+      overallAssessment: null,
+      score: null,
+      scoreRationale: [],
+      didWell: [],
+      priorityCorrections: [],
+      coachingCues: [],
+      viewNote: null,
+      comparison: null,
+    };
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sessionId: "session-123", status: "unable", stage: "coaching", videoUrl: null, result }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sessionId: "session-123", status: "unable", stage: "coaching", videoUrl: "https://storage.example/private-video", result }), { status: 200 }));
+
+    const response = await processAndLoadAnalysis({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123", includeVideoUrl: true });
 
     expect(response.videoUrl).toBe("https://storage.example/private-video");
     expect(fetcher.mock.calls[0][0]).toBe("https://example.supabase.co/functions/v1/analyze-video");

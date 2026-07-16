@@ -56,6 +56,27 @@ describe("Gemini video client", () => {
     expect(JSON.stringify(request)).not.toContain('"fps":45');
   });
 
+  it("runs a lightweight 2 fps usability check before full analysis", async () => {
+    const check = {
+      outcome: "unable",
+      usableObservations: [],
+      limitations: ["No person is visible"],
+      retryReason: "No person or exercise movement is visible.",
+      retryInstruction: "Keep your full body in frame and record again.",
+    };
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(check) }] } }] }), { status: 200 }));
+    const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
+
+    await expect(client.checkVideo({
+      file: { name: "files/file-1", uri: "uri", mimeType: "video/mp4", state: "ACTIVE" },
+    })).resolves.toEqual(check);
+
+    const request = JSON.parse(String(fetcher.mock.calls[0][1].body));
+    expect(request.contents[0].parts[0].videoMetadata).toEqual({ fps: 2 });
+    expect(request.contents[0].parts[1].text).toContain("blatantly unusable");
+    expect(request.generationConfig.responseJsonSchema.properties).toHaveProperty("outcome");
+  });
+
   it("retries malformed structured output once", async () => {
     const valid = { candidates: [{ content: { parts: [{ text: JSON.stringify(validCandidate()) }] } }] };
     const fetcher = jest

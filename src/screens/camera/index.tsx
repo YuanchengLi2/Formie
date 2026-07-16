@@ -8,6 +8,7 @@ import * as ScreenOrientation from "expo-screen-orientation";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormButton } from "@/components/form-button";
+import { FormWordmark } from "@/components/form-wordmark";
 import {
   completeAnalysisUpload,
   createAnalysisSession,
@@ -17,6 +18,7 @@ import { useCaptureStore } from "@/features/capture/capture-store";
 import { normalizeRecordedDuration } from "@/features/capture/countdown";
 import { START_BEEP_URI } from "@/features/capture/start-beep";
 import type { CaptureOrientation, RecordedSet, UploadTarget } from "@/features/capture/types";
+import { captureVideoSettings } from "@/features/capture/video-settings";
 import { supabase } from "@/lib/supabase";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -58,6 +60,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraView>(null);
+  const preparedUploadRef = useRef<Promise<UploadTarget | null> | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>("back");
   const [torch, setTorch] = useState(false);
@@ -90,7 +93,8 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     async (saved: RecordedSet, existingTarget?: UploadTarget | null) => {
       try {
         const accessToken = await getAccessToken();
-        let target = existingTarget ?? null;
+        let target = existingTarget ?? useCaptureStore.getState().uploadTarget ?? null;
+        if (!target && preparedUploadRef.current) target = await preparedUploadRef.current;
         if (!target) {
           const session = await createAnalysisSession({ accessToken, previousSessionId });
           target = {
@@ -126,6 +130,28 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     [dispatch, previousSessionId, router],
   );
 
+  const prepareUploadTarget = useCallback((repeatSessionId?: string) => {
+    if (preparedUploadRef.current) return preparedUploadRef.current;
+    preparedUploadRef.current = (async () => {
+      try {
+        const accessToken = await getAccessToken();
+        const session = await createAnalysisSession({ accessToken, previousSessionId: repeatSessionId });
+        const target: UploadTarget = {
+          sessionId: session.sessionId,
+          signedUrl: session.upload.signedUrl,
+          uploadToken: session.upload.token,
+          path: session.upload.path,
+        };
+        const current = useCaptureStore.getState();
+        if (["countingDown", "recording", "recorded", "uploading"].includes(current.phase)) dispatch({ type: "upload_target_created", target });
+        return target;
+      } catch {
+        return null;
+      }
+    })();
+    return preparedUploadRef.current;
+  }, [dispatch]);
+
   const startNativeRecording = useCallback(async () => {
     if (!cameraRef.current) return;
     const actualStart = Date.now();
@@ -135,7 +161,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
 
     try {
       const orientation = await ScreenOrientation.getOrientationAsync().catch(() => ScreenOrientation.Orientation.UNKNOWN);
-      const result = await cameraRef.current.recordAsync({ maxDuration: 60 });
+      const result = await cameraRef.current.recordAsync({ maxDuration: captureVideoSettings.maxDurationSeconds });
       if (!result?.uri) throw new Error("The camera did not save the recording");
       const saved: RecordedSet = {
         localUri: result.uri,
@@ -174,6 +200,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   };
 
   const discardRecording = () => {
+    preparedUploadRef.current = null;
     dispatch({ type: "reset" });
   };
 
@@ -181,14 +208,20 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
 
   if (permission && !permission.granted) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", gap: spacing.xl, padding: spacing.xl, backgroundColor: colors.background }}>
-        <Text selectable style={[typography.title, { color: colors.text }]}>Camera access is needed</Text>
-        <Text selectable style={[typography.body, { color: colors.textSecondary }]}>FORM uses the camera only to record the exercise set you choose to analyze.</Text>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", gap: spacing.xl, padding: spacing.xl, backgroundColor: colors.background }}>
+        <View style={{ width: 112, height: 112, alignItems: "center", justifyContent: "center", borderRadius: 56, backgroundColor: colors.surfaceRaised }}>
+          <View style={{ width: 48, height: 34, borderRadius: 8, borderWidth: 2, borderColor: colors.textSecondary }}><View style={{ alignSelf: "center", width: 16, height: 16, marginTop: 7, borderRadius: 8, borderWidth: 2, borderColor: colors.gold }} /></View>
+        </View>
+        <View style={{ alignItems: "center", gap: spacing.sm }}>
+          <Text selectable style={[typography.title, { color: colors.text, textAlign: "center" }]}>Camera access</Text>
+          <Text selectable style={[typography.body, { maxWidth: 300, color: colors.textSecondary, textAlign: "center" }]}>FORM needs the camera to record and privately analyze your movement.</Text>
+        </View>
         {permission.canAskAgain ? (
-          <FormButton label="Allow Camera" onPress={() => void requestPermission()} />
+          <FormButton style={{ alignSelf: "stretch" }} label="Allow Camera" onPress={() => void requestPermission()} />
         ) : (
-          <FormButton label="Open Settings" onPress={() => void Linking.openSettings()} />
+          <FormButton style={{ alignSelf: "stretch" }} label="Open Settings" onPress={() => void Linking.openSettings()} />
         )}
+        <Text selectable style={[typography.caption, { color: colors.textMuted }]}>▣  Your recordings are private.</Text>
       </View>
     );
   }
@@ -211,7 +244,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         }}
         selectedLens={selectedLens}
         style={{ flex: 1 }}
-        videoQuality="1080p"
+        videoQuality={captureVideoSettings.quality}
         videoStabilizationMode="auto"
       />
 
@@ -228,6 +261,9 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         >
           <Text selectable style={{ color: colors.text, fontSize: 24 }}>×</Text>
         </Pressable>
+        <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 12, alignItems: "center" }}>
+          <FormWordmark />
+        </View>
         <View style={{ flexDirection: "row", gap: spacing.sm }}>
           {ultraWideLens ? (
             <Pressable
@@ -256,6 +292,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         onRecord={() => {
           setElapsedMs(0);
           dispatch({ type: "begin_countdown", previousSessionId });
+          void prepareUploadTarget(previousSessionId);
         }}
         onStop={() => cameraRef.current?.stopRecording()}
         onRetryUpload={retryUpload}

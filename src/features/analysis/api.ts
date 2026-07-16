@@ -168,9 +168,9 @@ export async function getAnalysisStatus(input: RequestContext & { sessionId: str
   );
 }
 
-export async function processAndLoadAnalysis(input: RequestContext & { sessionId: string }): Promise<AnalysisStatusResponse> {
+export async function processAndLoadAnalysis(input: RequestContext & { sessionId: string; includeVideoUrl?: boolean }): Promise<AnalysisStatusResponse> {
   const processed = await processAnalysis(input);
-  return processed.result ? getAnalysisStatus(input) : processed;
+  return processed.result && input.includeVideoUrl ? getAnalysisStatus(input) : processed;
 }
 
 export async function correctAnalysisLabel(

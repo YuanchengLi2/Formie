@@ -13,20 +13,16 @@ export function ScoreRing({ score, size = 156 }: ScoreRingProps) {
     <View
       accessibilityLabel={`Movement quality ${score} out of 100`}
       style={{
-        width: size,
-        height: size,
-        alignItems: "center",
+        minWidth: size,
+        alignItems: "baseline",
         justifyContent: "center",
-        borderRadius: size / 2,
-        borderWidth: 2,
-        borderColor: colors.gold,
-        backgroundColor: colors.background,
+        flexDirection: "row",
       }}
     >
-      <Text selectable style={[typography.display, { color: colors.text, fontVariant: ["tabular-nums"] }]}>
+      <Text selectable style={[typography.display, { color: colors.gold, fontVariant: ["tabular-nums"] }]}>
         {score}
       </Text>
-      <Text selectable style={{ color: colors.gold, fontSize: 12, fontWeight: "600" }}>
+      <Text selectable style={{ color: colors.textMuted, fontSize: 13, fontWeight: "500" }}>
         / 100
       </Text>
     </View>

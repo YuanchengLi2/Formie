@@ -1,3 +1,4 @@
+/* eslint-disable no-extend-native -- This test intentionally emulates Hermes without ES2023 array helpers. */
 import type { AnalysisResult, CoachingFinding } from "./result-schema";
 import { getRecognitionLabel, getResultPresentation, getVisibleFindings } from "./presentation";
 
@@ -64,6 +65,16 @@ describe("result presentation", () => {
       finding("Another high", "high"),
     ]);
     expect(visible.map((item) => item.title)).toEqual(["High", "Another high", "Important", "Note"]);
+  });
+
+  it("orders findings on Hermes runtimes without Array.prototype.toSorted", () => {
+    const original = Array.prototype.toSorted;
+    Object.defineProperty(Array.prototype, "toSorted", { configurable: true, value: undefined });
+    try {
+      expect(getVisibleFindings([finding("Note", "note"), finding("High", "high")]).map((item) => item.title)).toEqual(["High", "Note"]);
+    } finally {
+      Object.defineProperty(Array.prototype, "toSorted", { configurable: true, value: original });
+    }
   });
 
   it("uses honest recognition language when the label is uncertain", () => {

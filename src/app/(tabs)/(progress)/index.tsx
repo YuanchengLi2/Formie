@@ -7,5 +7,5 @@ import { ProgressScreen } from "@/screens/progress";
 export default function ProgressRoute() {
   const router = useRouter();
   const history = useAnalysisHistory();
-  return <ProgressScreen groups={groupAnalysisSessions(history.data ?? [])} onOpenSession={(sessionId) => router.push(`/results/${sessionId}` as Href)} />;
+  return <ProgressScreen groups={groupAnalysisSessions(history.data ?? [])} onOpenSession={(sessionId) => router.push(`/results/${sessionId}` as Href)} onRecord={() => router.push("/recording-tips")} />;
 }

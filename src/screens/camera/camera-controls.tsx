@@ -3,11 +3,10 @@ import { Pressable, Text, View } from "react-native";
 import { FormButton } from "@/components/form-button";
 import { formatElapsed } from "@/features/capture/countdown";
 import type { CapturePhase } from "@/features/capture/types";
+import { captureVideoSettings } from "@/features/capture/video-settings";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
-
-const MIN_RECORDING_MS = 3_000;
 
 type CameraControlsProps = {
   phase: CapturePhase;
@@ -45,8 +44,11 @@ export function CameraControls({
 
       {phase === "countingDown" ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md }}>
-          <Text selectable style={{ color: colors.text, fontSize: 112, lineHeight: 120, fontWeight: "200", fontVariant: ["tabular-nums"] }}>{countdown}</Text>
-          <Text selectable style={[typography.body, { color: colors.text }]}>Recording starts automatically</Text>
+          <View style={{ width: 220, height: 220, alignItems: "center", justifyContent: "center", borderRadius: 110, borderWidth: 2, borderColor: colors.gold, backgroundColor: "rgba(0,0,0,0.24)" }}>
+            <Text selectable style={{ color: colors.text, fontSize: 104, lineHeight: 112, fontWeight: "200", fontVariant: ["tabular-nums"] }}>{countdown}</Text>
+          </View>
+          <Text selectable style={[typography.heading, { color: colors.text }]}>Get into position</Text>
+          <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Recording starts automatically</Text>
         </View>
       ) : (
         <View style={{ flex: 1 }} />
@@ -54,23 +56,19 @@ export function CameraControls({
 
       <View style={{ alignItems: "center", gap: spacing.md, paddingBottom: spacing.xl }}>
         {phase === "idle" || phase === "processing" ? (
-          <Pressable
-            accessibilityLabel="Start countdown"
-            accessibilityRole="button"
-            onPress={onRecord}
-            style={({ pressed }) => ({
-              width: 82,
-              height: 82,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 41,
-              borderWidth: 2,
-              borderColor: colors.text,
-              opacity: pressed ? 0.72 : 1,
-            })}
-          >
-            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.danger }} />
-          </Pressable>
+          <>
+            <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.pill, backgroundColor: "rgba(0,0,0,0.58)" }}>
+              <Text selectable style={[typography.caption, { color: colors.text }]}>Keep the full movement visible</Text>
+            </View>
+            <Pressable
+              accessibilityLabel="Start countdown"
+              accessibilityRole="button"
+              onPress={onRecord}
+              style={({ pressed }) => ({ width: 82, height: 82, alignItems: "center", justifyContent: "center", borderRadius: 41, borderWidth: 2, borderColor: colors.text, opacity: pressed ? 0.72 : 1, transform: [{ scale: pressed ? 0.96 : 1 }] })}
+            >
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: colors.danger }} />
+            </Pressable>
+          </>
         ) : null}
 
         {phase === "recording" ? (
@@ -78,14 +76,15 @@ export function CameraControls({
             <Pressable
               accessibilityLabel="Stop recording"
               accessibilityRole="button"
-              accessibilityState={{ disabled: elapsedMs < MIN_RECORDING_MS }}
-              disabled={elapsedMs < MIN_RECORDING_MS}
+              accessibilityState={{ disabled: elapsedMs < captureVideoSettings.minimumDurationMs }}
+              disabled={elapsedMs < captureVideoSettings.minimumDurationMs}
               onPress={onStop}
-              style={{ width: 82, height: 82, alignItems: "center", justifyContent: "center", borderRadius: 41, borderWidth: 2, borderColor: colors.gold, opacity: elapsedMs < MIN_RECORDING_MS ? 0.5 : 1 }}
+              style={{ width: 82, height: 82, alignItems: "center", justifyContent: "center", borderRadius: 41, borderWidth: 2, borderColor: colors.gold, opacity: elapsedMs < captureVideoSettings.minimumDurationMs ? 0.5 : 1 }}
             >
               <View style={{ width: 34, height: 34, borderRadius: 6, backgroundColor: colors.text }} />
             </Pressable>
-            {elapsedMs < MIN_RECORDING_MS ? <Text selectable style={[typography.caption, { color: colors.text }]}>Keep recording for 3 seconds</Text> : null}
+            {elapsedMs < captureVideoSettings.minimumDurationMs ? <Text selectable style={[typography.caption, { color: colors.text }]}>Keep recording for 3 seconds</Text> : null}
+            {elapsedMs >= captureVideoSettings.minimumDurationMs ? <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Tap to stop</Text> : null}
           </>
         ) : null}
 

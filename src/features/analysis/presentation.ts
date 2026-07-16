@@ -17,7 +17,7 @@ export function getVisibleFindings(findings: CoachingFinding[]): CoachingFinding
           evidence.visibleBodyAreas.length > 0,
       ),
     )
-    .toSorted((left, right) => SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity]);
+    .sort((left, right) => SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity]);
 }
 
 export function getRecognitionLabel(result: AnalysisResult): string {

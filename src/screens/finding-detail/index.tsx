@@ -28,20 +28,28 @@ export function FindingDetailScreen({ finding, videoUrl, onRecordAnother }: Find
   const context = [evidence.repNumber ? `Rep ${evidence.repNumber}` : null, evidence.phase, `${timestamp(evidence.startMs)}–${timestamp(evidence.endMs)}`].filter(Boolean).join(" · ");
 
   return (
-    <ScrollView contentContainerStyle={{ gap: spacing.lg, paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.xxl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={{ gap: spacing.sm }}>
-        <Text selectable style={[typography.caption, { color: colors.gold }]}>COACHING DETAIL</Text>
+    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.lg, paddingBottom: insets.bottom + spacing.xxl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{ gap: spacing.xs }}>
+        <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 0.8 }]}>COACHING DETAIL</Text>
         <Text selectable style={[typography.title, { color: colors.text }]}>{finding.title}</Text>
         <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{context}</Text>
       </View>
 
-      {videoUrl ? <EvidenceVideo videoUrl={videoUrl} startMs={evidence.startMs} /> : null}
+      {videoUrl ? <EvidenceVideo videoUrl={videoUrl} startMs={evidence.startMs} /> : <View style={{ height: 180, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}><Text selectable style={[typography.caption, { color: colors.textMuted }]}>Loading private video evidence…</Text></View>}
 
-      <FormCard>
+      <View style={{ gap: spacing.sm }}>
         <Text selectable style={[typography.caption, { color: colors.gold }]}>WHAT HAPPENED</Text>
         <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{finding.detail}</Text>
         <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{evidence.visualEvidence}</Text>
-      </FormCard>
+      </View>
+
+      {finding.cue ? (
+        <FormCard style={{ borderColor: colors.gold, backgroundColor: colors.surfaceRaised }}>
+          <Text selectable style={[typography.caption, { color: colors.gold }]}>TRY THIS</Text>
+          <Text selectable style={[typography.heading, { color: colors.text }]}>{finding.cue}</Text>
+        </FormCard>
+      ) : null}
+
       <FormCard>
         <Text selectable style={[typography.caption, { color: colors.gold }]}>WHY IT MATTERS</Text>
         <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{finding.whyItMatters}</Text>
@@ -50,12 +58,6 @@ export function FindingDetailScreen({ finding, videoUrl, onRecordAnother }: Find
         <FormCard>
           <Text selectable style={[typography.caption, { color: colors.gold }]}>WHAT TO CHANGE</Text>
           <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{finding.correction}</Text>
-        </FormCard>
-      ) : null}
-      {finding.cue ? (
-        <FormCard style={{ borderColor: colors.gold }}>
-          <Text selectable style={[typography.caption, { color: colors.gold }]}>TRY THIS</Text>
-          <Text selectable style={[typography.heading, { color: colors.text }]}>{finding.cue}</Text>
         </FormCard>
       ) : null}
       <FormButton label="Record Another Set" onPress={onRecordAnother} />

@@ -49,15 +49,15 @@ export function ResultsScreen({ result, onFindingPress, onRecordAnother, onCorre
         contentContainerStyle={{ gap: spacing.xl, paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xxl, paddingHorizontal: spacing.lg }}
         style={{ flex: 1, backgroundColor: colors.background }}
       >
-        <View style={{ alignItems: "center", gap: spacing.sm }}>
-          <FormWordmark />
-          <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{presentation.status === "complete" ? "ANALYSIS COMPLETE" : presentation.status === "partial" ? "ANALYSIS FROM VISIBLE MOVEMENT" : "RECORDING GUIDANCE"}</Text>
-          <Text selectable style={[typography.title, { color: colors.text, textAlign: "center" }]}>{presentation.exerciseLabel}</Text>
-          <FormButton label="Correct exercise name" variant="ghost" onPress={() => {
+        <View style={{ alignItems: "center" }}><FormWordmark /></View>
+        <View style={{ alignItems: "flex-start", gap: spacing.xs }}>
+          <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 0.8 }]}>{presentation.status === "complete" ? "ANALYSIS COMPLETE" : presentation.status === "partial" ? "ANALYSIS FROM VISIBLE MOVEMENT" : "RECORDING UNUSABLE"}</Text>
+          <Text selectable style={[typography.title, { color: colors.text }]}>{presentation.exerciseLabel}</Text>
+          <FormButton style={{ minHeight: 34, paddingHorizontal: 0 }} label="Correct exercise name" variant="ghost" onPress={() => {
             setLabelError(null);
             setEditingLabel(true);
           }} />
-          {presentation.score !== null ? <ScoreRing score={presentation.score} /> : null}
+          {presentation.score !== null ? <View style={{ alignItems: "flex-start", gap: spacing.xs, paddingTop: spacing.md }}><Text selectable style={[typography.caption, { color: colors.textMuted }]}>Movement Quality</Text><ScoreRing score={presentation.score} size={112} /></View> : null}
         </View>
 
         {presentation.overallAssessment ? (
@@ -76,6 +76,7 @@ export function ResultsScreen({ result, onFindingPress, onRecordAnother, onCorre
 
         {presentation.status === "unable" ? (
           <FormCard style={{ borderColor: colors.gold }}>
+            <Text selectable style={[typography.caption, { color: colors.gold }]}>RECORDING UNUSABLE</Text>
             <Text selectable style={[typography.heading, { color: colors.text }]}>{presentation.retryReason ?? "The movement was not visible enough for form coaching."}</Text>
             <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{presentation.retryInstruction ?? "Keep the working joints in frame and try again."}</Text>
           </FormCard>

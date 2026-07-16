@@ -44,7 +44,7 @@ export function FormButton({
       testID={testID}
       style={({ pressed }) => [
         {
-          minHeight: 56,
+          minHeight: 54,
           alignItems: "center",
           justifyContent: "center",
           borderWidth: 1,
@@ -53,7 +53,8 @@ export function FormButton({
           paddingHorizontal: spacing.xl,
           backgroundColor: palette.backgroundColor,
           borderColor: palette.borderColor,
-          opacity: disabled ? 0.42 : pressed ? 0.78 : 1,
+          opacity: disabled ? 0.42 : pressed ? 0.86 : 1,
+          transform: [{ scale: pressed ? 0.985 : 1 }],
         },
         style,
       ]}

@@ -12,6 +12,31 @@ export type GeminiFile = {
   state: "PROCESSING" | "ACTIVE" | "FAILED";
 };
 
+export type VideoPreflightCheck = {
+  outcome: "usable" | "unable";
+  usableObservations: string[];
+  limitations: string[];
+  retryReason: string | null;
+  retryInstruction: string | null;
+};
+
+const VIDEO_PREFLIGHT_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["outcome", "usableObservations", "limitations", "retryReason", "retryInstruction"],
+  properties: {
+    outcome: { type: "string", enum: ["usable", "unable"] },
+    usableObservations: { type: "array", items: { type: "string" } },
+    limitations: { type: "array", items: { type: "string" } },
+    retryReason: { type: ["string", "null"] },
+    retryInstruction: { type: ["string", "null"] },
+  },
+} as const;
+
+const VIDEO_PREFLIGHT_PROMPT = `Check only whether this exercise recording is blatantly unusable before full analysis.
+Return unable only when there is no person or exercise movement to evaluate, the view is overwhelmingly blocked or dark, the subject stays outside the frame, or the video is corrupted. If any meaningful exercise movement is visible, return usable even when the angle is imperfect or some joints leave frame briefly.
+Do not identify the exercise and do not provide form coaching. For unable, provide one short specific retryReason and one actionable retryInstruction. For usable, set retryReason and retryInstruction to null.`;
+
 type ClientOptions = {
   apiKey: string;
   model: string;
@@ -41,6 +66,24 @@ function responseText(payload: Record<string, unknown>): string {
   const text = parts.map((part) => part && typeof part === "object" ? (part as Record<string, unknown>).text : null).find((value) => typeof value === "string");
   if (typeof text !== "string") throw new Error("Gemini returned no structured text");
   return text;
+}
+
+function parsePreflight(value: unknown): VideoPreflightCheck {
+  if (!value || typeof value !== "object") throw new Error("Gemini returned an invalid video check");
+  const check = value as Record<string, unknown>;
+  if (check.outcome !== "usable" && check.outcome !== "unable") throw new Error("Gemini returned an invalid video-check outcome");
+  if (!Array.isArray(check.usableObservations) || !check.usableObservations.every((item) => typeof item === "string")) throw new Error("Gemini returned invalid usable observations");
+  if (!Array.isArray(check.limitations) || !check.limitations.every((item) => typeof item === "string")) throw new Error("Gemini returned invalid video limitations");
+  const retryReason = typeof check.retryReason === "string" ? check.retryReason.trim() : null;
+  const retryInstruction = typeof check.retryInstruction === "string" ? check.retryInstruction.trim() : null;
+  if (check.outcome === "unable" && (!retryReason || !retryInstruction)) throw new Error("An unusable video check requires retry guidance");
+  return {
+    outcome: check.outcome,
+    usableObservations: check.usableObservations,
+    limitations: check.limitations,
+    retryReason: check.outcome === "unable" ? retryReason : null,
+    retryInstruction: check.outcome === "unable" ? retryInstruction : null,
+  };
 }
 
 export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: ClientOptions) {
@@ -81,6 +124,28 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
     async getFile(name: string): Promise<GeminiFile> {
       const response = await fetcher(`${API}/${name}?key=${key}`);
       return parseFile(await responseJson(response, "Gemini file status failed"));
+    },
+
+    async checkVideo(input: { file: GeminiFile }): Promise<VideoPreflightCheck> {
+      const response = await fetcher(`${API}/models/${encodeURIComponent(model)}:generateContent?key=${key}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            role: "user",
+            parts: [
+              { fileData: { mimeType: input.file.mimeType, fileUri: input.file.uri }, videoMetadata: { fps: 2 } },
+              { text: VIDEO_PREFLIGHT_PROMPT },
+            ],
+          }],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseJsonSchema: VIDEO_PREFLIGHT_JSON_SCHEMA,
+          },
+        }),
+      });
+      const payload = await responseJson(response, "Gemini video check failed");
+      return parsePreflight(JSON.parse(responseText(payload)));
     },
 
     async generateAnalysis(input: { file: GeminiFile; prompt: string; durationMs: number }): Promise<AnalysisCandidate> {

@@ -1,5 +1,5 @@
 import type { AnalysisCandidate } from "../_shared/analysis-contract.ts";
-import type { GeminiFile } from "../_shared/gemini-video.ts";
+import type { GeminiFile, VideoPreflightCheck } from "../_shared/gemini-video.ts";
 
 export type AnalyzeVideoSession = {
   id: string;
@@ -15,6 +15,7 @@ export type AnalyzeVideoSession = {
   geminiFileName: string | null;
   geminiFileUri: string | null;
   geminiFileState: GeminiFile["state"] | null;
+  preflightCheck: VideoPreflightCheck | null;
   result: AnalysisCandidate | null;
 };
 
@@ -25,6 +26,8 @@ export type AnalyzeVideoDependencies = {
   saveFile: (sessionId: string, file: GeminiFile) => Promise<void>;
   getFile: (name: string) => Promise<GeminiFile>;
   saveFileState: (sessionId: string, file: GeminiFile) => Promise<void>;
+  checkVideo: (session: AnalyzeVideoSession, file: GeminiFile) => Promise<VideoPreflightCheck>;
+  savePreflightCheck: (sessionId: string, check: VideoPreflightCheck) => Promise<void>;
   buildPrompt: (session: AnalyzeVideoSession) => Promise<string>;
   generate: (session: AnalyzeVideoSession, file: GeminiFile, prompt: string) => Promise<AnalysisCandidate>;
   markStage: (sessionId: string, stage: "video_processing" | "technique_review" | "coaching") => Promise<void>;
@@ -41,6 +44,30 @@ function json(payload: unknown, status: number): Response {
 
 function statusPayload(session: AnalyzeVideoSession, status: string, stage: string | null, result: AnalysisCandidate | null) {
   return { sessionId: session.id, status, stage, videoUrl: null, result };
+}
+
+function unableResult(check: VideoPreflightCheck): AnalysisCandidate {
+  return {
+    status: "unable",
+    recognition: {
+      label: null,
+      variation: null,
+      equipment: [],
+      confidence: 0,
+      alternatives: [],
+      catalogExerciseId: null,
+      cameraView: "uncertain",
+    },
+    videoCheck: check,
+    overallAssessment: null,
+    score: null,
+    scoreRationale: [],
+    didWell: [],
+    priorityCorrections: [],
+    coachingCues: [],
+    viewNote: null,
+    comparison: null,
+  };
 }
 
 export async function analyzeVideoHandler(request: Request, dependencies: AnalyzeVideoDependencies): Promise<Response> {
@@ -68,13 +95,14 @@ export async function analyzeVideoHandler(request: Request, dependencies: Analyz
     }
 
     if (!session.geminiFileName) {
-      await dependencies.markStage(session.id, "video_processing");
       const file = await dependencies.uploadFile(session);
       await dependencies.saveFile(session.id, file);
-      return json(statusPayload(session, "processing", "video_processing", null), 202);
+      return json(statusPayload(session, "processing", "video_check", null), 202);
     }
 
-    const file = await dependencies.getFile(session.geminiFileName);
+    const [file, preparedPrompt] = session.preflightCheck
+      ? await Promise.all([dependencies.getFile(session.geminiFileName), dependencies.buildPrompt(session)])
+      : [await dependencies.getFile(session.geminiFileName), null];
     await dependencies.saveFileState(session.id, file);
     if (file.state === "PROCESSING") {
       return json(statusPayload(session, "processing", "video_processing", null), 202);
@@ -84,8 +112,26 @@ export async function analyzeVideoHandler(request: Request, dependencies: Analyz
       return json({ message: "Gemini could not process the uploaded video", code: "GEMINI_FILE_FAILED" }, 502);
     }
 
+    if (!session.preflightCheck) {
+      let check: VideoPreflightCheck;
+      try {
+        check = await dependencies.checkVideo(session, file);
+      } catch {
+        await dependencies.markFailed(session.id, "GEMINI_VIDEO_CHECK_FAILED");
+        return json({ message: "The recording could not be checked", code: "GEMINI_VIDEO_CHECK_FAILED" }, 502);
+      }
+      if (check.outcome === "unable") {
+        const result = unableResult(check);
+        await dependencies.saveResult(session.id, result);
+        await dependencies.deleteFile(file.name).catch(() => undefined);
+        return json(statusPayload(session, "unable", "video_check", result), 200);
+      }
+      await dependencies.savePreflightCheck(session.id, check);
+      await dependencies.markStage(session.id, "video_processing");
+    }
+
     await dependencies.markStage(session.id, "technique_review");
-    const prompt = await dependencies.buildPrompt(session);
+    const prompt = preparedPrompt ?? await dependencies.buildPrompt(session);
     let result: AnalysisCandidate;
     try {
       result = await dependencies.generate(session, file, prompt);

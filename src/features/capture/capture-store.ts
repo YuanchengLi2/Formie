@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import type { CaptureEvent, CaptureState } from "./types";
+import { captureVideoSettings } from "./video-settings";
 
 export const initialCaptureState: CaptureState = {
   phase: "idle",
@@ -24,7 +25,7 @@ export function captureReducer(state: CaptureState, event: CaptureEvent): Captur
       return {
         ...initialCaptureState,
         phase: "countingDown",
-        countdown: 10,
+        countdown: captureVideoSettings.countdownSeconds,
         previousSessionId: event.previousSessionId ?? null,
       };
     case "countdown_tick":
@@ -44,7 +45,7 @@ export function captureReducer(state: CaptureState, event: CaptureEvent): Captur
       requirePhase(state, ["recorded"], "start upload");
       return { ...state, phase: "uploading", error: null };
     case "upload_target_created":
-      requirePhase(state, ["uploading"], "save upload target");
+      requirePhase(state, ["countingDown", "recording", "recorded", "uploading"], "save upload target");
       return { ...state, sessionId: event.target.sessionId, uploadTarget: event.target };
     case "upload_failed":
       requirePhase(state, ["uploading"], "fail upload");

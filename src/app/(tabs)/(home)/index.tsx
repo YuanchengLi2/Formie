@@ -11,5 +11,5 @@ export default function HomeRoute() {
     createdAt: item.createdAt,
     score: item.score,
   }));
-  return <HomeScreen onRecord={() => router.push("/recording-tips")} recentAnalyses={recentAnalyses} onOpenSession={(sessionId) => router.push(`/results/${sessionId}` as Href)} />;
+  return <HomeScreen onRecord={() => router.push("/recording-tips")} recentAnalyses={recentAnalyses} onOpenSession={(sessionId) => router.push(`/results/${sessionId}` as Href)} onOpenProfile={() => router.push("/(tabs)/(profile)")} />;
 }

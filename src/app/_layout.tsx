@@ -23,17 +23,17 @@ export default function RootLayout() {
     <AppProviders>
       <ThemeProvider value={formTheme}>
         <StatusBar style="light" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.gold, headerShadowVisible: false, headerTitleStyle: { color: colors.gold, fontSize: 12, fontWeight: "600" } }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="recording-tips" options={{ headerShown: true, title: "Recording Tips", headerBackButtonDisplayMode: "minimal" }} />
           <Stack.Screen name="camera" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="analysis/[session-id]" options={{ headerShown: false, gestureEnabled: false }} />
           <Stack.Screen name="results/[session-id]" options={{ headerShown: false }} />
-          <Stack.Screen name="results/[session-id]/finding/[finding-id]" options={{ headerShown: true, title: "Coaching Detail", headerBackButtonDisplayMode: "minimal" }} />
+          <Stack.Screen name="results/[session-id]/finding/[finding-id]" options={{ headerShown: true, title: "FORM", headerBackButtonDisplayMode: "minimal" }} />
           <Stack.Screen
             name="no-phone-space"
             options={{
-              headerShown: true,
+              headerShown: false,
               title: "Quick Setup Ideas",
               headerBackButtonDisplayMode: "minimal",
               presentation: "formSheet",

@@ -17,18 +17,19 @@ async function getAccessToken(): Promise<string> {
   return created.data.session.access_token;
 }
 
-export function useAnalysisStatus(sessionId: string) {
+export function useAnalysisStatus(sessionId: string, options: { includeVideoUrl?: boolean } = {}) {
+  const includeVideoUrl = options.includeVideoUrl ?? false;
   return useQuery({
-    queryKey: ["analysis-status", sessionId],
+    queryKey: ["analysis-status", sessionId, includeVideoUrl],
     queryFn: async ({ signal }) => {
       const accessToken = await getAccessToken();
-      return processAndLoadAnalysis({ accessToken, sessionId, signal });
+      return processAndLoadAnalysis({ accessToken, sessionId, signal, includeVideoUrl });
     },
     enabled: Boolean(sessionId),
     retry: 2,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      return status && terminalStatuses.has(status) ? false : 2_000;
+      return status && terminalStatuses.has(status) ? false : 750;
     },
   });
 }

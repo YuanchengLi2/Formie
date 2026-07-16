@@ -63,6 +63,7 @@ Deno.serve(async (request) => {
         geminiFileName: session.gemini_file_name,
         geminiFileUri: session.gemini_file_uri,
         geminiFileState: session.gemini_file_state,
+        preflightCheck: session.preflight_check,
         result: resultPayload(session, result),
       } as AnalyzeVideoSession;
     },
@@ -82,7 +83,7 @@ Deno.serve(async (request) => {
         gemini_file_name: file.name,
         gemini_file_uri: file.uri,
         gemini_file_state: file.state,
-        stage: "video_processing",
+        stage: "video_check",
         updated_at: new Date().toISOString(),
       }).eq("id", sessionId);
       if (error) throw error;
@@ -92,6 +93,16 @@ Deno.serve(async (request) => {
       const { error } = await admin.from("analysis_sessions").update({
         gemini_file_uri: file.uri,
         gemini_file_state: file.state,
+        updated_at: new Date().toISOString(),
+      }).eq("id", sessionId);
+      if (error) throw error;
+    },
+    checkVideo: (_session, file) => gemini.checkVideo({ file }),
+    savePreflightCheck: async (sessionId, check) => {
+      const { error } = await admin.from("analysis_sessions").update({
+        preflight_check: check,
+        preflight_checked_at: new Date().toISOString(),
+        stage: "video_processing",
         updated_at: new Date().toISOString(),
       }).eq("id", sessionId);
       if (error) throw error;
@@ -144,7 +155,7 @@ Deno.serve(async (request) => {
       const now = new Date().toISOString();
       const { error: sessionError } = await admin.from("analysis_sessions").update({
         status: result.status,
-        stage: "coaching",
+        stage: result.status === "unable" ? "video_check" : "coaching",
         camera_view: recognition.cameraView,
         detected_label: recognition.label,
         detected_variation: recognition.variation,

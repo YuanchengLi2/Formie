@@ -12,7 +12,7 @@ import { typography } from "@/theme/type";
 export default function FindingDetailRoute() {
   const router = useRouter();
   const { "session-id": sessionId = "", "finding-id": findingId = "" } = useLocalSearchParams<{ "session-id": string; "finding-id": string }>();
-  const status = useAnalysisStatus(sessionId);
+  const status = useAnalysisStatus(sessionId, { includeVideoUrl: true });
   const resetCapture = useCaptureStore((state) => state.dispatch);
   const finding = status.data?.result ? findResultFinding(status.data.result, findingId) : null;
 
