@@ -160,6 +160,15 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, onFi
           {point ? <Pressable accessibilityRole="button" onPress={() => onFindingPress(point.observed.finding)} style={{ minHeight: 60, flexDirection: "row", alignItems: "center", gap: spacing.md, borderBottomWidth: 1, borderColor: colors.border }}><Text style={{ color: colors.gold, fontSize: 20 }}>→</Text><Text selectable style={[typography.body, { flex: 1, color: colors.textSecondary }]}>Priority: {point.observed.finding.title.toLocaleLowerCase()}</Text></Pressable> : null}
         </View>
         {remember ? <View style={{ gap: spacing.sm, paddingTop: spacing.md }}><Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>REMEMBER</Text><Text selectable style={[typography.heading, { color: colors.text }]}>“{remember}”</Text><Text selectable style={[typography.body, { color: colors.textSecondary }]}>{point?.observed.finding.correction}</Text></View> : null}
+        {(result.nextSetPlan ?? []).length ? <View style={{ gap: spacing.md, paddingTop: spacing.md }}>
+          <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>YOUR NEXT SET</Text>
+          {result.nextSetPlan?.map((item, index) => (
+            <View key={item.id} style={{ flexDirection: "row", gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised }}>
+              <View style={{ width: 30, height: 30, alignItems: "center", justifyContent: "center", borderRadius: 15, backgroundColor: colors.goldSoft }}><Text selectable style={[typography.label, { color: colors.gold }]}>{index + 1}</Text></View>
+              <View style={{ flex: 1, gap: spacing.xs }}><Text selectable style={[typography.heading, { color: colors.text }]}>{item.action}</Text><Text selectable style={[typography.body, { color: colors.textSecondary }]}>{item.rationale}</Text></View>
+            </View>
+          ))}
+        </View> : null}
       </View>
 
       <View style={{ flexDirection: "row", borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>

@@ -102,9 +102,12 @@ describe("ResultsScreen", () => {
     const screen = await renderResults();
     for (let index = 1; index <= 5; index += 1) expect(screen.getByText(`Did well ${index}`)).toBeTruthy();
     expect(screen.getByText("Improve priority 1.")).toBeTruthy();
-    await fireEvent.press(screen.getByText("What to do next"));
+    expect(screen.getByText("YOUR NEXT SET")).toBeTruthy();
     expect(screen.getByText("Keep your upper arms beside your torso")).toBeTruthy();
-    expect(screen.getByText("1 of 16")).toBeTruthy();
+    expect(screen.getByText("Lower each rep for two seconds")).toBeTruthy();
+    await fireEvent.press(screen.getByText("What to do next"));
+    expect(screen.getAllByText("Keep your upper arms beside your torso").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("1 of 26")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Next coaching point"));
     expect(screen.getAllByText("Priority 2").length).toBeGreaterThanOrEqual(1);
   });
@@ -165,7 +168,7 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("What to do next")).toBeTruthy();
     expect(screen.queryByText("6 of 8 reps consistent")).toBeNull();
     expect(screen.getByText("Set Summary")).toBeTruthy();
-    expect(screen.getByText("1 of 16")).toBeTruthy();
+    expect(screen.getByText("1 of 26")).toBeTruthy();
     expect(screen.getByText("your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.")).toBeTruthy();
     expect(screen.getByText("Evidence checked")).toBeTruthy();
     expect(screen.queryByText(/premium run/i)).toBeNull();

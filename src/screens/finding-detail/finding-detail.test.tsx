@@ -1,7 +1,7 @@
 import { fireEvent, render } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import type { CoachingFinding } from "@/features/analysis/result-schema";
+import type { AnalysisResult, CoachingFinding } from "@/features/analysis/result-schema";
 
 import { FindingDetailScreen } from ".";
 
@@ -17,6 +17,23 @@ const finding: CoachingFinding = {
 };
 
 describe("FindingDetailScreen", () => {
+  it("shows finding-specific set context, repetitions, body areas, and feedback role", async () => {
+    const recurring = { ...finding, evidence: [finding.evidence[0], { ...finding.evidence[0], startMs: 9_200, peakMs: 9_650, endMs: 10_100, repNumber: 4 }] };
+    const result = { setContext: { cameraView: "down-front diagonal", visibleReferences: ["shoulders relative to the seat", "handle endpoint relative to the frame"] } } as AnalysisResult;
+    const screen = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
+        <FindingDetailScreen finding={recurring} result={result} section="correction" videoUrl={null} onRecordAnother={jest.fn()} />
+      </SafeAreaProvider>,
+    );
+
+    expect(screen.getByText("PRIORITY CORRECTION")).toBeTruthy();
+    expect(screen.getByText("Recurring pattern")).toBeTruthy();
+    expect(screen.getByText("Reps 3, 4")).toBeTruthy();
+    expect(screen.getByText("left elbow, right elbow")).toBeTruthy();
+    expect(screen.getByText("down-front diagonal")).toBeTruthy();
+    expect(screen.getByText("shoulders relative to the seat • handle endpoint relative to the frame")).toBeTruthy();
+  });
+
   it("explains what happened, why it matters, and what to change", async () => {
     const onRecordAnother = jest.fn();
     const screen = await render(

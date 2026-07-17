@@ -24,6 +24,13 @@ function resultWithTwoMoments(): AnalysisResult {
 }
 
 describe("buildReviewFrames", () => {
+  it("includes supported strengths in the synchronized review instead of hiding them", () => {
+    const value = resultWithTwoMoments();
+    value.didWell = [{ ...value.priorityCorrections[0], id: "stable-start", title: "Stable setup" }];
+
+    expect(buildReviewFrames(value).observed.map((frame) => frame.findingId)).toContain("stable-start");
+  });
+
   it("derives multiple honest video frames for every supported purpose", () => {
     const groups = buildReviewFrames(resultWithTwoMoments());
 

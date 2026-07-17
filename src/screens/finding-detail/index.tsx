@@ -6,7 +6,8 @@ import { FormButton } from "@/components/form-button";
 import { FormCard } from "@/components/form-card";
 import { FullRecording } from "@/components/full-recording";
 import type { ReviewFrame } from "@/features/analysis/review-frames";
-import type { CoachingFinding } from "@/features/analysis/result-schema";
+import type { AnalysisResult, CoachingFinding } from "@/features/analysis/result-schema";
+import type { FindingSection } from "@/features/analysis/result-store";
 import { formatPointAdvice } from "@/features/analysis/evidence-timestamp";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
@@ -21,12 +22,20 @@ function timestamp(milliseconds: number): string {
 
 type FindingDetailScreenProps = {
   finding: CoachingFinding;
+  result?: AnalysisResult | null;
+  section?: FindingSection;
   videoUrl: string | null;
   durationMs?: number | null;
   onRecordAnother: () => void;
 };
 
-export function FindingDetailScreen({ finding, videoUrl, durationMs = null, onRecordAnother }: FindingDetailScreenProps) {
+const SECTION_LABEL: Record<FindingSection, string> = {
+  strength: "SUPPORTED STRENGTH",
+  correction: "PRIORITY CORRECTION",
+  cue: "COACHING CUE",
+};
+
+export function FindingDetailScreen({ finding, result = null, section = "correction", videoUrl, durationMs = null, onRecordAnother }: FindingDetailScreenProps) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const wideWorkspace = width >= 820;
@@ -45,6 +54,9 @@ export function FindingDetailScreen({ finding, videoUrl, durationMs = null, onRe
   })), [finding]);
   const activeFrame = reviewFrames[Math.min(activeEvidenceIndex, reviewFrames.length - 1)] ?? null;
   const playbackDuration = durationMs ?? Math.max(...finding.evidence.map((moment) => moment.endMs), 1_000);
+  const repNumbers = [...new Set(finding.evidence.flatMap((moment) => moment.repNumber === null ? [] : [moment.repNumber]))].sort((left, right) => left - right);
+  const visibleBodyAreas = [...new Set(finding.evidence.flatMap((moment) => moment.visibleBodyAreas))];
+  const patternLabel = finding.evidence.length > 1 ? "Recurring pattern" : "Single moment";
   const selectFrame = (frame: ReviewFrame) => {
     const index = reviewFrames.findIndex((item) => item.id === frame.id);
     if (index >= 0) setActiveEvidenceIndex(index);
@@ -72,6 +84,24 @@ export function FindingDetailScreen({ finding, videoUrl, durationMs = null, onRe
         <Text selectable style={[typography.body, { color: colors.textMuted }]}>{evidence.visualEvidence}</Text>
       </View>
 
+      <View style={{ flexDirection: wideWorkspace ? "row" : "column", gap: spacing.md }}>
+        <FormCard style={{ flex: 1, gap: spacing.sm, padding: spacing.lg }}>
+          <Text selectable style={[typography.caption, { color: colors.gold }]}>PATTERN</Text>
+          <Text selectable style={[typography.heading, { color: colors.text }]}>{patternLabel}</Text>
+          <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{repNumbers.length ? `Reps ${repNumbers.join(", ")}` : "Setup or between repetitions"}</Text>
+        </FormCard>
+        <FormCard style={{ flex: 1, gap: spacing.sm, padding: spacing.lg }}>
+          <Text selectable style={[typography.caption, { color: colors.gold }]}>VISIBLE EVIDENCE</Text>
+          <Text selectable style={[typography.body, { color: colors.text }]}>{visibleBodyAreas.join(", ")}</Text>
+        </FormCard>
+      </View>
+
+      {result?.setContext ? <FormCard style={{ gap: spacing.sm, padding: spacing.lg }}>
+        <Text selectable style={[typography.caption, { color: colors.gold }]}>CAMERA CONTEXT</Text>
+        <Text selectable style={[typography.heading, { color: colors.text }]}>{result.setContext.cameraView ?? "View not confidently identified"}</Text>
+        {result.setContext.visibleReferences.length ? <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{result.setContext.visibleReferences.join(" • ")}</Text> : null}
+      </FormCard> : null}
+
       {finding.cue ? <FormCard style={{ gap: spacing.md, padding: spacing.lg, borderColor: colors.gold, backgroundColor: colors.goldSoft }}><Text selectable style={[typography.caption, { color: colors.gold }]}>TRY THIS NEXT</Text><Text selectable style={[typography.heading, { color: colors.text }]}>{finding.cue}</Text></FormCard> : null}
       <View style={{ flexDirection: wideWorkspace ? "row" : "column", gap: spacing.md }}>
         <FormCard style={{ flex: 1, gap: spacing.md, padding: spacing.lg }}><Text selectable style={[typography.caption, { color: colors.gold }]}>WHY IT MATTERS</Text><Text selectable style={[typography.body, { color: colors.textSecondary }]}>{finding.whyItMatters}</Text></FormCard>
@@ -83,7 +113,7 @@ export function FindingDetailScreen({ finding, videoUrl, durationMs = null, onRe
   return (
     <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: spacing.xl, paddingTop: spacing.lg, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ gap: spacing.sm }}>
-        <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>COACHING DETAIL</Text>
+        <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>{SECTION_LABEL[section]}</Text>
         <Text selectable style={[typography.title, { color: colors.text }]}>{finding.title}</Text>
         <Text selectable style={[typography.body, { color: colors.textMuted }]}>{context}</Text>
       </View>
