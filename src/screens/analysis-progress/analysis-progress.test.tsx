@@ -13,6 +13,7 @@ describe("AnalysisProgressScreen", () => {
 
     expect(screen.queryByText(/%/)).toBeNull();
     expect(screen.getByTestId("analysis-progress-native-motion", { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByTestId("analysis-generated-motion", { includeHiddenElements: true })).toBeTruthy();
     expect(screen.getByTestId("analysis-motion-video-processing", { includeHiddenElements: true }).props.accessibilityState).toEqual({ selected: true });
     expect(screen.getByText("Checking your recording")).toBeTruthy();
     expect(screen.getByText("Preparing the full video")).toBeTruthy();
