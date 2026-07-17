@@ -1,4 +1,4 @@
-import { buildPlaybackCoachingMoments, formatPlaybackTime, nextFrameIndex, reviewPurposeLabel, stepPlaybackMs, timelineMarkerPercent, timelineSeekFromPageX, timelineSeekMs } from "./full-recording";
+import { buildPlaybackCoachingMoments, formatPlaybackTime, isTimelineDrag, nextFrameIndex, reviewPurposeLabel, stepPlaybackMs, timelineMarkerPercent, timelineSeekFromPageX, timelineSeekMs } from "./full-recording";
 
 describe("full recording timeline", () => {
   it("positions rep markers against the complete recording duration", () => {
@@ -11,6 +11,13 @@ describe("full recording timeline", () => {
     expect(timelineSeekMs(500, 400, 20_000)).toBe(20_000);
     expect(formatPlaybackTime(65_400)).toBe("01:05");
     expect(timelineSeekFromPageX(375, 275, 400, 20_000)).toBe(5_000);
+  });
+
+  it("keeps taps local to the timeline and only captures deliberate drags", () => {
+    expect(timelineSeekMs(75, 300, 60_000)).toBe(15_000);
+    expect(isTimelineDrag(3, 4)).toBe(false);
+    expect(isTimelineDrag(7, 1)).toBe(true);
+    expect(isTimelineDrag(1, 8)).toBe(false);
   });
 
   it("plots every AI coaching moment, including multiple and between-rep evidence", () => {

@@ -30,6 +30,10 @@ export function timelineSeekFromPageX(pageX: number, trackPageX: number, width: 
   return timelineSeekMs(pageX - trackPageX, width, durationMs);
 }
 
+export function isTimelineDrag(dx: number, dy: number, threshold = 6): boolean {
+  return Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy);
+}
+
 export function stepPlaybackMs(currentMs: number, durationMs: number, direction: -1 | 1): number {
   return Math.min(durationMs, Math.max(0, currentMs + direction * 5_000));
 }
@@ -116,12 +120,17 @@ export function FullRecording({ videoUrl, durationMs, coachingFindings = [], rev
   const activeFrame = selectedReviewFrame ?? null;
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    player.timeUpdateEventInterval = 0.25;
+    const timeSubscription = player.addListener("timeUpdate", ({ currentTime }) => {
       if (draggingRef.current) return;
-      setCurrentMs(Math.min(durationMs, Math.max(0, Number(player.currentTime ?? 0) * 1_000)));
-      setPlaying(Boolean(player.playing));
-    }, 120);
-    return () => clearInterval(timer);
+      setCurrentMs(Math.min(durationMs, Math.max(0, currentTime * 1_000)));
+    });
+    const playingSubscription = player.addListener("playingChange", ({ isPlaying }) => setPlaying(isPlaying));
+    return () => {
+      timeSubscription.remove();
+      playingSubscription.remove();
+      player.timeUpdateEventInterval = 0;
+    };
   }, [durationMs, player]);
 
   useEffect(() => {
@@ -144,17 +153,17 @@ export function FullRecording({ videoUrl, durationMs, coachingFindings = [], rev
     seekTo(timelineSeekFromPageX(pageX, timelinePageXRef.current, timelineWidthRef.current, durationMs), true);
   }, [durationMs, seekTo]);
   const panResponder = useMemo(() => PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_event, gestureState) => isTimelineDrag(gestureState.dx, gestureState.dy),
     onPanResponderGrant: (event) => {
       draggingRef.current = true;
       player.pause();
       setPlaying(false);
       previewFromPageX(event.nativeEvent.pageX);
     },
-    onPanResponderMove: (_event, gestureState) => previewFromPageX(gestureState.moveX),
-    onPanResponderRelease: (_event, gestureState) => {
-      commitFromPageX(gestureState.moveX);
+    onPanResponderMove: (event) => previewFromPageX(event.nativeEvent.pageX),
+    onPanResponderRelease: (event) => {
+      commitFromPageX(event.nativeEvent.pageX);
       draggingRef.current = false;
     },
     onPanResponderTerminate: () => { draggingRef.current = false; },
@@ -189,7 +198,7 @@ export function FullRecording({ videoUrl, durationMs, coachingFindings = [], rev
         <View style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
           <Text selectable style={[typography.label, { width: 45, color: colors.text, fontVariant: ["tabular-nums"] }]}>{formatPlaybackTime(currentMs)}</Text>
           <View style={{ flex: 1, height: 44, justifyContent: "center" }}>
-            <View
+            <Pressable
               {...panResponder.panHandlers}
               ref={timelineRef}
               accessibilityActions={[{ name: "decrement", label: "Back five seconds" }, { name: "increment", label: "Forward five seconds" }]}
@@ -198,13 +207,14 @@ export function FullRecording({ videoUrl, durationMs, coachingFindings = [], rev
               accessibilityValue={{ min: 0, max: Math.round(durationMs / 1_000), now: Math.round(currentMs / 1_000), text: `${formatPlaybackTime(currentMs)} of ${formatPlaybackTime(durationMs)}` }}
               onAccessibilityAction={(event) => seekTo(stepPlaybackMs(currentMs, durationMs, event.nativeEvent.actionName === "decrement" ? -1 : 1), true)}
               onLayout={onTimelineLayout}
+              onPress={(event) => seekTo(timelineSeekMs(event.nativeEvent.locationX, timelineWidthRef.current, durationMs), true)}
               style={{ position: "absolute", inset: 0, justifyContent: "center" }}
             >
               <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.border }}>
                 <View style={{ width: `${progress}%`, height: 6, borderRadius: 3, backgroundColor: colors.gold }} />
                 <View style={{ position: "absolute", left: `${progress}%`, top: -7, width: 20, height: 20, marginLeft: -10, borderRadius: 10, borderWidth: 3, borderColor: colors.surface, backgroundColor: colors.gold }} />
               </View>
-            </View>
+            </Pressable>
             {timelineFrames.map((frame) => {
               const selected = activeFrame?.id === frame.id;
               return (
