@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, { FadeInUp, FadeOut, LinearTransition } from "react-native-reanimated";
 
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";
 import { FormButton } from "@/components/form-button";
-import { FullRecording } from "@/components/full-recording";
+import { FullRecording, formatPlaybackTime } from "@/components/full-recording";
 import type { AnalysisStatusResponse } from "@/features/analysis/api";
-import { buildCoachingReviewPoints, type ReviewFrame } from "@/features/analysis/review-frames";
+import { buildCoachingReviewPoints } from "@/features/analysis/review-frames";
 import type { CoachConversation, CoachMessage } from "@/features/coach/types";
 import type { AnalysisHistoryItem } from "@/features/progress/group-sessions";
 import { colors } from "@/theme/colors";
@@ -45,7 +46,12 @@ export function CoachScreen({ videos, initialSessionId = null, loadConversation 
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
+  const workspaceScrollRef = useRef<ScrollView>(null);
   const selected = availableVideos.find((video) => video.sessionId === selectedSessionId) ?? null;
+
+  useEffect(() => {
+    if (messages.length > 0) workspaceScrollRef.current?.scrollToEnd({ animated: true });
+  }, [messages.length]);
 
   useEffect(() => {
     if (!selectedSessionId) return;
@@ -125,7 +131,9 @@ export function CoachScreen({ videos, initialSessionId = null, loadConversation 
         <Pressable accessibilityRole="button" onPress={() => setSelectedSessionId(null)} style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}><Text style={[typography.label, { color: colors.gold }]}>Change</Text></Pressable>
       </View>
 
-      {analysis?.videoUrl && analysis.durationMs && result ? <FullRecording videoUrl={analysis.videoUrl} reps={result.repTimeline ?? []} durationMs={analysis.durationMs} reviewFrames={points.map((point) => point.observed)} selectedReviewFrame={selectedFrame} onSelectReviewFrame={(frame: ReviewFrame) => setSelectedFrameId(frame.id)} /> : loadingAnalysis ? <View style={{ minHeight: 180, alignItems: "center", justifyContent: "center", borderRadius: radii.md, backgroundColor: colors.surface }}><Text selectable style={[typography.body, { color: colors.textSecondary }]}>Loading video evidence…</Text></View> : null}
+      {analysis?.videoUrl && analysis.durationMs && result ? <FullRecording videoUrl={analysis.videoUrl} durationMs={analysis.durationMs} reviewFrames={points.map((point) => point.observed)} selectedReviewFrame={selectedFrame} onSelectReviewFrame={(frame) => setSelectedFrameId(frame.id)} showActiveFrameCard={false} /> : loadingAnalysis ? <View style={{ minHeight: 180, alignItems: "center", justifyContent: "center", borderRadius: radii.md, backgroundColor: colors.surface }}><Text selectable style={[typography.body, { color: colors.textSecondary }]}>Loading video evidence…</Text></View> : null}
+
+      {points.length > 0 ? <View style={{ gap: spacing.sm }}><Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>COACHING MOMENTS</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>{points.map((point, index) => { const selectedPoint = selectedFrame?.id === point.observed.id; return <Pressable accessibilityRole="button" key={point.id} onPress={() => setSelectedFrameId(point.observed.id)} style={{ minHeight: 58, maxWidth: 220, justifyContent: "center", gap: spacing.xs, paddingHorizontal: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: selectedPoint ? colors.gold : colors.border, backgroundColor: selectedPoint ? colors.goldSoft : colors.surface }}><Text selectable style={[typography.caption, { color: colors.gold }]}>{index + 1} · {formatPlaybackTime(point.observed.timeMs)}</Text><Text selectable numberOfLines={1} style={[typography.label, { color: colors.text }]}>{point.observed.finding.title}</Text></Pressable>; })}</ScrollView></View> : null}
 
       <View style={{ gap: spacing.sm }}>
         <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>ANALYSIS CONTEXT</Text>
@@ -133,6 +141,7 @@ export function CoachScreen({ videos, initialSessionId = null, loadConversation 
           <Pressable onPress={() => setShowTargetIntent((value) => !value)} style={{ minHeight: 40, justifyContent: "center", paddingHorizontal: spacing.md, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border }}><Text style={[typography.caption, { color: colors.textSecondary }]}>Target · {targetIntent || "Add"}</Text></Pressable>
           <View style={{ minHeight: 40, justifyContent: "center", paddingHorizontal: spacing.md, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border }}><Text selectable style={[typography.caption, { color: colors.textSecondary }]}>{result?.recognition.variation ?? result?.recognition.exerciseFamily ?? "Video analysis"}</Text></View>
         </View>
+        {result?.setContext.changeAcrossSet ? <Animated.View entering={FadeInUp.duration(200)} layout={LinearTransition.duration(160)} style={{ gap: spacing.xs, padding: spacing.md, borderRadius: radii.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}><Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.1 }]}>WHOLE-SET CONTEXT</Text><Text selectable style={[typography.body, { color: colors.textSecondary }]}>{result.setContext.changeAcrossSet}</Text></Animated.View> : null}
         {showTargetIntent ? <TextInput accessibilityLabel="Target muscle or area" value={targetIntent} onChangeText={setTargetIntent} placeholder="Optional, e.g. upper back" placeholderTextColor={colors.textMuted} maxLength={240} style={[typography.body, { minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radii.sm, borderWidth: 1, borderColor: colors.border, color: colors.text }]} /> : null}
         <Text selectable style={[typography.caption, { color: colors.textMuted }]}>FORM only uses details visible in this recording.</Text>
       </View>
@@ -141,20 +150,31 @@ export function CoachScreen({ videos, initialSessionId = null, loadConversation 
 
   const conversation = (
     <View style={{ flex: workspaceWide ? 1 : undefined, minHeight: workspaceWide ? 520 : undefined, gap: spacing.md }}>
-      {messages.length === 0 ? <View style={{ flex: 1, justifyContent: "center", gap: spacing.lg, paddingVertical: spacing.xl }}><View style={{ gap: spacing.sm, alignItems: "center" }}><Text selectable style={[typography.heading, { color: colors.text, textAlign: "center" }]}>What do you want to improve?</Text><Text selectable style={[typography.body, { maxWidth: 520, color: colors.textSecondary, textAlign: "center" }]}>Ask about your technique, muscle targeting, setup, or a specific moment in this recording.</Text><Text selectable style={[typography.caption, { color: colors.textMuted, textAlign: "center" }]}>If the camera angle limits an answer, FORM will tell you.</Text></View><View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>{STARTERS.map((starter) => <Pressable key={starter} accessibilityRole="button" onPress={() => setDraft(starter)} style={({ pressed }) => ({ minHeight: 54, flexGrow: 1, flexBasis: width >= 540 ? "46%" : "100%", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md, paddingHorizontal: spacing.md, borderRadius: radii.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: pressed ? colors.goldSoft : colors.surface })}><Text style={[typography.body, { flex: 1, color: colors.text }]}>{starter}</Text><Text style={{ color: colors.gold, fontSize: 22 }}>›</Text></Pressable>)}</View></View> : <View style={{ gap: spacing.md }}>{messages.map((message) => <View key={message.id} style={{ maxWidth: "88%", alignSelf: message.role === "user" ? "flex-end" : "flex-start", gap: spacing.xs, padding: spacing.md, borderRadius: radii.md, borderWidth: message.role === "assistant" ? 1 : 0, borderColor: colors.border, backgroundColor: message.role === "user" ? colors.goldSoft : colors.surface }}><Text selectable style={[typography.caption, { color: message.role === "assistant" ? colors.gold : colors.textMuted }]}>{message.role === "assistant" ? "FORM Coach" : "You"}</Text><Text selectable style={[typography.body, { color: colors.text }]}>{message.content}</Text></View>)}</View>}
+      {messages.length === 0 ? (
+        <Animated.View entering={FadeInUp.duration(220)} style={{ flex: 1, justifyContent: "center", gap: spacing.lg, paddingVertical: spacing.xl }}>
+          <View style={{ gap: spacing.sm, alignItems: "center" }}><Text selectable style={[typography.heading, { color: colors.text, textAlign: "center" }]}>What do you want to improve?</Text><Text selectable style={[typography.body, { maxWidth: 520, color: colors.textSecondary, textAlign: "center" }]}>Ask about your technique, muscle targeting, setup, or a specific moment in this recording.</Text><Text selectable style={[typography.caption, { color: colors.textMuted, textAlign: "center" }]}>If the camera angle limits an answer, FORM will tell you.</Text></View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+            {STARTERS.map((starter, index) => <Animated.View entering={FadeInUp.delay(index * 45).duration(220)} key={starter} layout={LinearTransition.duration(160)} style={{ flexGrow: 1, flexBasis: width >= 540 ? "46%" : "100%" }}><Pressable accessibilityRole="button" onPress={() => setDraft(starter)} style={({ pressed }) => ({ minHeight: 54, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md, paddingHorizontal: spacing.md, borderRadius: radii.sm, borderWidth: 1, borderColor: colors.border, backgroundColor: pressed ? colors.goldSoft : colors.surface })}><Text style={[typography.body, { flex: 1, color: colors.text }]}>{starter}</Text><Text style={{ color: colors.gold, fontSize: 22 }}>›</Text></Pressable></Animated.View>)}
+          </View>
+        </Animated.View>
+      ) : (
+        <View style={{ gap: spacing.md }}>
+          {messages.map((message, index) => <Animated.View entering={FadeInUp.delay(Math.min(index, 4) * 35).duration(200)} exiting={FadeOut.duration(120)} key={message.id} layout={LinearTransition.duration(160)} testID={`coach-message-${message.role}`} style={{ maxWidth: "88%", alignSelf: message.role === "user" ? "flex-end" : "flex-start", gap: spacing.xs, padding: spacing.md, borderRadius: radii.md, borderCurve: "continuous", borderWidth: message.role === "assistant" ? 1 : 0, borderColor: colors.border, backgroundColor: message.role === "user" ? colors.goldSoft : colors.surface }}><Text selectable style={[typography.caption, { color: message.role === "assistant" ? colors.gold : colors.textMuted }]}>{message.role === "assistant" ? "FORM Coach" : "You"}</Text><Text selectable style={[typography.body, { color: colors.text }]}>{message.content}</Text></Animated.View>)}
+        </View>
+      )}
     </View>
   );
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ paddingTop: insets.top + spacing.md, paddingHorizontal: spacing.lg }}><Text selectable style={[typography.heading, { color: colors.gold, textAlign: "center", letterSpacing: 2 }]}>FORM Coach</Text></View>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, flexDirection: workspaceWide ? "row" : "column", alignItems: "stretch", gap: spacing.xl, padding: spacing.lg }}>
+      <ScrollView ref={workspaceScrollRef} contentInsetAdjustmentBehavior="automatic" onContentSizeChange={() => messages.length > 0 && workspaceScrollRef.current?.scrollToEnd({ animated: true })} style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, flexDirection: workspaceWide ? "row" : "column", alignItems: "stretch", gap: spacing.xl, padding: spacing.lg }}>
         {videoWorkspace}
         {conversation}
       </ScrollView>
       <View style={{ gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.background }}>
         <View style={{ flexDirection: "row", alignItems: "flex-end", gap: spacing.sm }}><TextInput accessibilityLabel="Message your coach" multiline value={draft} onChangeText={setDraft} placeholder="Ask about this recording…" placeholderTextColor={colors.textMuted} maxLength={2000} style={[typography.body, { flex: 1, maxHeight: 110, minHeight: 52, padding: spacing.md, borderRadius: radii.pill, borderWidth: 1, borderColor: error ? colors.danger : colors.border, color: colors.text, backgroundColor: colors.surface }]} /><View style={{ width: 86 }}><FormButton label={sending ? "Sending" : "Send"} disabled={!draft.trim() || sending} onPress={() => void submit()} /></View></View>
-        <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Video evidence attached</Text>
+        {selectedFrame ? <Animated.View accessibilityLabel={`Selected evidence: ${selectedFrame.title} at ${formatPlaybackTime(selectedFrame.timeMs)}`} entering={FadeInUp.duration(180)} key={selectedFrame.id} layout={LinearTransition.duration(160)} testID="coach-evidence-context" style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}><View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors.gold }} /><Text selectable numberOfLines={1} style={[typography.caption, { flex: 1, color: colors.textSecondary }]}>{formatPlaybackTime(selectedFrame.timeMs)} · {selectedFrame.title}</Text></Animated.View> : <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Video evidence attached</Text>}
         {error ? <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}><Text selectable style={[typography.caption, { flex: 1, color: colors.danger }]}>{error}</Text><Pressable accessibilityRole="button" onPress={() => void submit()} style={{ minWidth: 48, minHeight: 44, alignItems: "center", justifyContent: "center" }}><Text style={[typography.label, { color: colors.gold }]}>Retry</Text></Pressable></View> : null}
       </View>
     </KeyboardAvoidingView>

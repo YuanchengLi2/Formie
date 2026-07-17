@@ -23,14 +23,18 @@ describe("CoachScreen", () => {
         videoCheck: { outcome: "usable", usableObservations: ["upper body visible"], limitations: [], retryReason: null, retryInstruction: null },
         overallAssessment: "The set is reviewable.", score: 82, scoreRationale: [], didWell: [],
         priorityCorrections: [{ id: "shoulder", title: "Level the shoulders", detail: "The right shoulder rises.", whyItMatters: "Uneven pulling reduces repeatability.", correction: "Keep both shoulders level.", cue: "Level shoulders.", severity: "important", evidence: [{ startMs: 1_000, peakMs: 1_300, endMs: 1_600, repNumber: 1, phase: "pull", visualEvidence: "The right shoulder rises first.", coachingNote: "your right shoulder rises first. Pull both shoulders level.", visibleBodyAreas: ["shoulders"], confidence: 0.9, focusRegion: { centerX: 0.58, centerY: 0.36, radius: 0.12, arrowFromX: 0.82, arrowFromY: 0.18, label: "right shoulder", confidence: 0.9 } }] }],
-        coachingCues: [], setSummary: { totalReps: 3, consistentReps: 2, verdict: "One shoulder rises first." }, repTimeline: [{ repNumber: 1, startMs: 800, peakMs: 1_300, endMs: 1_800, assessment: "breakdown", note: "Right shoulder rises." }], nextSetPlan: [{ id: "plan", action: "Keep both shoulders level", rationale: "Pull evenly.", relatedFindingId: "shoulder" }], precisionRequest: { requestedRuns: 0, reason: null, targets: [] }, comparison: null,
+        coachingCues: [], setContext: { cameraView: "down-front diagonal", visibleReferences: ["shoulders", "handle endpoint"], sequenceSummary: "Three complete repetitions were visible.", changeAcrossSet: "The right shoulder rose first on the final two repetitions.", coachingBasis: "Keep both shoulders level through the same pull endpoint." }, setSummary: { totalReps: 3, consistentReps: 2, verdict: "One shoulder rises first." }, repTimeline: [{ repNumber: 1, startMs: 800, peakMs: 1_300, endMs: 1_800, assessment: "breakdown", note: "Right shoulder rises." }], nextSetPlan: [{ id: "plan", action: "Keep both shoulders level", rationale: "Pull evenly.", relatedFindingId: "shoulder" }], precisionRequest: { requestedRuns: 0, reason: null, targets: [] }, comparison: null,
       },
     }));
     const screen = await render(withSafeArea(<CoachScreen videos={[video("complete")]} initialSessionId="complete" loadAnalysis={loadAnalysis} />));
 
     await waitFor(() => expect(screen.getByLabelText("Full exercise recording")).toBeTruthy());
     expect(screen.getByText("FORM Coach")).toBeTruthy();
+    expect(screen.getByTestId("coach-evidence-context")).toBeTruthy();
+    expect(screen.getByTestId("coach-evidence-context").props.accessibilityLabel).toContain("Level the shoulders");
     expect(screen.getByText("ANALYSIS CONTEXT")).toBeTruthy();
+    expect(screen.getByText("WHOLE-SET CONTEXT")).toBeTruthy();
+    expect(screen.getByText("The right shoulder rose first on the final two repetitions.")).toBeTruthy();
     expect(screen.getByText("Check my form")).toBeTruthy();
     expect(screen.getByText("Am I hitting my target muscle?")).toBeTruthy();
     await fireEvent.press(screen.getByText("What should I change next set?"));
@@ -61,6 +65,7 @@ describe("CoachScreen", () => {
     await fireEvent.press(screen.getByText("Send"));
     expect(screen.getByText("Are my shoulders level?")).toBeTruthy();
     await waitFor(() => expect(screen.getByText("At 00:01, keep both shoulders level.")).toBeTruthy());
+    expect(screen.getByTestId("coach-message-assistant")).toBeTruthy();
     expect(sendMessage).toHaveBeenCalledWith(expect.objectContaining({ sessionId: "complete", targetIntent: "upper back" }));
   });
 

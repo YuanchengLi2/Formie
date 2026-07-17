@@ -1,77 +1,91 @@
+param(
+  [string]$SourcePath
+)
+
+$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
-$images = Join-Path $PSScriptRoot '..\assets\images'
-$images = [IO.Path]::GetFullPath($images)
+$images = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\assets\images'))
+$sourceAsset = Join-Path $images 'form-logo-source.png'
+
+if ($SourcePath) {
+  $resolvedSource = (Resolve-Path -LiteralPath $SourcePath).Path
+  [IO.File]::Copy($resolvedSource, $sourceAsset, $true)
+}
+
+if (-not (Test-Path -LiteralPath $sourceAsset)) {
+  throw 'Provide -SourcePath once so the supplied FORM logo can be versioned as assets/images/form-logo-source.png.'
+}
+
+$source = New-Object System.Drawing.Bitmap($sourceAsset)
+$purple = [System.Drawing.ColorTranslator]::FromHtml('#3512ED')
 
 function New-Canvas([int]$Size, [bool]$Transparent) {
   $bitmap = New-Object System.Drawing.Bitmap($Size, $Size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
   $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-  $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+  $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+  $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
   $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-  if ($Transparent) {
-    $graphics.Clear([System.Drawing.Color]::Transparent)
-  } else {
-    $graphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#090909'))
-  }
+  $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+  $graphics.Clear($(if ($Transparent) { [System.Drawing.Color]::Transparent } else { $purple }))
   return @($bitmap, $graphics)
 }
 
-function Draw-Mark($Graphics, [int]$Size, [string]$HexColor, [double]$Scale = 1.0) {
-  $color = [System.Drawing.ColorTranslator]::FromHtml($HexColor)
-  $center = $Size / 2.0
-  $half = $Size * 0.29 * $Scale
-  $corner = $Size * 0.105 * $Scale
-  $width = [Math]::Max(3, $Size * 0.017 * $Scale)
-  $pen = New-Object System.Drawing.Pen($color, $width)
-  $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-
-  $left = $center - $half
-  $right = $center + $half
-  $top = $center - $half
-  $bottom = $center + $half
-  $Graphics.DrawLine($pen, $left, $top + $corner, $left, $top)
-  $Graphics.DrawLine($pen, $left, $top, $left + $corner, $top)
-  $Graphics.DrawLine($pen, $right - $corner, $top, $right, $top)
-  $Graphics.DrawLine($pen, $right, $top, $right, $top + $corner)
-  $Graphics.DrawLine($pen, $left, $bottom - $corner, $left, $bottom)
-  $Graphics.DrawLine($pen, $left, $bottom, $left + $corner, $bottom)
-  $Graphics.DrawLine($pen, $right - $corner, $bottom, $right, $bottom)
-  $Graphics.DrawLine($pen, $right, $bottom - $corner, $right, $bottom)
-
-  $fWidth = $width * 1.35
-  $fPen = New-Object System.Drawing.Pen($color, $fWidth)
-  $fPen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $fPen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-  $fx = $center - ($Size * 0.065 * $Scale)
-  $fyTop = $center - ($Size * 0.145 * $Scale)
-  $fyBottom = $center + ($Size * 0.155 * $Scale)
-  $Graphics.DrawLine($fPen, $fx, $fyTop, $fx, $fyBottom)
-  $Graphics.DrawLine($fPen, $fx, $fyTop, $center + ($Size * 0.13 * $Scale), $fyTop)
-  $Graphics.DrawLine($fPen, $fx, $center - ($Size * 0.005 * $Scale), $center + ($Size * 0.075 * $Scale), $center - ($Size * 0.005 * $Scale))
-  $pen.Dispose()
-  $fPen.Dispose()
-}
-
-function Save-BrandImage([string]$Path, [int]$Size, [bool]$Transparent, [string]$Color, [double]$Scale = 1.0) {
+function Save-SourceVariant([string]$Name, [int]$Size, [double]$Scale, [bool]$Transparent) {
   $canvas = New-Canvas $Size $Transparent
   $bitmap = $canvas[0]
   $graphics = $canvas[1]
-  Draw-Mark $graphics $Size $Color $Scale
-  $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+  $destinationSize = [int][Math]::Round($Size * $Scale)
+  $destinationOffset = [int][Math]::Round(($Size - $destinationSize) / 2)
+  $cropInset = 78
+  $sourceWidth = $source.Width - 2 * $cropInset
+  $sourceHeight = $source.Height - 2 * $cropInset
+  $sourceRect = [System.Drawing.Rectangle]::new($cropInset, $cropInset, $sourceWidth, $sourceHeight)
+  $destinationRect = [System.Drawing.Rectangle]::new($destinationOffset, $destinationOffset, $destinationSize, $destinationSize)
+  $graphics.DrawImage($source, $destinationRect, $sourceRect, [System.Drawing.GraphicsUnit]::Pixel)
+  $bitmap.Save((Join-Path $images $Name), [System.Drawing.Imaging.ImageFormat]::Png)
   $graphics.Dispose()
   $bitmap.Dispose()
 }
 
-Save-BrandImage (Join-Path $images 'icon.png') 1024 $false '#C8A96B' 1.0
-Save-BrandImage (Join-Path $images 'splash-icon.png') 512 $true '#C8A96B' 0.92
-Save-BrandImage (Join-Path $images 'android-icon-foreground.png') 1024 $true '#C8A96B' 0.72
-Save-BrandImage (Join-Path $images 'android-icon-monochrome.png') 432 $true '#FFFFFF' 0.82
-Save-BrandImage (Join-Path $images 'favicon.png') 64 $false '#C8A96B' 0.92
+function Save-MonochromeVariant([string]$Name, [int]$Size) {
+  $canvas = New-Canvas $Size $true
+  $bitmap = $canvas[0]
+  $graphics = $canvas[1]
+  $graphics.Dispose()
+  $padding = 52
+  $content = $Size - 2 * $padding
+  $cropInset = 78
+  $cropSize = $source.Width - 2 * $cropInset
+
+  for ($y = 0; $y -lt $content; $y += 1) {
+    $sourceY = $cropInset + [int][Math]::Floor(($y / [double]$content) * $cropSize)
+    for ($x = 0; $x -lt $content; $x += 1) {
+      $sourceX = $cropInset + [int][Math]::Floor(($x / [double]$content) * $cropSize)
+      $pixel = $source.GetPixel($sourceX, $sourceY)
+      $isWhiteMark = $pixel.R -gt 175 -and $pixel.G -gt 175 -and $pixel.B -gt 175
+      $isRedJoint = $pixel.R -gt 175 -and $pixel.G -lt 175 -and $pixel.B -lt 175
+      if ($isWhiteMark -or $isRedJoint) {
+        $bitmap.SetPixel($padding + $x, $padding + $y, [System.Drawing.Color]::White)
+      }
+    }
+  }
+
+  $bitmap.Save((Join-Path $images $Name), [System.Drawing.Imaging.ImageFormat]::Png)
+  $bitmap.Dispose()
+}
+
+Save-SourceVariant 'icon.png' 1024 1.0 $false
+Save-SourceVariant 'splash-icon.png' 512 0.86 $true
+Save-SourceVariant 'android-icon-foreground.png' 1024 0.76 $true
+Save-SourceVariant 'favicon.png' 64 1.0 $false
+Save-SourceVariant 'form-logo-mark.png' 256 1.0 $true
+Save-MonochromeVariant 'android-icon-monochrome.png' 432
 
 $background = New-Canvas 1024 $false
 $background[0].Save((Join-Path $images 'android-icon-background.png'), [System.Drawing.Imaging.ImageFormat]::Png)
 $background[1].Dispose()
 $background[0].Dispose()
+$source.Dispose()
 
-Write-Output "Generated FORM launcher, adaptive, monochrome, splash, and favicon assets."
+Write-Output 'Generated FORM launcher, adaptive, monochrome, splash, favicon, and in-app logo assets from form-logo-source.png.'

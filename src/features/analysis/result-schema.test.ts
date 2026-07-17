@@ -55,6 +55,13 @@ function validResult(): AnalysisResult {
     didWell: [validFinding("controlled-lowering")],
     priorityCorrections: [validFinding()],
     coachingCues: [validFinding("wall-cue")],
+    setContext: {
+      cameraView: "down-front diagonal",
+      visibleReferences: ["shoulders relative to the seat", "handle endpoint relative to the machine frame"],
+      sequenceSummary: "Eight complete repetitions were visible from setup through the final reset.",
+      changeAcrossSet: "The handle reached a slightly shorter endpoint during the final two repetitions.",
+      coachingBasis: "Prioritize a repeatable handle endpoint while keeping both shoulders level.",
+    },
     setSummary: { totalReps: 8, consistentReps: 6, verdict: "Control changed during the final two repetitions." },
     repTimeline: [{ repNumber: 3, startMs: 7_600, peakMs: 8_350, endMs: 9_000, assessment: "breakdown", note: "Elbow position moved forward." }],
     nextSetPlan: [{ id: "plan-1", action: "Keep the upper arms still", rationale: "Reduce shoulder assistance.", relatedFindingId: "elbow-drift" }],
@@ -69,12 +76,25 @@ describe("analysisResultSchema", () => {
   it("accepts a complete result with timestamped evidence", () => {
     const parsed = analysisResultSchema.parse(validResult());
     expect(parsed.setSummary).toMatchObject({ totalReps: 8, consistentReps: 6 });
+    expect(parsed.setContext).toMatchObject({ cameraView: "down-front diagonal", visibleReferences: expect.arrayContaining([expect.stringContaining("handle endpoint")]) });
     expect(parsed.repTimeline?.[0]).toMatchObject({ repNumber: 3, assessment: "breakdown" });
     expect(parsed.nextSetPlan?.[0]).toMatchObject({ relatedFindingId: "elbow-drift" });
     expect(parsed.verification).toMatchObject({ performed: true, outcome: "confirmed" });
     expect(parsed.precisionReview).toMatchObject({ runsUsed: 2, status: "completed" });
     expect(parsed.priorityCorrections[0].evidence[0].focusRegion).toMatchObject({ label: "right elbow", centerX: 0.58 });
     expect(parsed.priorityCorrections[0].evidence[0].coachingNote).toContain("both elbows move forward");
+  });
+
+  it("defaults whole-set context for legacy saved results", () => {
+    const result = validResult() as Omit<AnalysisResult, "setContext"> & { setContext?: AnalysisResult["setContext"] };
+    delete result.setContext;
+    expect(analysisResultSchema.parse(result).setContext).toEqual({
+      cameraView: null,
+      visibleReferences: [],
+      sequenceSummary: null,
+      changeAcrossSet: null,
+      coachingBasis: null,
+    });
   });
 
   it("keeps legacy saved evidence compatible by defaulting visual focus to null", () => {

@@ -41,6 +41,7 @@ export function resultPayload(session: Record<string, unknown>, result: Record<s
     didWell,
     priorityCorrections,
     coachingCues,
+    setContext: (result.set_context ?? { cameraView: null, visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: null }) as AnalysisCandidate["setContext"],
     setSummary: (result.set_summary ?? { totalReps: null, consistentReps: null, verdict: null }) as AnalysisCandidate["setSummary"],
     repTimeline: (result.rep_timeline ?? []) as AnalysisCandidate["repTimeline"],
     nextSetPlan,

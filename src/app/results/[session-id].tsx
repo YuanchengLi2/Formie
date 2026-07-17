@@ -43,7 +43,7 @@ export default function ResultsRoute() {
       tutorialLoading={tutorial.isLoading}
       onOpenTutorial={(video) => void WebBrowser.openBrowserAsync(video.url)}
       onFindingPress={openFinding}
-      onAskCoach={() => router.push({ pathname: "/(tabs)/(coach)/index", params: { sessionId } })}
+      onAskCoach={() => router.push({ pathname: "/(tabs)/(coach)", params: { sessionId } })}
       onRecordAnother={() => {
         resetCapture({ type: "reset" });
         router.replace({ pathname: "/recording-tips", params: { previousSessionId: sessionId } });

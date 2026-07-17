@@ -16,6 +16,7 @@ type HistoryRow = {
   created_at: string;
   detected_label: string | null;
   corrected_label: string | null;
+  pinned_at?: string | null;
   exercise_family?: string | null;
   analysis_results: HistoryResultRow | HistoryResultRow[] | null;
 };
@@ -24,7 +25,7 @@ async function defaultHistoryQuery(): Promise<QueryResult> {
   const { supabase } = await import("@/lib/supabase");
   return supabase
     .from("analysis_sessions")
-    .select("id,status,created_at,detected_label,corrected_label,exercise_family,analysis_results(score,priority_corrections,comparison)")
+    .select("id,status,created_at,detected_label,corrected_label,pinned_at,exercise_family,analysis_results(score,priority_corrections,comparison)")
     .in("status", ["processing", "complete", "partial", "unable"])
     .order("created_at", { ascending: false })
     .limit(100);
@@ -43,6 +44,7 @@ export async function fetchAnalysisHistory({ query = defaultHistoryQuery }: { qu
       createdAt: row.created_at,
       detectedLabel: row.detected_label,
       correctedLabel: row.corrected_label,
+      pinnedAt: row.pinned_at ?? null,
       exerciseFamily: isExerciseFamily(row.exercise_family) ? row.exercise_family : null,
       score,
       priorityCorrectionTitles: (nested?.priority_corrections ?? []).map((finding) => finding.title).filter((title): title is string => Boolean(title)),
@@ -50,4 +52,16 @@ export async function fetchAnalysisHistory({ query = defaultHistoryQuery }: { qu
       priorityIssueImproved: nested?.comparison?.priorityIssueImproved ?? nested?.comparison?.priority_issue_improved ?? null,
     };
   });
+}
+
+export async function setAnalysisPinned(sessionId: string, pinned: boolean): Promise<void> {
+  const { supabase } = await import("@/lib/supabase");
+  const { error } = await supabase.from("analysis_sessions").update({ pinned_at: pinned ? new Date().toISOString() : null }).eq("id", sessionId);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteAnalysisSession(sessionId: string): Promise<void> {
+  const { supabase } = await import("@/lib/supabase");
+  const { error } = await supabase.functions.invoke("delete-analysis", { body: { sessionId } });
+  if (error) throw new Error(error.message);
 }

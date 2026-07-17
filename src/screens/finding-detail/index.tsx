@@ -1,14 +1,15 @@
-import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { EvidenceVideo } from "@/components/evidence-video";
 import { FormButton } from "@/components/form-button";
 import { FormCard } from "@/components/form-card";
+import { FullRecording } from "@/components/full-recording";
+import type { ReviewFrame } from "@/features/analysis/review-frames";
 import type { CoachingFinding } from "@/features/analysis/result-schema";
 import { formatPointAdvice } from "@/features/analysis/evidence-timestamp";
 import { colors } from "@/theme/colors";
-import { spacing } from "@/theme/spacing";
+import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
 
 function timestamp(milliseconds: number): string {
@@ -21,45 +22,77 @@ function timestamp(milliseconds: number): string {
 type FindingDetailScreenProps = {
   finding: CoachingFinding;
   videoUrl: string | null;
+  durationMs?: number | null;
   onRecordAnother: () => void;
 };
 
-export function FindingDetailScreen({ finding, videoUrl, onRecordAnother }: FindingDetailScreenProps) {
+export function FindingDetailScreen({ finding, videoUrl, durationMs = null, onRecordAnother }: FindingDetailScreenProps) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const wideWorkspace = width >= 820;
   const [activeEvidenceIndex, setActiveEvidenceIndex] = useState(0);
   const evidence = finding.evidence[Math.min(activeEvidenceIndex, finding.evidence.length - 1)];
-  const context = [evidence.repNumber ? `Rep ${evidence.repNumber}` : "Between reps", evidence.phase, `${timestamp(evidence.startMs)}–${timestamp(evidence.endMs)}`].filter(Boolean).join(" · ");
+  const context = [evidence.phase, `${timestamp(evidence.startMs)}–${timestamp(evidence.endMs)}`].filter(Boolean).join(" · ");
+  const reviewFrames = useMemo<ReviewFrame[]>(() => finding.evidence.map((moment, index) => ({
+    id: `detail-${finding.id}-${index}-${moment.peakMs ?? moment.startMs}`,
+    purpose: "observed",
+    title: finding.title,
+    body: formatPointAdvice(moment),
+    findingId: finding.id,
+    finding,
+    evidence: moment,
+    timeMs: moment.peakMs ?? moment.startMs,
+  })), [finding]);
+  const activeFrame = reviewFrames[Math.min(activeEvidenceIndex, reviewFrames.length - 1)] ?? null;
+  const playbackDuration = durationMs ?? Math.max(...finding.evidence.map((moment) => moment.endMs), 1_000);
+  const selectFrame = (frame: ReviewFrame) => {
+    const index = reviewFrames.findIndex((item) => item.id === frame.id);
+    if (index >= 0) setActiveEvidenceIndex(index);
+  };
 
-  return (
-    <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.lg, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={{ gap: spacing.xs }}>
-        <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 0.8 }]}>COACHING DETAIL</Text>
-        <Text selectable style={[typography.title, { color: colors.text }]}>{finding.title}</Text>
-        <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{context}</Text>
-      </View>
-
+  const details = (
+    <View style={{ flex: wideWorkspace ? 1 : undefined, gap: spacing.lg }}>
       {finding.evidence.length > 1 ? (
-        <View accessibilityLabel="Evidence moment selector" style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-          {finding.evidence.map((moment, index) => (
-            <Pressable accessibilityLabel={`Show evidence ${index + 1}`} accessibilityRole="button" key={`${moment.startMs}-${index}`} onPress={() => setActiveEvidenceIndex(index)} style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 999, borderWidth: 1, borderColor: index === activeEvidenceIndex ? colors.gold : colors.border, backgroundColor: index === activeEvidenceIndex ? colors.goldSoft : colors.surface }}>
-              <Text selectable style={[typography.caption, { color: index === activeEvidenceIndex ? colors.gold : colors.textSecondary }]}>{moment.repNumber ? `Rep ${moment.repNumber} · ` : "Between · "}{timestamp(moment.peakMs ?? moment.startMs)}</Text>
-            </Pressable>
-          ))}
+        <View style={{ gap: spacing.sm }}>
+          <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>EVIDENCE MOMENTS</Text>
+          <ScrollView accessibilityLabel="Evidence moment selector" horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+            {finding.evidence.map((moment, index) => (
+              <Pressable accessibilityLabel={`Show evidence ${index + 1}`} accessibilityRole="button" key={`${moment.startMs}-${index}`} onPress={() => setActiveEvidenceIndex(index)} style={{ minHeight: 52, justifyContent: "center", paddingHorizontal: spacing.lg, borderRadius: radii.pill, borderWidth: 1, borderColor: index === activeEvidenceIndex ? colors.gold : colors.border, backgroundColor: index === activeEvidenceIndex ? colors.goldSoft : colors.surface }}>
+                <Text selectable style={[typography.label, { color: index === activeEvidenceIndex ? colors.gold : colors.textSecondary }]}>Moment {index + 1} · {timestamp(moment.peakMs ?? moment.startMs)}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
         </View>
       ) : null}
 
-      {videoUrl ? <EvidenceVideo key={`${finding.id}-${activeEvidenceIndex}`} videoUrl={videoUrl} evidence={evidence} /> : <View style={{ height: 180, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}><Text selectable style={[typography.caption, { color: colors.textMuted }]}>Loading private video evidence…</Text></View>}
-
-      <View style={{ gap: spacing.sm }}>
-        <Text selectable style={[typography.caption, { color: colors.gold }]}>WHAT HAPPENED</Text>
-        <Text selectable style={[typography.body, { color: colors.text }]}>{formatPointAdvice(evidence)}</Text>
+      <View style={{ gap: spacing.md, padding: spacing.lg, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised }}>
+        <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>WHAT HAPPENED</Text>
+        <Text selectable style={[typography.heading, { color: colors.text }]}>{formatPointAdvice(evidence)}</Text>
         <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{finding.detail}</Text>
-        <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{evidence.visualEvidence}</Text>
+        <Text selectable style={[typography.body, { color: colors.textMuted }]}>{evidence.visualEvidence}</Text>
       </View>
 
-      {finding.cue ? <FormCard style={{ borderColor: colors.gold, backgroundColor: colors.surfaceRaised }}><Text selectable style={[typography.caption, { color: colors.gold }]}>TRY THIS</Text><Text selectable style={[typography.heading, { color: colors.text }]}>{finding.cue}</Text></FormCard> : null}
-      <FormCard><Text selectable style={[typography.caption, { color: colors.gold }]}>WHY IT MATTERS</Text><Text selectable style={[typography.body, { color: colors.textSecondary }]}>{finding.whyItMatters}</Text></FormCard>
-      {finding.correction ? <FormCard><Text selectable style={[typography.caption, { color: colors.gold }]}>WHAT TO CHANGE</Text><Text selectable style={[typography.body, { color: colors.textSecondary }]}>{finding.correction}</Text></FormCard> : null}
+      {finding.cue ? <FormCard style={{ gap: spacing.md, padding: spacing.lg, borderColor: colors.gold, backgroundColor: colors.goldSoft }}><Text selectable style={[typography.caption, { color: colors.gold }]}>TRY THIS NEXT</Text><Text selectable style={[typography.heading, { color: colors.text }]}>{finding.cue}</Text></FormCard> : null}
+      <View style={{ flexDirection: wideWorkspace ? "row" : "column", gap: spacing.md }}>
+        <FormCard style={{ flex: 1, gap: spacing.md, padding: spacing.lg }}><Text selectable style={[typography.caption, { color: colors.gold }]}>WHY IT MATTERS</Text><Text selectable style={[typography.body, { color: colors.textSecondary }]}>{finding.whyItMatters}</Text></FormCard>
+        {finding.correction ? <FormCard style={{ flex: 1, gap: spacing.md, padding: spacing.lg }}><Text selectable style={[typography.caption, { color: colors.gold }]}>WHAT TO CHANGE</Text><Text selectable style={[typography.body, { color: colors.textSecondary }]}>{finding.correction}</Text></FormCard> : null}
+      </View>
+    </View>
+  );
+
+  return (
+    <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: spacing.xl, paddingTop: spacing.lg, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={{ gap: spacing.sm }}>
+        <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>COACHING DETAIL</Text>
+        <Text selectable style={[typography.title, { color: colors.text }]}>{finding.title}</Text>
+        <Text selectable style={[typography.body, { color: colors.textMuted }]}>{context}</Text>
+      </View>
+
+      <View testID="finding-detail-workspace" style={{ flexDirection: wideWorkspace ? "row" : "column", alignItems: "flex-start", gap: spacing.lg }}>
+        {videoUrl ? <View style={{ width: wideWorkspace ? "48%" : "100%", maxWidth: wideWorkspace ? 560 : undefined }}><FullRecording videoUrl={videoUrl} durationMs={playbackDuration} reviewFrames={reviewFrames} selectedReviewFrame={activeFrame} onSelectReviewFrame={selectFrame} showActiveFrameCard={false} /></View> : <View style={{ width: wideWorkspace ? "48%" : "100%", height: 240, alignItems: "center", justifyContent: "center", borderRadius: radii.lg, backgroundColor: colors.surface }}><Text selectable style={[typography.body, { color: colors.textMuted }]}>Loading private video evidence…</Text></View>}
+        {details}
+      </View>
+
       <FormButton label="Record Another Set" onPress={onRecordAnother} />
     </ScrollView>
   );

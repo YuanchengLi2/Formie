@@ -58,6 +58,13 @@ export type AnalysisCandidate = {
   didWell: CoachingFinding[];
   priorityCorrections: CoachingFinding[];
   coachingCues: CoachingFinding[];
+  setContext: {
+    cameraView: string | null;
+    visibleReferences: string[];
+    sequenceSummary: string | null;
+    changeAcrossSet: string | null;
+    coachingBasis: string | null;
+  };
   setSummary: { totalReps: number | null; consistentReps: number | null; verdict: string | null };
   repTimeline: Array<{ repNumber: number; startMs: number; peakMs: number; endMs: number; assessment: "strong" | "consistent" | "breakdown" | "uncertain"; note: string }>;
   nextSetPlan: Array<{ id: string; action: string; rationale: string; relatedFindingId: string | null }>;
@@ -179,7 +186,7 @@ const precisionTargetSchema = {
 
 export const GEMINI_ANALYSIS_JSON_SCHEMA = {
   type: "object",
-  required: ["status", "recognition", "videoCheck", "overallAssessment", "score", "scoreRationale", "didWell", "priorityCorrections", "coachingCues", "setSummary", "repTimeline", "nextSetPlan", "precisionRequest", "comparison"],
+  required: ["status", "recognition", "videoCheck", "overallAssessment", "score", "scoreRationale", "didWell", "priorityCorrections", "coachingCues", "setContext", "setSummary", "repTimeline", "nextSetPlan", "precisionRequest", "comparison"],
   properties: {
     status: { type: "string", enum: ["complete", "partial", "unable"] },
     recognition: {
@@ -224,6 +231,17 @@ export const GEMINI_ANALYSIS_JSON_SCHEMA = {
     didWell: { type: "array", items: findingSchema },
     priorityCorrections: { type: "array", items: findingSchema },
     coachingCues: { type: "array", items: findingSchema },
+    setContext: {
+      type: "object",
+      required: ["cameraView", "visibleReferences", "sequenceSummary", "changeAcrossSet", "coachingBasis"],
+      properties: {
+        cameraView: { type: ["string", "null"] },
+        visibleReferences: { type: "array", items: { type: "string" } },
+        sequenceSummary: { type: ["string", "null"] },
+        changeAcrossSet: { type: ["string", "null"] },
+        coachingBasis: { type: ["string", "null"] },
+      },
+    },
     setSummary: {
       type: "object",
       required: ["totalReps", "consistentReps", "verdict"],
@@ -374,6 +392,24 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
   const didWell = findings(result.didWell, "didWell", durationMs);
   const corrections = findings(result.priorityCorrections, "priorityCorrections", durationMs);
   const cues = findings(result.coachingCues, "coachingCues", durationMs);
+  const allFindingPeaks = [...didWell, ...corrections, ...cues].flatMap((finding) => finding.evidence.map((moment) => ({ findingId: finding.id, peakMs: moment.peakMs })));
+  for (let left = 0; left < allFindingPeaks.length; left += 1) {
+    for (let right = left + 1; right < allFindingPeaks.length; right += 1) {
+      if (allFindingPeaks[left].findingId !== allFindingPeaks[right].findingId && Math.abs(allFindingPeaks[left].peakMs - allFindingPeaks[right].peakMs) < 250) {
+        throw new Error("Different findings must use distinct evidence frames");
+      }
+    }
+  }
+
+  const setContext = object(result.setContext, "setContext");
+  const cameraView = string(setContext.cameraView, "setContext.cameraView", true);
+  const visibleReferences = strings(setContext.visibleReferences, "setContext.visibleReferences");
+  const sequenceSummary = string(setContext.sequenceSummary, "setContext.sequenceSummary", true);
+  const changeAcrossSet = string(setContext.changeAcrossSet, "setContext.changeAcrossSet", true);
+  const coachingBasis = string(setContext.coachingBasis, "setContext.coachingBasis", true);
+  if (result.status !== "unable" && (!cameraView || visibleReferences.length === 0 || !sequenceSummary || !changeAcrossSet || !coachingBasis)) {
+    throw new Error("setContext requires the camera view, visible references, complete sequence, change across the set, and coaching basis");
+  }
 
   const setSummary = object(result.setSummary, "setSummary");
   const totalReps = number(setSummary.totalReps, "setSummary.totalReps", 1, 10_000, true);

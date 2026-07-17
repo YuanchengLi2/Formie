@@ -11,6 +11,7 @@ function result(): AnalysisCandidate {
     recognition: { label: "Curl", variation: null, equipment: ["dumbbells"], confidence: 0.9, alternatives: [], catalogExerciseId: null, exerciseFamily: "curl" },
     videoCheck: { outcome: "usable", usableObservations: ["upper body"], limitations: [], retryReason: null, retryInstruction: null },
     overallAssessment: "The visible set was controlled.", score: null, scoreRationale: [], didWell: [], priorityCorrections: [], coachingCues: [],
+    setContext: { cameraView: "front", visibleReferences: ["shoulders", "dumbbell endpoints"], sequenceSummary: "Eight repetitions were visible.", changeAcrossSet: "The same path remained visible across the set.", coachingBasis: "Preserve the repeatable path." },
     setSummary: { totalReps: 8, consistentReps: 7, verdict: "Seven of eight reps stayed controlled." }, repTimeline: [], nextSetPlan: [], precisionRequest: { requestedRuns: 0, reason: null, targets: [] }, comparison: null,
   };
 }
@@ -136,6 +137,7 @@ describe("analyzeVideoHandler", () => {
 
     expect(response.status).toBe(200);
     expect(payload.result).toMatchObject({ status: "unable", videoCheck: unusableCheck });
+    expect(payload.result.setContext).toEqual({ cameraView: null, visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: null });
     expect(deps.saveResult).toHaveBeenCalledWith("session-1", expect.objectContaining({ status: "unable", videoCheck: unusableCheck }));
     expect(deps.generate).not.toHaveBeenCalled();
     expect(deps.deleteFile).toHaveBeenCalledWith("files/file-1");

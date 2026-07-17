@@ -28,6 +28,7 @@ export default function FindingDetailRoute() {
     <FindingDetailScreen
       finding={finding}
       videoUrl={status.data?.videoUrl ?? null}
+      durationMs={status.data?.durationMs ?? null}
       onRecordAnother={() => {
         resetCapture({ type: "reset" });
         router.replace({ pathname: "/recording-tips", params: { previousSessionId: sessionId } });

@@ -81,6 +81,22 @@ const setSummarySchema = z.object({
   path: ["consistentReps"],
 });
 
+const legacySetContext = {
+  cameraView: null,
+  visibleReferences: [] as string[],
+  sequenceSummary: null,
+  changeAcrossSet: null,
+  coachingBasis: null,
+};
+
+const setContextSchema = z.object({
+  cameraView: z.string().min(1).nullable(),
+  visibleReferences: z.array(z.string().min(1)),
+  sequenceSummary: z.string().min(1).nullable(),
+  changeAcrossSet: z.string().min(1).nullable(),
+  coachingBasis: z.string().min(1).nullable(),
+});
+
 const repTimelineItemSchema = z.object({
   repNumber: z.number().int().positive(),
   startMs: z.number().int().min(0),
@@ -151,6 +167,7 @@ export const analysisResultSchema = z
     didWell: z.array(coachingFindingSchema),
     priorityCorrections: z.array(coachingFindingSchema),
     coachingCues: z.array(coachingFindingSchema),
+    setContext: setContextSchema.optional().default(legacySetContext),
     setSummary: setSummarySchema.optional(),
     repTimeline: z.array(repTimelineItemSchema).optional(),
     nextSetPlan: z.array(nextSetPlanItemSchema).max(5).optional(),

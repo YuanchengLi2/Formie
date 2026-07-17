@@ -14,6 +14,8 @@ describe("RecordingTipsScreen", () => {
     expect(screen.getByText("Keep the full movement visible")).toBeTruthy();
     expect(screen.getByText("Capture most of your body or the area you want coached")).toBeTruthy();
     expect(screen.getByLabelText("Animated phone placement guide")).toBeTruthy();
+    expect(screen.getByTestId("recording-tips-motion-card")).toBeTruthy();
+    expect(screen.getAllByTestId(/recording-tip-row-/)).toHaveLength(4);
     expect(screen.queryByLabelText("Phone placement from the production mockup")).toBeNull();
     expect(screen.getByText(/consent to private video upload for AI form analysis/i)).toBeTruthy();
     expect(screen.queryByText(/squat|curl|press/i)).toBeNull();
