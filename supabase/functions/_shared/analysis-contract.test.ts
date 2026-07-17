@@ -42,7 +42,11 @@ function candidate() {
       coachingBasis: "Prioritize a repeatable handle endpoint while keeping both shoulders level.",
     },
     setSummary: { totalReps: 3, consistentReps: 2, verdict: "The last repetition changed." },
-    repTimeline: [{ repNumber: 1, startMs: 500, peakMs: 900, endMs: 1_800, assessment: "consistent", note: "The repetition stayed controlled." }],
+    repTimeline: [
+      { repNumber: 1, startMs: 500, peakMs: 900, endMs: 1_800, assessment: "consistent", note: "The repetition stayed controlled." },
+      { repNumber: 2, startMs: 2_000, peakMs: 2_450, endMs: 3_300, assessment: "consistent", note: "The second repetition stayed controlled." },
+      { repNumber: 3, startMs: 3_500, peakMs: 4_000, endMs: 4_800, assessment: "breakdown", note: "The final endpoint shortened." },
+    ],
     nextSetPlan: [{ id: "plan-1", action: "Keep the upper arms still", rationale: "Reduce elbow drift.", relatedFindingId: "drift" }],
     precisionRequest: { requestedRuns: 1, reason: "The late elbow path needs a tighter timestamp check.", targets: [{ kind: "timestamp", findingId: "drift", startMs: 1_000, endMs: 1_700, question: "Does the elbow move forward at the cited peak?" }] },
     comparison: null,
@@ -133,6 +137,22 @@ describe("Gemini analysis contract", () => {
     const value = candidate();
     value.repTimeline.push({ repNumber: 1, startMs: 1_600, peakMs: 1_900, endMs: 2_200, assessment: "breakdown", note: "Duplicate rep." });
     expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("repTimeline must be ordered with unique non-overlapping repetitions");
+  });
+
+  it("rejects duplicate finding and next-set action identifiers", () => {
+    const duplicateFinding = candidate();
+    duplicateFinding.priorityCorrections[0].id = duplicateFinding.didWell[0].id;
+    expect(() => validateAnalysisCandidate(duplicateFinding, 10_000)).toThrow("finding IDs must be unique");
+
+    const duplicateAction = candidate();
+    duplicateAction.nextSetPlan.push({ ...duplicateAction.nextSetPlan[0] });
+    expect(() => validateAnalysisCandidate(duplicateAction, 10_000)).toThrow("nextSetPlan IDs must be unique");
+  });
+
+  it("requires the reported rep total to match the complete rep timeline", () => {
+    const value = candidate();
+    value.setSummary.totalReps = 4;
+    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("total repetitions must match repTimeline");
   });
 
   it("rejects a score when recognition is uncertain", () => {

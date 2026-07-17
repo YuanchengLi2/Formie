@@ -15,7 +15,11 @@ function validCandidate() {
     coachingCues: [],
     setContext: { cameraView: "front", visibleReferences: ["torso", "dumbbell endpoints"], sequenceSummary: "Three repetitions were visible.", changeAcrossSet: "The torso stayed stable across the set.", coachingBasis: "Preserve the stable torso while repeating the same curl path." },
     setSummary: { totalReps: 3, consistentReps: 2, verdict: "The final repetition changed." },
-    repTimeline: [{ repNumber: 1, startMs: 500, peakMs: 900, endMs: 1_300, assessment: "consistent", note: "The repetition stayed controlled." }],
+    repTimeline: [
+      { repNumber: 1, startMs: 500, peakMs: 900, endMs: 1_300, assessment: "consistent", note: "The repetition stayed controlled." },
+      { repNumber: 2, startMs: 1_500, peakMs: 1_900, endMs: 2_300, assessment: "consistent", note: "The second repetition stayed controlled." },
+      { repNumber: 3, startMs: 2_500, peakMs: 2_900, endMs: 3_300, assessment: "breakdown", note: "The final repetition changed." },
+    ],
     nextSetPlan: [{ id: "plan-1", action: "Keep the upper arms still", rationale: "Reduce elbow drift.", relatedFindingId: "stable" }],
     precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
     comparison: null,
@@ -202,6 +206,7 @@ describe("Gemini video client", () => {
       evidence: [{ ...draft.didWell[0].evidence[0], peakMs: 1_250 + index * 10, coachingNote: `the visible position changes; make physical change ${index + 1}.` }],
     }));
     draft.repTimeline = [{ ...draft.repTimeline[0], endMs: 2_000 }];
+    draft.setSummary = { ...draft.setSummary, totalReps: 1, consistentReps: 1 };
     draft.nextSetPlan = [{ id: "plan-1", action: "Apply the clearest correction", rationale: "Improve the set.", relatedFindingId: "correction-1" }];
     const fetcher = jest.fn();
     const client = createGeminiVideoClient({ apiKey: "secret", model: "gemini-3.5-flash", fetcher });
@@ -235,6 +240,7 @@ describe("Gemini video client", () => {
     draft.recognition.confidence = 0.72;
     draft.priorityCorrections = [{ ...draft.didWell[0], id: "elbow-drift", title: "Late elbow drift", evidence: [{ ...draft.didWell[0].evidence[0], startMs: 2_000, peakMs: 2_400, endMs: 2_800, confidence: 0.82 }] }];
     draft.repTimeline = [{ repNumber: 1, startMs: 500, peakMs: 2_400, endMs: 3_000, assessment: "breakdown", note: "Elbow travel increased." }];
+    draft.setSummary = { ...draft.setSummary, totalReps: 1, consistentReps: 0 };
     draft.precisionRequest = {
       requestedRuns: 2,
       reason: "Recognition and the late-set timestamp both need review.",

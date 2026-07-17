@@ -186,7 +186,7 @@ Deno.serve(async (request) => {
         premium_runs_used: result.precisionReview?.runsUsed ?? 0,
         verification: result.verification ?? null,
         comparison: result.comparison,
-        analysis_version: "gemini-video-4.1.0",
+        analysis_version: "gemini-video-4.2.0",
       }, { onConflict: "session_id" });
       if (resultError) throw resultError;
     },

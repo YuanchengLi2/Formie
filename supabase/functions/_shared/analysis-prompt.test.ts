@@ -40,6 +40,13 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).toContain("onset delay, brief reversal, path wobble");
     expect(prompt).toContain("movement direction of every visible hand, wrist, elbow, shoulder");
     expect(prompt).toContain("perspective distortion");
+    expect(prompt).toContain("infer the camera direction");
+    expect(prompt).toContain("front, rear, left side, right side, high, low, or diagonal");
+    expect(prompt).toContain("foreshortening");
+    expect(prompt).toContain("wide-angle lens distortion");
+    expect(prompt).toContain("apparent size alone");
+    expect(prompt).toContain("same anatomical phase");
+    expect(prompt).toContain("mirrored front-camera footage");
     expect(prompt).toContain("Report every distinct visible and actionable technical deviation");
     expect(prompt).toContain("distinguish not visible from visibly incorrect");
     expect(prompt).toContain("evaluate every factor that is actually visible");
@@ -87,10 +94,8 @@ describe("buildAnalysisPrompt", () => {
     expect(prompt).toContain("precisionRequest.requestedRuns to 0 or 1");
     expect(prompt).toContain("single material uncertainty");
     expect(prompt).not.toContain("Capture metadata");
-    expect(prompt).not.toContain("camera view");
     expect(prompt).not.toContain("move the camera");
     expect(prompt).not.toContain("record from a different angle");
-    expect(prompt).not.toContain("orientation");
     expect(prompt).not.toContain("MediaPipe");
     expect(prompt).not.toContain("MoveNet");
     expect(prompt).not.toContain("pose");
