@@ -20,7 +20,7 @@ function session(overrides: Partial<AnalyzeVideoSession> = {}): AnalyzeVideoSess
   return {
     id: "session-1", userId: "user-1", status: "processing", stage: "video_check", videoPath: "user-1/session-1/original.mp4", durationMs: 10_000,
     requestedFps: REQUESTED_ANALYSIS_FPS,
-    geminiFileName: null, geminiFileUri: null, geminiFileState: null, preflightCheck: null, result: null,
+    geminiFileName: null, geminiFileUri: null, geminiFileState: null, preflightCheck: null, analysisDraft: null, result: null,
     ...overrides,
   };
 }
@@ -41,6 +41,7 @@ function dependencies(current = session(), overrides: Partial<AnalyzeVideoDepend
     savePreflightCheck: jest.fn(async () => undefined),
     buildPrompt: jest.fn(async () => "coach the actual camera view"),
     generate: jest.fn(async () => result()),
+    saveDraft: jest.fn(async () => undefined),
     verify: jest.fn(async (_session, _file, draft) => ({
       ...draft,
       precisionReview: { runsRequested: 0, runsUsed: 0, status: "not-needed", summary: null, passes: [] },
@@ -48,6 +49,7 @@ function dependencies(current = session(), overrides: Partial<AnalyzeVideoDepend
     })),
     markStage: jest.fn(async () => undefined),
     saveResult: jest.fn(async () => undefined),
+    clearDraft: jest.fn(async () => undefined),
     markFailed: jest.fn(async () => undefined),
     deleteFile: jest.fn(async () => undefined),
     ...overrides,
@@ -101,21 +103,24 @@ describe("analyzeVideoHandler", () => {
     expect(deps.generate).not.toHaveBeenCalled();
   });
 
-  it("persists one result and cleans up an active file", async () => {
+  it("persists a resumed draft result and cleans up an active file", async () => {
     const deps = dependencies(session({
+      stage: "coaching",
       geminiFileName: "files/file-1",
       geminiFileUri: "uri",
       geminiFileState: "ACTIVE",
       preflightCheck: { outcome: "usable", usableObservations: ["person and movement visible"], limitations: [], retryReason: null, retryInstruction: null },
+      analysisDraft: result(),
     }));
     const response = await analyzeVideoHandler(request(), deps);
     expect(response.status).toBe(200);
-    expect(deps.generate).toHaveBeenCalledTimes(1);
+    expect(deps.generate).not.toHaveBeenCalled();
     expect(deps.verify).toHaveBeenCalledWith(expect.objectContaining({ id: "session-1" }), activeFile, result());
     expect(deps.saveResult).toHaveBeenCalledWith("session-1", expect.objectContaining({
       precisionReview: expect.objectContaining({ runsUsed: 0 }),
       verification: expect.objectContaining({ outcome: "not-needed" }),
     }));
+    expect(deps.clearDraft).toHaveBeenCalledWith("session-1");
     expect(deps.deleteFile).toHaveBeenCalledWith("files/file-1");
     expect((await response.json()).result).toMatchObject(result());
   });
@@ -143,22 +148,62 @@ describe("analyzeVideoHandler", () => {
     expect(deps.deleteFile).toHaveBeenCalledWith("files/file-1");
   });
 
-  it("continues directly into coaching after a usable check without another polling round", async () => {
+  it("stops at full-video preparation after a usable check", async () => {
     const deps = dependencies(session({ geminiFileName: "files/file-1", geminiFileUri: "uri", geminiFileState: "ACTIVE" }));
 
     const response = await analyzeVideoHandler(request(), deps);
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
+    expect((await response.json()).stage).toBe("video_processing");
     expect(deps.savePreflightCheck).toHaveBeenCalledWith("session-1", expect.objectContaining({ outcome: "usable" }));
-    expect(deps.generate).toHaveBeenCalledTimes(1);
+    expect(deps.markStage).toHaveBeenCalledWith("session-1", "video_processing");
+    expect(deps.generate).not.toHaveBeenCalled();
   });
 
-  it("keeps a completed result when best-effort Gemini cleanup fails", async () => {
+  it("makes technique review observable before running Gemini analysis", async () => {
     const deps = dependencies(session({
+      stage: "video_processing",
       geminiFileName: "files/file-1",
       geminiFileUri: "uri",
       geminiFileState: "ACTIVE",
       preflightCheck: { outcome: "usable", usableObservations: ["person and movement visible"], limitations: [], retryReason: null, retryInstruction: null },
+    }));
+
+    const response = await analyzeVideoHandler(request(), deps);
+
+    expect(response.status).toBe(202);
+    expect((await response.json()).stage).toBe("technique_review");
+    expect(deps.markStage).toHaveBeenCalledWith("session-1", "technique_review");
+    expect(deps.generate).not.toHaveBeenCalled();
+  });
+
+  it("saves the primary draft and makes coaching observable before verification", async () => {
+    const deps = dependencies(session({
+      stage: "technique_review",
+      geminiFileName: "files/file-1",
+      geminiFileUri: "uri",
+      geminiFileState: "ACTIVE",
+      preflightCheck: { outcome: "usable", usableObservations: ["person and movement visible"], limitations: [], retryReason: null, retryInstruction: null },
+    }));
+
+    const response = await analyzeVideoHandler(request(), deps);
+
+    expect(response.status).toBe(202);
+    expect((await response.json()).stage).toBe("coaching");
+    expect(deps.generate).toHaveBeenCalledTimes(1);
+    expect(deps.saveDraft).toHaveBeenCalledWith("session-1", result());
+    expect(deps.markStage).toHaveBeenCalledWith("session-1", "coaching");
+    expect(deps.verify).not.toHaveBeenCalled();
+  });
+
+  it("keeps a completed result when best-effort Gemini cleanup fails", async () => {
+    const deps = dependencies(session({
+      stage: "coaching",
+      geminiFileName: "files/file-1",
+      geminiFileUri: "uri",
+      geminiFileState: "ACTIVE",
+      preflightCheck: { outcome: "usable", usableObservations: ["person and movement visible"], limitations: [], retryReason: null, retryInstruction: null },
+      analysisDraft: result(),
     }), {
       deleteFile: jest.fn(async () => { throw new Error("cleanup unavailable"); }),
     });
@@ -175,10 +220,12 @@ describe("analyzeVideoHandler", () => {
 
   it("keeps the primary analysis when the precision verifier is unavailable", async () => {
     const deps = dependencies(session({
+      stage: "coaching",
       geminiFileName: "files/file-1",
       geminiFileUri: "uri",
       geminiFileState: "ACTIVE",
       preflightCheck: { outcome: "usable", usableObservations: ["person and movement visible"], limitations: [], retryReason: null, retryInstruction: null },
+      analysisDraft: result(),
     }), {
       verify: jest.fn(async () => { throw new Error("verifier unavailable"); }),
     });
@@ -201,6 +248,7 @@ describe("analyzeVideoHandler", () => {
     expect(failedFile.markFailed).toHaveBeenCalled();
 
     const invalidOutput = dependencies(session({
+      stage: "technique_review",
       geminiFileName: "files/file-1",
       geminiFileUri: "uri",
       geminiFileState: "ACTIVE",

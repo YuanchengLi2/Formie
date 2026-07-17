@@ -62,6 +62,7 @@ Deno.serve(async (request) => {
         geminiFileUri: session.gemini_file_uri,
         geminiFileState: session.gemini_file_state,
         preflightCheck: session.preflight_check,
+        analysisDraft: session.analysis_draft,
         result: resultPayload(session, result),
       } as AnalyzeVideoSession;
     },
@@ -132,6 +133,13 @@ Deno.serve(async (request) => {
       });
     },
     generate: (session, file, prompt) => gemini.generateAnalysis({ file, prompt, durationMs: session.durationMs ?? 0 }),
+    saveDraft: async (sessionId, draft) => {
+      const { error } = await admin.from("analysis_sessions").update({
+        analysis_draft: draft,
+        updated_at: new Date().toISOString(),
+      }).eq("id", sessionId);
+      if (error) throw error;
+    },
     verify: (session, file, draft) => gemini.verifyAnalysis({ file, draft, durationMs: session.durationMs ?? 0 }),
     markStage: async (sessionId, stage) => {
       const { error } = await admin.from("analysis_sessions").update({ status: "processing", stage, updated_at: new Date().toISOString() }).eq("id", sessionId);
@@ -181,6 +189,10 @@ Deno.serve(async (request) => {
         analysis_version: "gemini-video-4.1.0",
       }, { onConflict: "session_id" });
       if (resultError) throw resultError;
+    },
+    clearDraft: async (sessionId) => {
+      const { error } = await admin.from("analysis_sessions").update({ analysis_draft: null, updated_at: new Date().toISOString() }).eq("id", sessionId);
+      if (error) throw error;
     },
     markFailed: async (sessionId, code) => {
       const { error } = await admin.from("analysis_sessions").update({ status: "failed", failure_code: code, updated_at: new Date().toISOString() }).eq("id", sessionId);
