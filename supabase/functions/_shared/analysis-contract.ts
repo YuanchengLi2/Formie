@@ -392,6 +392,8 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
   const didWell = findings(result.didWell, "didWell", durationMs);
   const corrections = findings(result.priorityCorrections, "priorityCorrections", durationMs);
   const cues = findings(result.coachingCues, "coachingCues", durationMs);
+  const findingIdList = [...didWell, ...corrections, ...cues].map((finding) => finding.id);
+  if (new Set(findingIdList).size !== findingIdList.length) throw new Error("finding IDs must be unique across every coaching section");
   const allFindingPeaks = [...didWell, ...corrections, ...cues].flatMap((finding) => finding.evidence.map((moment) => ({ findingId: finding.id, peakMs: moment.peakMs })));
   for (let left = 0; left < allFindingPeaks.length; left += 1) {
     for (let right = left + 1; right < allFindingPeaks.length; right += 1) {
@@ -430,12 +432,18 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
     if (!["strong", "consistent", "breakdown", "uncertain"].includes(String(rep.assessment))) throw new Error("repTimeline assessment is invalid");
     string(rep.note, "repTimeline.note");
   }
+  if ((totalReps === null && result.repTimeline.length > 0) || (totalReps !== null && result.repTimeline.length !== totalReps)) {
+    throw new Error("total repetitions must match repTimeline");
+  }
 
   if (!Array.isArray(result.nextSetPlan) || result.nextSetPlan.length > 5) throw new Error("nextSetPlan must contain at most five actions");
   const findingIds = new Set([...didWell, ...corrections, ...cues].map((finding) => finding.id));
+  const nextSetPlanIds = new Set<string>();
   for (const rawItem of result.nextSetPlan) {
     const item = object(rawItem, "nextSetPlan item");
     string(item.id, "nextSetPlan.id");
+    if (nextSetPlanIds.has(String(item.id))) throw new Error("nextSetPlan IDs must be unique");
+    nextSetPlanIds.add(String(item.id));
     string(item.action, "nextSetPlan.action");
     string(item.rationale, "nextSetPlan.rationale");
     string(item.relatedFindingId, "nextSetPlan.relatedFindingId", true);

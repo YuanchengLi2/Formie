@@ -44,7 +44,7 @@ function frameFor(
 }
 
 export function buildReviewFrames(result: AnalysisResult): ReviewFrameGroups {
-  const visibleFindings = [...result.priorityCorrections, ...result.coachingCues];
+  const visibleFindings = [...result.priorityCorrections, ...result.coachingCues, ...(result.didWell ?? [])];
   const observed = visibleFindings.flatMap((finding) => finding.evidence.map((evidence, index) => frameFor(
     "observed",
     finding,

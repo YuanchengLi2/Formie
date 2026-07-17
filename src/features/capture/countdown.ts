@@ -11,5 +11,5 @@ export function formatElapsed(durationMs: number): string {
 }
 
 export function normalizeRecordedDuration(durationMs: number): number {
-  return Math.min(60_000, Math.max(0, Math.round(durationMs)));
+  return Math.min(90_000, Math.max(0, Math.round(durationMs)));
 }

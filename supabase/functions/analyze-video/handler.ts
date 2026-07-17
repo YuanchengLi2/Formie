@@ -14,6 +14,7 @@ export type AnalyzeVideoSession = {
   geminiFileUri: string | null;
   geminiFileState: GeminiFile["state"] | null;
   preflightCheck: VideoPreflightCheck | null;
+  analysisDraft: AnalysisCandidate | null;
   result: AnalysisCandidate | null;
 };
 
@@ -28,9 +29,11 @@ export type AnalyzeVideoDependencies = {
   savePreflightCheck: (sessionId: string, check: VideoPreflightCheck) => Promise<void>;
   buildPrompt: (session: AnalyzeVideoSession) => Promise<string>;
   generate: (session: AnalyzeVideoSession, file: GeminiFile, prompt: string) => Promise<AnalysisCandidate>;
+  saveDraft: (sessionId: string, draft: AnalysisCandidate) => Promise<void>;
   verify: (session: AnalyzeVideoSession, file: GeminiFile, draft: AnalysisCandidate) => Promise<AnalysisCandidate>;
   markStage: (sessionId: string, stage: "video_processing" | "technique_review" | "coaching") => Promise<void>;
   saveResult: (sessionId: string, result: AnalysisCandidate) => Promise<void>;
+  clearDraft: (sessionId: string) => Promise<void>;
   markFailed: (sessionId: string, code: string) => Promise<void>;
   deleteFile: (name: string) => Promise<void>;
 };
@@ -104,10 +107,7 @@ export async function analyzeVideoHandler(request: Request, dependencies: Analyz
       return json(statusPayload(session, "processing", "video_check", null), 202);
     }
 
-    const [file, existingPrompt] = session.preflightCheck
-      ? await Promise.all([dependencies.getFile(session.geminiFileName), dependencies.buildPrompt(session)])
-      : [await dependencies.getFile(session.geminiFileName), null];
-    let preparedPrompt = existingPrompt;
+    const file = await dependencies.getFile(session.geminiFileName);
     await dependencies.saveFileState(session.id, file);
     if (file.state === "PROCESSING") {
       return json(statusPayload(session, "processing", session.preflightCheck ? "video_processing" : "video_check", null), 202);
@@ -120,10 +120,7 @@ export async function analyzeVideoHandler(request: Request, dependencies: Analyz
     if (!session.preflightCheck) {
       let check: VideoPreflightCheck;
       try {
-        [check, preparedPrompt] = await Promise.all([
-          dependencies.checkVideo(session, file),
-          dependencies.buildPrompt(session),
-        ]);
+        check = await dependencies.checkVideo(session, file);
       } catch {
         await dependencies.markFailed(session.id, "GEMINI_VIDEO_CHECK_FAILED");
         return json({ message: "The recording could not be checked", code: "GEMINI_VIDEO_CHECK_FAILED" }, 502);
@@ -136,19 +133,31 @@ export async function analyzeVideoHandler(request: Request, dependencies: Analyz
       }
       await dependencies.savePreflightCheck(session.id, check);
       await dependencies.markStage(session.id, "video_processing");
+      return json(statusPayload(session, "processing", "video_processing", null), 202);
     }
 
-    await dependencies.markStage(session.id, "technique_review");
-    const prompt = preparedPrompt ?? await dependencies.buildPrompt(session);
-    let result: AnalysisCandidate;
-    try {
-      result = await dependencies.generate(session, file, prompt);
-    } catch {
-      await dependencies.markFailed(session.id, "GEMINI_ANALYSIS_FAILED");
-      return json({ message: "Gemini analysis could not be validated", code: "GEMINI_ANALYSIS_FAILED" }, 502);
+    if (session.stage === "video_processing" && !session.analysisDraft) {
+      await dependencies.markStage(session.id, "technique_review");
+      return json(statusPayload(session, "processing", "technique_review", null), 202);
     }
 
-    await dependencies.markStage(session.id, "coaching");
+    let result = session.analysisDraft;
+    if (!result) {
+      const prompt = await dependencies.buildPrompt(session);
+      try {
+        result = await dependencies.generate(session, file, prompt);
+      } catch {
+        await dependencies.markFailed(session.id, "GEMINI_ANALYSIS_FAILED");
+        return json({ message: "Gemini analysis could not be validated", code: "GEMINI_ANALYSIS_FAILED" }, 502);
+      }
+      await dependencies.saveDraft(session.id, result);
+    }
+
+    if (session.stage !== "coaching") {
+      await dependencies.markStage(session.id, "coaching");
+      return json(statusPayload(session, "processing", "coaching", null), 202);
+    }
+
     try {
       result = await dependencies.verify(session, file, result);
     } catch {
@@ -171,6 +180,7 @@ export async function analyzeVideoHandler(request: Request, dependencies: Analyz
       };
     }
     await dependencies.saveResult(session.id, result);
+    await dependencies.clearDraft(session.id).catch(() => undefined);
     await dependencies.deleteFile(file.name).catch(() => undefined);
     return json(statusPayload(session, result.status, "coaching", result), 200);
   } catch (error) {

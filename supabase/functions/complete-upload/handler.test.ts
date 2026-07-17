@@ -50,6 +50,17 @@ describe("completeUploadHandler", () => {
     expect(deps.markProcessing).not.toHaveBeenCalled();
   });
 
+  it("accepts a complete ninety-second set", async () => {
+    const deps = dependencies();
+    const response = await completeUploadHandler(
+      request({ sessionId: "session-1", durationMs: 90_000 }),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(deps.markProcessing).toHaveBeenCalledWith(expect.objectContaining({ durationMs: 90_000 }));
+  });
+
   it("requires an owned session and uploaded storage object", async () => {
     const missingSession = dependencies({ findSession: jest.fn(async () => null) });
     const notFound = await completeUploadHandler(

@@ -48,7 +48,7 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
   const { sessionId, durationMs } = body;
   if (
     typeof sessionId !== "string" || !sessionId ||
-    typeof durationMs !== "number" || !Number.isInteger(durationMs) || durationMs < 3_000 || durationMs > 60_000
+    typeof durationMs !== "number" || !Number.isInteger(durationMs) || durationMs < 3_000 || durationMs > 90_000
   ) {
     return json({ message: "Invalid upload metadata", code: "INVALID_BODY" }, 400);
   }
