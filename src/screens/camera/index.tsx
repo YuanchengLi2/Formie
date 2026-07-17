@@ -160,7 +160,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         zoom={zoom}
       />
       <GestureDetector gesture={pinchGesture}>
-        <View accessibilityLabel="Pinch camera preview to zoom" collapsable={false} style={{ position: "absolute", inset: 0 }} />
+        <View accessibilityLabel="Pinch camera preview in or out" collapsable={false} style={{ position: "absolute", inset: 0 }} />
       </GestureDetector>
 
       <View pointerEvents="box-none" style={{ position: "absolute", top: insets.top + spacing.md, left: spacing.lg, right: spacing.lg, flexDirection: "row", justifyContent: "space-between" }}>
@@ -206,6 +206,8 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         onStop={() => cameraRef.current?.stopRecording()}
         onRetryUpload={() => undefined}
         onDiscardRecording={discardRecording}
+        zoomed={zoom > 0.005}
+        onResetZoom={() => setCameraZoom(0)}
         topInset={insets.top}
         bottomInset={insets.bottom}
       />

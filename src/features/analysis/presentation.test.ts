@@ -51,6 +51,7 @@ function result(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
     didWell: [finding("Stable torso", "note")],
     priorityCorrections: [finding("Elbow drift", "high")],
     coachingCues: [finding("Wall cue", "important")],
+    setContext: { cameraView: null, visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: null },
     comparison: null,
     ...overrides,
   };

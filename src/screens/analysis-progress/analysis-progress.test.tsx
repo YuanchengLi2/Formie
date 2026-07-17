@@ -12,11 +12,13 @@ describe("AnalysisProgressScreen", () => {
     );
 
     expect(screen.queryByText(/%/)).toBeNull();
-    expect(screen.getByLabelText("Analysis figure")).toBeTruthy();
+    expect(screen.getByTestId("analysis-progress-native-motion", { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByTestId("analysis-motion-video-processing", { includeHiddenElements: true }).props.accessibilityState).toEqual({ selected: true });
     expect(screen.getByText("Checking your recording")).toBeTruthy();
     expect(screen.getByText("Preparing the full video")).toBeTruthy();
     expect(screen.getByLabelText("Preparing the full video").props.accessibilityState).toEqual({ selected: true });
     expect(screen.queryByLabelText("FORM analysis progress animation")).toBeNull();
+    expect(screen.queryByLabelText("Analysis figure")).toBeNull();
     expect(screen.queryByText("This usually takes a moment")).toBeNull();
   });
 

@@ -39,6 +39,13 @@ function result(): AnalysisResult {
     didWell: Array.from({ length: 5 }, (_, index) => finding(`well-${index}`, `Did well ${index + 1}`)),
     priorityCorrections: Array.from({ length: 4 }, (_, index) => finding(`fix-${index}`, `Priority ${index + 1}`)),
     coachingCues: Array.from({ length: 4 }, (_, index) => finding(`cue-${index}`, `Coaching ${index + 1}`)),
+    setContext: {
+      cameraView: "down-front diagonal",
+      visibleReferences: ["shoulders relative to the seat", "handle endpoint relative to the machine frame"],
+      sequenceSummary: "Eight complete repetitions were visible from setup through the final reset.",
+      changeAcrossSet: "The handle endpoint shortened during the final two repetitions.",
+      coachingBasis: "Match the earlier handle endpoint while keeping both shoulders level.",
+    },
     setSummary: { totalReps: 8, consistentReps: 6, verdict: "Good control. Elbow position changed near the end." },
     repTimeline: [
       { repNumber: 1, startMs: 500, peakMs: 1_000, endMs: 1_500, assessment: "consistent", note: "Controlled repetition." },
@@ -68,16 +75,28 @@ describe("ResultsScreen", () => {
     const screen = await renderResults();
 
     expect(screen.getByText("COACHING REVIEW")).toBeTruthy();
-    expect(screen.getByText("16 coaching points")).toBeTruthy();
+    expect(screen.queryByText(/coaching points/i)).toBeNull();
     expect(screen.getByText("Review what happened, why it matters, and what to change next.")).toBeTruthy();
     expect(screen.getByText("What happened")).toBeTruthy();
     expect(screen.getByText("Why it matters")).toBeTruthy();
     expect(screen.getByText("What to do next")).toBeTruthy();
     expect(screen.getByText("Set Summary")).toBeTruthy();
+    expect(screen.getByText("WHOLE-SET READ")).toBeTruthy();
+    expect(screen.getByText("Eight complete repetitions were visible from setup through the final reset.")).toBeTruthy();
+    expect(screen.getByText("The handle endpoint shortened during the final two repetitions.")).toBeTruthy();
+    expect(screen.getByText("Match the earlier handle endpoint while keeping both shoulders level.")).toBeTruthy();
     expect(screen.getByText("Ask FORM Coach")).toBeTruthy();
     expect(screen.getByText("Camera visibility note")).toBeTruthy();
-    expect(screen.getByText("Pinch out to zoom · pinch in to return to full frame")).toBeTruthy();
-  });
+    expect(screen.queryByText(/pinch/i)).toBeNull();
+    expect(screen.getByTestId("coaching-workspace")).toBeTruthy();
+    expect(screen.getByTestId("active-coaching-panel").props.accessibilityLabel).toContain("What happened");
+    expect(screen.getByLabelText("Recording timeline").props.accessibilityRole).toBe("adjustable");
+    expect(screen.getByLabelText("Play recording in video")).toBeTruthy();
+    expect(screen.getAllByLabelText(/Review .* at/).length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId(/timeline-evidence-marker-/).length).toBeGreaterThan(0);
+    await fireEvent.press(screen.getByText("Why it matters"));
+    expect(screen.getByTestId("active-coaching-panel").props.accessibilityLabel).toContain("Why it matters");
+  }, 10_000);
 
   it("renders the supported strengths and focused next-set plan", async () => {
     const screen = await renderResults();
@@ -144,18 +163,17 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("What happened")).toBeTruthy();
     expect(screen.getByText("Why it matters")).toBeTruthy();
     expect(screen.getByText("What to do next")).toBeTruthy();
-    expect(screen.getByText("6 of 8 reps consistent")).toBeTruthy();
+    expect(screen.queryByText("6 of 8 reps consistent")).toBeNull();
     expect(screen.getByText("Set Summary")).toBeTruthy();
     expect(screen.getByText("1 of 16")).toBeTruthy();
     expect(screen.getByText("your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.")).toBeTruthy();
     expect(screen.getByText("Evidence checked")).toBeTruthy();
-    expect(screen.getByText("2 premium runs")).toBeTruthy();
+    expect(screen.queryByText(/premium run/i)).toBeNull();
     expect(screen.queryByText(/tokens/)).toBeNull();
     expect(screen.getByText("Ask FORM Coach")).toBeTruthy();
-    expect(screen.getByLabelText("Coaching point: Priority 1 at 00:02")).toHaveStyle({ width: 44, height: 44 });
-
-    await fireEvent.press(screen.getByLabelText("Coaching point: Priority 1 at 00:01"));
-    expect(screen.getByLabelText("AI focus: right shoulder")).toBeTruthy();
+    expect(screen.queryByLabelText(/Coaching point:/)).toBeNull();
+    expect(screen.queryByLabelText(/AI focus:/)).toBeNull();
+    expect(screen.queryByText(/^Rep \d+$/)).toBeNull();
     expect(screen.getAllByText("your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.").length).toBeGreaterThanOrEqual(1);
 
     await fireEvent.press(screen.getByText("Did well 1"));
@@ -192,7 +210,7 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("Evidence checked")).toBeNull();
   });
 
-  it("shows an honest premium receipt when a review fails and remaining runs are stopped", async () => {
+  it("keeps internal precision-run receipts out of the coaching UI", async () => {
     const failed = result();
     failed.precisionReview = {
       runsRequested: 2,
@@ -207,8 +225,8 @@ describe("ResultsScreen", () => {
       </SafeAreaProvider>,
     );
 
-    expect(screen.getByText("1 attempted · 0 completed")).toBeTruthy();
-    expect(screen.getByText("Stopped after review failure")).toBeTruthy();
+    expect(screen.queryByText(/attempted/i)).toBeNull();
+    expect(screen.queryByText(/review failure/i)).toBeNull();
     expect(screen.queryByText("1 additional evidence run completed")).toBeNull();
   });
 

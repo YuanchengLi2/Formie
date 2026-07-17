@@ -1,6 +1,8 @@
 const fs = require("node:fs");
 
 const CAMERA_LANGUAGE = /\b(camera|phone|angle|framing|frame the|orientation|viewpoint|recording direction|move farther|move closer)\b/i;
+const HIDDEN_INTERNAL_LANGUAGE = /\b(glutes?|quads?|hamstrings?|biceps?|triceps?|pecs?|lats?|muscles?|core)\b.{0,50}\b(stop(?:ped|s)?\s+(?:contribut|activat)|not\s+(?:contribut|activat)|deactivat|disengag)/i;
+const FATIGUE_OR_LOAD_LANGUAGE = /\b(fatigue|fatigued|tired|reduce\s+(?:the\s+)?(?:load|weight)|lower\s+(?:the\s+)?(?:load|weight))\b/i;
 
 function normalize(value) {
   return String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -18,6 +20,10 @@ function evaluateRows(rows, toleranceMs = 750) {
   let cameraComments = 0;
   let verifierInvocations = 0;
   let premiumRuns = 0;
+  let evidenceMoments = 0;
+  let pointAdviceMoments = 0;
+  let unsupportedInternalClaims = 0;
+  let unsupportedFatigueClaims = 0;
   const verifierUsage = { promptTokens: 0, outputTokens: 0, thinkingTokens: 0 };
   const failures = [];
 
@@ -52,6 +58,22 @@ function evaluateRows(rows, toleranceMs = 750) {
     const cameraCommentary = CAMERA_LANGUAGE.test(coachingText);
     if (cameraCommentary) cameraComments += 1;
 
+    const findings = [result.didWell, result.priorityCorrections, result.coachingCues].flatMap((items) => Array.isArray(items) ? items : []);
+    const moments = findings.flatMap((finding) => Array.isArray(finding?.evidence) ? finding.evidence : []);
+    evidenceMoments += moments.length;
+    pointAdviceMoments += moments.filter((moment) => typeof moment?.coachingNote === "string" && moment.coachingNote.trim()).length;
+    const hiddenInternalClaim = moments.some((moment) => HIDDEN_INTERNAL_LANGUAGE.test(String(moment?.coachingNote ?? "")));
+    if (hiddenInternalClaim) unsupportedInternalClaims += 1;
+    const unsupportedFatigue = findings.some((finding) => {
+      const evidence = Array.isArray(finding?.evidence) ? finding.evidence : [];
+      if (!evidence.some((moment) => FATIGUE_OR_LOAD_LANGUAGE.test(String(moment?.coachingNote ?? "")))) return false;
+      const reps = new Set(evidence.map((moment) => moment?.repNumber).filter((value) => Number.isInteger(value)));
+      const peaks = evidence.map((moment) => Number(moment?.peakMs)).filter(Number.isFinite);
+      const span = peaks.length > 1 ? Math.max(...peaks) - Math.min(...peaks) : 0;
+      return !(evidence.length >= 2 && (reps.size >= 2 || span >= 1_500));
+    });
+    if (unsupportedFatigue) unsupportedFatigueClaims += 1;
+
     const runsUsed = Number(result.precisionReview?.runsUsed ?? (result.verification?.performed ? 1 : 0));
     premiumRuns += runsUsed;
     if (runsUsed > 0) verifierInvocations += 1;
@@ -67,6 +89,9 @@ function evaluateRows(rows, toleranceMs = 750) {
     if (!correctionOk) checks.push("priority-correction");
     if (!evidenceOk) checks.push("evidence-time");
     if (cameraCommentary) checks.push("camera-commentary");
+    if (moments.some((moment) => typeof moment?.coachingNote !== "string" || !moment.coachingNote.trim())) checks.push("point-advice");
+    if (hiddenInternalClaim) checks.push("hidden-inference");
+    if (unsupportedFatigue) checks.push("unsupported-fatigue");
     if (checks.length) failures.push({ id: row.id ?? `row-${index + 1}`, checks });
   }
 
@@ -79,6 +104,9 @@ function evaluateRows(rows, toleranceMs = 750) {
     cameraCommentaryRate: ratio(cameraComments, rows.length),
     verifierInvocationRate: ratio(verifierInvocations, rows.length),
     premiumRunsAverage: ratio(premiumRuns, rows.length),
+    pointAdviceCoverageRate: ratio(pointAdviceMoments, evidenceMoments),
+    unsupportedInternalClaimRate: ratio(unsupportedInternalClaims, rows.length),
+    fatigueWithoutRepeatedEvidenceRate: ratio(unsupportedFatigueClaims, rows.length),
     verifierUsage,
     failures,
   };

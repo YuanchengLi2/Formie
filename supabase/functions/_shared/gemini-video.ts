@@ -1,4 +1,5 @@
 import { GEMINI_ANALYSIS_JSON_SCHEMA, type AnalysisCandidate, validateAnalysisCandidate } from "./analysis-contract.ts";
+import { REQUESTED_ANALYSIS_FPS } from "./analysis-settings.ts";
 
 const API = "https://generativelanguage.googleapis.com/v1beta";
 const UPLOAD_API = "https://generativelanguage.googleapis.com/upload/v1beta/files";
@@ -316,11 +317,12 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
             contents: [{
               role: "user",
               parts: [
-                { fileData: { mimeType: input.file.mimeType, fileUri: input.file.uri }, videoMetadata: { fps: 12 } },
+                { fileData: { mimeType: input.file.mimeType, fileUri: input.file.uri }, videoMetadata: { fps: REQUESTED_ANALYSIS_FPS } },
                 { text: prompt },
               ],
             }],
             generationConfig: {
+              mediaResolution: "MEDIA_RESOLUTION_HIGH",
               responseMimeType: "application/json",
               responseJsonSchema: GEMINI_ANALYSIS_JSON_SCHEMA,
             },
@@ -342,9 +344,8 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
 
     async verifyAnalysis(input: { file: GeminiFile; draft: AnalysisCandidate; durationMs: number }): Promise<AnalysisCandidate> {
       const request = input.draft.precisionRequest;
-      const needsWholeCoachingAudit = input.draft.status !== "unable";
-      const requestedTargets = (request?.targets ?? []).slice(0, needsWholeCoachingAudit ? 2 : 3);
-      if (!needsWholeCoachingAudit && requestedTargets.length === 0) {
+      const requestedTargets = (request?.targets ?? []).slice(0, 1);
+      if (requestedTargets.length === 0) {
         return {
           ...input.draft,
           precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
@@ -355,57 +356,9 @@ export function createGeminiVideoClient({ apiKey, model, fetcher = fetch }: Clie
       let merged: AnalysisCandidate = input.draft;
       const passes: NonNullable<AnalysisCandidate["precisionReview"]>["passes"] = [];
       let latestVerification: AnalysisCandidate["verification"] = { performed: false, reason: null, outcome: "not-needed", checkedFindingId: null };
-      let auditFailed = false;
-
-      if (needsWholeCoachingAudit) {
-        const prompt = `You are FORM's whole-analysis evidence auditor. Rewatch the complete original recording at high detail and return one complete corrected coaching result.
-
-Current coaching result: ${JSON.stringify(input.draft)}
-
-Audit every finding and every evidence moment, not only the first correction. Preserve every distinct material finding that the recording supports, remove unsupported or duplicate findings, and add any clearly visible material correction the first analysis missed, including when the first analysis returned only praise. There is no numeric cap on supported corrections or on the distinct material evidence moments needed to show where a recurring issue appears. Systematically check setup and bracing, timing and tempo, joint and implement placement, range of motion, stability, symmetry, sequencing, and rep-to-rep consistency across the entire set.
-
-For each finding, verify that its observation, explanation, correction, and cue are specific to the recognized exercise and mutually consistent. For each evidence moment, compare nearby frames and place peakMs on the clearest frame with the largest visible displacement or contrast that proves that exact claim; keep startMs and endMs tight, set repNumber and phase accurately, and rewrite coachingNote so it describes the visible event and one reproducible physical change. Verify every focusRegion against the original uncropped source frame and keep it only when the exact joint, body area, or implement is localizable with confidence of at least 0.8; otherwise set it to null.
-
-Use every usable part of the recording even when some body areas are hidden. In videoCheck.usableObservations, state which evaluation factors are visible. In videoCheck.limitations, state only the factors that genuinely cannot be judged. Never fabricate hidden joint position, muscle activation, pressure, pain, intent, or internal force. A limited view must not erase useful advice about timing, visible placement, range, stability, sequencing, or consistency. Only call fatigue or reduce load when repeated late-set deterioration visibly supports it. Return absolute milliseconds from the original video. Set precisionRequest to zero because this response is the whole-result audit.`;
-
-        try {
-          const response = await fetcher(`${API}/models/${encodeURIComponent(model)}:generateContent?key=${key}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ fileData: { mimeType: input.file.mimeType, fileUri: input.file.uri }, videoMetadata: { fps: 24 } }, { text: prompt }] }],
-              generationConfig: { mediaResolution: "MEDIA_RESOLUTION_HIGH", responseMimeType: "application/json", responseJsonSchema: GEMINI_ANALYSIS_JSON_SCHEMA },
-            }),
-          });
-          const payload = await responseJson(response, "Gemini whole-analysis audit failed");
-          const parsed = pinUsableRecognition(JSON.parse(responseText(payload))) as Record<string, unknown>;
-          parsed.precisionRequest = { requestedRuns: 0, reason: null, targets: [] };
-          delete parsed.precisionReview;
-          delete parsed.verification;
-          const audited = validateAnalysisCandidate(parsed, input.durationMs);
-          const comparableDraft = {
-            ...input.draft,
-            precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
-            precisionReview: undefined,
-            verification: undefined,
-          };
-          const changed = JSON.stringify(audited) !== JSON.stringify(comparableDraft);
-          merged = audited;
-          const outcome = changed ? "revised" : "confirmed";
-          const reason = changed
-            ? "The complete coaching result was revised after checking every finding and evidence frame."
-            : "Every coaching finding and evidence frame was confirmed against the complete recording.";
-          passes.push({ passNumber: 1, kind: "technique", outcome, reason, checkedFindingId: null, startMs: null, endMs: null, usage: usage(payload) });
-          latestVerification = { performed: true, reason, outcome, checkedFindingId: null, usage: usage(payload) };
-        } catch (error) {
-          auditFailed = true;
-          passes.push({ passNumber: 1, kind: "technique", outcome: "failed", reason: error instanceof Error ? error.message : "Whole-analysis evidence audit failed", checkedFindingId: null, startMs: null, endMs: null, usage: { promptTokens: 0, outputTokens: 0, thinkingTokens: 0 } });
-          latestVerification = { performed: true, reason: "The whole-analysis evidence audit was unavailable; the primary analysis was retained.", outcome: "failed", checkedFindingId: null };
-        }
-      }
 
       const findingIds = new Set([...merged.didWell, ...merged.priorityCorrections, ...merged.coachingCues].map((finding) => finding.id));
-      const targets = auditFailed ? [] : requestedTargets.filter((target) => target.kind === "recognition" || (target.findingId !== null && findingIds.has(target.findingId)));
+      const targets = requestedTargets.filter((target) => target.kind === "recognition" || (target.findingId !== null && findingIds.has(target.findingId)));
 
       for (let index = 0; index < targets.length; index += 1) {
         const target = targets[index];
@@ -421,7 +374,7 @@ The entire current coaching result is provided below. Keep every supported part,
 Entire current coaching result: ${JSON.stringify(merged)}
 Earlier premium review decisions: ${JSON.stringify(priorDecisions)}
 
-For recognition, confirm the existing nearest standard exercise or revise recognition to the most specific supported exercise and variation, even when the attempt is performed badly. For timestamp or technique, inspect the cited joint, body segment, or implement path and return a complete revised finding only if needed. All evidence timestamps must be absolute milliseconds from the start of the original video. Every revised evidence moment needs a coachingNote that describes the visible event at that moment and one reproducible correction; do not repeat the timestamp because the app adds it. Only call fatigue or recommend reducing load when repeated late-set deterioration supports it. Never claim hidden muscle activation or internal pressure. For every revised evidence moment, return focusRegion in normalized original source-frame coordinates only when the exact visible target is localizable with at least 0.8 confidence; otherwise set focusRegion to null. Confirm only what is visible; reject an unsupported finding; use inconclusive when the supplied view cannot decide. Never infer pain, muscle activation, hidden positions, intent, or internal forces. Never put recording or camera advice into coaching. Return recognition only for a revised recognition target, and finding only for a revised timestamp or technique target.`;
+For recognition, confirm the existing nearest standard exercise or revise recognition to the most specific supported exercise and variation, even when the attempt is performed badly. For timestamp or technique, inspect the cited joint, body segment, or implement path and return a complete revised finding only if needed. All evidence timestamps must be absolute milliseconds from the start of the original video. If revising a peakMs, keep it at least 250 milliseconds away from the evidence peaks used by every other finding while choosing a frame that still proves this claim. Every revised evidence moment needs a coachingNote that describes the visible event at that moment and one reproducible correction; do not repeat the timestamp because the app adds it. Only call fatigue or recommend reducing load when repeated late-set deterioration supports it. Never claim hidden muscle activation or internal pressure. For every revised evidence moment, return focusRegion in normalized original source-frame coordinates only when the exact visible target is localizable with at least 0.8 confidence; otherwise set focusRegion to null. Confirm only what is visible; reject an unsupported finding; use inconclusive when the supplied view cannot decide. Never infer pain, muscle activation, hidden positions, intent, or internal forces. Never put recording or camera advice into coaching. Return recognition only for a revised recognition target, and finding only for a revised timestamp or technique target.`;
         const videoMetadata: Record<string, unknown> = { fps: 24 };
         if (startMs !== null && endMs !== null) {
           videoMetadata.startOffset = `${startMs / 1_000}s`;
@@ -458,7 +411,7 @@ For recognition, confirm the existing nearest standard exercise or revise recogn
       }
 
       const failed = passes.some((pass) => pass.outcome === "failed");
-      const runsRequested = (needsWholeCoachingAudit ? 1 : 0) + targets.length;
+      const runsRequested = targets.length;
       const reviewed: AnalysisCandidate = ensureActionablePlan({
         ...merged,
         precisionRequest: { requestedRuns: 0, reason: null, targets: [] },

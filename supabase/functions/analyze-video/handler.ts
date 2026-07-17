@@ -64,6 +64,7 @@ function unableResult(check: VideoPreflightCheck): AnalysisCandidate {
     didWell: [],
     priorityCorrections: [],
     coachingCues: [],
+    setContext: { cameraView: null, visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: null },
     setSummary: { totalReps: null, consistentReps: null, verdict: null },
     repTimeline: [],
     nextSetPlan: [],
@@ -103,9 +104,10 @@ export async function analyzeVideoHandler(request: Request, dependencies: Analyz
       return json(statusPayload(session, "processing", "video_check", null), 202);
     }
 
-    const [file, preparedPrompt] = session.preflightCheck
+    const [file, existingPrompt] = session.preflightCheck
       ? await Promise.all([dependencies.getFile(session.geminiFileName), dependencies.buildPrompt(session)])
       : [await dependencies.getFile(session.geminiFileName), null];
+    let preparedPrompt = existingPrompt;
     await dependencies.saveFileState(session.id, file);
     if (file.state === "PROCESSING") {
       return json(statusPayload(session, "processing", session.preflightCheck ? "video_processing" : "video_check", null), 202);
@@ -118,7 +120,10 @@ export async function analyzeVideoHandler(request: Request, dependencies: Analyz
     if (!session.preflightCheck) {
       let check: VideoPreflightCheck;
       try {
-        check = await dependencies.checkVideo(session, file);
+        [check, preparedPrompt] = await Promise.all([
+          dependencies.checkVideo(session, file),
+          dependencies.buildPrompt(session),
+        ]);
       } catch {
         await dependencies.markFailed(session.id, "GEMINI_VIDEO_CHECK_FAILED");
         return json({ message: "The recording could not be checked", code: "GEMINI_VIDEO_CHECK_FAILED" }, 502);

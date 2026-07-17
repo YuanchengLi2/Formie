@@ -1,4 +1,3 @@
-import { Image } from "expo-image";
 import { ScrollView, Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -6,12 +5,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FormButton } from "@/components/form-button";
 import { FormCard } from "@/components/form-card";
 import { FormWordmark } from "@/components/form-wordmark";
+import { AnalysisProgressMotion } from "@/components/analysis-progress-motion";
 import { analysisProgress } from "@/features/analysis/progress-stages";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
-
-const analysisFigure = require("../../../assets/production/analysis-figure.png");
 
 type AnalysisProgressScreenProps = {
   stage: string | null;
@@ -36,15 +34,15 @@ export function AnalysisProgressScreen({ stage, failureMessage, onRecordAgain, o
         }}
       >
         <FormWordmark />
-        <Animated.View entering={FadeInDown.duration(380)} style={{ flex: 1, justifyContent: "center", gap: spacing.xl }}>
-          <View style={{ gap: spacing.sm }}>
+        <Animated.View entering={FadeInDown.duration(220)} style={{ flex: 1, justifyContent: "center", gap: spacing.xxl }}>
+          <View style={{ gap: spacing.md }}>
             <Text selectable style={[typography.title, { color: colors.text }]}>Analyzing your movement</Text>
-            <Text selectable style={[typography.body, { color: colors.textSecondary }]}>Your recording is ready. FORM is working through each coaching stage.</Text>
+            <Text selectable style={[typography.body, { maxWidth: 560, color: colors.textSecondary }]}>Your recording is ready. FORM is reviewing the full movement and preparing specific coaching.</Text>
           </View>
 
           <View
             style={{
-              minHeight: 180,
+              minHeight: 210,
               overflow: "hidden",
               borderRadius: radii.lg,
               borderCurve: "continuous",
@@ -53,23 +51,18 @@ export function AnalysisProgressScreen({ stage, failureMessage, onRecordAgain, o
               backgroundColor: colors.surface,
             }}
           >
-            <Image
-              source={analysisFigure}
-              accessibilityLabel="Analysis figure"
-              contentFit="cover"
-              style={{ width: "100%", height: 210 }}
-            />
+            <AnalysisProgressMotion stage={stage} />
           </View>
 
           <View accessibilityRole="list" style={{ gap: spacing.sm }}>
             {progress.items.map((item, index) => (
               <Animated.View
                 key={item.key}
-                entering={FadeInDown.delay(index * 45).duration(280)}
+                entering={FadeInDown.delay(index * 25).duration(180)}
                 accessibilityLabel={item.label}
                 accessibilityState={{ selected: item.state === "active" }}
                 style={{
-                  minHeight: 48,
+                  minHeight: 56,
                   flexDirection: "row",
                   alignItems: "center",
                   gap: spacing.md,

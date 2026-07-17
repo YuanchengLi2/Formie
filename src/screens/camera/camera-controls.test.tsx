@@ -40,6 +40,16 @@ describe("CameraControls", () => {
     expect(onRecord).toHaveBeenCalledTimes(1);
   });
 
+  it("offers a clear way to return to the full unzoomed view", async () => {
+    const onResetZoom = jest.fn();
+    const screen = await render(
+      <CameraControls phase="idle" countdown={null} elapsedMs={0} error={null} hasRecording={false} zoomed onResetZoom={onResetZoom} onRecord={jest.fn()} onStop={jest.fn()} onRetryUpload={jest.fn()} />,
+    );
+    expect(screen.queryByText(/pinch to zoom/i)).toBeNull();
+    await fireEvent.press(screen.getByText("Reset view"));
+    expect(onResetZoom).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps a retry action visible when upload fails", async () => {
     const onRetryUpload = jest.fn();
     const onDiscardRecording = jest.fn();

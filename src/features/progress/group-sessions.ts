@@ -8,6 +8,7 @@ export type AnalysisHistoryItem = {
   createdAt: string;
   detectedLabel: string | null;
   correctedLabel: string | null;
+  pinnedAt?: string | null;
   exerciseFamily?: ExerciseFamily | null;
   score: number | null;
   priorityCorrectionTitles: string[];

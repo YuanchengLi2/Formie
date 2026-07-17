@@ -32,8 +32,15 @@ function candidate() {
       { criterion: "torso control", observed: "Stable torso", impact: 92, confidence: 0.91 },
     ],
     didWell: [{ id: "stable", title: "Stable torso", detail: "The torso stayed quiet.", whyItMatters: "This keeps the curl repeatable.", correction: null, cue: null, severity: "note", evidence: [evidence] }],
-    priorityCorrections: [{ id: "drift", title: "Reduce elbow drift", detail: "The elbows moved forward.", whyItMatters: "Shoulder motion replaces part of the curl.", correction: "Keep the upper arms quiet.", cue: "Elbows against a wall.", severity: "important", evidence: [evidence] }],
+    priorityCorrections: [{ id: "drift", title: "Reduce elbow drift", detail: "The elbows moved forward.", whyItMatters: "Shoulder motion replaces part of the curl.", correction: "Keep the upper arms quiet.", cue: "Elbows against a wall.", severity: "important", evidence: [{ ...evidence, peakMs: 1_650 }] }],
     coachingCues: [],
+    setContext: {
+      cameraView: "down-front diagonal",
+      visibleReferences: ["shoulders relative to the seat", "handle endpoint relative to the machine frame"],
+      sequenceSummary: "Three complete repetitions were visible from setup through the final reset.",
+      changeAcrossSet: "The handle reached a slightly shorter endpoint during the final repetition.",
+      coachingBasis: "Prioritize a repeatable handle endpoint while keeping both shoulders level.",
+    },
     setSummary: { totalReps: 3, consistentReps: 2, verdict: "The last repetition changed." },
     repTimeline: [{ repNumber: 1, startMs: 500, peakMs: 900, endMs: 1_800, assessment: "consistent", note: "The repetition stayed controlled." }],
     nextSetPlan: [{ id: "plan-1", action: "Keep the upper arms still", rationale: "Reduce elbow drift.", relatedFindingId: "drift" }],
@@ -46,7 +53,8 @@ describe("Gemini analysis contract", () => {
   it("accepts one complete evidence-backed video result", () => {
     expect(validateAnalysisCandidate(candidate(), 10_000)).toEqual(candidate());
     expect(GEMINI_ANALYSIS_JSON_SCHEMA.required).toContain("recognition");
-    expect(GEMINI_ANALYSIS_JSON_SCHEMA.required).toEqual(expect.arrayContaining(["setSummary", "repTimeline", "nextSetPlan", "precisionRequest"]));
+    expect(GEMINI_ANALYSIS_JSON_SCHEMA.required).toEqual(expect.arrayContaining(["setContext", "setSummary", "repTimeline", "nextSetPlan", "precisionRequest"]));
+    expect(GEMINI_ANALYSIS_JSON_SCHEMA.properties.setContext.required).toEqual(["cameraView", "visibleReferences", "sequenceSummary", "changeAcrossSet", "coachingBasis"]);
     expect(GEMINI_ANALYSIS_JSON_SCHEMA.properties.priorityCorrections.items.properties.evidence.items.required).toContain("focusRegion");
     expect(GEMINI_ANALYSIS_JSON_SCHEMA.properties.priorityCorrections.items.properties.evidence.items.required).toContain("coachingNote");
   });
@@ -87,6 +95,18 @@ describe("Gemini analysis contract", () => {
     const value = candidate();
     value.priorityCorrections[0].evidence[0].coachingNote = "your elbows drift forward as fatigue develops. Reduce the load and keep your arms beside your torso.";
     expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("repeated evidence");
+  });
+
+  it("rejects usable coaching that omits whole-set context", () => {
+    const value = candidate() as Record<string, unknown>;
+    delete value.setContext;
+    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow(/setContext/);
+  });
+
+  it("requires different findings to cite distinct peak frames", () => {
+    const value = candidate();
+    value.priorityCorrections[0].evidence[0].peakMs = value.didWell[0].evidence[0].peakMs;
+    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("distinct evidence frames");
   });
 
   it("rejects finding timestamps that disagree with the referenced repetition", () => {

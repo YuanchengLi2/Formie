@@ -29,12 +29,12 @@ describe("FindingDetailScreen", () => {
     expect(screen.getByText("Reduce the load slightly and match both elbows.")).toBeTruthy();
     expect(screen.getByText("Pull both handles through the same finish line.")).toBeTruthy();
     expect(screen.getByText("At 0:07, your right elbow reaches the finish before the left. Slow the pull and finish both handles together.")).toBeTruthy();
-    expect(screen.getByText("Rep 3 · concentric · 00:07.2–00:08.1")).toBeTruthy();
+    expect(screen.getByText("concentric · 00:07.2–00:08.1")).toBeTruthy();
     await fireEvent.press(screen.getByText("Record Another Set"));
     expect(onRecordAnother).toHaveBeenCalledTimes(1);
   });
 
-  it("uses Gemini's high-confidence visual target for deterministic zoom, circle, and arrow", async () => {
+  it("uses the same clear full-frame player without zoom or circle overlays", async () => {
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
         <FindingDetailScreen
@@ -45,8 +45,10 @@ describe("FindingDetailScreen", () => {
       </SafeAreaProvider>,
     );
 
-    expect(screen.getByText("LOOK HERE")).toBeTruthy();
-    expect(screen.getByLabelText("AI focus: right elbow")).toBeTruthy();
-    expect(screen.getByLabelText("Focus arrow to right elbow")).toBeTruthy();
+    expect(screen.getByLabelText("Full exercise recording")).toBeTruthy();
+    expect(screen.getByLabelText("Recording timeline")).toBeTruthy();
+    expect(screen.queryByText("LOOK HERE")).toBeNull();
+    expect(screen.queryByLabelText(/AI focus:/)).toBeNull();
+    expect(screen.queryByLabelText(/Focus arrow/)).toBeNull();
   });
 });

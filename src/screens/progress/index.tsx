@@ -1,26 +1,36 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
 
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";
 import { FormButton } from "@/components/form-button";
 import { FormWordmark } from "@/components/form-wordmark";
 import type { ExerciseFamily } from "@/features/exercises/exercise-family";
-import type { AnalysisHistoryGroup, AnalysisHistoryItem } from "@/features/progress/group-sessions";
+import type { AnalysisHistoryGroup, AnalysisHistoryItem, AnalysisHistoryStatus } from "@/features/progress/group-sessions";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
 
 type ExerciseRow = AnalysisHistoryItem & { family: ExerciseFamily; label: string };
 
-export function ProgressScreen({ groups, onOpenSession, onRecord }: { groups: AnalysisHistoryGroup[]; onOpenSession: (sessionId: string) => void; onRecord?: () => void }) {
+type ProgressScreenProps = {
+  groups: AnalysisHistoryGroup[];
+  onOpenSession: (sessionId: string, status: AnalysisHistoryStatus) => void;
+  onRecord?: () => void;
+  onTogglePin?: (sessionId: string, pinned: boolean) => void | Promise<void>;
+  onDeleteSession?: (sessionId: string) => void | Promise<void>;
+};
+
+export function ProgressScreen({ groups, onOpenSession, onRecord, onTogglePin = () => undefined, onDeleteSession = () => undefined }: ProgressScreenProps) {
   const [query, setQuery] = useState("");
   const [family, setFamily] = useState<ExerciseFamily | "all">("all");
+  const [actionRow, setActionRow] = useState<ExerciseRow | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const rows = useMemo<ExerciseRow[]>(() => groups.flatMap((group) => group.sessions.map((session) => ({
     ...session,
     family: group.exerciseFamily,
-    label: session.correctedLabel?.trim() || session.detectedLabel?.trim() || "Unusable recording",
-  }))).sort((left, right) => right.createdAt.localeCompare(left.createdAt)), [groups]);
+    label: session.status === "processing" ? "Analyzing set" : session.correctedLabel?.trim() || session.detectedLabel?.trim() || "Unusable recording",
+  }))).sort((left, right) => Number(Boolean(right.pinnedAt)) - Number(Boolean(left.pinnedAt)) || right.createdAt.localeCompare(left.createdAt)), [groups]);
   const families = useMemo(() => groups.map((group) => ({ family: group.exerciseFamily, label: group.label })), [groups]);
   const filtered = rows.filter((row) => (family === "all" || row.family === family) && row.label.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
 
@@ -60,17 +70,40 @@ export function ProgressScreen({ groups, onOpenSession, onRecord }: { groups: An
           </Animated.View>
         ) : filtered.map((row) => (
           <Animated.View layout={LinearTransition.duration(180)} key={row.sessionId}>
-            <Pressable accessibilityLabel={`Open analysis from ${new Date(row.createdAt).toLocaleDateString()}`} accessibilityRole="button" onPress={() => onOpenSession(row.sessionId)} style={({ pressed }) => ({ minHeight: 72, flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm, borderBottomWidth: 1, borderColor: colors.border, opacity: pressed ? 0.65 : 1 })}>
-              <ExerciseFamilyIcon family={row.family} size={56} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text selectable numberOfLines={1} style={[typography.label, { color: colors.text }]}>{row.label}</Text>
-                <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{new Date(row.createdAt).toLocaleDateString()} · {row.priorityCorrectionTitles[0] ?? "Analysis saved"}</Text>
-              </View>
-              <Text selectable style={[typography.heading, { color: colors.gold }]}>{row.score ?? "View"}</Text>
-            </Pressable>
+            <View style={{ minHeight: 72, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderColor: colors.border }}>
+              <Pressable accessibilityLabel={`Open analysis from ${new Date(row.createdAt).toLocaleDateString()}`} accessibilityRole="button" onLongPress={() => { setConfirmDelete(false); setActionRow(row); }} onPress={() => onOpenSession(row.sessionId, row.status)} style={({ pressed }) => ({ minHeight: 72, flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm, opacity: pressed ? 0.65 : 1 })}>
+                <ExerciseFamilyIcon family={row.family} size={56} />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}><Text selectable numberOfLines={1} style={[typography.label, { flexShrink: 1, color: colors.text }]}>{row.label}</Text>{row.pinnedAt ? <Text accessibilityLabel="Pinned analysis" style={{ color: colors.gold, fontSize: 14 }}>◆</Text> : null}</View>
+                  <Text selectable style={[typography.caption, { color: row.status === "processing" ? colors.gold : colors.textMuted }]}>{row.status === "processing" ? "Analysis in progress" : `${new Date(row.createdAt).toLocaleDateString()} · ${row.priorityCorrectionTitles[0] ?? "Analysis saved"}`}</Text>
+                </View>
+                <Text selectable style={[typography.heading, { color: colors.gold }]}>{row.status === "processing" ? "Continue" : row.score ?? "View"}</Text>
+              </Pressable>
+              <Pressable accessibilityLabel={`More options for ${row.label} from ${new Date(row.createdAt).toLocaleDateString()}`} accessibilityRole="button" onPress={() => { setConfirmDelete(false); setActionRow(row); }} style={({ pressed }) => ({ width: 48, height: 56, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.55 : 1 })}><Text style={{ color: colors.textSecondary, fontSize: 25, lineHeight: 28 }}>•••</Text></Pressable>
+            </View>
           </Animated.View>
         ))}
       </View>
+
+      <Modal animationType="fade" onRequestClose={() => setActionRow(null)} transparent visible={Boolean(actionRow)}>
+        <Pressable accessibilityLabel="Close analysis actions" onPress={() => setActionRow(null)} style={{ flex: 1, justifyContent: "flex-end", padding: spacing.lg, backgroundColor: "rgba(0,0,0,0.66)" }}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={{ gap: spacing.sm, padding: spacing.lg, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised }}>
+            <Text selectable style={[typography.heading, { color: colors.text }]}>{confirmDelete ? "Delete this analysis?" : actionRow?.label}</Text>
+            {confirmDelete ? (
+              <>
+                <Text selectable style={[typography.body, { color: colors.textSecondary }]}>The saved coaching and private recording will be removed permanently.</Text>
+                <Pressable accessibilityRole="button" onPress={() => { if (actionRow) void onDeleteSession(actionRow.sessionId); setActionRow(null); setConfirmDelete(false); }} style={{ minHeight: 52, alignItems: "center", justifyContent: "center", borderRadius: radii.md, backgroundColor: colors.danger }}><Text style={[typography.label, { color: colors.text }]}>Delete permanently</Text></Pressable>
+                <Pressable accessibilityRole="button" onPress={() => setConfirmDelete(false)} style={{ minHeight: 48, alignItems: "center", justifyContent: "center" }}><Text style={[typography.label, { color: colors.textSecondary }]}>Go back</Text></Pressable>
+              </>
+            ) : (
+              <>
+                <Pressable accessibilityRole="button" onPress={() => { if (actionRow) void onTogglePin(actionRow.sessionId, !actionRow.pinnedAt); setActionRow(null); }} style={{ minHeight: 52, justifyContent: "center", paddingHorizontal: spacing.md, borderRadius: radii.md, backgroundColor: colors.surface }}><Text style={[typography.body, { color: colors.text }]}>{actionRow?.pinnedAt ? "Unpin analysis" : "Pin analysis"}</Text></Pressable>
+                <Pressable accessibilityRole="button" onPress={() => setConfirmDelete(true)} style={{ minHeight: 52, justifyContent: "center", paddingHorizontal: spacing.md, borderRadius: radii.md, backgroundColor: colors.surface }}><Text style={[typography.body, { color: colors.danger }]}>Delete analysis</Text></Pressable>
+              </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }

@@ -18,6 +18,8 @@ type CameraControlsProps = {
   onStop: () => void;
   onRetryUpload: () => void;
   onDiscardRecording?: () => void;
+  zoomed?: boolean;
+  onResetZoom?: () => void;
   topInset?: number;
   bottomInset?: number;
 };
@@ -32,6 +34,8 @@ export function CameraControls({
   onStop,
   onRetryUpload,
   onDiscardRecording = () => undefined,
+  zoomed = false,
+  onResetZoom = () => undefined,
   topInset = 0,
   bottomInset = 0,
 }: CameraControlsProps) {
@@ -61,8 +65,9 @@ export function CameraControls({
       <View style={{ alignItems: "center", gap: spacing.md, paddingBottom: bottomInset + spacing.md }}>
         {phase === "idle" || phase === "processing" ? (
           <>
-            <View style={{ paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.pill, backgroundColor: "rgba(0,0,0,0.58)" }}>
-              <Text selectable style={[typography.caption, { color: colors.text }]}>Keep the full movement visible · pinch to zoom</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.pill, backgroundColor: "rgba(0,0,0,0.58)" }}>
+              <Text selectable style={[typography.caption, { color: colors.text }]}>Keep the full movement visible</Text>
+              {zoomed ? <Pressable accessibilityRole="button" onPress={onResetZoom} hitSlop={10}><Text style={[typography.label, { color: colors.gold }]}>Reset view</Text></Pressable> : null}
             </View>
             <Pressable
               accessibilityLabel="Start countdown"

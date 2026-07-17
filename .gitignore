@@ -10,6 +10,9 @@ node_modules/
 dist/
 dist-final-check/
 dist-verify/
+dist-android-*/
+.asset-pack-preview/
+form-expo-qr.png
 web-build/
 .form-scaffold/
 supabase/.branches/
