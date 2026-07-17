@@ -8,7 +8,7 @@ export type ResultFindingContext = {
 };
 
 export function findResultFindingContext(result: AnalysisResult, findingId: string): ResultFindingContext | null {
-  const sections: Array<[FindingSection, CoachingFinding[]]> = [
+  const sections: [FindingSection, CoachingFinding[]][] = [
     ["strength", result.didWell],
     ["correction", result.priorityCorrections],
     ["cue", result.coachingCues],
