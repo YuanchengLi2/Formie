@@ -107,10 +107,10 @@ describe("Gemini analysis contract", () => {
     expect(() => validateAnalysisCandidate(value, 10_000)).toThrow(/setContext/);
   });
 
-  it("requires different findings to cite distinct peak frames", () => {
+  it("allows different findings to cite the same visible moment", () => {
     const value = candidate();
     value.priorityCorrections[0].evidence[0].peakMs = value.didWell[0].evidence[0].peakMs;
-    expect(() => validateAnalysisCandidate(value, 10_000)).toThrow("distinct evidence frames");
+    expect(validateAnalysisCandidate(value, 10_000)).toEqual(value);
   });
 
   it("rejects finding timestamps that disagree with the referenced repetition", () => {

@@ -22,6 +22,12 @@ const statusResponseSchema = z.object({
   result: analysisResultSchema.nullable(),
 });
 
+const reanalysisResponseSchema = z.object({
+  sessionId: z.string().min(1),
+  status: z.literal("queued"),
+  stage: z.literal("video_check"),
+});
+
 export const tutorialVideoSchema = z.object({
   videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
   url: z.string().url(),
@@ -165,6 +171,15 @@ export async function processAnalysis(input: RequestContext & { sessionId: strin
     input,
     { method: "POST", body: JSON.stringify({ sessionId: input.sessionId }) },
     statusResponseSchema,
+  );
+}
+
+export async function reanalyzeAnalysis(input: RequestContext & { sessionId: string }) {
+  return requestJson(
+    "reanalyze-video",
+    input,
+    { method: "POST", body: JSON.stringify({ sessionId: input.sessionId }) },
+    reanalysisResponseSchema,
   );
 }
 

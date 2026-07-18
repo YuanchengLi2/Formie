@@ -394,14 +394,6 @@ export function validateAnalysisCandidate(value: unknown, durationMs: number): A
   const cues = findings(result.coachingCues, "coachingCues", durationMs);
   const findingIdList = [...didWell, ...corrections, ...cues].map((finding) => finding.id);
   if (new Set(findingIdList).size !== findingIdList.length) throw new Error("finding IDs must be unique across every coaching section");
-  const allFindingPeaks = [...didWell, ...corrections, ...cues].flatMap((finding) => finding.evidence.map((moment) => ({ findingId: finding.id, peakMs: moment.peakMs })));
-  for (let left = 0; left < allFindingPeaks.length; left += 1) {
-    for (let right = left + 1; right < allFindingPeaks.length; right += 1) {
-      if (allFindingPeaks[left].findingId !== allFindingPeaks[right].findingId && Math.abs(allFindingPeaks[left].peakMs - allFindingPeaks[right].peakMs) < 250) {
-        throw new Error("Different findings must use distinct evidence frames");
-      }
-    }
-  }
 
   const setContext = object(result.setContext, "setContext");
   const cameraView = string(setContext.cameraView, "setContext.cameraView", true);

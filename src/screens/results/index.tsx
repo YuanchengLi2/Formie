@@ -24,6 +24,10 @@ type ResultsScreenProps = {
   tutorialLoading?: boolean;
   onOpenTutorial?: (tutorial: TutorialVideo) => void;
   onAskCoach?: () => void;
+  showDebugReanalysis?: boolean;
+  onReanalyze?: () => void;
+  reanalyzing?: boolean;
+  reanalysisError?: string | null;
 };
 
 const PURPOSES: { id: ReviewPurpose; label: string }[] = [
@@ -43,7 +47,7 @@ export function formatAnalysisTimestamp(milliseconds: number): string {
   return `${minutes.toString().padStart(2, "0")}:${seconds.toFixed(1).padStart(4, "0")}`;
 }
 
-export function ResultsScreen({ result, videoUrl = null, durationMs = null, onFindingPress, onRecordAnother, tutorial = null, tutorialLoading = false, onOpenTutorial = () => undefined, onAskCoach = () => undefined }: ResultsScreenProps) {
+export function ResultsScreen({ result, videoUrl = null, durationMs = null, onFindingPress, onRecordAnother, tutorial = null, tutorialLoading = false, onOpenTutorial = () => undefined, onAskCoach = () => undefined, showDebugReanalysis = false, onReanalyze = () => undefined, reanalyzing = false, reanalysisError = null }: ResultsScreenProps) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const wideWorkspace = width >= 820;
@@ -179,6 +183,11 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, onFi
       {scope.length > 0 ? <Pressable accessibilityRole="button" accessibilityState={{ expanded: showVisibility }} onPress={() => setShowVisibility((value) => !value)} style={{ gap: spacing.md, paddingVertical: spacing.lg, borderBottomWidth: 1, borderColor: colors.border }}><View style={{ flexDirection: "row", alignItems: "center" }}><Text selectable style={[typography.body, { flex: 1, color: colors.text }]}>Camera visibility note</Text><Text style={{ color: colors.gold, fontSize: 22 }}>{showVisibility ? "⌃" : "›"}</Text></View>{showVisibility ? scope.map((item) => <Text selectable key={item} style={[typography.body, { color: colors.textSecondary }]}>• {item}</Text>) : null}</Pressable> : null}
 
       {presentation.comparison ? <View style={{ gap: spacing.sm, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.gold }}><Text selectable style={[typography.caption, { color: colors.gold }]}>SINCE YOUR LAST SET</Text><Text selectable style={[typography.body, { color: colors.text }]}>{presentation.comparison.summary}</Text></View> : null}
+
+      {showDebugReanalysis && videoUrl ? <View style={{ gap: spacing.sm }}>
+        <Pressable accessibilityRole="button" accessibilityState={{ disabled: reanalyzing }} disabled={reanalyzing} onPress={onReanalyze} testID="debug-reanalyze-video" style={({ pressed }) => ({ minHeight: 56, alignItems: "center", justifyContent: "center", borderRadius: radii.md, borderWidth: 1, borderColor: colors.danger, backgroundColor: pressed ? colors.surfaceRaised : colors.surface, opacity: reanalyzing ? 0.6 : 1 })}><Text selectable style={[typography.label, { color: colors.danger }]}>{reanalyzing ? "Resetting analysis…" : "Debug: Reanalyze Video"}</Text></Pressable>
+        {reanalysisError ? <Text accessibilityRole="alert" selectable style={[typography.caption, { color: colors.danger, textAlign: "center" }]}>{reanalysisError}</Text> : null}
+      </View> : null}
 
       <Pressable accessibilityRole="button" onPress={onRecordAnother} testID="record-another-loop" style={({ pressed }) => ({ minHeight: 72, alignItems: "center", justifyContent: "center", borderRadius: radii.md, backgroundColor: pressed ? colors.goldPressed : colors.gold })}><Text selectable style={[typography.heading, { color: colors.background }]}>Record Another Set</Text></Pressable>
     </ScrollView>

@@ -251,4 +251,31 @@ describe("ResultsScreen", () => {
     await fireEvent.press(screen.getByLabelText("Watch Clear Cable Row Tutorial example"));
     expect(onOpenTutorial).toHaveBeenCalledWith(tutorial);
   });
+
+  it("shows the saved-video reanalysis control only when development enables it", async () => {
+    const hidden = await renderResults();
+    expect(hidden.queryByText("Debug: Reanalyze Video")).toBeNull();
+
+    const onReanalyze = jest.fn();
+    const visible = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
+        <ResultsScreen result={result()} videoUrl="https://storage.example/private-set.mp4" durationMs={12_000} onFindingPress={jest.fn()} onRecordAnother={jest.fn()} showDebugReanalysis onReanalyze={onReanalyze} />
+      </SafeAreaProvider>,
+    );
+    await fireEvent.press(visible.getByText("Debug: Reanalyze Video"));
+    expect(onReanalyze).toHaveBeenCalledTimes(1);
+  });
+
+  it("locks the debug control while resetting and shows a reset error", async () => {
+    const onReanalyze = jest.fn();
+    const screen = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
+        <ResultsScreen result={result()} videoUrl="https://storage.example/private-set.mp4" durationMs={12_000} onFindingPress={jest.fn()} onRecordAnother={jest.fn()} showDebugReanalysis onReanalyze={onReanalyze} reanalyzing reanalysisError="Could not reset this saved video." />
+      </SafeAreaProvider>,
+    );
+    expect(screen.getByText("Resetting analysis…")).toBeTruthy();
+    expect(screen.getByText("Could not reset this saved video.")).toBeTruthy();
+    await fireEvent.press(screen.getByText("Resetting analysis…"));
+    expect(onReanalyze).not.toHaveBeenCalled();
+  });
 });

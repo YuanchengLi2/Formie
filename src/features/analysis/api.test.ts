@@ -1,4 +1,4 @@
-import { AnalysisApiError, completeAnalysisUpload, createAnalysisSession, getAnalysisStatus, getExerciseTutorial, processAnalysis, processAndLoadAnalysis, uploadAnalysisVideo } from "./api";
+import { AnalysisApiError, completeAnalysisUpload, createAnalysisSession, getAnalysisStatus, getExerciseTutorial, processAnalysis, processAndLoadAnalysis, reanalyzeAnalysis, uploadAnalysisVideo } from "./api";
 
 describe("analysis API", () => {
   it("creates a session without requiring exercise selection", async () => {
@@ -197,6 +197,22 @@ describe("analysis API", () => {
     await expect(getExerciseTutorial({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" })).resolves.toEqual(tutorial);
     expect(fetcher).toHaveBeenCalledWith(
       "https://example.supabase.co/functions/v1/exercise-tutorial",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ sessionId: "session-123" }) }),
+    );
+  });
+
+  it("queues the same saved video for development reanalysis", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "queued", stage: "video_check" }), { status: 202 }));
+
+    await expect(reanalyzeAnalysis({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      sessionId: "session-123",
+    })).resolves.toEqual({ sessionId: "session-123", status: "queued", stage: "video_check" });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://example.supabase.co/functions/v1/reanalyze-video",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ sessionId: "session-123" }) }),
     );
   });
