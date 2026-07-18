@@ -5,6 +5,7 @@
 
 # JavaScript / Expo
 node_modules/
+.worktrees/
 .expo/
 .expo-export-check/
 dist/
