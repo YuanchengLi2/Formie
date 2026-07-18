@@ -97,7 +97,9 @@ type FullRecordingProps = {
 };
 
 export function FullRecording({ videoUrl, durationMs, coachingFindings = [], reviewFrames, selectedReviewFrame, onSelectReviewFrame, onOpenFinding, showActiveFrameCard = true }: FullRecordingProps) {
-  const player = useVideoPlayer(videoUrl);
+  const player = useVideoPlayer(videoUrl, (createdPlayer) => {
+    createdPlayer.timeUpdateEventInterval = 0.25;
+  });
   const [currentMs, setCurrentMs] = useState(0);
   const [playing, setPlaying] = useState(false);
   const timelineRef = useRef<View>(null);
@@ -120,7 +122,6 @@ export function FullRecording({ videoUrl, durationMs, coachingFindings = [], rev
   const activeFrame = selectedReviewFrame ?? null;
 
   useEffect(() => {
-    player.timeUpdateEventInterval = 0.25;
     const timeSubscription = player.addListener("timeUpdate", ({ currentTime }) => {
       if (draggingRef.current) return;
       setCurrentMs(Math.min(durationMs, Math.max(0, currentTime * 1_000)));
@@ -129,7 +130,6 @@ export function FullRecording({ videoUrl, durationMs, coachingFindings = [], rev
     return () => {
       timeSubscription.remove();
       playingSubscription.remove();
-      player.timeUpdateEventInterval = 0;
     };
   }, [durationMs, player]);
 
