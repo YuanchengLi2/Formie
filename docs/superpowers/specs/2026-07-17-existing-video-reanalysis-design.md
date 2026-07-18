@@ -2,13 +2,13 @@
 
 ## Goal
 
-Let a signed-in user rerun an existing saved recording through the current Formai analysis pipeline without recording or uploading the video again.
+Give developers testing Formai in Expo Go or another development build a fast way to rerun an existing saved recording through the current analysis pipeline without recording or uploading the video again.
 
 ## User Experience
 
-The results screen for every saved analysis with a retained video shows a secondary `Reanalyze Video` action near the existing `Record Another Set` action.
+In development only, the results screen for every saved analysis with a retained video shows a clearly labeled `Debug: Reanalyze Video` action near the existing `Record Another Set` action. Production bundles do not render the action.
 
-Tapping the action asks for confirmation because the refreshed analysis replaces the existing result. While the request starts, the action is disabled and shows a clear loading label. After the backend accepts the request, the app navigates to the existing analysis-progress screen for the same session. The normal progress stages run, and completion returns the user to the refreshed results screen.
+Tapping the action immediately replaces the existing result. While the request starts, the action is disabled and shows `Resetting analysis…`. After the backend accepts the request, the app navigates to the existing analysis-progress screen for the same session. The normal progress stages run, and completion returns the developer to the refreshed results screen.
 
 If the request fails before reanalysis starts, the current result remains visible and the screen shows an actionable error. Repeated taps cannot start concurrent reanalyses.
 
@@ -31,8 +31,8 @@ The existing `analyze-video` function then uploads the retained video to Gemini 
 
 - Add a typed `reanalyzeAnalysis` request to the existing analysis API module, using the current authenticated request/error-handling path.
 - Add a React Query mutation at the results route. On success, remove stale analysis queries, invalidate history, and replace the route with `/analysis/[session-id]`.
-- Add `onReanalyze`, `reanalyzing`, and optional error props to `ResultsScreen`.
-- Keep presentation styling consistent with the current gold/charcoal visual system. The new action is secondary so `Record Another Set` remains the primary action.
+- Add `onReanalyze`, `reanalyzing`, and optional error props to `ResultsScreen`, and gate the control with a `showDebugReanalysis` prop supplied from `__DEV__` at the route boundary.
+- Keep presentation styling consistent with the current gold/charcoal visual system while making the debug status unmistakable. `Record Another Set` remains the primary action.
 
 ## Error Handling
 
@@ -52,7 +52,7 @@ A database function performs the session reset, result removal, and coaching-thr
 - Edge handler tests cover authorization, ownership, missing video, concurrent reanalysis, success, and backend failure.
 - Database reset behavior is represented by the handler dependency contract and verified after migration deployment.
 - Client API tests cover request shape, response parsing, and server errors.
-- Results-screen tests cover visibility, confirmation callback, loading state, and error state.
+- Results-screen tests cover development-only visibility, the callback, loading state, and error state.
 - Route tests cover mutation success navigation and query/history invalidation where practical.
 - Full Jest, TypeScript, and live Edge Function checks run before QR delivery.
 
@@ -61,4 +61,5 @@ A database function performs the session reset, result removal, and coaching-thr
 - Preserving old analysis revisions.
 - Copying the source video into a second storage object.
 - Reanalysis from history cards without first opening the result.
+- A production-visible reanalysis feature.
 - Changing Gemini models, pricing, or the analysis prompt as part of this feature.
