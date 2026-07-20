@@ -15,6 +15,7 @@ Expand FORM from 634 exercise variants and 7,608 resolved visual criteria to at 
 - Contradicted and insufficient findings remain internal and are never rendered as rejected or unknown cards.
 - A numerical score requires an exact match, at least 60 percent verified rubric coverage, and at least three represented domains.
 - Evidence timestamps must satisfy `startMs <= peakMs <= endMs` after every verifier adjustment.
+- Camera modeling must distinguish direction from height, tilt, distance, framing, and machine occlusion. A phone resting on the floor and aimed upward must not be treated as an ordinary front or side view.
 - Existing worker, pose, 3D, and tracker paths remain outside the active pipeline.
 - No subagents are used for design, implementation, or verification.
 
@@ -72,7 +73,19 @@ The schema remains in a small migration. Catalog data is emitted into determinis
 
 ### Indexer output
 
-The 4 FPS indexer no longer receives every catalog row. It receives a compact closed taxonomy for family, equipment class, camera view, support, trajectory, laterality, stance, grip, and angle, while returning a free-form visible exercise label plus structured mechanics and alternatives. It still cannot produce form findings, coaching, or scores.
+The 4 FPS indexer no longer receives every catalog row. It receives a compact closed taxonomy for family, equipment class, camera direction, camera height, tilt, distance, framing, support, trajectory, laterality, stance, grip, and exercise angle, while returning a free-form visible exercise label plus structured mechanics and alternatives. It still cannot produce form findings, coaching, or scores.
+
+Camera output separately records:
+
+- direction: front, side, rear, front-45, or rear-45;
+- height: ground, low, mid, or high;
+- tilt: upward, level, or downward;
+- distance: close, medium, or far;
+- framing: full-body, partial-body, or equipment-dominant;
+- visible body regions and visible equipment regions;
+- machine occlusions and perspective limitations.
+
+A ground-level upward view is therefore not collapsed into an ordinary front or side view. The index is still allowed to continue when useful relationships are visible, but it must state which relationships cannot be established.
 
 ### Candidate retrieval
 
@@ -86,6 +99,8 @@ An exact result stores the matched variant ID, selected rubric, match score, and
 ### Analyst input
 
 The 12 FPS analyst receives the validated video index, active-set clip, repetition intervals, limitations, and only the selected 8–15 criteria. The larger catalog therefore does not increase the analyst prompt.
+
+Before analysis, deterministic rubric filtering removes criteria whose required regions are hidden by framing, machine pads, or equipment. Criteria sensitive to perspective are down-weighted or removed for ground/low upward views and high downward views. Stable machine relationships that remain visible—handle timing, pad contact, seat position, stack control, and repeatable endpoints—remain eligible. Hidden criteria do not become `unknown` rows and do not reduce the score.
 
 ## Evidence reliability fix
 
@@ -104,18 +119,20 @@ The following flows must be exercised:
 5. Usable exact match with insufficient coverage withholds the score.
 6. Unknown exercise uses observation-only criteria and withholds the score.
 7. Known label with incompatible equipment uses observation-only criteria.
-8. Unable video returns one retry reason/instruction and no coaching.
-9. Analyst emits invalid, speculative, duplicate, or low-confidence candidates and they are filtered individually.
-10. Verifier supports, contradicts, or cannot establish findings; only supported findings become public.
-11. No supported correction returns calm copy rather than uncertainty cards.
-12. Supported findings request five exact display frames each for at most three displayed findings.
-13. Frame upload failure cleans temporary frames and remains retryable.
-14. Writer succeeds using only supported finding IDs.
-15. Writer fails or invents unsupported language and deterministic fallback preserves the analysis.
-16. Interrupted processing resumes from persisted artifacts without repeating completed model stages.
-17. Terminal polling returns the stored result without another model call.
-18. Provider/storage failure stores a stable failure code and exposes a recoverable user path where available.
-19. Reanalysis uses the current pipeline without reviving retired pose/tracker inputs.
+8. Ground-level upward machine view keeps only visible machine/contact/path criteria and withholds unsupported body-alignment claims.
+9. Equipment-dominant or partially framed video continues only when enough visible relationships remain; otherwise it becomes unable.
+10. Unable video returns one retry reason/instruction and no coaching.
+11. Analyst emits invalid, speculative, duplicate, or low-confidence candidates and they are filtered individually.
+12. Verifier supports, contradicts, or cannot establish findings; only supported findings become public.
+13. No supported correction returns calm copy rather than uncertainty cards.
+14. Supported findings request five exact display frames each for at most three displayed findings.
+15. Frame upload failure cleans temporary frames and remains retryable.
+16. Writer succeeds using only supported finding IDs.
+17. Writer fails or invents unsupported language and deterministic fallback preserves the analysis.
+18. Interrupted processing resumes from persisted artifacts without repeating completed model stages.
+19. Terminal polling returns the stored result without another model call.
+20. Provider/storage failure stores a stable failure code and exposes a recoverable user path where available.
+21. Reanalysis uses the current pipeline without reviving retired pose/tracker inputs.
 
 ## Benchmark and accuracy reporting
 
@@ -144,6 +161,8 @@ The report must distinguish architecture correctness from measured coaching accu
 ### Live flow smoke tests
 
 Run at minimum one exact catalog video, one deliberately out-of-catalog video, and one unusable/blank video through the deployed service. Validate persisted rubric resolution, score eligibility, frame manifests, client schema, and terminal status. Automated tests cover controlled provider failure, writer fallback, retries, and resume/idempotency branches.
+
+The automated camera matrix additionally covers every direction at ground, low, mid, and high placement; upward, level, and downward tilt; partial framing; and machine-dominant occlusion. At least one live machine fixture recorded from a low or ground-like viewpoint must confirm that visible machine criteria survive while perspective-sensitive hidden criteria are omitted.
 
 ## Verification gates
 
