@@ -7,8 +7,10 @@ The Results screen must show every distinct visible correction returned by the s
 ## Analysis contract
 
 - Gemini 3.5 Flash remains the only model that analyzes video and owns findings, score, severity, and evidence.
+- Send the complete original video at exactly 16 FPS, high media resolution, and `thinkingLevel: "high"`.
 - The analyst audits setup and stability, path and alignment, range and positions, control and tempo, and repetition consistency.
 - Every distinct clearly visible deviation becomes one correction finding, including minor issues.
+- The analyst must perform a final small-issue sweep and retain note-level deviations even when a larger issue is also present.
 - Repeated occurrences of the same deviation remain one finding with multiple evidence moments.
 - The contract does not require an arbitrary minimum number of corrections; uncertain or invisible mechanics must not be invented.
 - Every negative scoring observation must reference at least one correction finding. A dimension may be positive or not visible without creating a correction.
