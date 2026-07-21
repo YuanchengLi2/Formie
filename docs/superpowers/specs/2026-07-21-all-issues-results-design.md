@@ -6,7 +6,7 @@ The Results screen must show every distinct visible correction returned by the s
 
 ## Analysis contract
 
-- Gemini 3.5 Flash remains the only model that analyzes video and owns findings, score, severity, and evidence.
+- Gemini 3.6 Flash (`gemini-3.6-flash`) remains the only model that analyzes video and owns findings, score, severity, and evidence.
 - Send the complete original video at exactly 16 FPS, high media resolution, and `thinkingLevel: "high"`.
 - The analyst audits setup and stability, path and alignment, range and positions, control and tempo, and repetition consistency.
 - Every distinct clearly visible deviation becomes one correction finding, including minor issues.

@@ -4,13 +4,13 @@
 
 **Goal:** Make the single Gemini analyst retain every distinct visible issue, request the original video at 16 FPS with high thinking, and display every returned issue once on Results while keeping repeated evidence in More Details.
 
-**Architecture:** `gemini-3.5-flash` remains the only video analyst. Its five-dimension audit explicitly labels whether each dimension contains an issue; every issue-labelled dimension must reference an existing correction finding. The client renders all correction findings as a visible list, while `buildCoachingReviewPoints` continues using one representative frame per finding and the finding-detail screen keeps every evidence moment.
+**Architecture:** `gemini-3.6-flash` remains the only video analyst. Its five-dimension audit explicitly labels whether each dimension contains an issue; every issue-labelled dimension must reference an existing correction finding. The client renders all correction findings as a visible list, while `buildCoachingReviewPoints` continues using one representative frame per finding and the finding-detail screen keeps every evidence moment.
 
 **Tech Stack:** TypeScript, Supabase Edge Functions, Gemini Files/generateContent APIs, Expo React Native, Jest, Zod.
 
 ## Global Constraints
 
-- Exactly one video-analysis call using `gemini-3.5-flash`.
+- Exactly one video-analysis call using `gemini-3.6-flash`.
 - Request exactly 16 FPS, `MEDIA_RESOLUTION_HIGH`, and `thinkingLevel: "high"`.
 - The Lite writer is text-only and cannot change findings, score, severity, evidence, or timestamps.
 - Report every distinct clearly visible issue, including note-level issues; never force an arbitrary correction count or infer hidden mechanics.
@@ -159,7 +159,7 @@ Expected: all commands exit `0`.
 
 - [ ] **Step 3: Run the same row video non-persistingly**
 
-Upload `%TEMP%\FormaiPlanInspect\latest.mp4` to Gemini Files, make one `gemini-3.5-flash` request using the production prompt/schema at 16 FPS and high thinking, then optionally make the text-only Lite writer request. Print the score, all correction titles/severities, evidence peaks, and telemetry. Delete the temporary Gemini file.
+Upload `%TEMP%\FormaiPlanInspect\latest.mp4` to Gemini Files, make one `gemini-3.6-flash` request using the production prompt/schema at 16 FPS and high thinking, then optionally make the text-only Lite writer request. Print the score, all correction titles/severities, evidence peaks, and telemetry. Delete the temporary Gemini file.
 
 Expected: telemetry shows one 16 FPS/high-thinking video call; every returned issue passes the contract and appears once in the Results fixture behavior. Rep-count variance is informational, not an acceptance blocker.
 
