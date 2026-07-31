@@ -21,11 +21,13 @@ const group: AnalysisHistoryGroup = {
 };
 
 describe("ProgressScreen", () => {
-  it("uses search and filters without rendering the movement graph", async () => {
-    const screen = await render(<ProgressScreen groups={[]} onOpenSession={jest.fn()} onRecord={jest.fn()} />);
+  it("uses search and filters without rendering dashboard metrics", async () => {
+    const screen = await render(<ProgressScreen groups={[]} onOpenSession={jest.fn()} />);
     expect(screen.getByPlaceholderText("Search exercises")).toBeTruthy();
     expect(screen.getByText("All")).toBeTruthy();
     expect(screen.queryByText("Movement Quality")).toBeNull();
+    expect(screen.queryByTestId("progress-metrics-grid")).toBeNull();
+    expect(screen.queryByLabelText("Progress rewards")).toBeNull();
   });
 
   it("renders every saved exercise separately and filters the list", async () => {

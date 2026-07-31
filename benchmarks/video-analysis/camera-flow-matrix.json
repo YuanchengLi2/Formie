@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "name": "Criteria v3 catalog and camera flow matrix",
+  "cameraSweep": {
+    "exercises": [
+      { "slug": "incline-selectorized-chest-press", "equipmentClass": "selectorized-machine" },
+      { "slug": "neutral-grip-selectorized-seated-row", "equipmentClass": "selectorized-machine" },
+      { "slug": "neutral-grip-selectorized-lat-pulldown", "equipmentClass": "selectorized-machine" },
+      { "slug": "45-degree-leg-press", "equipmentClass": "selectorized-machine" },
+      { "slug": "incline-smith-machine-bench-press", "equipmentClass": "smith" },
+      { "slug": "neutral-grip-cable-seated-row", "equipmentClass": "cable" },
+      { "slug": "incline-iso-lateral-chest-press", "equipmentClass": "iso-lateral-machine" },
+      { "slug": "incline-plate-loaded-converging-chest-press", "equipmentClass": "plate-loaded-machine" }
+    ],
+    "views": ["front", "side", "rear", "front-45", "rear-45"],
+    "heights": ["ground", "low", "mid", "high"],
+    "tilts": ["upward", "level", "downward"],
+    "distances": ["close", "medium", "far"],
+    "framings": ["full-body", "partial-body", "equipment-dominant"],
+    "occlusionStates": [
+      { "id": "clear", "occlusions": [] },
+      { "id": "machine-shroud", "occlusions": ["machine shroud blocks body landmarks"] }
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "incline_machine_ground_up",
+      "kind": "exact_rubric",
+      "slug": "incline-selectorized-chest-press",
+      "equipmentClass": "selectorized-machine",
+      "cameraView": "front-45",
+      "cameraGeometry": { "height": "ground", "tilt": "upward", "distance": "close", "framing": "equipment-dominant" },
+      "expected": { "resolution": "exact", "scoreEligible": true, "minCriteria": 2, "requiredCriterionSuffixes": ["machine-stack", "machine-handles"], "forbiddenCriterionSuffixes": ["press-symmetry", "variation-position"] }
+    },
+    {
+      "id": "incline_machine_level_full_body",
+      "kind": "exact_rubric",
+      "slug": "incline-selectorized-chest-press",
+      "equipmentClass": "selectorized-machine",
+      "cameraView": "side",
+      "cameraGeometry": { "height": "mid", "tilt": "level", "distance": "medium", "framing": "full-body" },
+      "expected": { "resolution": "exact", "scoreEligible": true, "minCriteria": 8 }
+    },
+    {
+      "id": "neutral_dumbbell_row_side",
+      "kind": "exact_rubric",
+      "slug": "neutral-grip-dumbbell-bent-over-row",
+      "equipmentClass": "dumbbell",
+      "cameraView": "side",
+      "cameraGeometry": { "height": "mid", "tilt": "level", "distance": "medium", "framing": "full-body" },
+      "expected": { "resolution": "exact", "scoreEligible": true, "minCriteria": 8 }
+    },
+    {
+      "id": "selectorized_row_ground_up",
+      "kind": "exact_rubric",
+      "slug": "neutral-grip-selectorized-seated-row",
+      "equipmentClass": "selectorized-machine",
+      "cameraView": "front-45",
+      "cameraGeometry": { "height": "ground", "tilt": "upward", "distance": "close", "framing": "equipment-dominant" },
+      "expected": { "resolution": "exact", "scoreEligible": true, "minCriteria": 2, "requiredCriterionSuffixes": ["machine-stack", "machine-handles"] }
+    },
+    {
+      "id": "tempo_row_exact_variation",
+      "kind": "exact_rubric",
+      "slug": "3-1-1-tempo-neutral-grip-dumbbell-bent-over-row",
+      "equipmentClass": "dumbbell",
+      "cameraView": "side",
+      "cameraGeometry": { "height": "mid", "tilt": "level", "distance": "medium", "framing": "full-body" },
+      "expected": { "resolution": "exact", "scoreEligible": true, "minCriteria": 9, "requiredCriterionSuffixes": ["execution-3-1-1-tempo"] }
+    },
+    {
+      "id": "unknown_machine_ground_up",
+      "kind": "observation_only",
+      "label": "Acme rotating incline press machine",
+      "equipmentClass": "selectorized-machine",
+      "cameraView": "front-45",
+      "cameraGeometry": { "height": "ground", "tilt": "upward", "distance": "close", "framing": "equipment-dominant" },
+      "expected": { "resolution": "observation_only", "scoreEligible": false, "criteriaCount": 4, "questionPattern": "machine|handle|pad|support", "forbiddenQuestionPattern": "knee alignment|spinal angle|symmetry" }
+    },
+    {
+      "id": "unknown_bodyweight_level",
+      "kind": "observation_only",
+      "label": "Bodyweight spiral squat",
+      "equipmentClass": "bodyweight",
+      "cameraView": "side",
+      "cameraGeometry": { "height": "mid", "tilt": "level", "distance": "medium", "framing": "full-body" },
+      "expected": { "resolution": "observation_only", "scoreEligible": false, "criteriaCount": 5, "questionPattern": "visible" }
+    },
+    {
+      "id": "equipment_mismatch_never_borrows",
+      "kind": "exact_rubric",
+      "slug": "neutral-grip-dumbbell-bent-over-row",
+      "equipmentClass": "selectorized-machine",
+      "cameraView": "side",
+      "cameraGeometry": { "height": "mid", "tilt": "level", "distance": "medium", "framing": "full-body" },
+      "expected": { "resolution": "observation_only", "scoreEligible": false, "minCriteria": 1 }
+    }
+  ]
+}

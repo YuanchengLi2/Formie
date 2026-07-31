@@ -1,11 +1,127 @@
 import { z } from "zod";
 import { exerciseFamilies } from "@/features/exercises/exercise-family";
+import { setDeclarationSchema } from "./set-declaration";
+
+const EVIDENCE_REP_TOLERANCE_MS = 1_000;
+export const muscleRegions = ["chest", "front_shoulders", "rear_shoulders", "upper_back", "lats", "biceps", "triceps", "forearms", "abs", "obliques", "lower_back", "glutes", "quads", "hamstrings", "adductors", "calves"] as const;
+export const anatomyRegions = ["chest", "shoulders", "upper_back", "lats", "upper_arms", "elbows", "forearms", "wrists", "torso", "lower_back", "hips", "glutes", "quads", "hamstrings", "adductors", "knees", "calves", "ankles"] as const;
+type MuscleRegionName = (typeof muscleRegions)[number];
+
+const MUSCLE_NAME_REGIONS: readonly [MuscleRegionName, RegExp][] = [
+  ["chest", /\b(?:chest|pecs?|pectoralis|pectorals?)\b/i],
+  ["rear_shoulders", /\b(?:rear|posterior)\s+(?:delts?|deltoids?|shoulders?)\b/i],
+  ["front_shoulders", /\b(?:(?:front|anterior)\s+(?:delts?|deltoids?|shoulders?)|delts?|deltoids?|shoulders?)\b/i],
+  ["upper_back", /\b(?:upper back|traps?|trapezius|rhomboids?)\b/i],
+  ["lats", /\b(?:lats?|latissimus(?: dorsi)?)\b/i],
+  ["biceps", /\b(?:biceps?|brachialis|coracobrachialis)\b/i],
+  ["triceps", /\b(?:triceps?|anconeus)\b/i],
+  ["forearms", /\b(?:forearms?|brachioradialis|wrist flexors?|wrist extensors?|pronators?|supinators?)\b/i],
+  ["obliques", /\b(?:obliques?)\b/i],
+  ["abs", /\b(?:abs|abdominals?|rectus abdominis|transversus abdominis)\b/i],
+  ["lower_back", /\b(?:lower back|erector spinae|multifidus|quadratus lumborum)\b/i],
+  ["glutes", /\b(?:glutes?|gluteus)\b/i],
+  ["quads", /\b(?:quads?|quadriceps|rectus femoris|vastus)\b/i],
+  ["hamstrings", /\b(?:hamstrings?|biceps femoris|semimembranosus|semitendinosus)\b/i],
+  ["adductors", /\b(?:adductors?|inner thighs?|gracilis)\b/i],
+  ["calves", /\b(?:calves?|gastrocnemius|soleus)\b/i],
+];
+
+const muscleTargetSchema = z.object({
+  name: z.string().min(1),
+  region: z.enum(muscleRegions),
+});
+
+const rawStructuredMuscleFocusSchema = z.object({
+  primary: z.array(muscleTargetSchema).max(8),
+  secondary: z.array(muscleTargetSchema).max(8),
+  unclassified: z.array(z.string().min(1)).max(8).optional().default([]),
+});
+
+function canonicalMuscleFocus(focus: z.infer<typeof rawStructuredMuscleFocusSchema>) {
+  const unclassified = [...focus.unclassified];
+  const canonicalize = (targets: typeof focus.primary) => targets.flatMap((target) => {
+    const region = MUSCLE_NAME_REGIONS.find(([, pattern]) => pattern.test(target.name))?.[0] ?? null;
+    if (region === null) {
+      unclassified.push(target.name);
+      return [];
+    }
+    return [{ ...target, region }];
+  });
+  return {
+    primary: canonicalize(focus.primary),
+    secondary: canonicalize(focus.secondary),
+    unclassified: [...new Set(unclassified)].slice(0, 8),
+  };
+}
+
+const structuredMuscleFocusSchema = rawStructuredMuscleFocusSchema.transform(canonicalMuscleFocus).superRefine((focus, context) => {
+  const primaryRegions = new Set(focus.primary.map((target) => target.region));
+  const secondaryRegions = new Set(focus.secondary.map((target) => target.region));
+  if (primaryRegions.size !== focus.primary.length) {
+    context.addIssue({ code: "custom", path: ["primary"], message: "Primary muscle regions must be unique" });
+  }
+  if (secondaryRegions.size !== focus.secondary.length) {
+    context.addIssue({ code: "custom", path: ["secondary"], message: "Supporting muscle regions must be unique" });
+  }
+  focus.secondary.forEach((target, index) => {
+    if (primaryRegions.has(target.region)) {
+      context.addIssue({
+        code: "custom",
+        path: ["secondary", index, "region"],
+        message: "A muscle region cannot be both primary and supporting",
+      });
+    }
+  });
+});
+
+const muscleFocusSchema = z.union([
+  structuredMuscleFocusSchema,
+  z.array(z.string().min(1)).max(8).transform((unclassified) => ({
+    primary: [],
+    secondary: [],
+    unclassified,
+  })),
+]).optional().default({ primary: [], secondary: [], unclassified: [] });
 
 const scoreRationaleSchema = z.object({
   criterion: z.string().min(1),
   observed: z.string().min(1),
-  impact: z.number().min(0).max(100),
-  confidence: z.number().min(0.75).max(1),
+  impact: z.number().min(0).max(100).nullable(),
+  confidence: z.number().min(0).max(1),
+  evidenceIds: z.array(z.string().min(1)).optional(),
+});
+
+const movementScoreSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1).max(40),
+  score: z.number().min(0).max(100),
+  observed: z.string().min(1),
+  evidenceIds: z.array(z.string().min(1)).default([]),
+});
+
+const movementScoresSchema = z.union([
+  z.array(movementScoreSchema).length(0),
+  z.array(movementScoreSchema).min(3).max(5),
+]).optional();
+
+const scoreCriterionSchema = z.object({
+  key: z.enum(["setup_stability", "path_alignment", "range_positions", "control_tempo", "rep_consistency"]),
+  weight: z.union([z.literal(15), z.literal(20), z.literal(25)]),
+  rating: z.number().min(0).max(100).nullable(),
+  confidence: z.number().min(0).max(1),
+  observed: z.string().min(1),
+  evidenceIds: z.array(z.string().min(1)),
+});
+
+export const techniqueScorecardSchema = z.object({
+  rubricVersion: z.literal("strict-technique-v1"),
+  coverage: z.number().min(0).max(1),
+  confidence: z.number().min(0).max(1),
+  criteria: z.array(scoreCriterionSchema).length(5),
+  uncappedScore: z.number().int().min(0).max(100).nullable(),
+  appliedCap: z.union([z.literal(39), z.literal(59), z.literal(69)]).nullable(),
+  finalScore: z.number().int().min(0).max(100).nullable(),
+  auditStatus: z.enum(["single-pass", "confirmed", "adjudicated", "unavailable"]),
 });
 
 export const visualFocusRegionSchema = z.object({
@@ -15,7 +131,51 @@ export const visualFocusRegionSchema = z.object({
   arrowFromX: z.number().min(0).max(1),
   arrowFromY: z.number().min(0).max(1),
   label: z.string().min(1),
-  confidence: z.number().min(0.8).max(1),
+  confidence: z.number().min(0.4).max(1),
+});
+
+const equipmentLoadSchema = z.object({
+  value: z.number().nonnegative().nullable(),
+  unit: z.enum(["kg", "lb"]).nullable(),
+  scope: z.string().min(1).nullable(),
+  certainty: z.enum(["exact_visible", "partial_visible", "unknown"]),
+  basis: z.enum(["readable_label", "readable_selector", "counted_visible_plates", "not_readable"]),
+}).superRefine((load, context) => {
+  if (load.certainty === "exact_visible" && (load.value === null || load.unit === null || load.scope === null || !["readable_label", "readable_selector"].includes(load.basis))) {
+    context.addIssue({ code: "custom", message: "An exact load requires a readable label or selector, value, unit, and scope" });
+  }
+  if (load.certainty === "unknown" && (load.value !== null || load.unit !== null || load.basis !== "not_readable")) {
+    context.addIssue({ code: "custom", message: "An unknown load cannot include a numeric claim" });
+  }
+  if (
+    load.certainty === "partial_visible"
+    && (
+      load.basis !== "counted_visible_plates"
+      || (load.value === null) !== (load.unit === null)
+    )
+  ) {
+    context.addIssue({ code: "custom", message: "A partial load requires counted visible plates and matching value and unit visibility" });
+  }
+});
+
+const equipmentEvidenceSchema = z.object({
+  startMs: z.number().int().nonnegative(),
+  peakMs: z.number().int().nonnegative(),
+  endMs: z.number().int().positive(),
+  visualEvidence: z.string().min(1),
+  visibleReferences: z.array(z.string().min(1)).min(1),
+  confidence: z.number().min(0.75).max(1),
+  focusRegion: visualFocusRegionSchema.nullable(),
+}).refine((moment) => moment.startMs < moment.peakMs && moment.peakMs < moment.endMs, { message: "Equipment evidence peak must be inside its interval", path: ["peakMs"] });
+
+export const equipmentObservationSchema = z.object({
+  id: z.string().min(1),
+  category: z.enum(["visible_load", "setup", "balance", "equipment_motion", "limitation"]),
+  title: z.string().min(1),
+  observation: z.string().min(1),
+  coachingRelevance: z.string().min(1).nullable(),
+  load: equipmentLoadSchema.nullable(),
+  evidence: z.array(equipmentEvidenceSchema).min(1),
 });
 
 export const evidenceMomentSchema = z
@@ -28,24 +188,52 @@ export const evidenceMomentSchema = z
     visualEvidence: z.string().min(1),
     coachingNote: z.string().min(1).max(360).optional(),
     visibleBodyAreas: z.array(z.string().min(1)).min(1),
-    confidence: z.number().min(0.75).max(1),
+    confidence: z.number().min(0.4).max(1),
+    measurementIds: z.array(z.string().min(1)).optional(),
     focusRegion: visualFocusRegionSchema.nullable().optional(),
   })
   .refine((moment) => moment.endMs > moment.startMs, {
     message: "Evidence end time must follow its start time",
     path: ["endMs"],
   })
-  .refine((moment) => moment.peakMs === undefined || (moment.peakMs >= moment.startMs && moment.peakMs <= moment.endMs), { message: "Evidence peak must fall inside its interval", path: ["peakMs"] });
+  .refine((moment) => moment.peakMs === undefined || (moment.startMs < moment.peakMs && moment.peakMs < moment.endMs), { message: "Evidence peak must fall strictly inside its interval", path: ["peakMs"] });
 
 export const coachingFindingSchema = z.object({
   id: z.string().min(1),
+  coachingArea: z.enum([
+    "form",
+    "load",
+    "posture_setup",
+    "equipment",
+    "safety_surroundings",
+    "grip_contact",
+    "support_balance",
+  ]).optional().default("form"),
   title: z.string().min(1),
   detail: z.string().min(1),
   whyItMatters: z.string().min(1),
   correction: z.string().min(1).nullable(),
   cue: z.string().min(1).nullable(),
+  actionableCorrection: z.object({
+    instruction: z.string().min(1),
+    cue: z.string().min(1),
+    successCheck: z.string().min(1).nullable(),
+    applyWhen: z.string().min(1),
+  }).nullable().optional(),
+  expandedCoaching: z.object({
+    summary: z.string().min(1),
+    whatHappened: z.string().min(1),
+    whyItMatters: z.string().min(1),
+    whatToDo: z.string().min(1),
+    successCheck: z.string().min(1).nullable(),
+  }).optional(),
   severity: z.enum(["note", "important", "high"]),
   evidence: z.array(evidenceMomentSchema).min(1),
+  primaryEvidenceIndex: z.number().int().nonnegative().optional(),
+  observedIssueRegions: z.array(z.enum(anatomyRegions)).max(8).optional(),
+}).refine((finding) => finding.primaryEvidenceIndex === undefined || finding.primaryEvidenceIndex < finding.evidence.length, {
+  message: "Primary evidence index must select one of the finding's evidence moments",
+  path: ["primaryEvidenceIndex"],
 });
 
 const recognitionSchema = z.object({
@@ -56,6 +244,7 @@ const recognitionSchema = z.object({
   alternatives: z.array(z.string().min(1)),
   catalogExerciseId: z.number().int().positive().nullable(),
   exerciseFamily: z.enum(exerciseFamilies),
+  source: z.enum(["user_declared", "legacy_model"]).optional(),
 });
 
 const videoCheckSchema = z.object({
@@ -110,21 +299,38 @@ const nextSetPlanItemSchema = z.object({
   id: z.string().min(1),
   action: z.string().min(1),
   rationale: z.string().min(1),
+  successCheck: z.string().min(1).optional(),
   relatedFindingId: z.string().min(1).nullable(),
 });
 
-const usageSchema = z.object({
-  promptTokens: z.number().int().nonnegative(),
-  outputTokens: z.number().int().nonnegative(),
-  thinkingTokens: z.number().int().nonnegative(),
+type CoachingCoverageDomain =
+  | "surroundings"
+  | "equipment_setup"
+  | "grip_contact"
+  | "starting_position"
+  | "movement_execution"
+  | "support_balance";
+
+const coachingCoverageItem = <T extends CoachingCoverageDomain>(domain: T) => z.object({
+  domain: z.literal(domain),
+  status: z.enum(["issue", "clear", "not_visible"]),
+  observation: z.string().min(1),
+  findingIds: z.array(z.string().min(1)).max(20),
 });
 
-const verificationSchema = z.object({
-  performed: z.boolean(),
-  reason: z.string().min(1).nullable(),
-  outcome: z.enum(["not-needed", "confirmed", "revised", "rejected", "failed"]),
-  checkedFindingId: z.string().min(1).nullable(),
-  usage: usageSchema.optional(),
+const coachingCoverageSchema = z.tuple([
+  coachingCoverageItem("surroundings"),
+  coachingCoverageItem("equipment_setup"),
+  coachingCoverageItem("grip_contact"),
+  coachingCoverageItem("starting_position"),
+  coachingCoverageItem("movement_execution"),
+  coachingCoverageItem("support_balance"),
+]);
+
+const exerciseGuideSchema = z.object({
+  setupSteps: z.array(z.string().min(1)).min(1).max(5),
+  executionSteps: z.array(z.string().min(1)).min(1).max(5),
+  relatedFindingIds: z.array(z.string().min(1)).max(20),
 });
 
 const precisionRequestSchema = z.object({
@@ -139,55 +345,34 @@ const precisionRequestSchema = z.object({
   })).max(3),
 });
 
-const precisionReviewSchema = z.object({
-  runsRequested: z.number().int().min(0).max(3),
-  runsUsed: z.number().int().min(0).max(3),
-  status: z.enum(["not-needed", "completed", "partial", "failed"]),
-  summary: z.string().min(1).nullable(),
-  passes: z.array(z.object({
-    passNumber: z.number().int().positive(),
-    kind: z.enum(["recognition", "timestamp", "technique"]),
-    outcome: z.enum(["confirmed", "revised", "rejected", "inconclusive", "failed"]),
-    reason: z.string().min(1),
-    checkedFindingId: z.string().min(1).nullable(),
-    startMs: z.number().int().nonnegative().nullable(),
-    endMs: z.number().int().positive().nullable(),
-    usage: usageSchema,
-  })).max(3),
-});
-
 export const analysisResultSchema = z
   .object({
     status: z.enum(["complete", "partial", "unable"]),
     recognition: recognitionSchema,
     videoCheck: videoCheckSchema,
     overallAssessment: z.string().min(1).nullable(),
+    muscleFocus: muscleFocusSchema,
+    coachNote: z.string().min(1).nullable().optional().default(null),
     score: z.number().min(0).max(100).nullable(),
     scoreRationale: z.array(scoreRationaleSchema),
+    movementScores: movementScoresSchema,
+    scorecard: techniqueScorecardSchema.nullable().optional(),
+    equipmentObservations: z.array(equipmentObservationSchema).max(4).optional(),
+    exerciseGuide: exerciseGuideSchema.nullable().optional(),
+    coachingCoverage: coachingCoverageSchema.optional(),
     didWell: z.array(coachingFindingSchema),
     priorityCorrections: z.array(coachingFindingSchema),
     coachingCues: z.array(coachingFindingSchema),
     setContext: setContextSchema.optional().default(legacySetContext),
     setSummary: setSummarySchema.optional(),
     repTimeline: z.array(repTimelineItemSchema).optional(),
-    nextSetPlan: z.array(nextSetPlanItemSchema).max(5).optional(),
+    nextSetPlan: z.array(nextSetPlanItemSchema).max(20).optional(),
     precisionRequest: precisionRequestSchema.optional(),
-    precisionReview: precisionReviewSchema.optional(),
-    verification: verificationSchema.optional(),
     comparison: comparisonSchema.nullable(),
+    setDeclaration: setDeclarationSchema.nullable().optional(),
   })
   .superRefine((result, context) => {
     const findings = [...result.didWell, ...result.priorityCorrections, ...result.coachingCues];
-    const review = result.precisionReview;
-    if (review) {
-      const failedPasses = review.passes.filter((pass) => pass.outcome === "failed").length;
-      if (review.runsUsed !== review.passes.length) context.addIssue({ code: "custom", path: ["precisionReview", "runsUsed"], message: "Premium runs used must match recorded passes" });
-      if (review.runsUsed > review.runsRequested) context.addIssue({ code: "custom", path: ["precisionReview", "runsUsed"], message: "Premium runs used cannot exceed requested runs" });
-      if (review.status === "not-needed" && (review.runsRequested !== 0 || review.runsUsed !== 0)) context.addIssue({ code: "custom", path: ["precisionReview", "status"], message: "A not-needed review cannot use runs" });
-      if (review.status === "completed" && (review.runsUsed !== review.runsRequested || failedPasses > 0)) context.addIssue({ code: "custom", path: ["precisionReview", "status"], message: "A completed review requires every requested pass" });
-      if (review.status === "partial" && (failedPasses === 0 || failedPasses === review.passes.length)) context.addIssue({ code: "custom", path: ["precisionReview", "status"], message: "A partial review requires successful and failed passes" });
-      if (review.status === "failed" && review.passes.length > 0 && failedPasses === 0) context.addIssue({ code: "custom", path: ["precisionReview", "status"], message: "A failed review requires a failed pass" });
-    }
     if ((result.repTimeline ?? []).length > 0) {
       const reps = new Map((result.repTimeline ?? []).map((rep) => [rep.repNumber, rep]));
       for (const finding of findings) {
@@ -195,7 +380,7 @@ export const analysisResultSchema = z
           if (evidence.repNumber === null) continue;
           const rep = reps.get(evidence.repNumber);
           const peak = evidence.peakMs ?? evidence.startMs;
-          if (!rep || peak < rep.startMs || peak > rep.endMs) context.addIssue({ code: "custom", path: ["repTimeline"], message: "Finding evidence must fall inside its referenced repetition" });
+          if (!rep || peak < rep.startMs - EVIDENCE_REP_TOLERANCE_MS || peak > rep.endMs + EVIDENCE_REP_TOLERANCE_MS) context.addIssue({ code: "custom", path: ["repTimeline"], message: "Finding evidence must stay within one second of its referenced repetition" });
         }
       }
     }
@@ -210,11 +395,14 @@ export const analysisResultSchema = z
       if (result.score !== null || result.scoreRationale.length > 0) {
         context.addIssue({ code: "custom", path: ["score"], message: "Unable results cannot include a score" });
       }
+      if ((result.movementScores ?? []).length > 0) {
+        context.addIssue({ code: "custom", path: ["movementScores"], message: "Unable results cannot include movement scores" });
+      }
       if (findings.length > 0) {
         context.addIssue({ code: "custom", path: ["priorityCorrections"], message: "Unable results cannot include coaching findings" });
       }
-      if (result.overallAssessment !== null) {
-        context.addIssue({ code: "custom", path: ["overallAssessment"], message: "Unable results cannot include a technique assessment" });
+      if ((result.equipmentObservations ?? []).length > 0) {
+        context.addIssue({ code: "custom", path: ["equipmentObservations"], message: "Unable results cannot include equipment observations" });
       }
       return;
     }
@@ -225,28 +413,50 @@ export const analysisResultSchema = z
     if (!result.overallAssessment) {
       context.addIssue({ code: "custom", path: ["overallAssessment"], message: "Analyzed results require an overall assessment" });
     }
-    if ((result.nextSetPlan ?? []).length === 0) {
-      context.addIssue({ code: "custom", path: ["nextSetPlan"], message: "Analyzed results require at least one next-set action" });
+    if (result.score === null) {
+      context.addIssue({ code: "custom", path: ["score"], message: "Analyzed results require a numeric score" });
     }
-
-    if (result.score !== null) {
-      if (!result.recognition.label || result.recognition.confidence < 0.55) {
-        context.addIssue({ code: "custom", path: ["score"], message: "A score requires confident exercise recognition" });
+    for (const [index, finding] of result.priorityCorrections.entries()) {
+      if (!finding.actionableCorrection) {
+        context.addIssue({ code: "custom", path: ["priorityCorrections", index, "actionableCorrection"], message: "Every priority issue requires complete what-to-do-next coaching" });
       }
-      if (result.scoreRationale.length < 2) {
-        context.addIssue({ code: "custom", path: ["scoreRationale"], message: "A score requires at least two supported criteria" });
+    }
+    const correctionIds = new Set(result.priorityCorrections.map((finding) => finding.id));
+    for (const [index, coverage] of (result.coachingCoverage ?? []).entries()) {
+      if (coverage.status === "issue" && coverage.findingIds.length === 0) {
+        context.addIssue({ code: "custom", path: ["coachingCoverage", index, "findingIds"], message: "Issue coverage must reference a correction" });
       }
-    } else if (result.scoreRationale.length > 0) {
-      context.addIssue({ code: "custom", path: ["scoreRationale"], message: "Score rationale must be empty when no score is shown" });
+      if (coverage.status !== "issue" && coverage.findingIds.length > 0) {
+        context.addIssue({ code: "custom", path: ["coachingCoverage", index, "findingIds"], message: "Clear or not-visible coverage cannot reference corrections" });
+      }
+      for (const findingId of coverage.findingIds) {
+        if (!correctionIds.has(findingId)) context.addIssue({ code: "custom", path: ["coachingCoverage", index, "findingIds"], message: "Coverage references an unknown correction" });
+      }
+    }
+    for (const findingId of result.exerciseGuide?.relatedFindingIds ?? []) {
+      if (!correctionIds.has(findingId)) context.addIssue({ code: "custom", path: ["exerciseGuide", "relatedFindingIds"], message: "Exercise guide references an unknown correction" });
+    }
+    for (const [index, plan] of (result.nextSetPlan ?? []).entries()) {
+      if (!plan.relatedFindingId || !correctionIds.has(plan.relatedFindingId)) {
+        context.addIssue({ code: "custom", path: ["nextSetPlan", index, "relatedFindingId"], message: "Every next-set action must reference a real correction" });
+      }
+    }
+    if (result.priorityCorrections.length > 0 && (result.nextSetPlan ?? []).length === 0) {
+      context.addIssue({ code: "custom", path: ["nextSetPlan"], message: "Corrections require at least one next-set action" });
     }
     if (!result.recognition.label) context.addIssue({ code: "custom", path: ["recognition", "label"], message: "Analyzed results require an exercise label" });
   });
 
 export type ScoreRationale = z.infer<typeof scoreRationaleSchema>;
+export type MovementScore = z.infer<typeof movementScoreSchema>;
+export type AnatomyRegion = (typeof anatomyRegions)[number];
+export type TechniqueScorecard = z.infer<typeof techniqueScorecardSchema>;
+export type EquipmentObservation = z.infer<typeof equipmentObservationSchema>;
 export type EvidenceMoment = z.infer<typeof evidenceMomentSchema>;
 export type VisualFocusRegion = z.infer<typeof visualFocusRegionSchema>;
 export type CoachingFinding = z.infer<typeof coachingFindingSchema>;
 export type AnalysisResult = z.infer<typeof analysisResultSchema>;
+export type MuscleFocus = AnalysisResult["muscleFocus"];
+export type MuscleRegion = (typeof muscleRegions)[number];
 export type RepTimelineItem = z.infer<typeof repTimelineItemSchema>;
 export type NextSetPlanItem = z.infer<typeof nextSetPlanItemSchema>;
-export type PrecisionReview = z.infer<typeof precisionReviewSchema>;

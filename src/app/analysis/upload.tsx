@@ -9,16 +9,23 @@ export default function AnalysisUploadRoute() {
   const router = useRouter();
   const phase = useCaptureStore((state) => state.phase);
   const recording = useCaptureStore((state) => state.recording);
+  const declaration = useCaptureStore((state) => state.declaration);
   const previousSessionId = useCaptureStore((state) => state.previousSessionId);
+  const uploadSubstage = useCaptureStore((state) => state.uploadSubstage);
   const error = useCaptureStore((state) => state.error);
   const dispatch = useCaptureStore((state) => state.dispatch);
 
   useEffect(() => {
-    if (phase !== "uploading" || !recording) return;
+    if (phase !== "uploading" || !recording || !declaration) return;
     let active = true;
-    void analysisUploadCoordinator.run(recording, previousSessionId ?? undefined)
-      .then(({ sessionId }) => {
+    const unsubscribe = analysisUploadCoordinator.subscribe((progress) => {
+      if (!active) return;
+      dispatch({ type: "upload_progress", substage: progress.substage, target: progress.target });
+    });
+    void analysisUploadCoordinator.run(recording, declaration, previousSessionId ?? undefined)
+      .then(({ sessionId, target }) => {
         if (!active) return;
+        if (!useCaptureStore.getState().uploadTarget) dispatch({ type: "upload_target_created", target });
         dispatch({ type: "processing", sessionId });
         router.replace({ pathname: "/analysis/[session-id]", params: { "session-id": sessionId } });
       })
@@ -29,21 +36,24 @@ export default function AnalysisUploadRoute() {
           message: uploadError instanceof Error ? uploadError.message : "The original video could not be uploaded",
         });
       });
-    return () => { active = false; };
-  }, [dispatch, phase, previousSessionId, recording, router]);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [declaration, dispatch, phase, previousSessionId, recording, router]);
 
   const discard = () => {
     analysisUploadCoordinator.reset();
-    dispatch({ type: "reset" });
-    router.replace("/recording-tips");
+    dispatch({ type: "discard_recording" });
+    router.replace("/camera");
   };
 
-  const missingRecording = !recording ? "The saved recording is no longer available." : null;
+  const missingRecording = !recording || !declaration ? "The saved recording or set details are no longer available." : null;
   const failureMessage = phase === "error" ? error : missingRecording;
 
   return (
     <AnalysisProgressScreen
-      stage="uploading"
+      stage={uploadSubstage ?? "creating_session"}
       failureMessage={failureMessage}
       onRetryUpload={phase === "error" && recording ? () => dispatch({ type: "retry_upload" }) : undefined}
       onRecordAgain={failureMessage ? discard : undefined}

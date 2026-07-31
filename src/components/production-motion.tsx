@@ -3,7 +3,6 @@ import type { StyleProp, ViewStyle } from "react-native";
 
 const motionSources = {
   cameraSetup: require("../../assets/motion/camera-setup-loop.mp4"),
-  analysisProgress: require("../../assets/motion/analysis-progress-loop.mp4"),
 } as const;
 
 type ProductionMotionProps = {

@@ -4,7 +4,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormButton } from "@/components/form-button";
 import { FormCard } from "@/components/form-card";
-import { FormWordmark } from "@/components/form-wordmark";
 import { AnalysisProgressMotion } from "@/components/analysis-progress-motion";
 import { analysisProgress } from "@/features/analysis/progress-stages";
 import { colors } from "@/theme/colors";
@@ -14,12 +13,15 @@ import { typography } from "@/theme/type";
 type AnalysisProgressScreenProps = {
   stage: string | null;
   failureMessage: string | null;
+  onRetryAnalysis?: () => void;
+  retryingAnalysis?: boolean;
+  retryAnalysisError?: string | null;
   onRecordAgain?: () => void;
   onGoHome?: () => void;
   onRetryUpload?: () => void;
 };
 
-export function AnalysisProgressScreen({ stage, failureMessage, onRecordAgain, onGoHome, onRetryUpload }: AnalysisProgressScreenProps) {
+export function AnalysisProgressScreen({ stage, failureMessage, onRetryAnalysis, retryingAnalysis = false, retryAnalysisError = null, onRecordAgain, onGoHome, onRetryUpload }: AnalysisProgressScreenProps) {
   const insets = useSafeAreaInsets();
   const progress = analysisProgress(stage);
 
@@ -33,22 +35,18 @@ export function AnalysisProgressScreen({ stage, failureMessage, onRecordAgain, o
           paddingHorizontal: spacing.xl,
         }}
       >
-        <FormWordmark />
         <Animated.View entering={FadeInDown.duration(220)} style={{ flex: 1, justifyContent: "center", gap: spacing.xxl }}>
           <View style={{ gap: spacing.md }}>
             <Text selectable style={[typography.title, { color: colors.text }]}>Analyzing your movement</Text>
-            <Text selectable style={[typography.body, { maxWidth: 560, color: colors.textSecondary }]}>Your recording is ready. FORM is reviewing the full movement and preparing specific coaching.</Text>
+            <Text selectable style={[typography.label, { maxWidth: 560, color: colors.gold }]}>Keep Formie open and stay on this page until your coaching is ready.</Text>
           </View>
 
           <View
+            testID="analysis-progress-motion-surface"
             style={{
-              minHeight: 210,
+              minHeight: 330,
               overflow: "hidden",
-              borderRadius: radii.lg,
-              borderCurve: "continuous",
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.surface,
+              backgroundColor: colors.background,
             }}
           >
             <AnalysisProgressMotion stage={stage} />
@@ -102,9 +100,12 @@ export function AnalysisProgressScreen({ stage, failureMessage, onRecordAgain, o
       {failureMessage ? (
         <View style={{ position: "absolute", left: spacing.lg, right: spacing.lg, bottom: insets.bottom + spacing.lg }}>
           <FormCard style={{ gap: spacing.md, borderColor: colors.danger, backgroundColor: "rgba(15,15,15,0.97)" }}>
-            <Text selectable style={[typography.heading, { color: colors.text }]}>Analysis paused</Text>
+            <Text selectable style={[typography.heading, { color: colors.text }]}>Analysis couldn’t finish</Text>
             <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{failureMessage}</Text>
             <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Your recording is still saved securely.</Text>
+            <Text selectable style={[typography.caption, { color: colors.textMuted }]}>This failed attempt did not use a free analysis.</Text>
+            {retryAnalysisError ? <Text accessibilityRole="alert" selectable style={[typography.caption, { color: colors.danger }]}>{retryAnalysisError}</Text> : null}
+            {onRetryAnalysis ? <FormButton label={retryingAnalysis ? "Retrying…" : "Retry Analysis"} disabled={retryingAnalysis} onPress={onRetryAnalysis} /> : null}
             {onRetryUpload ? <FormButton label="Retry Upload" onPress={onRetryUpload} /> : null}
             {onRecordAgain ? <FormButton label="Record Again" onPress={onRecordAgain} /> : null}
             {onGoHome ? <FormButton label="Back to Home" variant="ghost" onPress={onGoHome} /> : null}

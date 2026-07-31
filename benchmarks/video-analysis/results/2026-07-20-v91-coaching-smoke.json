@@ -1,0 +1,1231 @@
+{
+  "generatedAt": "2026-07-21T02:54:18.369Z",
+  "label": "2026-07-20-v91-coaching-smoke",
+  "outputs": [
+    {
+      "id": "rehab_leg_abduction_bad",
+      "pairId": "rehab_leg_abduction",
+      "sourceFilename": "Ex4/PM_034-Camera17-30fps.mp4 frames 640-1090",
+      "expectedExercise": "standing leg abduction",
+      "acceptedLabels": [
+        "standing hip abduction",
+        "side leg raise",
+        "standing lateral leg raise"
+      ],
+      "expectedQuality": "bad",
+      "expectedView": "front",
+      "expectedEquipment": [],
+      "expectedLoad": "not_applicable",
+      "expectedRepCount": 5,
+      "repCountTolerance": 1,
+      "sessionId": "b46413b0-6751-42d8-883f-a6ddce563b78",
+      "status": "complete",
+      "stage": "coaching",
+      "failureCode": null,
+      "inputStrategy": "video",
+      "cameraGeometry": {
+        "tilt": "level",
+        "view": "front",
+        "height": "mid",
+        "framing": "full-body",
+        "distance": "medium",
+        "confidence": 0.95,
+        "occlusions": [],
+        "limitations": [],
+        "visibleRegions": [
+          "head",
+          "torso",
+          "arms",
+          "legs",
+          "feet"
+        ]
+      },
+      "indexedExercise": {
+        "slug": null,
+        "label": "bodyweight standing hip abduction",
+        "family": "raise",
+        "mechanics": {
+          "grip": "none",
+          "angle": "neutral",
+          "stance": "single-leg",
+          "support": "unsupported",
+          "laterality": "unilateral",
+          "trajectory": "curved",
+          "executionStyle": null
+        },
+        "confidence": 0.9,
+        "alternatives": [
+          {
+            "slug": null,
+            "label": "standing hip abduction",
+            "confidence": 0.8
+          }
+        ],
+        "equipmentClass": "bodyweight"
+      },
+      "rubricResolution": "observation_only",
+      "rubricExerciseId": null,
+      "selectedCriteria": 5,
+      "catalogMatch": {
+        "score": 0,
+        "margin": 0,
+        "reasons": [
+          "no_family_equipment_candidates"
+        ]
+      },
+      "stageAttempts": {},
+      "candidateFindings": [
+        {
+          "id": "finding-torso-tilt",
+          "kind": "correction",
+          "evidence": [
+            {
+              "endMs": 2417,
+              "peakMs": 1417,
+              "startMs": 417,
+              "visualEvidence": "The torso leans to the right at peak abduction of the left leg."
+            },
+            {
+              "endMs": 5250,
+              "peakMs": 4250,
+              "startMs": 3250,
+              "visualEvidence": "The torso leans to the right at peak abduction of the left leg."
+            },
+            {
+              "endMs": 8333,
+              "peakMs": 7333,
+              "startMs": 6333,
+              "visualEvidence": "The torso leans to the right at peak abduction of the left leg."
+            },
+            {
+              "endMs": 11083,
+              "peakMs": 10083,
+              "startMs": 9083,
+              "visualEvidence": "The torso leans to the right at peak abduction of the left leg."
+            },
+            {
+              "endMs": 14250,
+              "peakMs": 13250,
+              "startMs": 12250,
+              "visualEvidence": "The torso leans to the right at peak abduction of the left leg."
+            }
+          ],
+          "severity": "minor",
+          "confidence": 0.9,
+          "recurrence": "repeated",
+          "criterionId": "observation-only:visible-support",
+          "affectedReps": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "observableFact": "The torso tilts laterally to the right as the left leg is abducted, rather than remaining upright."
+        },
+        {
+          "id": "finding-controlled-tempo",
+          "kind": "strength",
+          "evidence": [
+            {
+              "endMs": 2417,
+              "peakMs": 1417,
+              "startMs": 417,
+              "visualEvidence": "Smooth control during the ascent and descent phases."
+            },
+            {
+              "endMs": 5250,
+              "peakMs": 4250,
+              "startMs": 3250,
+              "visualEvidence": "Smooth control during the ascent and descent phases."
+            },
+            {
+              "endMs": 8333,
+              "peakMs": 7333,
+              "startMs": 6333,
+              "visualEvidence": "Smooth control during the ascent and descent phases."
+            },
+            {
+              "endMs": 11083,
+              "peakMs": 10083,
+              "startMs": 9083,
+              "visualEvidence": "Smooth control during the ascent and descent phases."
+            },
+            {
+              "endMs": 14250,
+              "peakMs": 13250,
+              "startMs": 12250,
+              "visualEvidence": "Smooth control during the ascent and descent phases."
+            }
+          ],
+          "severity": "minor",
+          "confidence": 0.9,
+          "recurrence": "repeated",
+          "criterionId": "observation-only:visible-control",
+          "affectedReps": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "observableFact": "The leg is raised and lowered with a controlled, deliberate tempo, showing smooth transitions at the peak of each repetition."
+        },
+        {
+          "id": "finding-consistent-range",
+          "kind": "strength",
+          "evidence": [
+            {
+              "endMs": 2417,
+              "peakMs": 1417,
+              "startMs": 417,
+              "visualEvidence": "Consistent peak abduction height is achieved."
+            },
+            {
+              "endMs": 5250,
+              "peakMs": 4250,
+              "startMs": 3250,
+              "visualEvidence": "Consistent peak abduction height is achieved."
+            },
+            {
+              "endMs": 8333,
+              "peakMs": 7333,
+              "startMs": 6333,
+              "visualEvidence": "Consistent peak abduction height is achieved."
+            },
+            {
+              "endMs": 11083,
+              "peakMs": 10083,
+              "startMs": 9083,
+              "visualEvidence": "Consistent peak abduction height is achieved."
+            },
+            {
+              "endMs": 14250,
+              "peakMs": 13250,
+              "startMs": 12250,
+              "visualEvidence": "Consistent peak abduction height is achieved."
+            }
+          ],
+          "severity": "minor",
+          "confidence": 0.9,
+          "recurrence": "repeated",
+          "criterionId": "observation-only:visible-range",
+          "affectedReps": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "observableFact": "The left leg consistently reaches a high level of abduction across all repetitions."
+        }
+      ],
+      "criterionAssessments": [
+        {
+          "domain": "setup_stability",
+          "weight": 1,
+          "outcome": "good",
+          "criterionId": "observation-only:visible-support",
+          "verification": "supported"
+        },
+        {
+          "domain": "rep_consistency",
+          "weight": 1,
+          "outcome": "good",
+          "criterionId": "observation-only:visible-symmetry",
+          "verification": "supported"
+        },
+        {
+          "domain": "rep_consistency",
+          "weight": 1,
+          "outcome": "good",
+          "criterionId": "observation-only:visible-repeatability",
+          "verification": "supported"
+        },
+        {
+          "domain": "control_tempo",
+          "weight": 1,
+          "outcome": "good",
+          "criterionId": "observation-only:visible-control",
+          "verification": "supported"
+        },
+        {
+          "domain": "range_positions",
+          "weight": 1,
+          "outcome": "good",
+          "criterionId": "observation-only:visible-range",
+          "verification": "supported"
+        }
+      ],
+      "verificationDecisions": [
+        {
+          "reason": "The video clearly shows that during all five repetitions of the standing hip abduction, as the person abducts their left leg (moving to the right side of the screen), their torso tilts laterally to their right (towards the left side of the screen) instead of remaining upright.",
+          "decision": "supported",
+          "findingId": "finding-torso-tilt",
+          "confidence": 1,
+          "verifiedPeakMs": 7333
+        },
+        {
+          "reason": "The video shows the performer raising and lowering their leg with a controlled, deliberate tempo across all five repetitions. At the peak of each repetition, such as at 00:01.417, the transition is smooth and under visible control without any bouncing or dropping.",
+          "decision": "supported",
+          "findingId": "finding-controlled-tempo",
+          "confidence": 1,
+          "verifiedPeakMs": 1417
+        },
+        {
+          "reason": "The video shows that the left leg consistently reaches a high and repeatable level of abduction (approximately 45-50 degrees) at the peak of each of the five repetitions, with the third repetition peaking at approximately 00:07.333.",
+          "decision": "supported",
+          "findingId": "finding-consistent-range",
+          "confidence": 1,
+          "verifiedPeakMs": 7333
+        }
+      ],
+      "verifiedFindings": {
+        "strengths": [
+          {
+            "id": "finding-controlled-tempo",
+            "kind": "strength",
+            "evidence": [
+              {
+                "endMs": 2417,
+                "peakMs": 1417,
+                "startMs": 417,
+                "visualEvidence": "Smooth control during the ascent and descent phases."
+              },
+              {
+                "endMs": 5250,
+                "peakMs": 4250,
+                "startMs": 3250,
+                "visualEvidence": "Smooth control during the ascent and descent phases."
+              },
+              {
+                "endMs": 8333,
+                "peakMs": 7333,
+                "startMs": 6333,
+                "visualEvidence": "Smooth control during the ascent and descent phases."
+              },
+              {
+                "endMs": 11083,
+                "peakMs": 10083,
+                "startMs": 9083,
+                "visualEvidence": "Smooth control during the ascent and descent phases."
+              },
+              {
+                "endMs": 14250,
+                "peakMs": 13250,
+                "startMs": 12250,
+                "visualEvidence": "Smooth control during the ascent and descent phases."
+              }
+            ],
+            "severity": "minor",
+            "confidence": 0.9,
+            "recurrence": "repeated",
+            "criterionId": "observation-only:visible-control",
+            "affectedReps": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "observableFact": "The leg is raised and lowered with a controlled, deliberate tempo, showing smooth transitions at the peak of each repetition."
+          },
+          {
+            "id": "finding-consistent-range",
+            "kind": "strength",
+            "evidence": [
+              {
+                "endMs": 8333,
+                "peakMs": 7333,
+                "startMs": 6333,
+                "visualEvidence": "Consistent peak abduction height is achieved."
+              },
+              {
+                "endMs": 2417,
+                "peakMs": 1417,
+                "startMs": 417,
+                "visualEvidence": "Consistent peak abduction height is achieved."
+              },
+              {
+                "endMs": 5250,
+                "peakMs": 4250,
+                "startMs": 3250,
+                "visualEvidence": "Consistent peak abduction height is achieved."
+              },
+              {
+                "endMs": 11083,
+                "peakMs": 10083,
+                "startMs": 9083,
+                "visualEvidence": "Consistent peak abduction height is achieved."
+              },
+              {
+                "endMs": 14250,
+                "peakMs": 13250,
+                "startMs": 12250,
+                "visualEvidence": "Consistent peak abduction height is achieved."
+              }
+            ],
+            "severity": "minor",
+            "confidence": 0.9,
+            "recurrence": "repeated",
+            "criterionId": "observation-only:visible-range",
+            "affectedReps": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "observableFact": "The left leg consistently reaches a high level of abduction across all repetitions."
+          }
+        ],
+        "corrections": [
+          {
+            "id": "finding-torso-tilt",
+            "kind": "correction",
+            "evidence": [
+              {
+                "endMs": 8333,
+                "peakMs": 7333,
+                "startMs": 6333,
+                "visualEvidence": "The torso leans to the right at peak abduction of the left leg."
+              },
+              {
+                "endMs": 2417,
+                "peakMs": 1417,
+                "startMs": 417,
+                "visualEvidence": "The torso leans to the right at peak abduction of the left leg."
+              },
+              {
+                "endMs": 5250,
+                "peakMs": 4250,
+                "startMs": 3250,
+                "visualEvidence": "The torso leans to the right at peak abduction of the left leg."
+              },
+              {
+                "endMs": 11083,
+                "peakMs": 10083,
+                "startMs": 9083,
+                "visualEvidence": "The torso leans to the right at peak abduction of the left leg."
+              },
+              {
+                "endMs": 14250,
+                "peakMs": 13250,
+                "startMs": 12250,
+                "visualEvidence": "The torso leans to the right at peak abduction of the left leg."
+              }
+            ],
+            "severity": "minor",
+            "confidence": 0.9,
+            "recurrence": "repeated",
+            "criterionId": "observation-only:visible-support",
+            "affectedReps": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ],
+            "observableFact": "The torso tilts laterally to the right as the left leg is abducted, rather than remaining upright."
+          }
+        ],
+        "emptyCorrectionMessage": null
+      },
+      "writerResult": {
+        "setVerdict": "The set is executed with excellent control and range of motion, but keeping the torso upright will make the movement path more repeatable.",
+        "findingCopy": [
+          {
+            "cue": "Keep the same visible contact points and support position from rep to rep.",
+            "title": "Torso Tilts Laterally",
+            "detail": "The torso tilts laterally to the right as the left leg is abducted, rather than remaining upright.",
+            "applyWhen": "Apply this correction on every repetition of the next set.",
+            "findingId": "finding-torso-tilt",
+            "correction": "Maintain an upright torso throughout the entire movement, avoiding any sideways leaning to the right.",
+            "successCheck": "The torso remains vertical and does not lean to the right as the left leg rises.",
+            "whyItMatters": "Keeping the torso upright ensures that the range of motion comes entirely from the hip joint, making the movement path and endpoint highly repeatable."
+          },
+          {
+            "cue": "Change direction smoothly without bouncing or dropping the load.",
+            "title": "Controlled Tempo",
+            "detail": "The leg is raised and lowered with a controlled, deliberate tempo, showing smooth transitions at the peak of each repetition.",
+            "applyWhen": null,
+            "findingId": "finding-controlled-tempo",
+            "correction": null,
+            "successCheck": null,
+            "whyItMatters": "A controlled tempo prevents momentum from altering the path of the leg, ensuring consistent execution."
+          },
+          {
+            "cue": "Reach the same visible endpoints while keeping the support position consistent.",
+            "title": "Consistent Range of Motion",
+            "detail": "The left leg consistently reaches a high level of abduction across all repetitions.",
+            "applyWhen": null,
+            "findingId": "finding-consistent-range",
+            "correction": null,
+            "successCheck": null,
+            "whyItMatters": "Reaching a consistent peak height makes the endpoint of each repetition highly predictable and repeatable."
+          }
+        ],
+        "nextSetPlan": [
+          {
+            "id": "plan-torso-upright",
+            "action": "Focus on keeping the torso upright and vertical as you abduct the left leg.",
+            "rationale": "Correcting the lateral tilt to the right will isolate the movement to the hip joint and make the path more repeatable.",
+            "successCheck": "The torso does not lean to the right during the abduction phase.",
+            "relatedFindingId": "finding-torso-tilt"
+          },
+          {
+            "id": "plan-maintain-tempo",
+            "action": "Continue to raise and lower the leg with a controlled, deliberate tempo.",
+            "rationale": "Maintaining this controlled tempo ensures smooth transitions at the peak of each repetition.",
+            "successCheck": "The leg transitions smoothly at the peak without bouncing.",
+            "relatedFindingId": "finding-controlled-tempo"
+          }
+        ],
+        "overallAssessment": "The movement is performed with a highly controlled tempo and consistent range of motion across all repetitions. To further improve repeatability, focus on maintaining an upright torso position throughout the set."
+      },
+      "exactFramesUploaded": true,
+      "invokes": 7,
+      "idleTimeouts": 0,
+      "infrastructureRetries": 0,
+      "elapsedMs": 90084,
+      "recognition": {
+        "label": "bodyweight standing hip abduction",
+        "variation": null,
+        "equipment": [
+          "bodyweight"
+        ],
+        "confidence": 0.9,
+        "alternatives": [
+          "standing hip abduction"
+        ],
+        "catalogExerciseId": null,
+        "exerciseFamily": "raise"
+      },
+      "videoCheck": {
+        "outcome": "usable",
+        "limitations": [
+          "Score uses the visible criteria available for an observation-only exercise match."
+        ],
+        "retryReason": null,
+        "retryInstruction": null,
+        "usableObservations": [
+          "torso",
+          "left leg",
+          "right leg"
+        ]
+      },
+      "score": 89,
+      "setSummary": {
+        "verdict": "The set is executed with excellent control and range of motion, but keeping the torso upright will make the movement path more repeatable.",
+        "totalReps": 5,
+        "consistentReps": 0
+      },
+      "equipmentObservations": [],
+      "priorityCorrections": [
+        {
+          "id": "finding-torso-tilt",
+          "cue": "Keep the same visible contact points and support position from rep to rep.",
+          "title": "Torso Tilts Laterally",
+          "detail": "The torso tilts laterally to the right as the left leg is abducted, rather than remaining upright.",
+          "evidence": [
+            {
+              "endMs": 8333,
+              "phase": null,
+              "peakMs": 7333,
+              "startMs": 6333,
+              "repNumber": 3,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Keep the same visible contact points and support position from rep to rep.",
+              "measurementIds": [],
+              "visualEvidence": "The torso leans to the right at peak abduction of the left leg.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            },
+            {
+              "endMs": 2417,
+              "phase": null,
+              "peakMs": 1417,
+              "startMs": 417,
+              "repNumber": 1,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Keep the same visible contact points and support position from rep to rep.",
+              "measurementIds": [],
+              "visualEvidence": "The torso leans to the right at peak abduction of the left leg.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            },
+            {
+              "endMs": 5250,
+              "phase": null,
+              "peakMs": 4250,
+              "startMs": 3250,
+              "repNumber": 2,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Keep the same visible contact points and support position from rep to rep.",
+              "measurementIds": [],
+              "visualEvidence": "The torso leans to the right at peak abduction of the left leg.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            },
+            {
+              "endMs": 11083,
+              "phase": null,
+              "peakMs": 10083,
+              "startMs": 9083,
+              "repNumber": 4,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Keep the same visible contact points and support position from rep to rep.",
+              "measurementIds": [],
+              "visualEvidence": "The torso leans to the right at peak abduction of the left leg.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            },
+            {
+              "endMs": 14250,
+              "phase": null,
+              "peakMs": 13250,
+              "startMs": 12250,
+              "repNumber": 5,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Keep the same visible contact points and support position from rep to rep.",
+              "measurementIds": [],
+              "visualEvidence": "The torso leans to the right at peak abduction of the left leg.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            }
+          ],
+          "severity": "note",
+          "correction": "Maintain an upright torso throughout the entire movement, avoiding any sideways leaning to the right.",
+          "whyItMatters": "Keeping the torso upright ensures that the range of motion comes entirely from the hip joint, making the movement path and endpoint highly repeatable.",
+          "actionableCorrection": {
+            "cue": "Keep the same visible contact points and support position from rep to rep.",
+            "applyWhen": "Apply this correction on every repetition of the next set.",
+            "instruction": "Maintain an upright torso throughout the entire movement, avoiding any sideways leaning to the right.",
+            "successCheck": "The torso remains vertical and does not lean to the right as the left leg rises."
+          }
+        }
+      ],
+      "coachingCues": [],
+      "didWell": [
+        {
+          "id": "finding-controlled-tempo",
+          "cue": "Change direction smoothly without bouncing or dropping the load.",
+          "title": "Controlled Tempo",
+          "detail": "The leg is raised and lowered with a controlled, deliberate tempo, showing smooth transitions at the peak of each repetition.",
+          "evidence": [
+            {
+              "endMs": 2417,
+              "phase": null,
+              "peakMs": 1417,
+              "startMs": 417,
+              "repNumber": 1,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Change direction smoothly without bouncing or dropping the load.",
+              "measurementIds": [],
+              "visualEvidence": "Smooth control during the ascent and descent phases.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            },
+            {
+              "endMs": 5250,
+              "phase": null,
+              "peakMs": 4250,
+              "startMs": 3250,
+              "repNumber": 2,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Change direction smoothly without bouncing or dropping the load.",
+              "measurementIds": [],
+              "visualEvidence": "Smooth control during the ascent and descent phases.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            },
+            {
+              "endMs": 8333,
+              "phase": null,
+              "peakMs": 7333,
+              "startMs": 6333,
+              "repNumber": 3,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Change direction smoothly without bouncing or dropping the load.",
+              "measurementIds": [],
+              "visualEvidence": "Smooth control during the ascent and descent phases.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            },
+            {
+              "endMs": 11083,
+              "phase": null,
+              "peakMs": 10083,
+              "startMs": 9083,
+              "repNumber": 4,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Change direction smoothly without bouncing or dropping the load.",
+              "measurementIds": [],
+              "visualEvidence": "Smooth control during the ascent and descent phases.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            },
+            {
+              "endMs": 14250,
+              "phase": null,
+              "peakMs": 13250,
+              "startMs": 12250,
+              "repNumber": 5,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Change direction smoothly without bouncing or dropping the load.",
+              "measurementIds": [],
+              "visualEvidence": "Smooth control during the ascent and descent phases.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            }
+          ],
+          "severity": "note",
+          "correction": null,
+          "whyItMatters": "A controlled tempo prevents momentum from altering the path of the leg, ensuring consistent execution.",
+          "actionableCorrection": {
+            "instruction": "Change direction smoothly without bouncing or dropping the load.",
+            "cue": "Change direction smoothly without bouncing or dropping the load.",
+            "successCheck": "Repeat the visible relationship described in “Controlled Tempo” without the cited deviation.",
+            "applyWhen": "On the next repetition at the cited phase."
+          }
+        },
+        {
+          "id": "finding-consistent-range",
+          "cue": "Reach the same visible endpoints while keeping the support position consistent.",
+          "title": "Consistent Range of Motion",
+          "detail": "The left leg consistently reaches a high level of abduction across all repetitions.",
+          "evidence": [
+            {
+              "endMs": 8333,
+              "phase": null,
+              "peakMs": 7333,
+              "startMs": 6333,
+              "repNumber": 3,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Reach the same visible endpoints while keeping the support position consistent.",
+              "measurementIds": [],
+              "visualEvidence": "Consistent peak abduction height is achieved.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            },
+            {
+              "endMs": 2417,
+              "phase": null,
+              "peakMs": 1417,
+              "startMs": 417,
+              "repNumber": 1,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Reach the same visible endpoints while keeping the support position consistent.",
+              "measurementIds": [],
+              "visualEvidence": "Consistent peak abduction height is achieved.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            },
+            {
+              "endMs": 5250,
+              "phase": null,
+              "peakMs": 4250,
+              "startMs": 3250,
+              "repNumber": 2,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Reach the same visible endpoints while keeping the support position consistent.",
+              "measurementIds": [],
+              "visualEvidence": "Consistent peak abduction height is achieved.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            },
+            {
+              "endMs": 11083,
+              "phase": null,
+              "peakMs": 10083,
+              "startMs": 9083,
+              "repNumber": 4,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Reach the same visible endpoints while keeping the support position consistent.",
+              "measurementIds": [],
+              "visualEvidence": "Consistent peak abduction height is achieved.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            },
+            {
+              "endMs": 14250,
+              "phase": null,
+              "peakMs": 13250,
+              "startMs": 12250,
+              "repNumber": 5,
+              "confidence": 0.9,
+              "focusRegion": null,
+              "coachingNote": "Reach the same visible endpoints while keeping the support position consistent.",
+              "measurementIds": [],
+              "visualEvidence": "Consistent peak abduction height is achieved.",
+              "visibleBodyAreas": [
+                "visible movement"
+              ]
+            }
+          ],
+          "severity": "note",
+          "correction": null,
+          "whyItMatters": "Reaching a consistent peak height makes the endpoint of each repetition highly predictable and repeatable.",
+          "actionableCorrection": {
+            "instruction": "Reach the same visible endpoints while keeping the support position consistent.",
+            "cue": "Reach the same visible endpoints while keeping the support position consistent.",
+            "successCheck": "Repeat the visible relationship described in “Consistent Range of Motion” without the cited deviation.",
+            "applyWhen": "On the next repetition at the cited phase."
+          }
+        }
+      ],
+      "nextSetPlan": [
+        {
+          "id": "plan-torso-upright",
+          "action": "Focus on keeping the torso upright and vertical as you abduct the left leg.",
+          "rationale": "Correcting the lateral tilt to the right will isolate the movement to the hip joint and make the path more repeatable.",
+          "successCheck": "The torso does not lean to the right during the abduction phase.",
+          "relatedFindingId": "finding-torso-tilt"
+        },
+        {
+          "id": "plan-maintain-tempo",
+          "action": "Continue to raise and lower the leg with a controlled, deliberate tempo.",
+          "rationale": "Maintaining this controlled tempo ensures smooth transitions at the peak of each repetition.",
+          "successCheck": "The leg transitions smoothly at the peak without bouncing.",
+          "relatedFindingId": "finding-controlled-tempo"
+        }
+      ],
+      "evidenceTiming": [
+        {
+          "findingId": "finding-torso-tilt",
+          "title": "Torso Tilts Laterally",
+          "evidenceKind": "form",
+          "startMs": 6333,
+          "peakMs": 7333,
+          "endMs": 8333,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-torso-tilt",
+          "title": "Torso Tilts Laterally",
+          "evidenceKind": "form",
+          "startMs": 417,
+          "peakMs": 1417,
+          "endMs": 2417,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-torso-tilt",
+          "title": "Torso Tilts Laterally",
+          "evidenceKind": "form",
+          "startMs": 3250,
+          "peakMs": 4250,
+          "endMs": 5250,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-torso-tilt",
+          "title": "Torso Tilts Laterally",
+          "evidenceKind": "form",
+          "startMs": 9083,
+          "peakMs": 10083,
+          "endMs": 11083,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-torso-tilt",
+          "title": "Torso Tilts Laterally",
+          "evidenceKind": "form",
+          "startMs": 12250,
+          "peakMs": 13250,
+          "endMs": 14250,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-controlled-tempo",
+          "title": "Controlled Tempo",
+          "evidenceKind": "form",
+          "startMs": 417,
+          "peakMs": 1417,
+          "endMs": 2417,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-controlled-tempo",
+          "title": "Controlled Tempo",
+          "evidenceKind": "form",
+          "startMs": 3250,
+          "peakMs": 4250,
+          "endMs": 5250,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-controlled-tempo",
+          "title": "Controlled Tempo",
+          "evidenceKind": "form",
+          "startMs": 6333,
+          "peakMs": 7333,
+          "endMs": 8333,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-controlled-tempo",
+          "title": "Controlled Tempo",
+          "evidenceKind": "form",
+          "startMs": 9083,
+          "peakMs": 10083,
+          "endMs": 11083,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-controlled-tempo",
+          "title": "Controlled Tempo",
+          "evidenceKind": "form",
+          "startMs": 12250,
+          "peakMs": 13250,
+          "endMs": 14250,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-consistent-range",
+          "title": "Consistent Range of Motion",
+          "evidenceKind": "form",
+          "startMs": 6333,
+          "peakMs": 7333,
+          "endMs": 8333,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-consistent-range",
+          "title": "Consistent Range of Motion",
+          "evidenceKind": "form",
+          "startMs": 417,
+          "peakMs": 1417,
+          "endMs": 2417,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-consistent-range",
+          "title": "Consistent Range of Motion",
+          "evidenceKind": "form",
+          "startMs": 3250,
+          "peakMs": 4250,
+          "endMs": 5250,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-consistent-range",
+          "title": "Consistent Range of Motion",
+          "evidenceKind": "form",
+          "startMs": 9083,
+          "peakMs": 10083,
+          "endMs": 11083,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        },
+        {
+          "findingId": "finding-consistent-range",
+          "title": "Consistent Range of Motion",
+          "evidenceKind": "form",
+          "startMs": 12250,
+          "peakMs": 13250,
+          "endMs": 14250,
+          "confidence": 0.9,
+          "position": 0.5,
+          "atBoundary": false
+        }
+      ],
+      "boundaryEvidenceCount": 0,
+      "exactFrameRequests": [
+        {
+          "peakMs": 7333,
+          "findingId": "finding-torso-tilt",
+          "requestId": "v2-1-finding-torso-tilt",
+          "timestampsMs": [
+            7250,
+            7291,
+            7333,
+            7375,
+            7416
+          ]
+        },
+        {
+          "peakMs": 1417,
+          "findingId": "finding-controlled-tempo",
+          "requestId": "v2-2-finding-controlled-tempo",
+          "timestampsMs": [
+            1334,
+            1375,
+            1417,
+            1459,
+            1500
+          ]
+        },
+        {
+          "peakMs": 7333,
+          "findingId": "finding-consistent-range",
+          "requestId": "v2-3-finding-consistent-range",
+          "timestampsMs": [
+            7250,
+            7291,
+            7333,
+            7375,
+            7416
+          ]
+        }
+      ],
+      "exactFrameManifest": [
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/00.jpg",
+          "findingId": "finding-torso-tilt",
+          "requestId": "v2-1-finding-torso-tilt",
+          "evidenceId": "v2-1-finding-torso-tilt-0",
+          "timestampMs": 7250
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/01.jpg",
+          "findingId": "finding-torso-tilt",
+          "requestId": "v2-1-finding-torso-tilt",
+          "evidenceId": "v2-1-finding-torso-tilt-1",
+          "timestampMs": 7291
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/02.jpg",
+          "findingId": "finding-torso-tilt",
+          "requestId": "v2-1-finding-torso-tilt",
+          "evidenceId": "v2-1-finding-torso-tilt-2",
+          "timestampMs": 7333
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/03.jpg",
+          "findingId": "finding-torso-tilt",
+          "requestId": "v2-1-finding-torso-tilt",
+          "evidenceId": "v2-1-finding-torso-tilt-3",
+          "timestampMs": 7375
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/04.jpg",
+          "findingId": "finding-torso-tilt",
+          "requestId": "v2-1-finding-torso-tilt",
+          "evidenceId": "v2-1-finding-torso-tilt-4",
+          "timestampMs": 7416
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/05.jpg",
+          "findingId": "finding-controlled-tempo",
+          "requestId": "v2-2-finding-controlled-tempo",
+          "evidenceId": "v2-2-finding-controlled-tempo-0",
+          "timestampMs": 1334
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/06.jpg",
+          "findingId": "finding-controlled-tempo",
+          "requestId": "v2-2-finding-controlled-tempo",
+          "evidenceId": "v2-2-finding-controlled-tempo-1",
+          "timestampMs": 1375
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/07.jpg",
+          "findingId": "finding-controlled-tempo",
+          "requestId": "v2-2-finding-controlled-tempo",
+          "evidenceId": "v2-2-finding-controlled-tempo-2",
+          "timestampMs": 1417
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/08.jpg",
+          "findingId": "finding-controlled-tempo",
+          "requestId": "v2-2-finding-controlled-tempo",
+          "evidenceId": "v2-2-finding-controlled-tempo-3",
+          "timestampMs": 1459
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/09.jpg",
+          "findingId": "finding-controlled-tempo",
+          "requestId": "v2-2-finding-controlled-tempo",
+          "evidenceId": "v2-2-finding-controlled-tempo-4",
+          "timestampMs": 1500
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/10.jpg",
+          "findingId": "finding-consistent-range",
+          "requestId": "v2-3-finding-consistent-range",
+          "evidenceId": "v2-3-finding-consistent-range-0",
+          "timestampMs": 7250
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/11.jpg",
+          "findingId": "finding-consistent-range",
+          "requestId": "v2-3-finding-consistent-range",
+          "evidenceId": "v2-3-finding-consistent-range-1",
+          "timestampMs": 7291
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/12.jpg",
+          "findingId": "finding-consistent-range",
+          "requestId": "v2-3-finding-consistent-range",
+          "evidenceId": "v2-3-finding-consistent-range-2",
+          "timestampMs": 7333
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/13.jpg",
+          "findingId": "finding-consistent-range",
+          "requestId": "v2-3-finding-consistent-range",
+          "evidenceId": "v2-3-finding-consistent-range-3",
+          "timestampMs": 7375
+        },
+        {
+          "path": "5ec27b28-895f-473e-b343-d453923db363/b46413b0-6751-42d8-883f-a6ddce563b78/exact-frames/14.jpg",
+          "findingId": "finding-consistent-range",
+          "requestId": "v2-3-finding-consistent-range",
+          "evidenceId": "v2-3-finding-consistent-range-4",
+          "timestampMs": 7416
+        }
+      ],
+      "telemetry": [
+        {
+          "stage": "indexing",
+          "model": "gemini-3.5-flash",
+          "requested_fps": 4,
+          "clip_start_ms": null,
+          "clip_end_ms": null,
+          "status": "succeeded",
+          "error_code": null,
+          "duration_ms": 2991,
+          "prompt_tokens": 4520,
+          "output_tokens": 586,
+          "thinking_tokens": 0
+        },
+        {
+          "stage": "analyzing",
+          "model": "gemini-3.5-flash",
+          "requested_fps": 12,
+          "clip_start_ms": 500,
+          "clip_end_ms": 14250,
+          "status": "succeeded",
+          "error_code": null,
+          "duration_ms": 27722,
+          "prompt_tokens": 12111,
+          "output_tokens": 1742,
+          "thinking_tokens": 3272
+        },
+        {
+          "stage": "verifying",
+          "model": "gemini-3.5-flash",
+          "requested_fps": 12,
+          "clip_start_ms": 0,
+          "clip_end_ms": 15000,
+          "status": "succeeded",
+          "error_code": null,
+          "duration_ms": 7145,
+          "prompt_tokens": 12090,
+          "output_tokens": 95,
+          "thinking_tokens": 911
+        },
+        {
+          "stage": "verifying",
+          "model": "gemini-3.5-flash",
+          "requested_fps": 12,
+          "clip_start_ms": 0,
+          "clip_end_ms": 15000,
+          "status": "succeeded",
+          "error_code": null,
+          "duration_ms": 7635,
+          "prompt_tokens": 12081,
+          "output_tokens": 93,
+          "thinking_tokens": 1051
+        },
+        {
+          "stage": "verifying",
+          "model": "gemini-3.5-flash",
+          "requested_fps": 12,
+          "clip_start_ms": 0,
+          "clip_end_ms": 15000,
+          "status": "succeeded",
+          "error_code": null,
+          "duration_ms": 8356,
+          "prompt_tokens": 12086,
+          "output_tokens": 94,
+          "thinking_tokens": 1059
+        },
+        {
+          "stage": "verifying_criteria",
+          "model": "gemini-3.5-flash",
+          "requested_fps": 12,
+          "clip_start_ms": 500,
+          "clip_end_ms": 14250,
+          "status": "succeeded",
+          "error_code": null,
+          "duration_ms": 15166,
+          "prompt_tokens": 11155,
+          "output_tokens": 252,
+          "thinking_tokens": 2257
+        },
+        {
+          "stage": "writing_coaching",
+          "model": "gemini-3.5-flash",
+          "requested_fps": null,
+          "clip_start_ms": null,
+          "clip_end_ms": null,
+          "status": "succeeded",
+          "error_code": null,
+          "duration_ms": 3601,
+          "prompt_tokens": 356,
+          "output_tokens": 709,
+          "thinking_tokens": 0
+        }
+      ],
+      "clientSchemaValid": true,
+      "clientSchemaIssues": []
+    }
+  ]
+}

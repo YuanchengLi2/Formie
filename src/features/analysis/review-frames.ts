@@ -6,7 +6,7 @@ export type ReviewFrame = {
   id: string;
   purpose: ReviewPurpose;
   title: string;
-  body: string;
+  body?: string;
   findingId: string;
   finding: CoachingFinding;
   evidence: EvidenceMoment;
@@ -17,10 +17,25 @@ export type ReviewFrameGroups = Record<ReviewPurpose, ReviewFrame[]>;
 
 export type CoachingReviewPoint = {
   id: string;
+  kind: "issue" | "advice";
+  paragraph: string;
   observed: ReviewFrame;
   why: ReviewFrame;
   next: ReviewFrame;
 };
+
+function compactParagraph(parts: (string | null | undefined)[], sentenceLimit = 4): string | undefined {
+  const combined = [...new Set(parts.map((part) => part?.trim()).filter((part): part is string => Boolean(part)))].join(" ");
+  if (!combined) return undefined;
+  const sentences = combined.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((sentence) => sentence.trim()).filter(Boolean) ?? [combined];
+  return sentences.slice(0, sentenceLimit).join(" ");
+}
+
+function coachingSentence(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
 
 function frameFor(
   purpose: ReviewPurpose,
@@ -28,7 +43,7 @@ function frameFor(
   evidence: EvidenceMoment,
   evidenceIndex: number,
   title: string,
-  body: string,
+  body: string | undefined,
   sourceId = finding.id,
 ): ReviewFrame {
   return {
@@ -71,7 +86,7 @@ export function buildReviewFrames(result: AnalysisResult): ReviewFrameGroups {
       evidence,
       index,
       item.action,
-      item.rationale,
+      undefined,
       item.id,
     ));
   });
@@ -81,25 +96,46 @@ export function buildReviewFrames(result: AnalysisResult): ReviewFrameGroups {
 }
 
 export function buildCoachingReviewPoints(result: AnalysisResult): CoachingReviewPoint[] {
-  const groups = buildReviewFrames(result);
-  return groups.observed.map((observed, index) => {
-    const why = groups.why.find((frame) => frame.findingId === observed.findingId && frame.timeMs === observed.timeMs) ?? frameFor(
+  const findings = result.priorityCorrections.map((finding) => ({ finding, kind: "issue" as const }));
+  return findings.map(({ finding, kind }) => {
+    const evidenceIndex = Math.min(finding.primaryEvidenceIndex ?? 0, finding.evidence.length - 1);
+    const evidence = finding.evidence[evidenceIndex];
+    const action = finding.actionableCorrection;
+    const expanded = finding.expandedCoaching;
+    const observed = frameFor(
+      "observed",
+      finding,
+      evidence,
+      evidenceIndex,
+      finding.title,
+      expanded?.whatHappened?.trim() || compactParagraph([finding.detail], 4),
+      finding.id,
+    );
+    const why = frameFor(
       "why",
-      observed.finding,
-      observed.evidence,
-      index,
-      observed.finding.title,
-      observed.finding.whyItMatters,
+      finding,
+      evidence,
+      evidenceIndex,
+      finding.title,
+      expanded?.whyItMatters?.trim() || compactParagraph([finding.whyItMatters], 3),
+      finding.id,
     );
-    const planned = groups.next.find((frame) => frame.findingId === observed.findingId && frame.timeMs === observed.timeMs);
-    const next = planned ?? frameFor(
+    const next = frameFor(
       "next",
-      observed.finding,
-      observed.evidence,
-      index,
-      observed.finding.correction ?? observed.finding.cue ?? observed.finding.title,
-      observed.finding.cue ? `Remember: ${observed.finding.cue}` : observed.finding.correction ?? observed.finding.detail,
+      finding,
+      evidence,
+      evidenceIndex,
+      expanded?.whatToDo ?? action?.instruction ?? finding.correction ?? finding.cue ?? finding.title,
+      expanded?.whatToDo ? undefined : compactParagraph([
+        expanded?.successCheck ?? action?.successCheck,
+      ], 1),
     );
-    return { id: `${observed.findingId}-${observed.timeMs}-${index}`, observed, why, next };
+    const paragraph = [
+      observed.body,
+      why.body,
+      next.title,
+      next.body,
+    ].map(coachingSentence).filter((value): value is string => Boolean(value)).slice(0, 4).join(" ");
+    return { id: finding.id, kind, paragraph, observed, why, next };
   });
 }

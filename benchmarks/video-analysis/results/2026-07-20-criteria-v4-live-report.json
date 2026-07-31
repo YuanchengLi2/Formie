@@ -1,0 +1,48 @@
+{
+  "run": "v4-hardened-final-20260720",
+  "fixtures": 12,
+  "catalog": {
+    "version": "criteria-catalog-v4",
+    "variants": 12283,
+    "criteria": 159036,
+    "chunks": 77
+  },
+  "metrics": {
+    "completionRate": 1,
+    "clientSchemaValidityRate": 1,
+    "recognitionAccuracy": 0.75,
+    "scoreBandAccuracy": 0.25,
+    "goodFalsePositiveRate": 0,
+    "badSignalRecall": 0.3333333333333333,
+    "pairwiseRankingAccuracy": 0.3333333333333333,
+    "averageGoodScore": 100,
+    "averageBadScore": 81.5,
+    "averageScoreSeparation": 18.5,
+    "equipmentObservationCoverage": 1,
+    "unsafeExactLoadClaimRate": 0,
+    "evidenceIntervalValidityRate": 1,
+    "exactRubricResolutionRate": 0.9166666666666666,
+    "cameraViewAccuracy": 1,
+    "modelFailureRate": 0,
+    "averageLatencyMs": 133820,
+    "p50LatencyMs": 100282,
+    "p95LatencyMs": 514593
+  },
+  "thresholdsPassed": false,
+  "failedThresholds": [
+    "recognitionAccuracy",
+    "scoreBandAccuracy",
+    "badSignalRecall",
+    "pairwiseRankingAccuracy",
+    "evidenceBoundaryRate"
+  ],
+  "postRunVerification": {
+    "evidenceWindowPatchTargetedBoundaryCount": 0,
+    "fullJestSuites": 70,
+    "fullJestTests": 293,
+    "cameraCombinations": 4320,
+    "cameraCombinationFailures": 0,
+    "catalogHashMismatches": 0,
+    "deployedAnalyzeVideoVersion": 76
+  }
+}

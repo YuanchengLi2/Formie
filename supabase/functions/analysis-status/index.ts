@@ -2,6 +2,7 @@ import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { errorResponse, jsonResponse } from "../_shared/responses.ts";
 import { resultPayload } from "../_shared/result-payload.ts";
+import { playbackWindowFromSession } from "../_shared/analysis-playback-window.ts";
 
 Deno.serve(async (request) => {
   const options = preflight(request);
@@ -18,13 +19,25 @@ Deno.serve(async (request) => {
     const { data: result } = await admin.from("analysis_results").select("*").eq("session_id", sessionId).maybeSingle();
 
     let videoUrl: string | null = null;
-    if (session.video_path && result) {
+    if (session.video_path) {
       const signed = await admin.storage.from("analysis-videos").createSignedUrl(session.video_path, 900);
       videoUrl = signed.data?.signedUrl ?? null;
     }
 
     const payload = resultPayload(session, result);
-    return jsonResponse({ sessionId, status: session.status, stage: session.stage, durationMs: session.duration_ms, videoUrl, result: payload });
+    return jsonResponse({
+      sessionId,
+      status: session.status,
+      stage: session.stage,
+      failureCode: session.failure_code ?? null,
+      durationMs: session.duration_ms,
+      playbackWindow: playbackWindowFromSession(session),
+      videoUrl,
+      setDeclaration: session.set_declaration ?? null,
+      result: payload,
+      frameRequests: [],
+      exactFrameUploads: [],
+    });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") return errorResponse("Sign in again", 401, "UNAUTHORIZED");
     return errorResponse("Analysis status could not be loaded", 500, "STATUS_FAILED");

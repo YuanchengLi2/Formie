@@ -1,7 +1,7 @@
 const { evaluateRows } = require("./evaluate-coaching.cjs");
 
 describe("coaching evaluation", () => {
-  it("measures recognition, correction agreement, evidence timing, and verifier use", () => {
+  it("measures public coaching without depending on retired reviewer payloads", () => {
     const report = evaluateRows([
       {
         id: "curl-clean",
@@ -41,9 +41,9 @@ describe("coaching evaluation", () => {
     expect(report.priorityCorrectionAgreementRate).toBe(0.5);
     expect(report.evidenceWithinToleranceRate).toBe(0.5);
     expect(report.cameraCommentaryRate).toBe(0.5);
-    expect(report.verifierInvocationRate).toBe(0.5);
-    expect(report.premiumRunsAverage).toBe(1);
-    expect(report.verifierUsage).toEqual({ promptTokens: 200, outputTokens: 50, thinkingTokens: 15 });
+    expect(report.verifierInvocationRate).toBe(0);
+    expect(report.premiumRunsAverage).toBe(0);
+    expect(report.verifierUsage).toEqual({ promptTokens: 0, outputTokens: 0, thinkingTokens: 0 });
     expect(report.failures).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: "squat-miss", checks: expect.arrayContaining(["exercise", "priority-correction", "evidence-time", "camera-commentary"]) }),
     ]));

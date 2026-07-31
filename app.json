@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "FORM",
+    "name": "Formie",
     "slug": "form-ai-coach",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,15 +11,19 @@
       "supportsTablet": false,
       "bundleIdentifier": "app.form.coach",
       "infoPlist": {
-        "NSCameraUsageDescription": "FORM uses the camera to record your exercise set for private technique analysis.",
-        "NSMicrophoneUsageDescription": "FORM can include ambient audio in your exercise recording."
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Formie uses the camera to record your exercise set for private technique analysis.",
+        "NSMicrophoneUsageDescription": "Formie can include ambient audio in your exercise recording."
       }
     },
     "android": {
       "package": "app.form.coach",
       "permissions": [
         "CAMERA",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#090909",
@@ -39,8 +43,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow FORM to record your exercise set for private technique analysis.",
-          "microphonePermission": "Allow FORM to record audio with your set.",
+          "cameraPermission": "Allow Formie to record your exercise set for private technique analysis.",
+          "microphonePermission": "Allow Formie to record audio with your set.",
           "recordAudioAndroid": true
         }
       ],
@@ -54,13 +58,19 @@
       ],
       "expo-video",
       "expo-secure-store",
-      "expo-audio",
       "expo-web-browser",
       "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d05da588-4c59-4d3c-963d-a6d2b940fea1"
+      }
+    },
+    "owner": "yuancheng"
   }
 }

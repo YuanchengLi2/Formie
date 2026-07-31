@@ -1,12 +1,22 @@
 import type { AnalysisHistoryItem, AnalysisHistoryStatus } from "./group-sessions";
 import { isExerciseFamily } from "@/features/exercises/exercise-family";
+import { progressMetricsSchema, type ProgressMetrics } from "./metrics";
 
 type QueryResult = { data: unknown[] | null; error: { message: string } | null };
 type HistoryQuery = () => Promise<QueryResult>;
+type MetricsRpc = (
+  functionName: "get_progress_metrics",
+  parameters: { requested_timezone: string },
+) => Promise<{ data: unknown; error: { message: string } | null }>;
 
 type HistoryResultRow = {
   score?: number | string | null;
-  priority_corrections?: { title?: string }[] | null;
+  priority_corrections?: {
+    title?: string;
+    detail?: string;
+    severity?: "note" | "important" | "high";
+    evidence?: unknown[];
+  }[] | null;
   comparison?: { summary?: string; priorityIssueImproved?: boolean | null; priority_issue_improved?: boolean | null } | null;
 };
 
@@ -21,12 +31,14 @@ type HistoryRow = {
   analysis_results: HistoryResultRow | HistoryResultRow[] | null;
 };
 
+export const ANALYSIS_HISTORY_STATUSES: AnalysisHistoryStatus[] = ["processing", "complete", "partial", "unable", "failed"];
+
 async function defaultHistoryQuery(): Promise<QueryResult> {
   const { supabase } = await import("@/lib/supabase");
   return supabase
     .from("analysis_sessions")
     .select("id,status,created_at,detected_label,corrected_label,pinned_at,exercise_family,analysis_results(score,priority_corrections,comparison)")
-    .in("status", ["processing", "complete", "partial", "unable"])
+    .in("status", ANALYSIS_HISTORY_STATUSES)
     .order("created_at", { ascending: false })
     .limit(100);
 }
@@ -37,7 +49,8 @@ export async function fetchAnalysisHistory({ query = defaultHistoryQuery }: { qu
   return ((data ?? []) as HistoryRow[]).map((row) => {
     const nested = Array.isArray(row.analysis_results) ? row.analysis_results[0] : row.analysis_results;
     const rawScore = nested?.score;
-    const score = rawScore === null || rawScore === undefined ? null : Number(rawScore);
+    const rawNumericScore = rawScore === null || rawScore === undefined ? null : Number(rawScore);
+    const score = rawNumericScore;
     return {
       sessionId: row.id,
       status: row.status,
@@ -64,4 +77,34 @@ export async function deleteAnalysisSession(sessionId: string): Promise<void> {
   const { supabase } = await import("@/lib/supabase");
   const { error } = await supabase.functions.invoke("delete-analysis", { body: { sessionId } });
   if (error) throw new Error(error.message);
+}
+
+export function deviceTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+export async function fetchProgressMetrics({
+  timeZone = deviceTimeZone(),
+  rpc,
+}: {
+  timeZone?: string;
+  rpc?: MetricsRpc;
+} = {}): Promise<ProgressMetrics> {
+  const callRpc: MetricsRpc = rpc ?? (async (functionName, parameters) => {
+    const { supabase } = await import("@/lib/supabase");
+    const result = await supabase.rpc(functionName, parameters);
+    return {
+      data: result.data,
+      error: result.error ? { message: result.error.message } : null,
+    };
+  });
+  const { data, error } = await callRpc("get_progress_metrics", {
+    requested_timezone: timeZone.trim() || "UTC",
+  });
+  if (error) throw new Error(error.message);
+  return progressMetricsSchema.parse(data);
 }

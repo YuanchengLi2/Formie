@@ -5,6 +5,7 @@ import { getRecognitionLabel, getResultPresentation, getVisibleFindings } from "
 function finding(id: string, severity: CoachingFinding["severity"] = "important"): CoachingFinding {
   return {
     id,
+    coachingArea: "form",
     title: id,
     detail: `${id} detail`,
     whyItMatters: `${id} reason`,
@@ -54,6 +55,8 @@ function result(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
     setContext: { cameraView: null, visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: null },
     comparison: null,
     ...overrides,
+    muscleFocus: overrides.muscleFocus ?? { primary: [], secondary: [], unclassified: [] },
+    coachNote: overrides.coachNote ?? null,
   };
 }
 
@@ -66,6 +69,12 @@ describe("result presentation", () => {
       finding("Another high", "high"),
     ]);
     expect(visible.map((item) => item.title)).toEqual(["High", "Another high", "Important", "Note"]);
+  });
+
+  it("keeps supported advice at the analyzer confidence floor", () => {
+    const supported = finding("Visible optimization", "note");
+    supported.evidence[0].confidence = 0.4;
+    expect(getVisibleFindings([supported])).toEqual([supported]);
   });
 
   it("orders findings on Hermes runtimes without Array.prototype.toSorted", () => {
@@ -96,7 +105,7 @@ describe("result presentation", () => {
     expect(getResultPresentation(result())).toEqual({
       status: "complete",
       exerciseLabel: "Standing Dumbbell Curl",
-      overallAssessment: "Controlled repetitions with late elbow drift.",
+      overallAssessment: "Elbow drift is visible Elbow drift correction",
       score: null,
       didWell: [finding("Stable torso", "note")],
       priorityCorrections: [finding("Elbow drift", "high")],
@@ -105,5 +114,27 @@ describe("result presentation", () => {
       retryReason: null,
       retryInstruction: null,
     });
+  });
+
+  it("preserves the analyst score instead of applying a second punitive client cap", () => {
+    const major = getResultPresentation(result({ score: 92 }));
+    expect(major.score).toBe(92);
+    expect(major.overallAssessment).toBe("Elbow drift is visible Elbow drift correction");
+
+    const recurringHigh = finding("Recurring breakdown", "high");
+    recurringHigh.evidence.push({
+      ...recurringHigh.evidence[0],
+      startMs: 3_000,
+      peakMs: 3_250,
+      endMs: 3_500,
+      repNumber: 3,
+    });
+    expect(getResultPresentation(result({ score: 92, priorityCorrections: [recurringHigh] })).score).toBe(92);
+  });
+
+  it("does not reduce strong execution merely because useful notes are displayed", () => {
+    expect(getResultPresentation(result({ score: 91, priorityCorrections: [finding("One note", "note")] })).score).toBe(91);
+    expect(getResultPresentation(result({ score: 88, priorityCorrections: [finding("One", "note"), finding("Two", "note")] })).score).toBe(88);
+    expect(getResultPresentation(result({ score: 96, priorityCorrections: [] })).score).toBe(96);
   });
 });

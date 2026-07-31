@@ -1,12 +1,158 @@
-import { AnalysisApiError, completeAnalysisUpload, createAnalysisSession, getAnalysisStatus, getExerciseTutorial, processAnalysis, processAndLoadAnalysis, reanalyzeAnalysis, uploadAnalysisVideo } from "./api";
+import { AnalysisApiError, checkRecordingPreflight, completeAnalysisUpload, createAnalysisSession, getAnalysisStatus, getExerciseGuide, getExerciseTutorial, processAnalysis, processAndLoadAnalysis, reanalyzeAnalysis, uploadAnalysisVideo } from "./api";
+
+const declaration = {
+  exercise: { source: "catalog" as const, catalogExerciseId: 2, label: "Flat Dumbbell Bench Press" },
+  amount: { kind: "reps" as const, value: 8, countScope: "total" as const },
+  load: { kind: "known" as const, value: 45, unit: "lb" as const, scope: "per_hand" as const },
+  side: "bilateral" as const,
+  styles: [],
+  focusNote: null,
+};
 
 describe("analysis API", () => {
-  it("creates a session without requiring exercise selection", async () => {
+  it("checks an ordered low-cost frame sequence with recording and exercise context", async () => {
+    const frames = Array.from({ length: 24 }, (_, index) => ({
+      timeMs: 200 + index * 400,
+      mimeType: "image/jpeg" as const,
+      data: `frame-${index}`,
+    }));
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({
+      outcome: "usable",
+      reason: null,
+      checks: {
+        activityType: "dynamic_reps",
+        visibility: "limited",
+        cameraQuality: "limited",
+        cameraLimitations: ["perspective_distortion"],
+        movementEvidence: "usable_reps",
+        visibilityRequirements: {
+          source: "catalog",
+          exerciseName: "Goblet Squat",
+          bodyRegions: ["torso and pelvis relationship", "hips and knees through the full depth and return"],
+          equipment: [],
+          support: [],
+          movementPhases: ["start, working range, end, and return of one complete repetition"],
+        },
+        missingRequirements: [],
+        perspectiveDistortedRequirements: [],
+        activeMovementFrameIndices: [2, 3, 4, 5, 6],
+        requirementEvidence: [
+          { requirement: "torso and pelvis relationship", unusableFrameIndices: [6], perspectiveDistortedFrameIndices: [] },
+          { requirement: "hips and knees through the full depth and return", unusableFrameIndices: [6], perspectiveDistortedFrameIndices: [] },
+          { requirement: "start, working range, end, and return of one complete repetition", unusableFrameIndices: [6], perspectiveDistortedFrameIndices: [] },
+        ],
+      },
+      guidance: null,
+    }), { status: 200 }));
+
+    await expect(checkRecordingPreflight({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      frames,
+      durationMs: 10_000,
+      exerciseName: "Goblet Squat",
+      catalogExerciseId: 4,
+    })).resolves.toEqual({
+      outcome: "usable",
+      reason: null,
+      checks: {
+        activityType: "dynamic_reps",
+        visibility: "limited",
+        cameraQuality: "limited",
+        cameraLimitations: ["perspective_distortion"],
+        movementEvidence: "usable_reps",
+        visibilityRequirements: {
+          source: "catalog",
+          exerciseName: "Goblet Squat",
+          bodyRegions: ["torso and pelvis relationship", "hips and knees through the full depth and return"],
+          equipment: [],
+          support: [],
+          movementPhases: ["start, working range, end, and return of one complete repetition"],
+        },
+        missingRequirements: [],
+        perspectiveDistortedRequirements: [],
+        activeMovementFrameIndices: [2, 3, 4, 5, 6],
+        requirementEvidence: [
+          { requirement: "torso and pelvis relationship", unusableFrameIndices: [6], perspectiveDistortedFrameIndices: [] },
+          { requirement: "hips and knees through the full depth and return", unusableFrameIndices: [6], perspectiveDistortedFrameIndices: [] },
+          { requirement: "start, working range, end, and return of one complete repetition", unusableFrameIndices: [6], perspectiveDistortedFrameIndices: [] },
+        ],
+      },
+      guidance: null,
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://example.supabase.co/functions/v1/recording-preflight",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ frames, durationMs: 10_000, exerciseName: "Goblet Squat", catalogExerciseId: 4 }),
+      }),
+    );
+  });
+
+  it("loads a structured pre-record guide by catalog exercise ID", async () => {
+    const guide = {
+      exercise: { catalogExerciseId: 88, canonicalName: "One-Arm Dumbbell Row", family: "row" },
+      setup: ["Brace one hand on a stable bench."],
+      execution: ["Drive the working elbow toward your hip."],
+      safety: ["Keep the supporting surface from sliding."],
+      cameraPlacement: ["Place the phone far enough away to keep the bench and full body visible."],
+      tutorial: null,
+    };
+    const fetcher = jest.fn(async () => new Response(JSON.stringify(guide), { status: 200 }));
+
+    await expect(getExerciseGuide({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      catalogExerciseId: 88,
+    })).resolves.toEqual(guide);
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://example.supabase.co/functions/v1/exercise-guide",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ catalogExerciseId: 88 }),
+      }),
+    );
+  });
+
+  it("requests an AI-generated guide by custom exercise name without inventing a catalog ID", async () => {
+    const guide = {
+      exercise: { catalogExerciseId: null, canonicalName: "Jefferson Curl", family: "hinge" },
+      setup: ["Stand securely on a stable surface."],
+      execution: ["Move through the exercise with a slow visible path."],
+      safety: ["Use a comfortable range."],
+      cameraPlacement: ["Record from the side with the full body visible."],
+      tutorial: null,
+    };
+    const fetcher = jest.fn(async () => new Response(JSON.stringify(guide), { status: 200 }));
+
+    await expect(getExerciseGuide({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      customExerciseName: "  Jefferson Curl  ",
+    })).resolves.toEqual(guide);
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://example.supabase.co/functions/v1/exercise-guide",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ customExerciseName: "Jefferson Curl" }),
+      }),
+    );
+  });
+
+  it("creates a session with declared context and two private upload targets", async () => {
     const fetcher = jest.fn(async () =>
       new Response(
         JSON.stringify({
           sessionId: "session-123",
           upload: { signedUrl: "https://storage.example/upload", token: "upload-token", path: "user/session.mp4" },
+          analysisUpload: { signedUrl: "https://storage.example/analysis", token: "analysis-token", path: "user/analysis-input.mp4" },
+          privacySafeUpload: { signedUrl: "https://storage.example/privacy", token: "privacy-token", path: "user/privacy-safe-upper-body.mp4" },
         }),
         { status: 201, headers: { "Content-Type": "application/json" } },
       ),
@@ -16,9 +162,15 @@ describe("analysis API", () => {
       accessToken: "user-jwt",
       baseUrl: "https://example.supabase.co/functions/v1",
       fetcher,
+      declaration,
+      clientRequestId: "upload-request-1",
+      privacySafeFallback: true,
     });
 
     expect(response.sessionId).toBe("session-123");
+    expect(response.upload.path).toBe("user/session.mp4");
+    expect(response.analysisUpload.path).toBe("user/analysis-input.mp4");
+    expect(response.privacySafeUpload?.path).toBe("user/privacy-safe-upper-body.mp4");
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(fetcher).toHaveBeenCalledWith(
       "https://example.supabase.co/functions/v1/create-analysis",
@@ -28,7 +180,7 @@ describe("analysis API", () => {
           Authorization: "Bearer user-jwt",
           "Content-Type": "application/json",
         }),
-        body: JSON.stringify({}),
+        body: JSON.stringify({ clientRequestId: "upload-request-1", declaration, privacySafeFallback: true }),
       }),
     );
   });
@@ -39,6 +191,7 @@ describe("analysis API", () => {
         JSON.stringify({
           sessionId: "session-456",
           upload: { signedUrl: "https://storage.example/upload", token: "upload-token", path: "user/session.mp4" },
+          analysisUpload: { signedUrl: "https://storage.example/analysis", token: "analysis-token", path: "user/analysis-input.mp4" },
         }),
         { status: 201, headers: { "Content-Type": "application/json" } },
       ),
@@ -49,11 +202,12 @@ describe("analysis API", () => {
       accessToken: "user-jwt",
       baseUrl: "https://example.supabase.co/functions/v1",
       fetcher,
+      declaration,
     });
 
     expect(fetcher).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ body: JSON.stringify({ previousSessionId: "session-123" }) }),
+      expect.objectContaining({ body: JSON.stringify({ previousSessionId: "session-123", declaration }) }),
     );
   });
 
@@ -65,7 +219,7 @@ describe("analysis API", () => {
       }),
     );
 
-    await expect(createAnalysisSession({ accessToken: "expired", baseUrl: "https://example.supabase.co/functions/v1", fetcher })).rejects.toEqual(
+    await expect(createAnalysisSession({ accessToken: "expired", baseUrl: "https://example.supabase.co/functions/v1", fetcher, declaration })).rejects.toEqual(
       new AnalysisApiError("Sign in again", 401, "UNAUTHORIZED"),
     );
   });
@@ -90,7 +244,7 @@ describe("analysis API", () => {
     expect(uploadRequest.headers.Authorization).toBeUndefined();
   });
 
-  it("completes upload and starts processing without capture metadata", async () => {
+  it("marks the uploaded analysis artifact as upright and full length", async () => {
     const fetcher = jest.fn(async () => new Response(JSON.stringify({ processing: true }), { status: 200, headers: { "Content-Type": "application/json" } }));
 
     await completeAnalysisUpload({
@@ -99,21 +253,26 @@ describe("analysis API", () => {
       fetcher,
       sessionId: "session-123",
       durationMs: 18_500,
+      analysisInput: { kind: "upright_video", durationPreserved: true },
     });
 
     expect(fetcher).toHaveBeenCalledWith(
       "https://example.supabase.co/functions/v1/complete-upload",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ sessionId: "session-123", durationMs: 18_500 }),
+        body: JSON.stringify({
+          sessionId: "session-123",
+          durationMs: 18_500,
+          analysisInput: { kind: "upright_video", durationPreserved: true },
+        }),
       }),
     );
   });
 
   it("advances one analysis session through the Gemini endpoint", async () => {
-    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "processing", stage: "video_processing", durationMs: 18_500, videoUrl: null, result: null }), { status: 202, headers: { "Content-Type": "application/json" } }));
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "processing", stage: "video_processing", failureCode: null, durationMs: 18_500, videoUrl: null, result: null, retrying: true, attempt: 1 }), { status: 202, headers: { "Content-Type": "application/json" } }));
 
-    await expect(processAnalysis({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" })).resolves.toMatchObject({ stage: "video_processing", durationMs: 18_500 });
+    await expect(processAnalysis({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" })).resolves.toMatchObject({ stage: "video_processing", failureCode: null, durationMs: 18_500, retrying: true, attempt: 1 });
     expect(fetcher).toHaveBeenCalledWith(
       "https://example.supabase.co/functions/v1/analyze-video",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ sessionId: "session-123" }) }),
@@ -201,6 +360,91 @@ describe("analysis API", () => {
     );
   });
 
+  it("finalizes a full-duration privacy-safe fallback when it was uploaded", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ processing: true }), { status: 200 }));
+
+    await completeAnalysisUpload({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      sessionId: "session-123",
+      durationMs: 18_500,
+      analysisInput: { kind: "upright_video", durationPreserved: true },
+      privacySafeFallback: { kind: "upper_body", durationPreserved: true },
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: JSON.stringify({
+        sessionId: "session-123",
+        durationMs: 18_500,
+        analysisInput: { kind: "upright_video", durationPreserved: true },
+        privacySafeFallback: { kind: "upper_body", durationPreserved: true },
+      }),
+    }));
+  });
+
+  it("exposes the terminal failure code returned by analysis status", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({
+      sessionId: "session-123",
+      status: "failed",
+      stage: "analyzing",
+      failureCode: "ANALYSIS_FAILED",
+      durationMs: 3_826,
+      videoUrl: null,
+      result: null,
+    }), { status: 200 }));
+
+    await expect(getAnalysisStatus({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      sessionId: "session-123",
+    })).resolves.toMatchObject({ status: "failed", failureCode: "ANALYSIS_FAILED" });
+  });
+
+  it("retries a transient worker resource limit without losing the session", async () => {
+    const fetcher = jest
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: "WORKER_RESOURCE_LIMIT", message: "Not enough compute" }), { status: 546 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sessionId: "session-123", status: "processing", stage: "analyzing", durationMs: 18_500, videoUrl: null, result: null }), { status: 202 }));
+
+    await expect(processAnalysis({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123", retryDelayMs: 0 })).resolves.toMatchObject({ stage: "analyzing" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("completes upload with only the original video metadata", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ processing: true }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    await completeAnalysisUpload({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      sessionId: "session-123",
+      durationMs: 18_500,
+    });
+    expect(fetcher).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: JSON.stringify({ sessionId: "session-123", durationMs: 18_500 }),
+    }));
+  });
+
+  it("loads a resumable private video URL without requesting frame uploads", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({
+      sessionId: "session-123",
+      status: "processing",
+      stage: "writing_coaching",
+      durationMs: 10_000,
+      playbackWindow: { sourceStartMs: 1_200, sourceEndMs: 8_700 },
+      videoUrl: "https://storage.example/signed-original.mp4",
+      result: null,
+    }), { status: 200 }));
+
+    await expect(getAnalysisStatus({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" })).resolves.toMatchObject({
+      videoUrl: "https://storage.example/signed-original.mp4",
+      playbackWindow: { sourceStartMs: 1_200, sourceEndMs: 8_700 },
+      frameRequests: [],
+      exactFrameUploads: [],
+    });
+  });
+
   it("queues the same saved video for development reanalysis", async () => {
     const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "queued", stage: "video_check" }), { status: 202 }));
 
@@ -214,6 +458,23 @@ describe("analysis API", () => {
     expect(fetcher).toHaveBeenCalledWith(
       "https://example.supabase.co/functions/v1/reanalyze-video",
       expect.objectContaining({ method: "POST", body: JSON.stringify({ sessionId: "session-123" }) }),
+    );
+  });
+
+  it("can replace the declaration while reusing the same saved video", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "queued", stage: "video_check" }), { status: 202 }));
+
+    await reanalyzeAnalysis({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      sessionId: "session-123",
+      declaration,
+    });
+
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://example.supabase.co/functions/v1/reanalyze-video",
+      expect.objectContaining({ body: JSON.stringify({ sessionId: "session-123", declaration }) }),
     );
   });
 });

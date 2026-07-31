@@ -51,7 +51,7 @@ export function CoachingReviewCarousel({ groups, onSelectFrame }: { groups: Revi
         <Pressable accessibilityLabel="Previous review frame" accessibilityRole="button" onPress={() => move(-1)} style={{ minWidth: 48, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 24, borderWidth: 1, borderColor: colors.border }}><Text style={{ color: colors.gold, fontSize: 24 }}>‹</Text></Pressable>
         <View style={{ flex: 1, gap: spacing.xs }}>
           <Text selectable style={[typography.heading, { color: colors.text }]}>{selected.title}</Text>
-          <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{selected.body}</Text>
+          {selected.body ? <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{selected.body}</Text> : null}
           <Text selectable style={[typography.caption, { color: colors.gold }]}>{formatPlaybackTime(selected.timeMs)}</Text>
         </View>
         <Pressable accessibilityLabel="Next review frame" accessibilityRole="button" onPress={() => move(1)} style={{ minWidth: 48, minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 24, borderWidth: 1, borderColor: colors.border }}><Text style={{ color: colors.gold, fontSize: 24 }}>›</Text></Pressable>

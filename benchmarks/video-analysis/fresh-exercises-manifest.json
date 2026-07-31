@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 2,
+  "benchmark": {
+    "name": "Formai fresh exercise and view benchmark",
+    "version": "2026-07-20.1",
+    "source": "A Multi-View Raw Video Dataset of Seven Fitness Exercises with Good/Bad Form Labels",
+    "doi": "10.17632/kgbb3yn47p.1",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://data.mendeley.com/datasets/kgbb3yn47p/1",
+    "selection": "Four fresh matched good/bad pairs: the previously untested side-bend exercise plus new subjects and views for curl, push-up, and triceps extension.",
+    "thresholds": {
+      "completionRate": 0.95,
+      "clientSchemaValidityRate": 1,
+      "recognitionAccuracy": 0.9,
+      "cameraViewAccuracy": 0.9,
+      "scoreBandAccuracy": 0.75,
+      "goodFalsePositiveRateMax": 0.25,
+      "badSignalRecall": 0.75,
+      "badCorrectionRecall": 0.75,
+      "exerciseCorrectionCoverage": 1,
+      "actionableCoachingCoverage": 1,
+      "pairwiseRankingAccuracy": 0.75,
+      "unsafeExactLoadClaimRateMax": 0,
+      "evidenceIntervalValidityRate": 1,
+      "modelFailureRateMax": 0.05
+    }
+  },
+  "fixtures": [
+    {
+      "id": "fresh_sidebend_s5_diagonal_good",
+      "pairId": "fresh_sidebend_s5_diagonal",
+      "sourceFileId": "cd11d135-14d6-4379-be9f-09c293f609eb",
+      "sourceFilename": "subject_005_abs_good_diagonal.mp4",
+      "expectedExercise": "standing dumbbell side bend",
+      "acceptedLabels": ["side bend", "standing side bend", "dumbbell side bend"],
+      "expectedQuality": "good",
+      "expectedView": "diagonal",
+      "expectedEquipment": ["dumbbell"],
+      "expectedLoad": "unreadable"
+    },
+    {
+      "id": "fresh_sidebend_s5_diagonal_bad",
+      "pairId": "fresh_sidebend_s5_diagonal",
+      "sourceFileId": "b5122715-0f90-4f0a-acf7-110c98cdd746",
+      "sourceFilename": "subject_005_abs_bad_diagonal.mp4",
+      "expectedExercise": "standing dumbbell side bend",
+      "acceptedLabels": ["side bend", "standing side bend", "dumbbell side bend"],
+      "expectedQuality": "bad",
+      "expectedView": "diagonal",
+      "expectedEquipment": ["dumbbell"],
+      "expectedLoad": "unreadable"
+    },
+    {
+      "id": "fresh_curl_s6_side_good",
+      "pairId": "fresh_curl_s6_side",
+      "sourceFileId": "c792a3f1-9e7e-4596-94ea-02b66aaac79f",
+      "sourceFilename": "subject_006_bicep_curl_good_side.mp4",
+      "expectedExercise": "standing dumbbell biceps curl",
+      "acceptedLabels": ["dumbbell curl", "biceps curl", "standing dumbbell curl", "dumbbell hammer curl", "hammer curl"],
+      "expectedQuality": "good",
+      "expectedView": "side",
+      "expectedEquipment": ["dumbbell"],
+      "expectedLoad": "unreadable"
+    },
+    {
+      "id": "fresh_curl_s6_side_bad",
+      "pairId": "fresh_curl_s6_side",
+      "sourceFileId": "33b6ffee-0ddf-4119-bbb6-2e3f021eee0a",
+      "sourceFilename": "subject_006_bicep_curl_bad_side.mp4",
+      "expectedExercise": "standing dumbbell biceps curl",
+      "acceptedLabels": ["dumbbell curl", "biceps curl", "standing dumbbell curl", "dumbbell hammer curl", "hammer curl"],
+      "expectedQuality": "bad",
+      "expectedView": "side",
+      "expectedEquipment": ["dumbbell"],
+      "expectedLoad": "unreadable"
+    },
+    {
+      "id": "fresh_pushup_s9_side_good",
+      "pairId": "fresh_pushup_s9_side",
+      "sourceFileId": "b1662551-6eb2-4018-9821-75fcc9b223a3",
+      "sourceFilename": "subject_009_push_up_good_side.mp4",
+      "expectedExercise": "standard push-up",
+      "acceptedLabels": ["push-up", "pushup"],
+      "expectedQuality": "good",
+      "expectedView": "side",
+      "expectedEquipment": [],
+      "expectedLoad": "not_applicable"
+    },
+    {
+      "id": "fresh_pushup_s9_side_bad",
+      "pairId": "fresh_pushup_s9_side",
+      "sourceFileId": "2f59a88d-4dfe-441d-91c1-9810db51f5f4",
+      "sourceFilename": "subject_009_push_up_bad_side.mp4",
+      "expectedExercise": "standard push-up",
+      "acceptedLabels": ["push-up", "pushup"],
+      "expectedQuality": "bad",
+      "expectedView": "side",
+      "expectedEquipment": [],
+      "expectedLoad": "not_applicable"
+    },
+    {
+      "id": "fresh_triceps_s10_diagonal_good",
+      "pairId": "fresh_triceps_s10_diagonal",
+      "sourceFileId": "22d2d2fd-bd1c-48a6-9d83-90e7a7dbbae0",
+      "sourceFilename": "subject_010_tricep_good_diagonal.mp4",
+      "expectedExercise": "overhead dumbbell triceps extension",
+      "acceptedLabels": ["dumbbell triceps extension", "overhead triceps extension"],
+      "expectedQuality": "good",
+      "expectedView": "diagonal",
+      "expectedEquipment": ["dumbbell"],
+      "expectedLoad": "unreadable"
+    },
+    {
+      "id": "fresh_triceps_s10_diagonal_bad",
+      "pairId": "fresh_triceps_s10_diagonal",
+      "sourceFileId": "1d026a39-95f9-4bbb-bb8d-54bd654f712d",
+      "sourceFilename": "subject_010_tricep_bad_diagonal.mp4",
+      "expectedExercise": "overhead dumbbell triceps extension",
+      "acceptedLabels": ["dumbbell triceps extension", "overhead triceps extension"],
+      "expectedQuality": "bad",
+      "expectedView": "diagonal",
+      "expectedEquipment": ["dumbbell"],
+      "expectedLoad": "unreadable"
+    }
+  ]
+}

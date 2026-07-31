@@ -3,7 +3,6 @@ import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-nativ
 import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
 
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";
-import { FormButton } from "@/components/form-button";
 import { FormWordmark } from "@/components/form-wordmark";
 import type { ExerciseFamily } from "@/features/exercises/exercise-family";
 import type { AnalysisHistoryGroup, AnalysisHistoryItem, AnalysisHistoryStatus } from "@/features/progress/group-sessions";
@@ -16,12 +15,12 @@ type ExerciseRow = AnalysisHistoryItem & { family: ExerciseFamily; label: string
 type ProgressScreenProps = {
   groups: AnalysisHistoryGroup[];
   onOpenSession: (sessionId: string, status: AnalysisHistoryStatus) => void;
-  onRecord?: () => void;
+  onOpenProfile?: () => void;
   onTogglePin?: (sessionId: string, pinned: boolean) => void | Promise<void>;
   onDeleteSession?: (sessionId: string) => void | Promise<void>;
 };
 
-export function ProgressScreen({ groups, onOpenSession, onRecord, onTogglePin = () => undefined, onDeleteSession = () => undefined }: ProgressScreenProps) {
+export function ProgressScreen({ groups, onOpenSession, onOpenProfile = () => undefined, onTogglePin = () => undefined, onDeleteSession = () => undefined }: ProgressScreenProps) {
   const [query, setQuery] = useState("");
   const [family, setFamily] = useState<ExerciseFamily | "all">("all");
   const [actionRow, setActionRow] = useState<ExerciseRow | null>(null);
@@ -36,12 +35,17 @@ export function ProgressScreen({ groups, onOpenSession, onRecord, onTogglePin = 
 
   return (
     <ScrollView alwaysBounceVertical bounces contentInsetAdjustmentBehavior="automatic" overScrollMode="auto" style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ gap: spacing.lg, padding: spacing.lg, paddingBottom: spacing.xl }}>
-      <FormWordmark />
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <FormWordmark />
+        <Pressable accessibilityLabel="Open settings" accessibilityRole="button" onPress={onOpenProfile} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radii.pill, borderWidth: 1, borderColor: colors.gold }}>
+          <View style={{ width: 8, height: 8, borderRadius: 4, borderWidth: 1, borderColor: colors.gold }} />
+          <View style={{ width: 15, height: 7, marginTop: 2, borderTopLeftRadius: 8, borderTopRightRadius: 8, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.gold }} />
+        </Pressable>
+      </View>
       <View style={{ gap: spacing.xs }}>
         <Text selectable style={[typography.title, { color: colors.text }]}>Progress</Text>
         <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{rows.length === 0 ? "Your exercise history will appear here." : `${rows.length} saved ${rows.length === 1 ? "analysis" : "analyses"}`}</Text>
       </View>
-
       <TextInput
         accessibilityLabel="Search exercise history"
         autoCapitalize="none"
@@ -65,8 +69,7 @@ export function ProgressScreen({ groups, onOpenSession, onRecord, onTogglePin = 
         {filtered.length === 0 ? (
           <Animated.View entering={FadeInDown.duration(220)} style={{ gap: spacing.md, paddingVertical: spacing.xl, alignItems: "center" }}>
             <Text selectable style={[typography.heading, { color: colors.text }]}>{rows.length === 0 ? "No analyses yet" : "No matching exercises"}</Text>
-            <Text selectable style={[typography.body, { color: colors.textSecondary, textAlign: "center" }]}>{rows.length === 0 ? "Record a set and FORM will save it here automatically." : "Try another search or filter."}</Text>
-            {rows.length === 0 && onRecord ? <FormButton style={{ width: "100%" }} label="Record an Exercise" onPress={onRecord} /> : null}
+            <Text selectable style={[typography.body, { color: colors.textSecondary, textAlign: "center" }]}>{rows.length === 0 ? "Record a set and Formie will save it here automatically." : "Try another search or filter."}</Text>
           </Animated.View>
         ) : filtered.map((row) => (
           <Animated.View layout={LinearTransition.duration(180)} key={row.sessionId}>

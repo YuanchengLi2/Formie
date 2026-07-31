@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "benchmark": { "name": "Synthetic unusable-video flow", "version": "2026-07-20.1" },
+  "fixtures": [
+    {
+      "id": "synthetic_unusable_blank",
+      "expectedExercise": "unidentifiable",
+      "expectedQuality": "unknown",
+      "expectedView": "front",
+      "expectedEquipment": [],
+      "expectedLoad": "not_applicable"
+    }
+  ]
+}

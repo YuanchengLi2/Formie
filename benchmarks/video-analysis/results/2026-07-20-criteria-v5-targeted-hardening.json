@@ -1,0 +1,49 @@
+{
+  "generatedAt": "2026-07-20",
+  "catalog": {
+    "version": "criteria-catalog-v5",
+    "variants": 12283,
+    "criteria": 159372,
+    "chunks": 77,
+    "remoteCountVerified": true
+  },
+  "verification": {
+    "testSuitesPassed": 70,
+    "testsPassed": 296,
+    "typecheckPassed": true,
+    "cameraCombinationsPassed": 4320,
+    "deployedFunction": {
+      "slug": "analyze-video",
+      "version": 79,
+      "status": "ACTIVE"
+    }
+  },
+  "targetedLiveCases": [
+    {
+      "fixtureId": "mv_triceps_s2_side_bad",
+      "status": "complete",
+      "clientSchemaValid": true,
+      "rubricResolution": "exact",
+      "catalogExerciseId": 12101,
+      "variation": "single-arm-dumbbell-overhead-triceps-extension",
+      "selectedCriteria": 14,
+      "correctionDetected": true,
+      "correction": "The upper arm drifts forward during the eccentric phase of each repetition.",
+      "verificationConfidence": 0.95,
+      "boundaryEvidenceCount": 0,
+      "score": null
+    },
+    {
+      "fixtureId": "mv_press_s1_side_bad",
+      "status": "complete",
+      "clientSchemaValid": true,
+      "expectedExercise": "standing dumbbell shoulder press",
+      "recognizedExercise": "Dumbbell Overhead Triceps Extension",
+      "catalogExerciseId": 519,
+      "recognitionCorrect": false,
+      "boundaryEvidenceCount": 0,
+      "score": null
+    }
+  ],
+  "conclusion": "Targeted unilateral variation resolution and triceps bad-form recall improved. The full paid accuracy gate has not been rerun and the known shoulder-press identity failure remains."
+}

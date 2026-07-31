@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
-import { useAudioPlayer } from "expo-audio";
 import { CameraView, useCameraPermissions, type CameraType } from "expo-camera";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";
@@ -9,14 +8,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { FormButton } from "@/components/form-button";
-import { FormWordmark } from "@/components/form-wordmark";
 import { useCaptureStore } from "@/features/capture/capture-store";
+import { useCapturePreferences } from "@/features/capture/capture-preferences";
 import { analysisUploadCoordinator } from "@/features/capture/analysis-upload-coordinator";
 import { normalizeRecordedDuration } from "@/features/capture/countdown";
-import { START_BEEP_URI } from "@/features/capture/start-beep";
+import { deviceVideoStore } from "@/features/capture/device-video-store";
 import type { RecordedSet } from "@/features/capture/types";
 import { captureVideoSettings } from "@/features/capture/video-settings";
-import { pinchZoom } from "@/features/capture/camera-zoom";
+import { cameraZoomPresets, pinchZoom, resolveCameraZoom, type CameraZoomLabel } from "@/features/capture/camera-zoom";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
@@ -37,10 +36,15 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const [facing, setFacing] = useState<CameraType>("back");
   const [torch, setTorch] = useState(false);
   const [zoom, setZoom] = useState(0);
+  const [availableLenses, setAvailableLenses] = useState<string[]>([]);
+  const [selectedLens, setSelectedLens] = useState<string | undefined>();
+  const [activeZoomLabel, setActiveZoomLabel] = useState<CameraZoomLabel | null>("1x");
   const zoomRef = useRef(0);
   const pinchStartZoomRef = useRef(0);
+  const exitRequestedRef = useRef(false);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const beep = useAudioPlayer({ uri: START_BEEP_URI });
+  const capturePreferences = useCapturePreferences((state) => state.preferences);
+  const hydrateCapturePreferences = useCapturePreferences((state) => state.hydrate);
 
   const phase = useCaptureStore((state) => state.phase);
   const countdown = useCaptureStore((state) => state.countdown);
@@ -54,6 +58,10 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   }, [permission, requestPermission]);
 
   useEffect(() => {
+    void hydrateCapturePreferences();
+  }, [hydrateCapturePreferences]);
+
+  useEffect(() => {
     if (phase !== "recording" || startedAt === null) return;
     const update = () => setElapsedMs(Date.now() - startedAt);
     update();
@@ -61,36 +69,34 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     return () => clearInterval(timer);
   }, [phase, startedAt]);
 
-  const prepareUploadTarget = useCallback((repeatSessionId?: string) => {
-    return analysisUploadCoordinator.prepare(repeatSessionId);
-  }, []);
-
   const startNativeRecording = useCallback(async () => {
     if (!cameraRef.current) return;
     const actualStart = Date.now();
     dispatch({ type: "recording_started", startedAt: actualStart });
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    void beep.seekTo(0).then(() => beep.play());
+    if (capturePreferences.hapticsEnabled) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
 
     try {
       const result = await cameraRef.current.recordAsync({ maxDuration: captureVideoSettings.maxDurationSeconds });
+      if (exitRequestedRef.current) return;
       if (!result?.uri) throw new Error("The camera did not save the recording");
-      const saved: RecordedSet = {
+      const saved = await deviceVideoStore.persist({
         localUri: result.uri,
         durationMs: normalizeRecordedDuration(Date.now() - actualStart),
         mimeType: "video/mp4",
-      };
+      } satisfies RecordedSet);
       dispatch({ type: "recording_finished", recording: saved });
-      dispatch({ type: "upload_started" });
-      router.replace("/analysis/upload");
+      router.replace("/analysis/review");
     } catch (recordingError) {
+      if (exitRequestedRef.current) return;
       const current = useCaptureStore.getState();
       if (current.phase === "recording") {
         const message = recordingError instanceof Error ? recordingError.message : "Recording could not be saved";
         dispatch({ type: "recording_failed", message });
       }
     }
-  }, [beep, dispatch, router]);
+  }, [capturePreferences.hapticsEnabled, dispatch, router]);
 
   useEffect(() => {
     if (phase !== "countingDown" || countdown === null) return;
@@ -104,10 +110,22 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
 
   const discardRecording = () => {
     analysisUploadCoordinator.reset();
-    dispatch({ type: "reset" });
+    dispatch({ type: "discard_recording" });
   };
 
-  const cameraCanClose = phase === "idle" || phase === "countingDown" || phase === "error";
+  const closeCamera = useCallback(() => {
+    exitRequestedRef.current = true;
+    const stopRecording = cameraRef.current?.stopRecording;
+    if (phase === "recording" && typeof stopRecording === "function") {
+      stopRecording.call(cameraRef.current);
+    }
+    analysisUploadCoordinator.reset();
+    dispatch({ type: "discard_recording" });
+    router.replace({
+      pathname: "/recording-tips",
+      params: previousSessionId ? { previousSessionId } : {},
+    });
+  }, [dispatch, phase, previousSessionId, router]);
 
   const setCameraZoom = useCallback((nextZoom: number) => {
     zoomRef.current = nextZoom;
@@ -121,6 +139,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         pinchStartZoomRef.current = zoomRef.current;
       })
       .onUpdate((event) => {
+        setActiveZoomLabel(null);
         setCameraZoom(pinchZoom(pinchStartZoomRef.current, event.scale));
       }),
     [setCameraZoom],
@@ -132,7 +151,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         <Image accessibilityLabel="Camera access illustration" source={cameraPermissionArt} contentFit="contain" style={{ width: 190, height: 150 }} />
         <View style={{ alignItems: "center", gap: spacing.sm }}>
           <Text selectable style={[typography.title, { color: colors.text, textAlign: "center" }]}>Camera access</Text>
-          <Text selectable style={[typography.body, { maxWidth: 300, color: colors.textSecondary, textAlign: "center" }]}>FORM needs the camera to record and privately analyze your movement.</Text>
+          <Text selectable style={[typography.body, { maxWidth: 300, color: colors.textSecondary, textAlign: "center" }]}>Formie needs the camera to record and privately analyze your movement.</Text>
         </View>
         {permission.canAskAgain ? (
           <FormButton style={{ alignSelf: "stretch" }} label="Allow Camera" onPress={() => void requestPermission()} />
@@ -148,12 +167,23 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     <View style={{ flex: 1, backgroundColor: colors.cameraBlack }}>
       <CameraView
         ref={cameraRef}
+        accessibilityLabel="Camera preview"
         active
         enableTorch={torch}
         facing={facing}
         mirror={facing === "front"}
         mode="video"
         mute
+        onAvailableLensesChanged={({ lenses }) => {
+          setAvailableLenses(lenses);
+          if (selectedLens === undefined) {
+            const preset = resolveCameraZoom("1x", lenses);
+            setSelectedLens(preset.lens);
+            setActiveZoomLabel("1x");
+            setCameraZoom(preset.zoom);
+          }
+        }}
+        selectedLens={selectedLens}
         style={{ flex: 1 }}
         videoQuality={captureVideoSettings.quality}
         videoStabilizationMode="auto"
@@ -166,25 +196,21 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
       <View pointerEvents="box-none" style={{ position: "absolute", top: insets.top + spacing.md, left: spacing.lg, right: spacing.lg, flexDirection: "row", justifyContent: "space-between" }}>
         <Pressable
           accessibilityLabel="Close camera"
-          accessibilityState={{ disabled: !cameraCanClose }}
-          disabled={!cameraCanClose}
-          onPress={() => {
-            dispatch({ type: "reset" });
-            router.back();
-          }}
-          style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)", opacity: cameraCanClose ? 1 : 0.45 }}
+          accessibilityState={{ disabled: false }}
+          onPress={closeCamera}
+          style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)" }}
         >
           <Text selectable style={{ color: colors.text, fontSize: 24 }}>×</Text>
         </Pressable>
-        <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 12, alignItems: "center" }}>
-          <FormWordmark />
-        </View>
         <View style={{ flexDirection: "row", gap: spacing.sm }}>
           <Pressable accessibilityLabel="Toggle light" onPress={() => setTorch((value) => !value)} style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)" }}>
             <Text selectable style={{ color: torch ? colors.gold : colors.text, fontSize: 18 }}>ϟ</Text>
           </Pressable>
           <Pressable accessibilityLabel="Flip camera" onPress={() => {
             setFacing((value) => (value === "back" ? "front" : "back"));
+            setAvailableLenses([]);
+            setSelectedLens(undefined);
+            setActiveZoomLabel("1x");
             setCameraZoom(0);
           }} style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)" }}>
             <Text selectable style={{ color: colors.text, fontSize: 18 }}>↻</Text>
@@ -199,15 +225,28 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         error={error}
         hasRecording={Boolean(recording?.localUri)}
         onRecord={() => {
+          exitRequestedRef.current = false;
           setElapsedMs(0);
-          dispatch({ type: "begin_countdown", previousSessionId });
-          void prepareUploadTarget(previousSessionId);
+          dispatch({ type: "begin_countdown", previousSessionId, countdownSeconds: capturePreferences.countdownSeconds });
         }}
         onStop={() => cameraRef.current?.stopRecording()}
         onRetryUpload={() => undefined}
         onDiscardRecording={discardRecording}
         zoomed={zoom > 0.005}
-        onResetZoom={() => setCameraZoom(0)}
+        zoomPresets={cameraZoomPresets(availableLenses).map((preset) => preset.label)}
+        activeZoomLabel={activeZoomLabel}
+        onSelectZoom={(label) => {
+          const preset = resolveCameraZoom(label, availableLenses);
+          setSelectedLens(preset.lens);
+          setActiveZoomLabel(label);
+          setCameraZoom(preset.zoom);
+        }}
+        onResetZoom={() => {
+          const preset = resolveCameraZoom("1x", availableLenses);
+          setSelectedLens(preset.lens);
+          setActiveZoomLabel("1x");
+          setCameraZoom(preset.zoom);
+        }}
         topInset={insets.top}
         bottomInset={insets.bottom}
       />

@@ -50,6 +50,29 @@ describe("CameraControls", () => {
     expect(onResetZoom).toHaveBeenCalledTimes(1);
   });
 
+  it("shows persistent camera lens presets and selects one", async () => {
+    const onSelectZoom = jest.fn();
+    const screen = await render(
+      <CameraControls
+        phase="idle"
+        countdown={null}
+        elapsedMs={0}
+        error={null}
+        hasRecording={false}
+        zoomPresets={["0.5x", "1x", "2x"]}
+        activeZoomLabel="1x"
+        onSelectZoom={onSelectZoom}
+        onRecord={jest.fn()}
+        onStop={jest.fn()}
+        onRetryUpload={jest.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("Camera zoom 0.5x")).toBeTruthy();
+    expect(screen.getByLabelText("Camera zoom 1x").props.accessibilityState).toEqual({ selected: true });
+    await fireEvent.press(screen.getByLabelText("Camera zoom 2x"));
+    expect(onSelectZoom).toHaveBeenCalledWith("2x");
+  });
+
   it("keeps a retry action visible when upload fails", async () => {
     const onRetryUpload = jest.fn();
     const onDiscardRecording = jest.fn();

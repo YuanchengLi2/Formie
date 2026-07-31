@@ -6,7 +6,7 @@ import { getExerciseTutorial } from "./api";
 
 async function accessToken(): Promise<string> {
   const session = await supabase.auth.getSession();
-  if (!session.data.session?.access_token) throw new Error("Your private session expired. Please reopen FORM.");
+  if (!session.data.session?.access_token) throw new Error("Your private session expired. Please reopen Formie.");
   return session.data.session.access_token;
 }
 

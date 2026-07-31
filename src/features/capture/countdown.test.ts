@@ -11,8 +11,8 @@ describe("capture countdown", () => {
   });
 
   it("caps camera finalization overhead without inflating short recordings", () => {
-    expect(normalizeRecordedDuration(90_127)).toBe(90_000);
-    expect(normalizeRecordedDuration(60_127)).toBe(60_127);
+    expect(normalizeRecordedDuration(15_127)).toBe(15_000);
+    expect(normalizeRecordedDuration(10_127)).toBe(10_127);
     expect(normalizeRecordedDuration(2_999)).toBe(2_999);
   });
 });

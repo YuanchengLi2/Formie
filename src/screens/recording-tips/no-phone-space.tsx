@@ -10,8 +10,8 @@ const SOLUTIONS: [ProductionIconName, string][] = [["setupZoom", "Use 0.5x and m
 
 export function NoPhoneSpaceScreen({ onDone }: { onDone: () => void }) {
   return <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: colors.surfaceRaised }} contentContainerStyle={{ gap: spacing.lg, padding: spacing.xl, paddingBottom: spacing.xl }}>
-    <View style={{ alignItems: "center", gap: spacing.xs }}><Text selectable style={[typography.heading, { color: colors.text }]}>No place for your phone?</Text><Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Try one of these.</Text></View>
+    <View style={{ alignItems: "center" }}><Text selectable style={[typography.heading, { color: colors.text }]}>No place for your phone?</Text></View>
     <View>{SOLUTIONS.map(([icon, solution]) => <View key={solution} style={{ minHeight: 58, flexDirection: "row", alignItems: "center", gap: spacing.md, borderBottomWidth: 1, borderColor: colors.border }}><ProductionIcon name={icon} label={solution} size={30} tintColor={colors.textSecondary} /><Text selectable style={[typography.body, { flex: 1, color: colors.text }]}>{solution}</Text></View>)}</View>
-    <Text selectable style={[typography.caption, { color: colors.gold, textAlign: "center" }]}>Good enough to see is good enough to try.</Text><FormButton label="Got It" onPress={onDone} />
+    <FormButton label="Got It" onPress={onDone} />
   </ScrollView>;
 }

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "benchmark": {
+    "name": "FORM targeted issue-and-frame machine validation",
+    "version": "2026-07-20.1"
+  },
+  "fixtures": [
+    {
+      "id": "legpress_quarter_reps_front",
+      "pairId": "legpress_range_controlled",
+      "expectedExercise": "45-degree plate-loaded leg press",
+      "acceptedLabels": ["plate-loaded 45-degree leg press", "45-degree leg press"],
+      "expectedQuality": "bad",
+      "expectedView": "side",
+      "expectedEquipment": ["plate-loaded-machine"],
+      "expectedIssue": "repeated shallow range of motion caused by reversing the sled after a short knee and hip excursion",
+      "expectedIssueTerms": ["shallow", "range", "short", "excursion"],
+      "expectedEvidenceWindows": [
+        { "startMs": 0, "endMs": 7000 }
+      ]
+    }
+  ]
+}

@@ -4,9 +4,9 @@ import type { ColorValue } from "react-native";
 import { colors } from "@/theme/colors";
 
 const sources = {
-  tabHome: require("../../assets/production/icons/tab-home.png"),
-  tabProgress: require("../../assets/production/icons/tab-progress.png"),
-  tabProfile: require("../../assets/production/icons/tab-profile.png"),
+  tabHome: require("../../assets/production/icons/tab-home-clean.png"),
+  tabProgress: require("../../assets/production/icons/tab-progress-clean.png"),
+  tabProfile: require("../../assets/production/icons/tab-profile-clean.png"),
   setupZoom: require("../../assets/production/icons/setup-zoom.png"),
   setupBag: require("../../assets/production/icons/setup-bag.png"),
   setupPerson: require("../../assets/production/icons/setup-person.png"),

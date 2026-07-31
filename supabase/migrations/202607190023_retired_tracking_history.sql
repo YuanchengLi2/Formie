@@ -1,0 +1,2 @@
+-- Retired migration version marker.
+-- This version exists in remote history; criteria-pipeline-v2 does not recreate its tracking path.

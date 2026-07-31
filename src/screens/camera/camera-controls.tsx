@@ -2,6 +2,7 @@ import { Pressable, Text, View } from "react-native";
 
 import { FormButton } from "@/components/form-button";
 import { formatElapsed } from "@/features/capture/countdown";
+import type { CameraZoomLabel } from "@/features/capture/camera-zoom";
 import type { CapturePhase } from "@/features/capture/types";
 import { captureVideoSettings } from "@/features/capture/video-settings";
 import { colors } from "@/theme/colors";
@@ -20,6 +21,9 @@ type CameraControlsProps = {
   onDiscardRecording?: () => void;
   zoomed?: boolean;
   onResetZoom?: () => void;
+  zoomPresets?: CameraZoomLabel[];
+  activeZoomLabel?: CameraZoomLabel | null;
+  onSelectZoom?: (label: CameraZoomLabel) => void;
   topInset?: number;
   bottomInset?: number;
 };
@@ -36,6 +40,9 @@ export function CameraControls({
   onDiscardRecording = () => undefined,
   zoomed = false,
   onResetZoom = () => undefined,
+  zoomPresets = [],
+  activeZoomLabel = null,
+  onSelectZoom = () => undefined,
   topInset = 0,
   bottomInset = 0,
 }: CameraControlsProps) {
@@ -65,6 +72,23 @@ export function CameraControls({
       <View style={{ alignItems: "center", gap: spacing.md, paddingBottom: bottomInset + spacing.md }}>
         {phase === "idle" || phase === "processing" ? (
           <>
+            <View accessibilityLabel="Camera zoom presets" style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: 4, borderRadius: radii.pill, backgroundColor: "rgba(0,0,0,0.62)" }}>
+              {zoomPresets.map((label) => {
+                const selected = activeZoomLabel === label;
+                return (
+                  <Pressable
+                    key={label}
+                    accessibilityLabel={`Camera zoom ${label}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => onSelectZoom(label)}
+                    style={({ pressed }) => ({ minWidth: 48, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: radii.pill, backgroundColor: selected ? colors.gold : "transparent", opacity: pressed ? 0.72 : 1 })}
+                  >
+                    <Text style={[typography.label, { color: selected ? colors.background : colors.text }]}>{label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.pill, backgroundColor: "rgba(0,0,0,0.58)" }}>
               <Text selectable style={[typography.caption, { color: colors.text }]}>Keep the full movement visible</Text>
               {zoomed ? <Pressable accessibilityRole="button" onPress={onResetZoom} hitSlop={10}><Text style={[typography.label, { color: colors.gold }]}>Reset view</Text></Pressable> : null}

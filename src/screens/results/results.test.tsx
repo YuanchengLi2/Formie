@@ -1,10 +1,10 @@
 import { fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import type { AnalysisResult, CoachingFinding } from "@/features/analysis/result-schema";
-import type { TutorialVideo } from "@/features/analysis/api";
-
-import { formatAnalysisTimestamp, ResultsScreen } from ".";
+import { colors } from "@/theme/colors";
+import { conciseCopy, formatAnalysisTimestamp, ResultsScreen } from ".";
 
 describe("formatAnalysisTimestamp", () => {
   it("carries rounded seconds into the next minute", () => {
@@ -12,15 +12,41 @@ describe("formatAnalysisTimestamp", () => {
   });
 });
 
+describe("conciseCopy", () => {
+  it("keeps only the requested sentences and words", () => {
+    expect(conciseCopy(
+      "The first sentence is clear. The second sentence stays useful. This third sentence should disappear.",
+      2,
+      10,
+    )).toBe("The first sentence is clear. The second sentence stays useful.");
+  });
+});
+
 function finding(id: string, title: string): CoachingFinding {
   return {
     id,
+    coachingArea: "form",
     title,
     detail: `${title} was visible during the set.`,
     whyItMatters: `${title} affects repeatable movement quality.`,
     correction: `Improve ${title.toLowerCase()}.`,
     cue: `Think ${title.toLowerCase()}.`,
+    actionableCorrection: {
+      instruction: `Improve ${title.toLowerCase()}.`,
+      cue: `Think ${title.toLowerCase()}.`,
+      successCheck: `${title} stays repeatable.`,
+      applyWhen: "During the next set.",
+    },
+    expandedCoaching: {
+      summary: `${title} changes the movement.`,
+      whatHappened: "On rep 1, your right shoulder rises as the weight moves. Your left shoulder stays lower at the top. The uneven position is clearest before the weight changes direction.",
+      whyItMatters: "When one shoulder rises first, the weight follows a tilted path. That makes the next repetition harder to repeat evenly.",
+      whatToDo: "Start the next rep with both shoulders level.",
+      successCheck: "Both shoulders finish at the same height.",
+    },
     severity: "important",
+    observedIssueRegions: ["shoulders"],
+    primaryEvidenceIndex: 0,
     evidence: [
       { startMs: 1_000, peakMs: 1_300, endMs: 1_600, repNumber: 1, phase: "concentric", visualEvidence: `${title} at rep 1.`, coachingNote: "your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.", visibleBodyAreas: ["shoulders"], confidence: 0.9, focusRegion: { centerX: 0.58, centerY: 0.36, radius: 0.12, arrowFromX: 0.82, arrowFromY: 0.18, label: "right shoulder", confidence: 0.9 } },
       { startMs: 2_000, peakMs: 2_300, endMs: 2_600, repNumber: null, phase: "reset", visualEvidence: `${title} between reps.`, coachingNote: "the shoulders stay uneven during the reset. Re-square before starting the next repetition.", visibleBodyAreas: ["shoulders"], confidence: 0.86, focusRegion: null },
@@ -33,9 +59,24 @@ function result(): AnalysisResult {
     status: "partial",
     recognition: { label: "High-to-low cable row", variation: null, equipment: ["cable machine"], confidence: 0.76, alternatives: ["High row"], catalogExerciseId: null, exerciseFamily: "row" },
     videoCheck: { outcome: "partial", usableObservations: ["tempo", "elbow path"], limitations: ["hips obscured"], retryReason: null, retryInstruction: null },
-    overallAssessment: "The visible repetitions were controlled and provided useful coaching evidence.",
-    score: null,
+    overallAssessment: "The set keeps a stable base while the shoulder position changes late. The opening movement is controlled and the handle path stays repeatable. The main weakness is the late shoulder rise, so keep both shoulders level on the next set.",
+    muscleFocus: {
+      primary: [
+        { name: "Latissimus dorsi", region: "lats" },
+        { name: "Upper back", region: "upper_back" },
+      ],
+      secondary: [{ name: "Biceps", region: "biceps" }],
+      unclassified: [],
+    },
+    coachNote: "Your early repetitions establish a controlled path. Carry that same shoulder position through the end so the final movement matches the beginning.",
+    score: 75,
     scoreRationale: [],
+    movementScores: [
+      { id: "handle-path", label: "Handle Path", score: 78, observed: "The handle path remains steady until the final repetitions.", evidenceIds: ["fix-0"] },
+      { id: "shoulder-level", label: "Shoulder Level", score: 66, observed: "The right shoulder rises near the end of the set.", evidenceIds: ["fix-0"] },
+      { id: "lowering-control", label: "Lowering Control", score: 84, observed: "The return stays controlled across most repetitions.", evidenceIds: ["fix-1"] },
+    ],
+    equipmentObservations: [{ id: "stack-load", category: "visible_load", title: "Selected stack load", observation: "The selector is visible, but the selected number is not readable.", coachingRelevance: "Use the same visible selector position when comparing the next set.", load: { value: null, unit: null, scope: null, certainty: "unknown", basis: "not_readable" }, evidence: [{ startMs: 1_000, peakMs: 1_300, endMs: 1_600, visualEvidence: "The selector pin is visible while the number is blurred.", visibleReferences: ["weight stack", "selector pin"], confidence: 0.88, focusRegion: null }] }],
     didWell: Array.from({ length: 5 }, (_, index) => finding(`well-${index}`, `Did well ${index + 1}`)),
     priorityCorrections: Array.from({ length: 4 }, (_, index) => finding(`fix-${index}`, `Priority ${index + 1}`)),
     coachingCues: Array.from({ length: 4 }, (_, index) => finding(`cue-${index}`, `Coaching ${index + 1}`)),
@@ -52,22 +93,42 @@ function result(): AnalysisResult {
       { repNumber: 7, startMs: 8_000, peakMs: 8_500, endMs: 9_000, assessment: "breakdown", note: "Elbow travel increased." },
     ],
     nextSetPlan: [
-      { id: "plan-1", action: "Keep your upper arms beside your torso", rationale: "Reduce late elbow travel.", relatedFindingId: "fix-0" },
-      { id: "plan-2", action: "Lower each rep for two seconds", rationale: "Keep the tempo repeatable.", relatedFindingId: "cue-0" },
+      { id: "plan-1", action: "Keep your upper arms beside your torso", rationale: "Reduce late elbow travel.", successCheck: "The elbows stay beside the torso.", relatedFindingId: "fix-0" },
+      { id: "plan-2", action: "Lower each rep for two seconds", rationale: "Keep the tempo repeatable.", successCheck: "Each lowering phase lasts two seconds.", relatedFindingId: "fix-1" },
     ],
     precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
-    precisionReview: { runsRequested: 2, runsUsed: 2, status: "completed", summary: "Two premium precision runs completed.", passes: [{ passNumber: 1, kind: "recognition", outcome: "confirmed", reason: "Exercise identity confirmed.", checkedFindingId: null, startMs: null, endMs: null, usage: { promptTokens: 100, outputTokens: 20, thinkingTokens: 10 } }, { passNumber: 2, kind: "timestamp", outcome: "revised", reason: "Timestamp tightened.", checkedFindingId: "fix-0", startMs: 500, endMs: 2_000, usage: { promptTokens: 100, outputTokens: 20, thinkingTokens: 10 } }] },
-    verification: { performed: true, reason: "Subtle late-set change", outcome: "revised", checkedFindingId: "fix-0" },
     comparison: null,
+    setDeclaration: {
+      exercise: { source: "catalog", catalogExerciseId: 3, label: "Dumbbell Bench Press" },
+      amount: { kind: "reps", value: 8, countScope: "total" },
+      load: { kind: "known", value: 40, unit: "lb", scope: "per_hand" },
+      side: "bilateral",
+      styles: [],
+      focusNote: null,
+    },
   };
 }
 
-function renderResults(onFindingPress = jest.fn(), onRecordAnother = jest.fn()) {
+function renderResults(onRecordAnother = jest.fn(), value = result()) {
   return render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-      <ResultsScreen result={result()} videoUrl="https://storage.example/private-set.mp4" durationMs={12_000} onFindingPress={onFindingPress} onRecordAnother={onRecordAnother} />
+      <ResultsScreen result={value} videoUrl="https://storage.example/private-set.mp4" durationMs={12_000} playbackWindow={{ sourceStartMs: 500, sourceEndMs: 10_000 }} onRecordAnother={onRecordAnother} exampleState="ready" onWatchExample={jest.fn()} />
     </SafeAreaProvider>,
   );
+}
+
+function renderedTestIds(node: unknown, ids: string[] = []): string[] {
+  if (!node) return ids;
+  if (Array.isArray(node)) {
+    node.forEach((child) => renderedTestIds(child, ids));
+    return ids;
+  }
+  if (typeof node === "string") return ids;
+  if (typeof node !== "object") return ids;
+  const rendered = node as { props?: { testID?: unknown }; children?: unknown[] };
+  if (typeof rendered.props?.testID === "string") ids.push(rendered.props.testID);
+  rendered.children?.forEach((child: unknown) => renderedTestIds(child, ids));
+  return ids;
 }
 
 describe("ResultsScreen", () => {
@@ -76,57 +137,248 @@ describe("ResultsScreen", () => {
 
     expect(screen.getByText("COACHING REVIEW")).toBeTruthy();
     expect(screen.queryByText(/coaching points/i)).toBeNull();
-    expect(screen.getByText("Review what happened, why it matters, and what to change next.")).toBeTruthy();
-    expect(screen.getByText("What happened")).toBeTruthy();
-    expect(screen.getByText("Why it matters")).toBeTruthy();
-    expect(screen.getByText("What to do next")).toBeTruthy();
-    expect(screen.getByText("Set Summary")).toBeTruthy();
-    expect(screen.getByText("WHOLE-SET READ")).toBeTruthy();
-    expect(screen.getByText("Eight complete repetitions were visible from setup through the final reset.")).toBeTruthy();
-    expect(screen.getByText("The handle endpoint shortened during the final two repetitions.")).toBeTruthy();
-    expect(screen.getByText("Match the earlier handle endpoint while keeping both shoulders level.")).toBeTruthy();
-    expect(screen.getByText("Ask FORM Coach")).toBeTruthy();
-    expect(screen.getByText("Camera visibility note")).toBeTruthy();
-    expect(screen.queryByText(/pinch/i)).toBeNull();
+    expect(screen.queryByText("Each tab has one job: see the mistake, understand it, then fix one thing.")).toBeNull();
+    expect(screen.getByText("WHAT HAPPENED")).toBeTruthy();
+    expect(screen.queryByText("WHY IT MATTERS")).toBeNull();
+    expect(screen.queryByText("WHAT TO DO NEXT")).toBeNull();
+    await fireEvent.press(screen.getByLabelText("Why it matters"));
+    expect(screen.getByText("WHY IT MATTERS")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("What to do next"));
+    expect(screen.getByText("WHAT TO DO NEXT")).toBeTruthy();
+    expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
+    await fireEvent.press(screen.getByLabelText("What happened"));
+    expect(screen.getByText("WHOLE SET SUMMARY")).toBeTruthy();
+    expect(screen.getByText("The set keeps a stable base while the shoulder position changes late. The opening movement is controlled and the handle path stays repeatable.")).toBeTruthy();
+    expect(screen.getByText("concentric · 00:00.8")).toBeTruthy();
+    expect(screen.queryByText("WHOLE-SET READ")).toBeNull();
+    expect(screen.queryByText("Eight complete repetitions were visible from setup through the final reset.")).toBeNull();
+    expect(screen.queryByText("The handle endpoint shortened during the final two repetitions.")).toBeNull();
+    expect(screen.queryByText("Match the earlier handle endpoint while keeping both shoulders level.")).toBeNull();
+    expect(screen.getByText("Ask Formie Coach")).toBeTruthy();
+    expect(screen.getByText("Watch Example")).toBeTruthy();
+    expect(screen.queryByLabelText("FORM")).toBeNull();
+    expect(screen.queryByText("Camera visibility note")).toBeNull();
+    expect(screen.queryByText("Objective breakdown from your recording")).toBeNull();
+    expect(screen.getByText("EXERCISE MUSCLE FOCUS")).toBeTruthy();
+    expect(screen.getByText("SCORES")).toBeTruthy();
+    expect(screen.queryByText("Your early repetitions establish a controlled path.")).toBeNull();
+    expect(screen.getByTestId("coach-score-gauge").props.accessibilityRole).toBe("progressbar");
+    expect(screen.getByTestId("movement-scores")).toBeTruthy();
+    expect(screen.queryByText("WEAKNESSES")).toBeNull();
+    expect(screen.queryByText(/drag to rotate/i)).toBeNull();
     expect(screen.getByTestId("coaching-workspace")).toBeTruthy();
-    expect(screen.getByTestId("active-coaching-panel").props.accessibilityLabel).toContain("What happened");
+    expect(screen.getByTestId("active-coaching-panel").props.accessibilityLabel).toContain("Priority 1");
+    expect(screen.getByTestId("coaching-topic-sentence")).toHaveStyle({ fontSize: 15, lineHeight: 21, fontWeight: "700" });
+    expect(screen.getByTestId("coaching-supporting-copy")).toHaveStyle({ fontSize: 14, lineHeight: 21, fontWeight: "400" });
+    expect(screen.getByText(/On rep 1, your right shoulder rises/)).toBeTruthy();
+    expect(screen.queryByText("Priority 1 affects repeatable movement quality.")).toBeNull();
     expect(screen.getByLabelText("Recording timeline").props.accessibilityRole).toBe("adjustable");
     expect(screen.getByLabelText("Play recording in video")).toBeTruthy();
     expect(screen.getAllByLabelText(/Review .* at/).length).toBeGreaterThan(0);
     expect(screen.getAllByTestId(/timeline-evidence-marker-/).length).toBeGreaterThan(0);
-    await fireEvent.press(screen.getByText("Why it matters"));
-    expect(screen.getByTestId("active-coaching-panel").props.accessibilityLabel).toContain("Why it matters");
   }, 10_000);
 
   it("renders the supported strengths and focused next-set plan", async () => {
     const screen = await renderResults();
-    for (let index = 1; index <= 5; index += 1) expect(screen.getByText(`Did well ${index}`)).toBeTruthy();
-    expect(screen.getByText("Improve priority 1.")).toBeTruthy();
+    for (let index = 1; index <= 3; index += 1) expect(screen.getByText(`Did well ${index}`)).toBeTruthy();
+    expect(screen.queryByText("Did well 4")).toBeNull();
+    expect(screen.queryByTestId("strengths-section")).toBeNull();
+    expect(screen.getAllByTestId(/^summary-strength-well-\d+$/)).toHaveLength(3);
+    expect(StyleSheet.flatten(screen.getByTestId("summary-strength-well-0").props.style)).toMatchObject({ color: colors.success });
+    expect(StyleSheet.flatten(screen.getByTestId("summary-strength-well-0-card").props.style)).toMatchObject({ backgroundColor: "rgba(53,208,127,0.10)" });
+    expect(screen.getAllByTestId(/^summary-focus-fix-\d+$/)).toHaveLength(4);
+    expect(screen.getAllByTestId(/^summary-next-/).filter((node) => !String(node.props.testID).endsWith("-card"))).toHaveLength(3);
+    expect(screen.queryByText("Improve priority 1.")).toBeNull();
     expect(screen.getByText("YOUR NEXT SET")).toBeTruthy();
     expect(screen.getByText("Keep your upper arms beside your torso")).toBeTruthy();
     expect(screen.getByText("Lower each rep for two seconds")).toBeTruthy();
-    await fireEvent.press(screen.getByText("What to do next"));
-    expect(screen.getAllByText("Keep your upper arms beside your torso").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("1 of 26")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Next coaching point"));
+    expect(screen.queryByText("Reduce late elbow travel.")).toBeNull();
+    expect(screen.queryByText("The elbows stay beside the torso.")).toBeNull();
+    expect(screen.queryByText("Success check: Each lowering phase lasts two seconds.")).toBeNull();
+    expect(screen.getByText("Issue 1 of 4")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Next problem"));
     expect(screen.getAllByText("Priority 2").length).toBeGreaterThanOrEqual(1);
   });
 
-  it("omits an unsupported score while keeping exercise-specific coaching", async () => {
+  it("orders the personalized set sections and gives every ranked weakness a next-set action", async () => {
     const screen = await renderResults();
-    expect(screen.queryByLabelText(/Movement quality/)).toBeNull();
+    const ids = renderedTestIds(screen.toJSON());
+    const sectionIds = [
+      "coaching-workspace",
+      "muscle-focus-section",
+      "coach-note-scores-section",
+      "whole-set-summary-section",
+      "result-actions",
+    ];
+
+    expect(sectionIds.map((id) => ids.indexOf(id))).toEqual(
+      [...sectionIds.map((id) => ids.indexOf(id))].sort((left, right) => left - right),
+    );
+    expect(screen.queryByTestId("weaknesses-section")).toBeNull();
+    expect(screen.queryByTestId("next-set-section")).toBeNull();
+  });
+
+  it("keeps the post-analysis guide and six-domain audit internal", async () => {
+    const value = result();
+    value.exerciseGuide = {
+      setupSteps: [
+        "Set the cable just below shoulder height and clear the space behind you.",
+        "Take a neutral grip and square both shoulders before the first pull.",
+      ],
+      executionSteps: [
+        "Drive the elbows back while keeping the handle path level.",
+        "Return under control without letting either shoulder rise.",
+      ],
+      relatedFindingIds: ["fix-0"],
+    };
+    value.coachingCoverage = [
+      { domain: "surroundings", status: "clear", observation: "The working area stays clear.", findingIds: [] },
+      { domain: "equipment_setup", status: "issue", observation: "The cable starts slightly too high.", findingIds: ["fix-0"] },
+      { domain: "grip_contact", status: "clear", observation: "The grip remains neutral.", findingIds: [] },
+      { domain: "starting_position", status: "issue", observation: "The right shoulder starts higher.", findingIds: ["fix-0"] },
+      { domain: "movement_execution", status: "issue", observation: "The shoulder rises late in the set.", findingIds: ["fix-0"] },
+      { domain: "support_balance", status: "not_visible", observation: "Foot pressure is outside the camera view.", findingIds: [] },
+    ];
+
+    const screen = await renderResults(jest.fn(), value);
+
+    expect(screen.queryByTestId("exercise-guide-section")).toBeNull();
+    expect(screen.queryByText("HOW TO SET UP AND DO THIS EXERCISE")).toBeNull();
+    expect(screen.queryByText(/Set the cable just below shoulder height/)).toBeNull();
+    expect(screen.queryByText("EQUIPMENT SETUP")).toBeNull();
+    expect(screen.queryByText("STARTING POSITION")).toBeNull();
+  });
+
+  it("uses a rotatable anatomy model without circular body overlays", async () => {
+    const screen = await renderResults();
+
+    expect(screen.getByTestId("muscle-focus-figure")).toBeTruthy();
+    expect(screen.getByTestId("anatomy-body-image")).toBeTruthy();
+    expect(screen.getByLabelText("Rotatable anatomy model")).toBeTruthy();
+    expect(screen.getByLabelText("Rotate anatomy")).toBeTruthy();
+    expect(screen.getByTestId("anatomy-target-chest")).toBeTruthy();
+    expect(screen.getByTestId("anatomy-target-front_shoulders")).toBeTruthy();
+    expect(screen.getByTestId("anatomy-target-triceps")).toBeTruthy();
+    expect(screen.queryByTestId("anatomy-issue-shoulders")).toBeNull();
+    expect(screen.getByText("Target Muscles")).toBeTruthy();
+    expect(screen.getByText("Your Form")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Your Form"));
+    expect(screen.queryByTestId("anatomy-target-chest")).toBeNull();
+    expect(screen.getByTestId("anatomy-issue-shoulders")).toBeTruthy();
+    expect(screen.getByText("Observed issue areas")).toBeTruthy();
+    expect(screen.queryByText(/never claims actual muscle activation/i)).toBeNull();
+    expect(screen.getByTestId("anatomy-gesture-surface")).toBeTruthy();
+    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-"))).toBe(false);
+  });
+
+  it("uses one compact Coach's Note card with separate Scores and Coach's Note views", async () => {
+    const screen = await renderResults();
+
+    expect(screen.getByLabelText("Scores").props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByText("Handle Path")).toBeTruthy();
+    expect(screen.getByText("Shoulder Level")).toBeTruthy();
+    expect(screen.queryByText("Your early repetitions establish a controlled path.")).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText("Coach's Note"));
+    expect(screen.getByLabelText("Coach's Note").props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByText(result().coachNote!)).toBeTruthy();
+    expect(screen.queryByText("Handle Path")).toBeNull();
+    expect(screen.queryByTestId("movement-scores")).toBeNull();
+  });
+
+  it("keeps what happened and what to do next bound to the issue selected by the arrows", async () => {
+    const screen = await renderResults();
+
+    expect(screen.getByText("Issue 1 of 4")).toBeTruthy();
+    expect(screen.getByText(/On rep 1, your right shoulder rises/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Why it matters"));
+    expect(screen.getByText(/When one shoulder rises first/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("What to do next"));
+    expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
+
+    await fireEvent.press(screen.getByLabelText("Next problem"));
+    expect(screen.getByText("Issue 2 of 4")).toBeTruthy();
+    expect(screen.getByText(/On rep 1, your right shoulder rises/)).toBeTruthy();
+    expect(screen.queryByText("Priority 2 affects repeatable movement quality.")).toBeNull();
+    await fireEvent.press(screen.getByLabelText("Why it matters"));
+    expect(screen.getByText(/When one shoulder rises first/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("What to do next"));
+    expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
+  });
+
+  it("limits the complete visible coaching message to three sentences including its bold opening", async () => {
+    const value = result();
+    value.priorityCorrections[0].expandedCoaching!.whatHappened = "First visible sentence. Second visible sentence. Third visible sentence. Fourth sentence must be removed.";
+    const screen = await renderResults(jest.fn(), value);
+
+    expect(screen.getByText("First visible sentence.")).toBeTruthy();
+    expect(screen.getByText("Second visible sentence. Third visible sentence.")).toBeTruthy();
+    expect(screen.queryByText(/Fourth sentence/)).toBeNull();
+  });
+
+  it("uses compact summary and list typography", async () => {
+    const screen = await renderResults();
+    expect(StyleSheet.flatten(screen.getByTestId("whole-set-summary-text").props.style)).toMatchObject({ fontSize: 16, lineHeight: 23, fontWeight: "400" });
+    expect(StyleSheet.flatten(screen.getByTestId("summary-next-plan-1").props.style)).toMatchObject({ fontSize: 16, lineHeight: 23 });
+    expect(StyleSheet.flatten(screen.getByTestId("summary-next-plan-1-card").props.style)).toMatchObject({ minHeight: 56 });
+  });
+
+  it("keeps every issue inline instead of opening a More Details page", async () => {
+    const screen = await renderResults();
+
+    expect(screen.queryByTestId("all-issues-list")).toBeNull();
+    expect(screen.queryByText(/more details/i)).toBeNull();
+    expect(screen.queryAllByLabelText(/^Open issue details:/)).toHaveLength(0);
+    await fireEvent.press(screen.getAllByText("Priority 1")[0]);
+  });
+
+  it("keeps the final issue panel at a stable phone width", async () => {
+    const screen = await renderResults();
+    for (let index = 1; index < 4; index += 1) {
+      await fireEvent.press(screen.getByLabelText("Next problem"));
+    }
+
+    expect(screen.getByText("Issue 4 of 4")).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId("coaching-panel").props.style)).toMatchObject({
+      width: "100%",
+      minWidth: 0,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId("active-coaching-panel").props.style)).toMatchObject({
+      width: "100%",
+    });
+  });
+
+  it("explains a new single-pass score without a legacy scorecard", async () => {
+    const value = result();
+    value.scoreRationale = [
+      { criterion: "setup_stability", observed: "The support base stays planted.", impact: 5, confidence: 0.9, evidenceIds: ["well-0"] },
+      { criterion: "path_alignment", observed: "The working shoulder rises at the top.", impact: 25, confidence: 0.9, evidenceIds: ["fix-0"] },
+      { criterion: "range_positions", observed: "The endpoints stay visible and repeatable.", impact: 5, confidence: 0.85, evidenceIds: [] },
+      { criterion: "control_tempo", observed: "The return becomes faster late in the set.", impact: 20, confidence: 0.88, evidenceIds: ["fix-1"] },
+      { criterion: "rep_consistency", observed: "The last repetitions differ from the first.", impact: 20, confidence: 0.88, evidenceIds: ["fix-1"] },
+    ];
+
+    const screen = await renderResults(jest.fn(), value);
+    expect(screen.queryByText("Why this score")).toBeNull();
+    expect(screen.queryByText("The working shoulder rises at the top.")).toBeNull();
+    expect(screen.queryByText("The return becomes faster late in the set.")).toBeNull();
+  });
+
+  it("always shows the numeric score for a viewable workout", async () => {
+    const screen = await renderResults();
+    expect(screen.getAllByLabelText("Coach score 75 out of 100")).toHaveLength(1);
+    expect(screen.getByTestId("coach-score-gauge")).toBeTruthy();
+    expect(screen.queryByText("TECHNIQUE SCORE")).toBeNull();
     expect(screen.queryByText(/low angle showed tempo and elbow path/i)).toBeNull();
-    expect(screen.getByText("High-to-low cable row")).toBeTruthy();
+    expect(screen.queryByText("High-to-low cable row")).toBeNull();
     expect(screen.getByText("COACHING REVIEW")).toBeTruthy();
   });
 
-  it("opens evidence and supports another recording", async () => {
-    const onFindingPress = jest.fn();
+  it("keeps evidence review inline and supports another recording", async () => {
     const onRecordAnother = jest.fn();
-    const screen = await renderResults(onFindingPress, onRecordAnother);
-    await fireEvent.press(screen.getByText("Priority: priority 1"));
+    const screen = await renderResults(onRecordAnother);
+    await fireEvent.press(screen.getAllByText("Priority 1")[0]);
     await fireEvent.press(screen.getByText("Record Another Set"));
-    expect(onFindingPress).toHaveBeenCalledWith(expect.objectContaining({ id: "fix-0" }));
     expect(onRecordAnother).toHaveBeenCalledTimes(1);
   });
 
@@ -141,15 +393,15 @@ describe("ResultsScreen", () => {
     unusable.coachingCues = [];
     unusable.score = null;
     unusable.scoreRationale = [];
+    unusable.movementScores = [];
     unusable.setSummary = { totalReps: null, consistentReps: null, verdict: null };
     unusable.repTimeline = [];
     unusable.nextSetPlan = [];
-    unusable.precisionReview = { runsRequested: 0, runsUsed: 0, status: "not-needed", summary: null, passes: [] };
 
     const onRecordAnother = jest.fn();
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-        <ResultsScreen result={unusable} onFindingPress={jest.fn()} onRecordAnother={onRecordAnother} />
+        <ResultsScreen result={unusable} onRecordAnother={onRecordAnother} />
       </SafeAreaProvider>,
     );
 
@@ -159,28 +411,79 @@ describe("ResultsScreen", () => {
   });
 
   it("turns the result into an evidence-led coaching loop", async () => {
-    const onFindingPress = jest.fn();
-    const screen = await renderResults(onFindingPress);
+    const screen = await renderResults();
 
     expect(screen.getByText("COACHING REVIEW")).toBeTruthy();
     expect(screen.getByText("What happened")).toBeTruthy();
     expect(screen.getByText("Why it matters")).toBeTruthy();
     expect(screen.getByText("What to do next")).toBeTruthy();
     expect(screen.queryByText("6 of 8 reps consistent")).toBeNull();
-    expect(screen.getByText("Set Summary")).toBeTruthy();
-    expect(screen.getByText("1 of 26")).toBeTruthy();
-    expect(screen.getByText("your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.")).toBeTruthy();
-    expect(screen.getByText("Evidence checked")).toBeTruthy();
+    expect(screen.getByText("WHOLE SET SUMMARY")).toBeTruthy();
+    expect(screen.getByText("Issue 1 of 4")).toBeTruthy();
+    expect(screen.getByText(/On rep 1, your right shoulder rises/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Why it matters"));
+    expect(screen.getByText(/When one shoulder rises first/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("What to do next"));
+    expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
     expect(screen.queryByText(/premium run/i)).toBeNull();
     expect(screen.queryByText(/tokens/)).toBeNull();
-    expect(screen.getByText("Ask FORM Coach")).toBeTruthy();
+    expect(screen.getByText("Ask Formie Coach")).toBeTruthy();
     expect(screen.queryByLabelText(/Coaching point:/)).toBeNull();
     expect(screen.queryByLabelText(/AI focus:/)).toBeNull();
     expect(screen.queryByText(/^Rep \d+$/)).toBeNull();
-    expect(screen.getAllByText("your right shoulder rises as the handle passes your ribs. Keep both shoulders level on the next pull.").length).toBeGreaterThanOrEqual(1);
 
     await fireEvent.press(screen.getByText("Did well 1"));
-    expect(onFindingPress).toHaveBeenCalledWith(expect.objectContaining({ id: "well-0" }));
+  });
+
+  it("keeps clean sets correction-free while preserving strengths", async () => {
+    const value = result();
+    value.priorityCorrections = [];
+    value.coachingCues = [];
+    value.nextSetPlan = [];
+
+    const screen = await renderResults(jest.fn(), value);
+
+    expect(screen.getByText("No visible issues found")).toBeTruthy();
+    expect(screen.queryByText(/Issue \d+ of/)).toBeNull();
+    expect(screen.getByText("Did well 1")).toBeTruthy();
+    expect(screen.queryByText("YOUR NEXT SET")).toBeNull();
+  });
+
+  it("uses the selected primary evidence peak for the displayed issue", async () => {
+    const value = result();
+    value.priorityCorrections[0].primaryEvidenceIndex = 1;
+
+    const screen = await renderResults(jest.fn(), value);
+
+    expect(screen.getByText("reset · 00:01.8")).toBeTruthy();
+  });
+
+  it("exposes the tutorial loading, failure, and success actions", async () => {
+    const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } };
+    const loading = await render(
+      <SafeAreaProvider initialMetrics={metrics}>
+        <ResultsScreen result={result()} onRecordAnother={jest.fn()} exampleState="loading" />
+      </SafeAreaProvider>,
+    );
+    expect(loading.getByText("Loading Example…")).toBeDisabled();
+
+    const retry = jest.fn();
+    const failed = await render(
+      <SafeAreaProvider initialMetrics={metrics}>
+        <ResultsScreen result={result()} onRecordAnother={jest.fn()} exampleState="error" onWatchExample={retry} />
+      </SafeAreaProvider>,
+    );
+    await fireEvent.press(failed.getByText("Retry Example"));
+    expect(retry).toHaveBeenCalledTimes(1);
+
+    const watch = jest.fn();
+    const ready = await render(
+      <SafeAreaProvider initialMetrics={metrics}>
+        <ResultsScreen result={result()} onRecordAnother={jest.fn()} exampleState="ready" onWatchExample={watch} />
+      </SafeAreaProvider>,
+    );
+    await fireEvent.press(ready.getByText("Watch Example"));
+    expect(watch).toHaveBeenCalledTimes(1);
   });
 
   it("makes record another set the dominant result action", async () => {
@@ -193,7 +496,6 @@ describe("ResultsScreen", () => {
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
         <ResultsScreen
           result={result()}
-          onFindingPress={jest.fn()}
           onRecordAnother={jest.fn()}
         />
       </SafeAreaProvider>,
@@ -202,80 +504,80 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("MoveNet Thunder")).toBeNull();
   });
 
-  it("does not claim evidence was checked when the verifier failed", async () => {
-    const failed = result();
-    failed.verification = { performed: true, reason: "Verifier unavailable", outcome: "failed", checkedFindingId: "fix-0" };
-    const screen = await render(
-      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-        <ResultsScreen result={failed} onFindingPress={jest.fn()} onRecordAnother={jest.fn()} />
-      </SafeAreaProvider>,
-    );
-    expect(screen.queryByText("Evidence checked")).toBeNull();
-  });
-
-  it("keeps internal precision-run receipts out of the coaching UI", async () => {
-    const failed = result();
-    failed.precisionReview = {
-      runsRequested: 2,
-      runsUsed: 1,
-      status: "failed",
-      summary: "Premium review stopped after the first failed request.",
-      passes: [{ passNumber: 1, kind: "technique", outcome: "failed", reason: "Gemini premium review failed: 503", checkedFindingId: "fix-0", startMs: 500, endMs: 2_000, usage: { promptTokens: 0, outputTokens: 0, thinkingTokens: 0 } }],
-    };
-    const screen = await render(
-      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-        <ResultsScreen result={failed} onFindingPress={jest.fn()} onRecordAnother={jest.fn()} />
-      </SafeAreaProvider>,
-    );
-
-    expect(screen.queryByText(/attempted/i)).toBeNull();
-    expect(screen.queryByText(/review failure/i)).toBeNull();
-    expect(screen.queryByText("1 additional evidence run completed")).toBeNull();
-  });
-
-  it("removes exercise-name correction from the result flow", async () => {
+  it("shows the declared exercise while hiding the model's inferred label", async () => {
     const screen = await renderResults();
+    expect(screen.queryByText("High-to-low cable row")).toBeNull();
+    expect(screen.getByText("Dumbbell Bench Press · 8 reps · 40 lb per hand")).toBeTruthy();
     expect(screen.queryByText("Correct exercise name")).toBeNull();
     expect(screen.queryByLabelText("Exercise name")).toBeNull();
   });
 
-  it("opens the verified exercise tutorial selected after analysis", async () => {
-    const tutorial: TutorialVideo = { videoId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk", title: "Clear Cable Row Tutorial", channel: "Trusted Coach", whyChosen: "Shows setup and execution clearly.", thumbnailUrl: "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg", searchAttributionHtml: null };
-    const onOpenTutorial = jest.fn();
-    const screen = await render(
-      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-        <ResultsScreen result={result()} tutorial={tutorial} onOpenTutorial={onOpenTutorial} onFindingPress={jest.fn()} onRecordAnother={jest.fn()} />
-      </SafeAreaProvider>,
-    );
-    expect(screen.getByText("Watch Example")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Watch Clear Cable Row Tutorial example"));
-    expect(onOpenTutorial).toHaveBeenCalledWith(tutorial);
+  it("removes the standalone setup, equipment, and load section", async () => {
+    const screen = await renderResults();
+
+    expect(screen.queryByText("SETUP, EQUIPMENT & LOAD")).toBeNull();
+    expect(screen.queryByText("Selected stack load")).toBeNull();
+    expect(screen.queryByTestId("equipment-observations-section")).toBeNull();
+    expect(screen.getByText(/Dumbbell Bench Press.*8 reps.*40 lb per hand/)).toBeTruthy();
   });
 
-  it("shows the saved-video reanalysis control only when development enables it", async () => {
-    const hidden = await renderResults();
-    expect(hidden.queryByText("Debug: Reanalyze Video")).toBeNull();
+  it("uses declared-exercise anatomy instead of Gemini's mismatched muscle list", async () => {
+    const screen = await renderResults();
 
+    expect(screen.getByText("Pectorals, Front shoulders, Triceps")).toBeTruthy();
+    expect(screen.queryByText("Latissimus dorsi, Upper back, Biceps")).toBeNull();
+  });
+
+  it("labels the audited number as a technique score and explains every strict criterion and cap", async () => {
+    const value = result();
+    value.score = 59;
+    value.scorecard = {
+      rubricVersion: "strict-technique-v1",
+      coverage: 1,
+      confidence: 0.88,
+      criteria: [
+        { key: "setup_stability", weight: 20, rating: 82, confidence: 0.9, observed: "The setup stays stable.", evidenceIds: ["well-0"] },
+        { key: "path_alignment", weight: 25, rating: 58, confidence: 0.88, observed: "The elbow path changes repeatedly.", evidenceIds: ["fix-0"] },
+        { key: "range_positions", weight: 20, rating: 65, confidence: 0.86, observed: "Late endpoints shorten.", evidenceIds: ["fix-1"] },
+        { key: "control_tempo", weight: 15, rating: 75, confidence: 0.9, observed: "Most lowering phases stay controlled.", evidenceIds: ["well-1"] },
+        { key: "rep_consistency", weight: 20, rating: 52, confidence: 0.86, observed: "The last two reps break from the early pattern.", evidenceIds: ["fix-0"] },
+      ],
+      uncappedScore: 66,
+      appliedCap: 59,
+      finalScore: 59,
+      auditStatus: "confirmed",
+    };
+
+    const screen = await renderResults(jest.fn(), value);
+    expect(screen.getByLabelText("Coach score 59 out of 100")).toBeTruthy();
+    expect(screen.queryByText("Why this score")).toBeNull();
+    expect(screen.queryByText("Movement path and alignment")).toBeNull();
+    expect(screen.queryByText(/Score capped at 59/)).toBeNull();
+    expect(screen.queryByLabelText(/Movement quality/)).toBeNull();
+  });
+
+  it("lets a real user analyze the saved video again", async () => {
     const onReanalyze = jest.fn();
     const visible = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-        <ResultsScreen result={result()} videoUrl="https://storage.example/private-set.mp4" durationMs={12_000} onFindingPress={jest.fn()} onRecordAnother={jest.fn()} showDebugReanalysis onReanalyze={onReanalyze} />
+        <ResultsScreen result={result()} videoUrl="https://storage.example/private-set.mp4" durationMs={12_000} onRecordAnother={jest.fn()} onReanalyze={onReanalyze} />
       </SafeAreaProvider>,
     );
-    await fireEvent.press(visible.getByText("Debug: Reanalyze Video"));
+    expect(visible.getByText("Something look wrong?")).toBeTruthy();
+    await fireEvent.press(visible.getByText("Analyze Again"));
     expect(onReanalyze).toHaveBeenCalledTimes(1);
   });
 
-  it("locks the debug control while resetting and shows a reset error", async () => {
+  it("locks the reanalysis control while resetting and shows a reset error", async () => {
     const onReanalyze = jest.fn();
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-        <ResultsScreen result={result()} videoUrl="https://storage.example/private-set.mp4" durationMs={12_000} onFindingPress={jest.fn()} onRecordAnother={jest.fn()} showDebugReanalysis onReanalyze={onReanalyze} reanalyzing reanalysisError="Could not reset this saved video." />
+        <ResultsScreen result={result()} videoUrl="https://storage.example/private-set.mp4" durationMs={12_000} onRecordAnother={jest.fn()} onReanalyze={onReanalyze} reanalyzing reanalysisError="Could not reset this saved video." />
       </SafeAreaProvider>,
     );
-    expect(screen.getByText("Resetting analysis…")).toBeTruthy();
+    expect(screen.getByText("Analyzing Again…")).toBeTruthy();
     expect(screen.getByText("Could not reset this saved video.")).toBeTruthy();
-    await fireEvent.press(screen.getByText("Resetting analysis…"));
+    await fireEvent.press(screen.getByText("Analyzing Again…"));
     expect(onReanalyze).not.toHaveBeenCalled();
   });
 });

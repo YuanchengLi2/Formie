@@ -14,7 +14,7 @@ export function AnalysisFigure() {
   const jointStyle = useAnimatedStyle(() => ({ opacity: interpolate(scan.value, [0, 0.5, 1], [0.35, 1, 0.35]), transform: [{ scale: interpolate(scan.value, [0, 0.5, 1], [0.82, 1.12, 0.82]) }] }));
 
   return (
-    <View accessibilityLabel="FORM analyzing visible movement" style={{ height: 236, alignItems: "center", justifyContent: "center", overflow: "hidden", borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised }}>
+    <View accessibilityLabel="Formie analyzing visible movement" style={{ height: 236, alignItems: "center", justifyContent: "center", overflow: "hidden", borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised }}>
       <View style={{ alignItems: "center" }}>
         <View style={{ width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: colors.textMuted }} />
         <View style={{ width: 74, height: 92, marginTop: 5, borderTopLeftRadius: 32, borderTopRightRadius: 32, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.textMuted }} />

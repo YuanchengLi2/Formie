@@ -1,5 +1,6 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { exactFrameUploadPaths } from "../_shared/exact-frame-requests.ts";
 import { deleteAnalysisHandler } from "./handler.ts";
 
 Deno.serve(async (request) => {
@@ -11,7 +12,7 @@ Deno.serve(async (request) => {
     findSession: async (sessionId, userId) => {
       const { data: session, error: sessionError } = await admin
         .from("analysis_sessions")
-        .select("id,video_path")
+        .select("id,video_path,analysis_video_path")
         .eq("id", sessionId)
         .eq("user_id", userId)
         .maybeSingle();
@@ -20,6 +21,8 @@ Deno.serve(async (request) => {
       return {
         id: session.id,
         videoPath: session.video_path,
+        analysisVideoPath: session.analysis_video_path,
+        artifactPaths: exactFrameUploadPaths(userId, sessionId),
       };
     },
     removeVideos: async (paths) => {

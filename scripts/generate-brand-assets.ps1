@@ -14,7 +14,7 @@ if ($SourcePath) {
 }
 
 if (-not (Test-Path -LiteralPath $sourceAsset)) {
-  throw 'Provide -SourcePath once so the supplied FORM logo can be versioned as assets/images/form-logo-source.png.'
+  throw 'Provide -SourcePath once so the supplied Formie logo can be versioned as assets/images/form-logo-source.png.'
 }
 
 $source = New-Object System.Drawing.Bitmap($sourceAsset)
@@ -88,4 +88,4 @@ $background[1].Dispose()
 $background[0].Dispose()
 $source.Dispose()
 
-Write-Output 'Generated FORM launcher, adaptive, monochrome, splash, favicon, and in-app logo assets from form-logo-source.png.'
+Write-Output 'Generated Formie launcher, adaptive, monochrome, splash, favicon, and in-app logo assets from form-logo-source.png.'

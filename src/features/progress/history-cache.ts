@@ -3,5 +3,8 @@ type HistoryQueryInvalidator = {
 };
 
 export function invalidateAnalysisHistory(client: HistoryQueryInvalidator): Promise<unknown> {
-  return client.invalidateQueries({ queryKey: ["analysis-history"] });
+  return Promise.all([
+    client.invalidateQueries({ queryKey: ["analysis-history"] }),
+    client.invalidateQueries({ queryKey: ["progress-metrics"] }),
+  ]);
 }

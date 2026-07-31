@@ -23,10 +23,20 @@ const familySources: Record<ExerciseFamily, ImageSource> = {
   other: require("../../assets/production/exercise-families/other.png"),
 };
 
-export function ExerciseFamilyIcon({ family, size = 54, style }: { family: ExerciseFamily; size?: number; style?: StyleProp<ImageStyle> }) {
+export function ExerciseFamilyIcon({
+  family,
+  size = 54,
+  style,
+  accessibilityLabel,
+}: {
+  family: ExerciseFamily;
+  size?: number;
+  style?: StyleProp<ImageStyle>;
+  accessibilityLabel?: string;
+}) {
   return (
     <Image
-      accessibilityLabel={`${family} exercise icon`}
+      accessibilityLabel={accessibilityLabel ?? `${family} exercise icon`}
       contentFit="contain"
       source={familySources[family]}
       style={[{ width: size, height: size }, style]}

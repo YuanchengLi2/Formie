@@ -1,12 +1,19 @@
 import { supabase } from "@/lib/supabase";
 
+export class AuthenticationRequiredError extends Error {
+  constructor() {
+    super("Log in to continue");
+    this.name = "AuthenticationRequiredError";
+  }
+}
+
 export async function getAccessToken(): Promise<string> {
   const existing = await supabase.auth.getSession();
-  if (existing.data.session?.access_token) return existing.data.session.access_token;
-
-  const created = await supabase.auth.signInAnonymously();
-  if (created.error || !created.data.session?.access_token) {
-    throw new Error(created.error?.message ?? "A private session could not be created");
-  }
-  return created.data.session.access_token;
+  const session = existing.data.session;
+  if (
+    session?.access_token
+    && session.user.is_anonymous !== true
+    && Boolean(session.user.email_confirmed_at)
+  ) return session.access_token;
+  throw new AuthenticationRequiredError();
 }

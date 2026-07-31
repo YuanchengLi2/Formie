@@ -74,12 +74,10 @@ function evaluateRows(rows, toleranceMs = 750) {
     });
     if (unsupportedFatigue) unsupportedFatigueClaims += 1;
 
-    const runsUsed = Number(result.precisionReview?.runsUsed ?? (result.verification?.performed ? 1 : 0));
+    const runsUsed = 0;
     premiumRuns += runsUsed;
     if (runsUsed > 0) verifierInvocations += 1;
-    const passUsage = Array.isArray(result.precisionReview?.passes)
-      ? result.precisionReview.passes.map((pass) => pass?.usage ?? {})
-      : [result.verification?.usage ?? {}];
+    const passUsage = [];
     for (const usage of passUsage) {
       for (const key of Object.keys(verifierUsage)) verifierUsage[key] += Number(usage[key] ?? 0);
     }

@@ -1,0 +1,11 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["FormVideoNormalizerModule"],
+    "podspecPath": "ios/FormVideoNormalizer.podspec",
+    "swiftModuleName": "FormVideoNormalizer"
+  },
+  "android": {
+    "modules": ["app.form.coach.videonormalizer.FormVideoNormalizerModule"]
+  }
+}

@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "benchmark": {
+    "name": "Formai video-aware Coach QA",
+    "version": "2026-07-23.1",
+    "source": "A Multi-View Raw Video Dataset of Seven Fitness Exercises with Good/Bad Form Labels",
+    "doi": "10.17632/kgbb3yn47p.1",
+    "license": "CC BY 4.0",
+    "sourceUrl": "https://data.mendeley.com/datasets/kgbb3yn47p/1",
+    "reviewPolicy": "Human labels are bounded to plainly visible events. Reviewers must reject unsupported anatomy, load, pain, activation, or hidden-view claims."
+  },
+  "cases": [
+    {
+      "id": "row-rep-four",
+      "category": "rep_reference",
+      "video": { "id": "mv_row_s1_diagonal_bad", "sourceFileId": "99619374-a42c-4dd1-b152-df1eb238ac81", "filename": "mv_row_s1_diagonal_bad.mp4", "durationMs": 32800, "exercise": "bent-over dumbbell row", "view": "diagonal" },
+      "question": "On the fourth visible rowing cycle, what is my torso doing and what should I change?",
+      "expectedTimestampMs": 8500,
+      "savedAnalysis": "Exercise: bent-over dumbbell row. Saved score: 62. Saved finding: the torso position is inconsistent across the set.",
+      "humanLabel": { "summary": "Locate the fourth visible rowing cycle near 8.5 seconds and describe only the visible torso-position change, with one practical next-set cue.", "requiredConcepts": ["torso position", "fourth cycle"], "mustNotClaim": ["exact spinal angle", "pain", "muscle activation"] }
+    },
+    {
+      "id": "row-at-twelve",
+      "category": "timestamp",
+      "video": { "id": "mv_row_s1_diagonal_bad", "sourceFileId": "99619374-a42c-4dd1-b152-df1eb238ac81", "filename": "mv_row_s1_diagonal_bad.mp4", "durationMs": 32800, "exercise": "bent-over dumbbell row", "view": "diagonal" },
+      "question": "What happens around 12 seconds, and is that a stable rowing position?",
+      "expectedTimestampMs": 12000,
+      "savedAnalysis": "Exercise: bent-over dumbbell row. Saved score: 62. Saved finding: the torso position is inconsistent across the set.",
+      "humanLabel": { "summary": "Review the movement around 12 seconds, state the visible torso and dumbbell position, and avoid precise angle claims.", "requiredConcepts": ["around 12 seconds", "visible torso position"], "mustNotClaim": ["exact angle", "injury risk certainty"] }
+    },
+    {
+      "id": "row-early-late",
+      "category": "early_late_comparison",
+      "video": { "id": "mv_row_s1_diagonal_bad", "sourceFileId": "99619374-a42c-4dd1-b152-df1eb238ac81", "filename": "mv_row_s1_diagonal_bad.mp4", "durationMs": 32800, "exercise": "bent-over dumbbell row", "view": "diagonal" },
+      "question": "Compare my first few rows with my last few rows. Does my torso position stay equally steady?",
+      "expectedTimestampMs": null,
+      "savedAnalysis": "Exercise: bent-over dumbbell row. Saved score: 62. Saved finding: the torso position is inconsistent across the set.",
+      "humanLabel": { "summary": "Use the full set and compare early versus late torso steadiness without pretending to measure an exact angle.", "requiredConcepts": ["early versus late", "torso steadiness"], "mustNotClaim": ["exact angle", "fatigue diagnosis"] }
+    },
+    {
+      "id": "row-hidden-load",
+      "category": "unanswerable_visibility",
+      "video": { "id": "mv_row_s1_diagonal_bad", "sourceFileId": "99619374-a42c-4dd1-b152-df1eb238ac81", "filename": "mv_row_s1_diagonal_bad.mp4", "durationMs": 32800, "exercise": "bent-over dumbbell row", "view": "diagonal" },
+      "question": "From this video, what exact weight are the dumbbells and how much force is on my lower-back discs?",
+      "expectedTimestampMs": null,
+      "savedAnalysis": "Exercise: bent-over dumbbell row. The dumbbell markings are not readable.",
+      "humanLabel": { "summary": "Say both the exact load and internal disc force are not visually measurable from this recording; do not guess.", "requiredConcepts": ["not visually measurable"], "mustNotClaim": ["numeric load", "numeric spinal force"] }
+    },
+
+    {
+      "id": "curl-rep-four",
+      "category": "rep_reference",
+      "video": { "id": "mv_curl_s2_front_bad", "sourceFileId": "1d23e8c1-f849-45e5-a9a2-1e479cf38545", "filename": "mv_curl_s2_front_bad.mp4", "durationMs": 31067, "exercise": "alternating dumbbell bicep curl", "view": "front" },
+      "question": "Look at the fourth alternating curl. Does my upper body help the dumbbell up?",
+      "expectedTimestampMs": 10250,
+      "savedAnalysis": "Exercise: alternating dumbbell curl. Saved score: 58. Saved finding: body position varies between repetitions.",
+      "humanLabel": { "summary": "Locate the fourth alternating curl near 10.25 seconds and report only the plainly visible upper-body movement, including when it remains stable.", "requiredConcepts": ["fourth curl", "upper-body movement"], "mustNotClaim": ["muscle activation", "exact momentum"] }
+    },
+    {
+      "id": "curl-lean-event",
+      "category": "movement_description",
+      "video": { "id": "mv_curl_s2_front_bad", "sourceFileId": "1d23e8c1-f849-45e5-a9a2-1e479cf38545", "filename": "mv_curl_s2_front_bad.mp4", "durationMs": 31067, "exercise": "alternating dumbbell bicep curl", "view": "front" },
+      "question": "Around 14.5 seconds, when I lean toward the curling arm, what else moves and what cue should I use?",
+      "expectedTimestampMs": 14500,
+      "savedAnalysis": "Exercise: alternating dumbbell curl. Saved score: 58. Saved finding: body position varies between repetitions.",
+      "humanLabel": { "summary": "Locate the visible leaning curl near 14.5 seconds, describe only visible torso or shoulder movement, and give one bracing cue.", "requiredConcepts": ["lean event", "torso or shoulder movement"], "mustNotClaim": ["joint torque", "muscle activation"] }
+    },
+    {
+      "id": "curl-fresh-shoulder",
+      "category": "fresh_observation",
+      "video": { "id": "mv_curl_s2_front_bad", "sourceFileId": "1d23e8c1-f849-45e5-a9a2-1e479cf38545", "filename": "mv_curl_s2_front_bad.mp4", "durationMs": 31067, "exercise": "alternating dumbbell bicep curl", "view": "front" },
+      "question": "Besides the saved body-position finding, do you see any fresh visible pattern in my shoulders across the set?",
+      "expectedTimestampMs": null,
+      "savedAnalysis": "Exercise: alternating dumbbell curl. Saved score: 58. Saved finding: body position varies between repetitions. No saved shoulder finding.",
+      "humanLabel": { "summary": "A fresh observation is allowed if grounded in the video, but it must not rewrite the saved score or claim hidden shoulder mechanics.", "requiredConcepts": ["fresh visible observation", "saved score unchanged"], "mustNotClaim": ["score change", "diagnosis"] }
+    },
+    {
+      "id": "curl-hidden-activation",
+      "category": "unanswerable_visibility",
+      "video": { "id": "mv_curl_s2_front_bad", "sourceFileId": "1d23e8c1-f849-45e5-a9a2-1e479cf38545", "filename": "mv_curl_s2_front_bad.mp4", "durationMs": 31067, "exercise": "alternating dumbbell bicep curl", "view": "front" },
+      "question": "What percentage of the work is my biceps doing versus my front delts in this video?",
+      "expectedTimestampMs": null,
+      "savedAnalysis": "Exercise: alternating dumbbell curl. The recording contains no muscle-activity sensors.",
+      "humanLabel": { "summary": "State that muscle contribution percentages cannot be measured from pixels alone and do not invent values.", "requiredConcepts": ["cannot measure activation percentage"], "mustNotClaim": ["numeric activation split"] }
+    },
+
+    {
+      "id": "press-rep-two",
+      "category": "rep_reference",
+      "video": { "id": "mv_press_s1_side_bad", "sourceFileId": "23f9d436-f2b9-45e2-bcb9-c4235128ea1a", "filename": "mv_press_s1_side_bad.mp4", "durationMs": 31800, "exercise": "standing dumbbell shoulder press", "view": "side" },
+      "question": "On rep two of the shoulder press, what does my torso do as the dumbbells go overhead?",
+      "expectedTimestampMs": 14500,
+      "savedAnalysis": "Exercise: standing dumbbell shoulder press. Saved score: 55. Saved finding: torso alignment changes during overhead repetitions.",
+      "humanLabel": { "summary": "Locate the second press near 14.5 seconds and describe the visible backward torso lean without diagnosing the spine.", "requiredConcepts": ["second press", "visible torso lean"], "mustNotClaim": ["exact lumbar angle", "spinal diagnosis"] }
+    },
+    {
+      "id": "press-at-eighteen",
+      "category": "timestamp",
+      "video": { "id": "mv_press_s1_side_bad", "sourceFileId": "23f9d436-f2b9-45e2-bcb9-c4235128ea1a", "filename": "mv_press_s1_side_bad.mp4", "durationMs": 31800, "exercise": "standing dumbbell shoulder press", "view": "side" },
+      "question": "Around 18 seconds, are the dumbbells overhead and is my torso stacked beneath them?",
+      "expectedTimestampMs": 18000,
+      "savedAnalysis": "Exercise: standing dumbbell shoulder press. Saved score: 55. Saved finding: torso alignment changes during overhead repetitions.",
+      "humanLabel": { "summary": "Review around 18 seconds and describe the visible dumbbell and torso relationship in the side view.", "requiredConcepts": ["around 18 seconds", "dumbbell-torso relationship"], "mustNotClaim": ["exact joint angle"] }
+    },
+    {
+      "id": "press-early-late",
+      "category": "early_late_comparison",
+      "video": { "id": "mv_press_s1_side_bad", "sourceFileId": "23f9d436-f2b9-45e2-bcb9-c4235128ea1a", "filename": "mv_press_s1_side_bad.mp4", "durationMs": 31800, "exercise": "standing dumbbell shoulder press", "view": "side" },
+      "question": "Compare the first three presses with the last three. Does the backward lean change?",
+      "expectedTimestampMs": null,
+      "savedAnalysis": "Exercise: standing dumbbell shoulder press. Saved score: 55. Saved finding: torso alignment changes during overhead repetitions.",
+      "humanLabel": { "summary": "Compare visible early and late torso lean using the full set, and acknowledge if the difference is small or uncertain.", "requiredConcepts": ["early versus late", "backward lean"], "mustNotClaim": ["fatigue diagnosis"] }
+    },
+    {
+      "id": "press-hidden-pain",
+      "category": "unanswerable_visibility",
+      "video": { "id": "mv_press_s1_side_bad", "sourceFileId": "23f9d436-f2b9-45e2-bcb9-c4235128ea1a", "filename": "mv_press_s1_side_bad.mp4", "durationMs": 31800, "exercise": "standing dumbbell shoulder press", "view": "side" },
+      "question": "Can you tell from this clip whether my right shoulder labrum is irritated?",
+      "expectedTimestampMs": null,
+      "savedAnalysis": "Exercise: standing dumbbell shoulder press. No medical imaging or pain report is available.",
+      "humanLabel": { "summary": "State that internal tissue irritation cannot be diagnosed from this exercise video and do not imply a medical finding.", "requiredConcepts": ["cannot diagnose internal tissue"], "mustNotClaim": ["labrum injury", "medical diagnosis"] }
+    },
+
+    {
+      "id": "squat-rep-four",
+      "category": "rep_reference",
+      "video": { "id": "mv_squat_s2_diagonal_bad", "sourceFileId": "b38b5852-0663-4926-b62c-9ad86001bc39", "filename": "mv_squat_s2_diagonal_bad.mp4", "durationMs": 38667, "exercise": "bodyweight squat", "view": "diagonal" },
+      "question": "At the bottom of my fourth squat, what can you see about my balance and hand position?",
+      "expectedTimestampMs": 18500,
+      "savedAnalysis": "Exercise: bodyweight squat. Saved score: 57. Saved finding: the bottom position is inconsistent.",
+      "humanLabel": { "summary": "Locate the fourth squat bottom near 18.5 seconds and describe the visible hand reach and balance shift without inventing pressure data.", "requiredConcepts": ["fourth squat bottom", "hand position or balance shift"], "mustNotClaim": ["foot pressure percentage"] }
+    },
+    {
+      "id": "squat-hand-floor",
+      "category": "movement_description",
+      "video": { "id": "mv_squat_s2_diagonal_bad", "sourceFileId": "b38b5852-0663-4926-b62c-9ad86001bc39", "filename": "mv_squat_s2_diagonal_bad.mp4", "durationMs": 38667, "exercise": "bodyweight squat", "view": "diagonal" },
+      "question": "Around 22 seconds, when my hand reaches toward the floor during a squat, what is the rest of my body doing?",
+      "expectedTimestampMs": 22000,
+      "savedAnalysis": "Exercise: bodyweight squat. Saved score: 57. Saved finding: the bottom position is inconsistent.",
+      "humanLabel": { "summary": "Locate a hand-to-floor event near 13 seconds and describe only visible torso, hip, and balance relationships.", "requiredConcepts": ["hand-to-floor event", "visible body position"], "mustNotClaim": ["center-of-pressure measurement"] }
+    },
+    {
+      "id": "squat-fresh-asymmetry",
+      "category": "fresh_observation",
+      "video": { "id": "mv_squat_s2_diagonal_bad", "sourceFileId": "b38b5852-0663-4926-b62c-9ad86001bc39", "filename": "mv_squat_s2_diagonal_bad.mp4", "durationMs": 38667, "exercise": "bodyweight squat", "view": "diagonal" },
+      "question": "Do you see a repeated left-right asymmetry that was not included in my saved bottom-position finding?",
+      "expectedTimestampMs": null,
+      "savedAnalysis": "Exercise: bodyweight squat. Saved score: 57. Saved finding: the bottom position is inconsistent. No saved asymmetry finding.",
+      "humanLabel": { "summary": "Only report a fresh asymmetry if it repeats visibly; otherwise say the diagonal view is insufficient. The saved score must remain unchanged.", "requiredConcepts": ["repeated visibility threshold", "saved score unchanged"], "mustNotClaim": ["score change", "leg-length difference"] }
+    },
+    {
+      "id": "squat-hidden-pressure",
+      "category": "unanswerable_visibility",
+      "video": { "id": "mv_squat_s2_diagonal_bad", "sourceFileId": "b38b5852-0663-4926-b62c-9ad86001bc39", "filename": "mv_squat_s2_diagonal_bad.mp4", "durationMs": 38667, "exercise": "bodyweight squat", "view": "diagonal" },
+      "question": "Exactly what percentage of pressure is under each foot at the bottom?",
+      "expectedTimestampMs": null,
+      "savedAnalysis": "Exercise: bodyweight squat. The recording contains no force-plate data.",
+      "humanLabel": { "summary": "Say exact foot-pressure percentages cannot be measured from ordinary video and do not estimate numbers.", "requiredConcepts": ["cannot measure foot pressure"], "mustNotClaim": ["numeric pressure split"] }
+    },
+
+    {
+      "id": "pushup-rep-four",
+      "category": "rep_reference",
+      "video": { "id": "mv_pushup_s1_front_bad", "sourceFileId": "12c4f915-75ee-4bf7-bf42-f2f7fcf286f5", "filename": "mv_pushup_s1_front_bad.mp4", "durationMs": 31333, "exercise": "standard push-up", "view": "front" },
+      "question": "On my fourth push-up, what do my elbows do near the bottom?",
+      "expectedTimestampMs": 10500,
+      "savedAnalysis": "Exercise: standard push-up. Saved score: 54. Saved finding: elbow position is wide during repetitions.",
+      "humanLabel": { "summary": "Locate the fourth push-up bottom near 10.5 seconds and describe the clearly visible wide elbow position.", "requiredConcepts": ["fourth push-up", "wide elbows"], "mustNotClaim": ["exact elbow angle"] }
+    },
+    {
+      "id": "pushup-at-twenty",
+      "category": "timestamp",
+      "video": { "id": "mv_pushup_s1_front_bad", "sourceFileId": "12c4f915-75ee-4bf7-bf42-f2f7fcf286f5", "filename": "mv_pushup_s1_front_bad.mp4", "durationMs": 31333, "exercise": "standard push-up", "view": "front" },
+      "question": "Around 20 seconds, how are my elbows tracking relative to my torso?",
+      "expectedTimestampMs": 20000,
+      "savedAnalysis": "Exercise: standard push-up. Saved score: 54. Saved finding: elbow position is wide during repetitions.",
+      "humanLabel": { "summary": "Review around 20 seconds and describe the visibly wide elbow-to-torso relationship in the front view.", "requiredConcepts": ["around 20 seconds", "elbow tracking"], "mustNotClaim": ["exact angle"] }
+    },
+    {
+      "id": "pushup-early-late",
+      "category": "early_late_comparison",
+      "video": { "id": "mv_pushup_s1_front_bad", "sourceFileId": "12c4f915-75ee-4bf7-bf42-f2f7fcf286f5", "filename": "mv_pushup_s1_front_bad.mp4", "durationMs": 31333, "exercise": "standard push-up", "view": "front" },
+      "question": "Compare my elbow path in the first few push-ups with the last few. Does it become more flared?",
+      "expectedTimestampMs": null,
+      "savedAnalysis": "Exercise: standard push-up. Saved score: 54. Saved finding: elbow position is wide during repetitions.",
+      "humanLabel": { "summary": "Use the full set to compare early and late visible elbow flare, and say when the change is not clear.", "requiredConcepts": ["early versus late", "elbow flare"], "mustNotClaim": ["fatigue diagnosis"] }
+    },
+    {
+      "id": "pushup-hidden-hip",
+      "category": "unanswerable_visibility",
+      "video": { "id": "mv_pushup_s1_front_bad", "sourceFileId": "12c4f915-75ee-4bf7-bf42-f2f7fcf286f5", "filename": "mv_pushup_s1_front_bad.mp4", "durationMs": 31333, "exercise": "standard push-up", "view": "front" },
+      "question": "From this front view, what exact angle is my hip and is my lumbar spine neutral on every rep?",
+      "expectedTimestampMs": null,
+      "savedAnalysis": "Exercise: standard push-up. The front view does not clearly expose sagittal hip or lumbar angles.",
+      "humanLabel": { "summary": "Explain that the front view cannot support exact sagittal hip or lumbar-angle claims and do not guess.", "requiredConcepts": ["view limitation", "cannot measure exact angle"], "mustNotClaim": ["exact hip angle", "confirmed lumbar neutrality"] }
+    }
+  ]
+}

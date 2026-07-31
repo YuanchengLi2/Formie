@@ -1,65 +1,191 @@
-import type { RecordedSet, UploadTarget } from "./types";
+import type { SetDeclaration } from "@/features/analysis/set-declaration";
+
+import type {
+  RecordedSet,
+  UploadArtifactTarget,
+  UploadProgress,
+  UploadSubstage,
+  UploadTarget,
+} from "./types";
+
+const NETWORK_ATTEMPTS = 2;
+const NETWORK_STEP_TIMEOUT_MS = 45_000;
 
 export type UploadCoordinatorDependencies = {
   getAccessToken: () => Promise<string>;
-  createSession: (accessToken: string, previousSessionId?: string) => Promise<UploadTarget>;
-  uploadVideo: (recording: RecordedSet, target: UploadTarget) => Promise<void>;
-  completeUpload: (accessToken: string, sessionId: string, durationMs: number) => Promise<void>;
+  createRequestId: () => string;
+  createSession: (
+    accessToken: string,
+    declaration: SetDeclaration,
+    previousSessionId: string | undefined,
+    clientRequestId: string,
+    signal: AbortSignal,
+  ) => Promise<UploadTarget>;
+  uploadVideo: (recording: RecordedSet, target: UploadArtifactTarget, signal: AbortSignal) => Promise<void>;
+  normalizeVideo: (recording: RecordedSet) => Promise<RecordedSet>;
+  normalizePrivacySafeFallback: (recording: RecordedSet) => Promise<RecordedSet>;
+  bindLocalRecording: (sessionId: string, recording: RecordedSet) => Promise<void>;
+  completeUpload: (accessToken: string, sessionId: string, durationMs: number, hasPrivacySafeFallback: boolean, signal: AbortSignal) => Promise<void>;
 };
 
-export function createUploadCoordinator(dependencies: UploadCoordinatorDependencies) {
-  let preparedTarget: Promise<UploadTarget | null> | null = null;
-  let currentTarget: UploadTarget | null = null;
-  let uploaded = false;
-  let activeRun: Promise<{ sessionId: string }> | null = null;
+async function retryNetworkStep<T>(
+  operation: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < NETWORK_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), NETWORK_STEP_TIMEOUT_MS);
+    try {
+      return await operation(controller.signal);
+    } catch (error) {
+      lastError = error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw lastError;
+}
 
-  const createTarget = async (previousSessionId?: string): Promise<UploadTarget> => {
-    const accessToken = await dependencies.getAccessToken();
-    return dependencies.createSession(accessToken, previousSessionId);
+export function createUploadCoordinator(dependencies: UploadCoordinatorDependencies) {
+  let currentTarget: UploadTarget | null = null;
+  let originalUploaded = false;
+  let analysisUploaded = false;
+  let privacySafeUploaded = false;
+  let localRecordingBound = false;
+  let normalizedRecording: RecordedSet | null = null;
+  let privacySafeRecording: RecordedSet | null = null;
+  let declarationKey: string | null = null;
+  let clientRequestId: string | null = null;
+  let activeRun: Promise<{ sessionId: string; target: UploadTarget }> | null = null;
+  let progress: UploadProgress | null = null;
+  const listeners = new Set<(nextProgress: UploadProgress) => void>();
+
+  const emit = (substage: UploadSubstage, target: UploadTarget | null = currentTarget) => {
+    progress = { substage, target };
+    listeners.forEach((listener) => listener(progress as UploadProgress));
   };
 
-  const prepare = (previousSessionId?: string): Promise<UploadTarget | null> => {
-    if (currentTarget) return Promise.resolve(currentTarget);
-    if (!preparedTarget) {
-      preparedTarget = createTarget(previousSessionId)
-        .then((target) => {
-          currentTarget = target;
-          return target;
-        })
-        .catch(() => null);
-    }
-    return preparedTarget;
+  const clear = () => {
+    currentTarget = null;
+    originalUploaded = false;
+    analysisUploaded = false;
+    privacySafeUploaded = false;
+    localRecordingBound = false;
+    normalizedRecording = null;
+    privacySafeRecording = null;
+    declarationKey = null;
+    clientRequestId = null;
+    progress = null;
   };
 
   const reset = () => {
-    preparedTarget = null;
-    currentTarget = null;
-    uploaded = false;
+    clear();
     activeRun = null;
   };
 
-  const run = (recording: RecordedSet, previousSessionId?: string): Promise<{ sessionId: string }> => {
+  const subscribe = (listener: (nextProgress: UploadProgress) => void) => {
+    listeners.add(listener);
+    if (progress) listener(progress);
+    return () => listeners.delete(listener);
+  };
+
+  const run = (
+    recording: RecordedSet,
+    declaration: SetDeclaration,
+    previousSessionId?: string,
+  ): Promise<{ sessionId: string; target: UploadTarget }> => {
     if (activeRun) return activeRun;
+    const nextDeclarationKey = JSON.stringify({ declaration, previousSessionId: previousSessionId ?? null });
+    if (declarationKey !== null && declarationKey !== nextDeclarationKey) clear();
+    if (!clientRequestId) clientRequestId = dependencies.createRequestId();
+    const requestId = clientRequestId;
 
     const operation = (async () => {
-      let target = currentTarget ?? await prepare(previousSessionId);
-      if (!target) {
-        target = await createTarget(previousSessionId);
-        currentTarget = target;
+      if (!Number.isInteger(recording.durationMs) || recording.durationMs < 3_000 || recording.durationMs > 15_000) {
+        throw new Error("Recordings must be between 3 and 15 seconds.");
       }
 
-      if (!uploaded) {
-        await dependencies.uploadVideo(recording, target);
-        uploaded = true;
+      if (!currentTarget) {
+        emit("creating_session", null);
+        const accessToken = await dependencies.getAccessToken();
+        currentTarget = await retryNetworkStep((signal) => dependencies.createSession(
+          accessToken,
+          declaration,
+          previousSessionId,
+          requestId,
+          signal,
+        ));
+        declarationKey = nextDeclarationKey;
+      }
+      const target = currentTarget;
+      if (!localRecordingBound) {
+        await dependencies.bindLocalRecording(target.sessionId, recording);
+        localRecordingBound = true;
       }
 
+      const preparationTasks: Promise<void>[] = [];
+      if (!originalUploaded) {
+        emit("uploading_original", target);
+        preparationTasks.push(
+          retryNetworkStep((signal) => dependencies.uploadVideo(recording, target.original, signal))
+            .then(() => {
+              originalUploaded = true;
+            }),
+        );
+      }
+      if (!normalizedRecording || (target.privacySafe && !privacySafeRecording)) {
+        emit("normalizing", target);
+      }
+      if (!normalizedRecording) {
+        preparationTasks.push(
+          dependencies.normalizeVideo(recording).then((prepared) => {
+            normalizedRecording = prepared;
+          }),
+        );
+      }
+      if (target.privacySafe && !privacySafeRecording) {
+        preparationTasks.push(
+          dependencies.normalizePrivacySafeFallback(recording).then((prepared) => {
+            privacySafeRecording = prepared;
+          }),
+        );
+      }
+      await Promise.all(preparationTasks);
+
+      const analysisUploadTasks: Promise<void>[] = [];
+      if (!analysisUploaded) {
+        emit("uploading_analysis", target);
+        analysisUploadTasks.push(
+          retryNetworkStep((signal) => dependencies.uploadVideo(normalizedRecording as RecordedSet, target.analysis, signal))
+            .then(() => {
+              analysisUploaded = true;
+            }),
+        );
+      }
+      if (target.privacySafe && !privacySafeUploaded) {
+        emit("uploading_analysis", target);
+        analysisUploadTasks.push(
+          retryNetworkStep((signal) => dependencies.uploadVideo(privacySafeRecording as RecordedSet, target.privacySafe!, signal))
+            .then(() => {
+              privacySafeUploaded = true;
+            }),
+        );
+      }
+      await Promise.all(analysisUploadTasks);
+
+      emit("finalizing", target);
       const accessToken = await dependencies.getAccessToken();
-      await dependencies.completeUpload(accessToken, target.sessionId, recording.durationMs);
-      const result = { sessionId: target.sessionId };
-      reset();
+      await retryNetworkStep((signal) => dependencies.completeUpload(
+        accessToken,
+        target.sessionId,
+        recording.durationMs,
+        Boolean(target.privacySafe),
+        signal,
+      ));
+      const result = { sessionId: target.sessionId, target };
+      clear();
       return result;
     })();
-
     activeRun = operation;
     void operation.finally(() => {
       if (activeRun === operation) activeRun = null;
@@ -67,5 +193,10 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
     return operation;
   };
 
-  return { prepare, reset, run };
+  return {
+    currentProgress: () => progress,
+    reset,
+    run,
+    subscribe,
+  };
 }

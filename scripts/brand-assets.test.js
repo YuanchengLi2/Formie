@@ -11,10 +11,10 @@ function pngSize(filePath) {
   return { width: data.readUInt32BE(16), height: data.readUInt32BE(20) };
 }
 
-describe("FORM brand assets", () => {
+describe("Formie brand assets", () => {
   it("keeps the supplied logo as the versioned source of truth", () => {
     const source = fs.readFileSync(path.join(images, "form-logo-source.png"));
-    expect(crypto.createHash("sha256").update(source).digest("hex")).toBe("9f4a57771509db66b4b1aaa668c77f66967a772d103089bcee9a9aa62294bc64");
+    expect(crypto.createHash("sha256").update(source).digest("hex")).toBe("fa02cfabc4f3539702cb87f3e993472ffb7c570d77a629aa4ced2cbb354949c0");
     expect(pngSize(path.join(images, "form-logo-source.png"))).toEqual({ width: 1254, height: 1254 });
   });
 
@@ -44,5 +44,15 @@ describe("FORM brand assets", () => {
     }));
     expect(config.web.favicon).toBe("./assets/images/favicon.png");
     expect(config.plugins).toContainEqual(expect.arrayContaining(["expo-splash-screen", expect.objectContaining({ image: "./assets/images/splash-icon.png" })]));
+  });
+
+  it("changes the installed display name without changing the existing app identity", () => {
+    const config = require(path.join(root, "app.json")).expo;
+    expect(config.name).toBe("Formie");
+    expect(config.slug).toBe("form-ai-coach");
+    expect(config.scheme).toBe("form");
+    expect(config.ios.bundleIdentifier).toBe("app.form.coach");
+    expect(config.android.package).toBe("app.form.coach");
+    expect(config.ios.infoPlist.NSCameraUsageDescription).toContain("Formie");
   });
 });

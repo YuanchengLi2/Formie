@@ -1,4 +1,29 @@
+export type ScoreCriterionKey = "setup_stability" | "path_alignment" | "range_positions" | "control_tempo" | "rep_consistency";
 export type ExerciseFamily = "curl" | "triceps" | "press" | "overhead-press" | "fly" | "raise" | "row" | "pull-down" | "squat" | "lunge" | "hinge" | "hip-thrust" | "carry" | "core" | "plank" | "other";
+export type MuscleRegion = "chest" | "front_shoulders" | "rear_shoulders" | "upper_back" | "lats" | "biceps" | "triceps" | "forearms" | "abs" | "obliques" | "lower_back" | "glutes" | "quads" | "hamstrings" | "adductors" | "calves";
+export type AnatomyRegion = "chest" | "shoulders" | "upper_back" | "lats" | "upper_arms" | "elbows" | "forearms" | "wrists" | "torso" | "lower_back" | "hips" | "glutes" | "quads" | "hamstrings" | "adductors" | "knees" | "calves" | "ankles";
+export type MovementScore = {
+  id: string;
+  label: string;
+  score: number;
+  observed: string;
+  evidenceIds: string[];
+};
+export type MuscleTarget = { name: string; region: MuscleRegion };
+export type MuscleFocus = {
+  primary: MuscleTarget[];
+  secondary: MuscleTarget[];
+  unclassified: string[];
+};
+
+export type CoachingArea =
+  | "form"
+  | "load"
+  | "posture_setup"
+  | "equipment"
+  | "safety_surroundings"
+  | "grip_contact"
+  | "support_balance";
 
 export type EvidenceMoment = {
   startMs: number;
@@ -10,510 +35,96 @@ export type EvidenceMoment = {
   coachingNote?: string;
   visibleBodyAreas: string[];
   confidence: number;
-  focusRegion?: VisualFocusRegion | null;
-};
-
-export type VisualFocusRegion = {
-  centerX: number;
-  centerY: number;
-  radius: number;
-  arrowFromX: number;
-  arrowFromY: number;
-  label: string;
-  confidence: number;
+  measurementIds?: string[];
+  focusRegion?: { centerX: number; centerY: number; radius: number; arrowFromX: number; arrowFromY: number; label: string; confidence: number } | null;
 };
 
 export type CoachingFinding = {
   id: string;
+  coachingArea: CoachingArea;
   title: string;
   detail: string;
   whyItMatters: string;
   correction: string | null;
   cue: string | null;
+  actionableCorrection: { instruction: string; cue: string; successCheck: string | null; applyWhen: string } | null;
+  expandedCoaching?: {
+    summary: string;
+    whatHappened: string;
+    whyItMatters: string;
+    whatToDo: string;
+    successCheck: string | null;
+  };
   severity: "note" | "important" | "high";
   evidence: EvidenceMoment[];
+  primaryEvidenceIndex?: number;
+  observedIssueRegions?: AnatomyRegion[];
+};
+
+export type EquipmentObservation = {
+  id: string;
+  category: "visible_load" | "setup" | "balance" | "equipment_motion" | "limitation";
+  title: string;
+  observation: string;
+  coachingRelevance: string | null;
+  load: { value: number | null; unit: "kg" | "lb" | null; scope: string | null; certainty: "exact_visible" | "partial_visible" | "unknown"; basis: "readable_label" | "readable_selector" | "counted_visible_plates" | "not_readable" } | null;
+  evidence: Array<{ startMs: number; peakMs: number; endMs: number; visualEvidence: string; visibleReferences: string[]; confidence: number; focusRegion: EvidenceMoment["focusRegion"] }>;
+};
+
+export type CoachingCoverageDomain =
+  | "surroundings"
+  | "equipment_setup"
+  | "grip_contact"
+  | "starting_position"
+  | "movement_execution"
+  | "support_balance";
+
+export type CoachingCoverageItem = {
+  domain: CoachingCoverageDomain;
+  status: "issue" | "clear" | "not_visible";
+  observation: string;
+  findingIds: string[];
+};
+
+export type ExerciseGuide = {
+  setupSteps: string[];
+  executionSteps: string[];
+  relatedFindingIds: string[];
+};
+
+export type TechniqueScorecard = {
+  rubricVersion: string;
+  coverage: number;
+  confidence: number;
+  criteria: Array<{ key: ScoreCriterionKey; weight: number; rating: number | null; confidence: number; observed: string; evidenceIds: string[] }>;
+  uncappedScore: number | null;
+  appliedCap: number | null;
+  finalScore: number | null;
+  auditStatus: string;
 };
 
 export type AnalysisCandidate = {
   status: "complete" | "partial" | "unable";
-  recognition: {
-    label: string | null;
-    variation: string | null;
-    equipment: string[];
-    confidence: number;
-    alternatives: string[];
-    catalogExerciseId: number | null;
-    exerciseFamily: ExerciseFamily;
-  };
-  videoCheck: {
-    outcome: "usable" | "partial" | "unable";
-    usableObservations: string[];
-    limitations: string[];
-    retryReason: string | null;
-    retryInstruction: string | null;
-  };
+  recognition: { label: string | null; variation: string | null; equipment: string[]; confidence: number; alternatives: string[]; catalogExerciseId: number | null; exerciseFamily: ExerciseFamily; source?: "user_declared" | "legacy_model" };
+  videoCheck: { outcome: "usable" | "partial" | "unable"; usableObservations: string[]; limitations: string[]; retryReason: string | null; retryInstruction: string | null };
   overallAssessment: string | null;
+  muscleFocus: MuscleFocus;
+  coachNote: string | null;
   score: number | null;
-  scoreRationale: Array<{ criterion: string; observed: string; impact: number; confidence: number }>;
+  scoreRationale: Array<{ criterion: ScoreCriterionKey; observed: string; impact: number | null; confidence: number; evidenceIds: string[] }>;
+  movementScores?: MovementScore[];
+  scorecard: TechniqueScorecard | null;
+  equipmentObservations: EquipmentObservation[];
+  exerciseGuide?: ExerciseGuide | null;
+  coachingCoverage?: CoachingCoverageItem[];
   didWell: CoachingFinding[];
   priorityCorrections: CoachingFinding[];
   coachingCues: CoachingFinding[];
-  setContext: {
-    cameraView: string | null;
-    visibleReferences: string[];
-    sequenceSummary: string | null;
-    changeAcrossSet: string | null;
-    coachingBasis: string | null;
-  };
+  setContext: { cameraView: string | null; visibleReferences: string[]; sequenceSummary: string | null; changeAcrossSet: string | null; coachingBasis: string | null };
   setSummary: { totalReps: number | null; consistentReps: number | null; verdict: string | null };
   repTimeline: Array<{ repNumber: number; startMs: number; peakMs: number; endMs: number; assessment: "strong" | "consistent" | "breakdown" | "uncertain"; note: string }>;
-  nextSetPlan: Array<{ id: string; action: string; rationale: string; relatedFindingId: string | null }>;
-  precisionRequest: {
-    requestedRuns: number;
-    reason: string | null;
-    targets: Array<{ kind: "recognition" | "timestamp" | "technique"; findingId: string | null; startMs: number | null; endMs: number | null; question: string }>;
-  };
-  precisionReview?: {
-    runsRequested: number;
-    runsUsed: number;
-    status: "not-needed" | "completed" | "partial" | "failed";
-    summary: string | null;
-    passes: Array<{
-      passNumber: number;
-      kind: "recognition" | "timestamp" | "technique";
-      outcome: "confirmed" | "revised" | "rejected" | "inconclusive" | "failed";
-      reason: string;
-      checkedFindingId: string | null;
-      startMs: number | null;
-      endMs: number | null;
-      usage: { promptTokens: number; outputTokens: number; thinkingTokens: number };
-    }>;
-  };
-  verification?: {
-    performed: boolean;
-    reason: string | null;
-    outcome: "not-needed" | "confirmed" | "revised" | "rejected" | "failed";
-    checkedFindingId: string | null;
-    usage?: { promptTokens: number; outputTokens: number; thinkingTokens: number };
-  };
+  nextSetPlan: Array<{ id: string; action: string; rationale: string; successCheck?: string; relatedFindingId: string | null }>;
+  precisionRequest: { requestedRuns: number; reason: string | null; targets: Array<{ kind: "recognition" | "timestamp" | "technique"; findingId: string | null; startMs: number | null; endMs: number | null; question: string }> };
   comparison: { previousSessionId: string; summary: string; priorityIssueImproved: boolean | null } | null;
+  setDeclaration?: import("./set-declaration.ts").SetDeclaration | null;
 };
-
-const evidenceSchema = {
-  type: "object",
-  required: ["startMs", "peakMs", "endMs", "repNumber", "phase", "visualEvidence", "coachingNote", "visibleBodyAreas", "confidence", "focusRegion"],
-  properties: {
-    startMs: { type: "integer", minimum: 0 },
-    peakMs: { type: "integer", minimum: 0 },
-    endMs: { type: "integer", minimum: 1 },
-    repNumber: { type: ["integer", "null"] },
-    phase: { type: ["string", "null"] },
-    visualEvidence: { type: "string" },
-    coachingNote: { type: "string", minLength: 1, maxLength: 360 },
-    visibleBodyAreas: { type: "array", items: { type: "string" }, minItems: 1 },
-    confidence: { type: "number", minimum: 0.75, maximum: 1 },
-    focusRegion: {
-      anyOf: [
-        { type: "null" },
-        {
-          type: "object",
-          required: ["centerX", "centerY", "radius", "arrowFromX", "arrowFromY", "label", "confidence"],
-          properties: {
-            centerX: { type: "number", minimum: 0, maximum: 1 },
-            centerY: { type: "number", minimum: 0, maximum: 1 },
-            radius: { type: "number", minimum: 0.06, maximum: 0.3 },
-            arrowFromX: { type: "number", minimum: 0, maximum: 1 },
-            arrowFromY: { type: "number", minimum: 0, maximum: 1 },
-            label: { type: "string" },
-            confidence: { type: "number", minimum: 0.8, maximum: 1 },
-          },
-        },
-      ],
-    },
-  },
-} as const;
-
-const findingSchema = {
-  type: "object",
-  required: ["id", "title", "detail", "whyItMatters", "correction", "cue", "severity", "evidence"],
-  properties: {
-    id: { type: "string" },
-    title: { type: "string" },
-    detail: { type: "string" },
-    whyItMatters: { type: "string" },
-    correction: { type: ["string", "null"] },
-    cue: { type: ["string", "null"] },
-    severity: { type: "string", enum: ["note", "important", "high"] },
-    evidence: { type: "array", minItems: 1, items: evidenceSchema },
-  },
-} as const;
-
-const repTimelineSchema = {
-  type: "object",
-  required: ["repNumber", "startMs", "peakMs", "endMs", "assessment", "note"],
-  properties: {
-    repNumber: { type: "integer", minimum: 1 },
-    startMs: { type: "integer", minimum: 0 },
-    peakMs: { type: "integer", minimum: 0 },
-    endMs: { type: "integer", minimum: 1 },
-    assessment: { type: "string", enum: ["strong", "consistent", "breakdown", "uncertain"] },
-    note: { type: "string" },
-  },
-} as const;
-
-const nextSetPlanSchema = {
-  type: "object",
-  required: ["id", "action", "rationale", "relatedFindingId"],
-  properties: {
-    id: { type: "string" },
-    action: { type: "string" },
-    rationale: { type: "string" },
-    relatedFindingId: { type: ["string", "null"] },
-  },
-} as const;
-
-const precisionTargetSchema = {
-  type: "object",
-  required: ["kind", "findingId", "startMs", "endMs", "question"],
-  properties: {
-    kind: { type: "string", enum: ["recognition", "timestamp", "technique"] },
-    findingId: { type: ["string", "null"] },
-    startMs: { type: ["integer", "null"], minimum: 0 },
-    endMs: { type: ["integer", "null"], minimum: 1 },
-    question: { type: "string" },
-  },
-} as const;
-
-export const GEMINI_ANALYSIS_JSON_SCHEMA = {
-  type: "object",
-  required: ["status", "recognition", "videoCheck", "overallAssessment", "score", "scoreRationale", "didWell", "priorityCorrections", "coachingCues", "setContext", "setSummary", "repTimeline", "nextSetPlan", "precisionRequest", "comparison"],
-  properties: {
-    status: { type: "string", enum: ["complete", "partial", "unable"] },
-    recognition: {
-      type: "object",
-      required: ["label", "variation", "equipment", "confidence", "alternatives", "catalogExerciseId", "exerciseFamily"],
-      properties: {
-        label: { type: ["string", "null"] },
-        variation: { type: ["string", "null"] },
-        equipment: { type: "array", items: { type: "string" } },
-        confidence: { type: "number", minimum: 0, maximum: 1 },
-        alternatives: { type: "array", items: { type: "string" } },
-        catalogExerciseId: { type: ["integer", "null"] },
-        exerciseFamily: { type: "string", enum: ["curl", "triceps", "press", "overhead-press", "fly", "raise", "row", "pull-down", "squat", "lunge", "hinge", "hip-thrust", "carry", "core", "plank", "other"] },
-      },
-    },
-    videoCheck: {
-      type: "object",
-      required: ["outcome", "usableObservations", "limitations", "retryReason", "retryInstruction"],
-      properties: {
-        outcome: { type: "string", enum: ["usable", "partial", "unable"] },
-        usableObservations: { type: "array", items: { type: "string" } },
-        limitations: { type: "array", items: { type: "string" } },
-        retryReason: { type: ["string", "null"] },
-        retryInstruction: { type: ["string", "null"] },
-      },
-    },
-    overallAssessment: { type: ["string", "null"] },
-    score: { type: ["number", "null"], minimum: 0, maximum: 100 },
-    scoreRationale: {
-      type: "array",
-      items: {
-        type: "object",
-        required: ["criterion", "observed", "impact", "confidence"],
-        properties: {
-          criterion: { type: "string" },
-          observed: { type: "string" },
-          impact: { type: "number", minimum: 0, maximum: 100 },
-          confidence: { type: "number", minimum: 0.75, maximum: 1 },
-        },
-      },
-    },
-    didWell: { type: "array", items: findingSchema },
-    priorityCorrections: { type: "array", items: findingSchema },
-    coachingCues: { type: "array", items: findingSchema },
-    setContext: {
-      type: "object",
-      required: ["cameraView", "visibleReferences", "sequenceSummary", "changeAcrossSet", "coachingBasis"],
-      properties: {
-        cameraView: { type: ["string", "null"] },
-        visibleReferences: { type: "array", items: { type: "string" } },
-        sequenceSummary: { type: ["string", "null"] },
-        changeAcrossSet: { type: ["string", "null"] },
-        coachingBasis: { type: ["string", "null"] },
-      },
-    },
-    setSummary: {
-      type: "object",
-      required: ["totalReps", "consistentReps", "verdict"],
-      properties: {
-        totalReps: { type: ["integer", "null"], minimum: 1 },
-        consistentReps: { type: ["integer", "null"], minimum: 0 },
-        verdict: { type: ["string", "null"] },
-      },
-    },
-    repTimeline: { type: "array", items: repTimelineSchema },
-    nextSetPlan: { type: "array", maxItems: 5, items: nextSetPlanSchema },
-    precisionRequest: {
-      type: "object",
-      required: ["requestedRuns", "reason", "targets"],
-      properties: {
-        requestedRuns: { type: "integer", minimum: 0, maximum: 3 },
-        reason: { type: ["string", "null"] },
-        targets: { type: "array", maxItems: 3, items: precisionTargetSchema },
-      },
-    },
-    comparison: {
-      anyOf: [
-        { type: "null" },
-        {
-          type: "object",
-          required: ["previousSessionId", "summary", "priorityIssueImproved"],
-          properties: {
-            previousSessionId: { type: "string" },
-            summary: { type: "string" },
-            priorityIssueImproved: { type: ["boolean", "null"] },
-          },
-        },
-      ],
-    },
-  },
-} as const;
-
-function object(value: unknown, label: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
-  return value as Record<string, unknown>;
-}
-
-function string(value: unknown, label: string, nullable = false): string | null {
-  if (nullable && value === null) return null;
-  if (typeof value !== "string" || !value.trim()) throw new Error(`${label} must be a non-empty string`);
-  return value;
-}
-
-function number(value: unknown, label: string, minimum: number, maximum: number, nullable = false): number | null {
-  if (nullable && value === null) return null;
-  if (typeof value !== "number" || !Number.isFinite(value) || value < minimum || value > maximum) {
-    throw new Error(`${label} must be between ${minimum} and ${maximum}`);
-  }
-  return value;
-}
-
-function strings(value: unknown, label: string, requireOne = false): string[] {
-  if (!Array.isArray(value) || (requireOne && value.length === 0)) throw new Error(`${label} requires at least one visible body area`);
-  value.forEach((item) => string(item, label));
-  return value as string[];
-}
-
-function findings(value: unknown, label: string, durationMs: number): CoachingFinding[] {
-  if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
-  for (const rawFinding of value) {
-    const finding = object(rawFinding, `${label} finding`);
-    string(finding.id, `${label}.id`);
-    string(finding.title, `${label}.title`);
-    string(finding.detail, `${label}.detail`);
-    string(finding.whyItMatters, `${label}.whyItMatters`);
-    string(finding.correction, `${label}.correction`, true);
-    string(finding.cue, `${label}.cue`, true);
-    if (!["note", "important", "high"].includes(String(finding.severity))) throw new Error(`${label}.severity is invalid`);
-    if (!Array.isArray(finding.evidence) || finding.evidence.length === 0) throw new Error(`${label} requires evidence`);
-    let needsRepeatedEvidence = false;
-    const evidenceReps = new Set<number>();
-    const evidencePeaks: number[] = [];
-    for (const rawMoment of finding.evidence) {
-      const moment = object(rawMoment, `${label}.evidence`);
-      if (!Number.isInteger(moment.startMs) || !Number.isInteger(moment.peakMs) || !Number.isInteger(moment.endMs) || Number(moment.startMs) < 0 || Number(moment.peakMs) < Number(moment.startMs) || Number(moment.peakMs) > Number(moment.endMs) || Number(moment.endMs) <= Number(moment.startMs) || Number(moment.endMs) > durationMs) {
-        throw new Error("Evidence timestamp is outside the recorded video");
-      }
-      if (moment.repNumber !== null && (!Number.isInteger(moment.repNumber) || Number(moment.repNumber) < 1)) throw new Error("repNumber is invalid");
-      string(moment.phase, "phase", true);
-      string(moment.visualEvidence, "visualEvidence");
-      if (moment.coachingNote !== undefined) {
-        const note = string(moment.coachingNote, "coachingNote") as string;
-        if (note.length > 360) throw new Error("coachingNote must be no longer than 360 characters");
-        if (/^\s*at\s+\d+:\d{2}(?:\.\d+)?\s*,?/i.test(note)) throw new Error("coachingNote must not repeat the timestamp");
-        if (/\b(camera|phone|framing|viewpoint|orientation|recording angle)\b/i.test(note)) throw new Error("coachingNote must not contain camera commentary");
-        if (/\b(glutes?|quads?|hamstrings?|pecs?|lats?|muscles?|core)\b.{0,50}\b(stop(?:ped|s)?\s+contribut|not\s+contribut|activat|deactivat|disengag)/i.test(note)) throw new Error("coachingNote must not claim hidden muscle activation");
-        if (/\b(fatigue|fatigued|tired|reduce\s+(?:the\s+)?(?:load|weight)|lower\s+(?:the\s+)?(?:load|weight))\b/i.test(note)) needsRepeatedEvidence = true;
-      }
-      if (typeof moment.repNumber === "number") evidenceReps.add(moment.repNumber);
-      evidencePeaks.push(Number(moment.peakMs));
-      strings(moment.visibleBodyAreas, "visibleBodyAreas", true);
-      number(moment.confidence, "evidence confidence", 0.75, 1);
-      if (moment.focusRegion !== undefined && moment.focusRegion !== null) {
-        const focus = object(moment.focusRegion, "focusRegion");
-        number(focus.centerX, "focus region centerX", 0, 1);
-        number(focus.centerY, "focus region centerY", 0, 1);
-        number(focus.radius, "focus region radius", 0.06, 0.3);
-        number(focus.arrowFromX, "focus region arrowFromX", 0, 1);
-        number(focus.arrowFromY, "focus region arrowFromY", 0, 1);
-        string(focus.label, "focus region label");
-        number(focus.confidence, "focus region confidence", 0.8, 1);
-      }
-    }
-    const evidenceSpan = evidencePeaks.length > 1 ? Math.max(...evidencePeaks) - Math.min(...evidencePeaks) : 0;
-    if (needsRepeatedEvidence && !(finding.evidence.length >= 2 && (evidenceReps.size >= 2 || evidenceSpan >= 1_500))) {
-      throw new Error("Fatigue and load-reduction advice requires repeated evidence");
-    }
-  }
-  return value as CoachingFinding[];
-}
-
-export function validateAnalysisCandidate(value: unknown, durationMs: number): AnalysisCandidate {
-  const result = object(value, "analysis result");
-  if (!["complete", "partial", "unable"].includes(String(result.status))) throw new Error("status is invalid");
-
-  const recognition = object(result.recognition, "recognition");
-  string(recognition.label, "recognition.label", true);
-  string(recognition.variation, "recognition.variation", true);
-  strings(recognition.equipment, "recognition.equipment");
-  const recognitionConfidence = number(recognition.confidence, "recognition confidence", 0, 1) as number;
-  strings(recognition.alternatives, "recognition.alternatives");
-  if (recognition.catalogExerciseId !== null && (!Number.isInteger(recognition.catalogExerciseId) || Number(recognition.catalogExerciseId) < 1)) throw new Error("catalogExerciseId is invalid");
-  if (!["curl", "triceps", "press", "overhead-press", "fly", "raise", "row", "pull-down", "squat", "lunge", "hinge", "hip-thrust", "carry", "core", "plank", "other"].includes(String(recognition.exerciseFamily))) throw new Error("exerciseFamily is invalid");
-
-  const videoCheck = object(result.videoCheck, "videoCheck");
-  if (!["usable", "partial", "unable"].includes(String(videoCheck.outcome))) throw new Error("videoCheck outcome is invalid");
-  strings(videoCheck.usableObservations, "usableObservations");
-  strings(videoCheck.limitations, "limitations");
-  string(videoCheck.retryReason, "retryReason", true);
-  string(videoCheck.retryInstruction, "retryInstruction", true);
-
-  string(result.overallAssessment, "overallAssessment", true);
-  const score = number(result.score, "score", 0, 100, true);
-  if (!Array.isArray(result.scoreRationale)) throw new Error("scoreRationale must be an array");
-  for (const rawReason of result.scoreRationale) {
-    const reason = object(rawReason, "score rationale");
-    string(reason.criterion, "criterion");
-    string(reason.observed, "observed");
-    number(reason.impact, "impact", 0, 100);
-    number(reason.confidence, "score confidence", 0.75, 1);
-  }
-
-  const didWell = findings(result.didWell, "didWell", durationMs);
-  const corrections = findings(result.priorityCorrections, "priorityCorrections", durationMs);
-  const cues = findings(result.coachingCues, "coachingCues", durationMs);
-  const findingIdList = [...didWell, ...corrections, ...cues].map((finding) => finding.id);
-  if (new Set(findingIdList).size !== findingIdList.length) throw new Error("finding IDs must be unique across every coaching section");
-
-  const setContext = object(result.setContext, "setContext");
-  const cameraView = string(setContext.cameraView, "setContext.cameraView", true);
-  const visibleReferences = strings(setContext.visibleReferences, "setContext.visibleReferences");
-  const sequenceSummary = string(setContext.sequenceSummary, "setContext.sequenceSummary", true);
-  const changeAcrossSet = string(setContext.changeAcrossSet, "setContext.changeAcrossSet", true);
-  const coachingBasis = string(setContext.coachingBasis, "setContext.coachingBasis", true);
-  if (result.status !== "unable" && (!cameraView || visibleReferences.length === 0 || !sequenceSummary || !changeAcrossSet || !coachingBasis)) {
-    throw new Error("setContext requires the camera view, visible references, complete sequence, change across the set, and coaching basis");
-  }
-
-  const setSummary = object(result.setSummary, "setSummary");
-  const totalReps = number(setSummary.totalReps, "setSummary.totalReps", 1, 10_000, true);
-  const consistentReps = number(setSummary.consistentReps, "setSummary.consistentReps", 0, 10_000, true);
-  string(setSummary.verdict, "setSummary.verdict", true);
-  if (totalReps !== null && consistentReps !== null && consistentReps > totalReps) throw new Error("consistent repetitions cannot exceed total repetitions");
-
-  if (!Array.isArray(result.repTimeline)) throw new Error("repTimeline must be an array");
-  let previousRepNumber = 0;
-  let previousRepEnd = -1;
-  for (const rawRep of result.repTimeline) {
-    const rep = object(rawRep, "repTimeline item");
-    if (!Number.isInteger(rep.repNumber) || Number(rep.repNumber) < 1) throw new Error("repTimeline repNumber is invalid");
-    if (!Number.isInteger(rep.startMs) || !Number.isInteger(rep.peakMs) || !Number.isInteger(rep.endMs) || Number(rep.startMs) < 0 || Number(rep.startMs) >= Number(rep.endMs) || Number(rep.startMs) > Number(rep.peakMs) || Number(rep.peakMs) > Number(rep.endMs) || Number(rep.endMs) > durationMs) throw new Error("repTimeline timestamp is outside the recorded video");
-    if (Number(rep.repNumber) <= previousRepNumber || Number(rep.startMs) < previousRepEnd) throw new Error("repTimeline must be ordered with unique non-overlapping repetitions");
-    previousRepNumber = Number(rep.repNumber);
-    previousRepEnd = Number(rep.endMs);
-    if (!["strong", "consistent", "breakdown", "uncertain"].includes(String(rep.assessment))) throw new Error("repTimeline assessment is invalid");
-    string(rep.note, "repTimeline.note");
-  }
-  if ((totalReps === null && result.repTimeline.length > 0) || (totalReps !== null && result.repTimeline.length !== totalReps)) {
-    throw new Error("total repetitions must match repTimeline");
-  }
-
-  if (!Array.isArray(result.nextSetPlan) || result.nextSetPlan.length > 5) throw new Error("nextSetPlan must contain at most five actions");
-  const findingIds = new Set([...didWell, ...corrections, ...cues].map((finding) => finding.id));
-  const nextSetPlanIds = new Set<string>();
-  for (const rawItem of result.nextSetPlan) {
-    const item = object(rawItem, "nextSetPlan item");
-    string(item.id, "nextSetPlan.id");
-    if (nextSetPlanIds.has(String(item.id))) throw new Error("nextSetPlan IDs must be unique");
-    nextSetPlanIds.add(String(item.id));
-    string(item.action, "nextSetPlan.action");
-    string(item.rationale, "nextSetPlan.rationale");
-    string(item.relatedFindingId, "nextSetPlan.relatedFindingId", true);
-    if (item.relatedFindingId !== null && !findingIds.has(String(item.relatedFindingId))) throw new Error("nextSetPlan references an unknown finding");
-  }
-
-  const repByNumber = new Map((result.repTimeline as AnalysisCandidate["repTimeline"]).map((rep) => [rep.repNumber, rep]));
-  for (const finding of [...didWell, ...corrections, ...cues]) {
-    for (const moment of finding.evidence) {
-      if (moment.repNumber === null) continue;
-      const rep = repByNumber.get(moment.repNumber);
-      if (!rep || moment.peakMs < rep.startMs || moment.peakMs > rep.endMs) throw new Error("Finding evidence does not fall inside its referenced repetition");
-    }
-  }
-
-  const precisionRequest = object(result.precisionRequest, "precisionRequest");
-  if (!Number.isInteger(precisionRequest.requestedRuns) || Number(precisionRequest.requestedRuns) < 0 || Number(precisionRequest.requestedRuns) > 3) throw new Error("precisionRequest.requestedRuns must be between 0 and 3");
-  string(precisionRequest.reason, "precisionRequest.reason", true);
-  if (!Array.isArray(precisionRequest.targets) || precisionRequest.targets.length !== Number(precisionRequest.requestedRuns)) throw new Error("precisionRequest targets must match requested runs");
-  for (const rawTarget of precisionRequest.targets) {
-    const target = object(rawTarget, "precisionRequest target");
-    if (!["recognition", "timestamp", "technique"].includes(String(target.kind))) throw new Error("precisionRequest target kind is invalid");
-    string(target.findingId, "precisionRequest.findingId", true);
-    string(target.question, "precisionRequest.question");
-    const hasWindow = target.startMs !== null || target.endMs !== null;
-    if (target.kind !== "recognition" && !hasWindow) throw new Error("precisionRequest timestamp and technique targets require a window");
-    if (hasWindow && (!Number.isInteger(target.startMs) || !Number.isInteger(target.endMs) || Number(target.startMs) < 0 || Number(target.endMs) <= Number(target.startMs) || Number(target.endMs) > durationMs)) throw new Error("precisionRequest target window is outside the recorded video");
-    if (target.kind !== "recognition" && (target.findingId === null || !findingIds.has(String(target.findingId)))) throw new Error("precisionRequest target references an unknown finding");
-  }
-  if (Number(precisionRequest.requestedRuns) > 0 && !precisionRequest.reason) throw new Error("precisionRequest requires a reason when premium runs are requested");
-
-  if (result.precisionReview !== undefined) {
-    const review = object(result.precisionReview, "precisionReview");
-    if (!Number.isInteger(review.runsRequested) || Number(review.runsRequested) < 0 || Number(review.runsRequested) > 3) throw new Error("precisionReview.runsRequested must be between 0 and 3");
-    if (!Number.isInteger(review.runsUsed) || Number(review.runsUsed) < 0 || Number(review.runsUsed) > Number(review.runsRequested)) throw new Error("precisionReview.runsUsed must not exceed requested runs");
-    if (!Array.isArray(review.passes) || review.passes.length !== Number(review.runsUsed)) throw new Error("premium runs used must match recorded passes");
-    if (!["not-needed", "completed", "partial", "failed"].includes(String(review.status))) throw new Error("precisionReview status is invalid");
-    string(review.summary, "precisionReview.summary", true);
-    let failedPasses = 0;
-    for (const rawPass of review.passes) {
-      const pass = object(rawPass, "precisionReview pass");
-      if (!Number.isInteger(pass.passNumber) || Number(pass.passNumber) < 1) throw new Error("precisionReview pass number is invalid");
-      if (!["recognition", "timestamp", "technique"].includes(String(pass.kind))) throw new Error("precisionReview pass kind is invalid");
-      if (!["confirmed", "revised", "rejected", "inconclusive", "failed"].includes(String(pass.outcome))) throw new Error("precisionReview pass outcome is invalid");
-      if (pass.outcome === "failed") failedPasses += 1;
-      string(pass.reason, "precisionReview pass reason");
-      string(pass.checkedFindingId, "precisionReview checked finding", true);
-      const passUsage = object(pass.usage, "precisionReview usage");
-      for (const key of ["promptTokens", "outputTokens", "thinkingTokens"] as const) {
-        if (!Number.isInteger(passUsage[key]) || Number(passUsage[key]) < 0) throw new Error("precisionReview token usage is invalid");
-      }
-    }
-    if (review.status === "not-needed" && (Number(review.runsRequested) !== 0 || Number(review.runsUsed) !== 0)) throw new Error("not-needed premium review cannot use runs");
-    if (review.status === "completed" && (Number(review.runsUsed) !== Number(review.runsRequested) || failedPasses > 0)) throw new Error("completed premium review requires every requested pass");
-    if (review.status === "partial" && (failedPasses === 0 || failedPasses === review.passes.length)) throw new Error("partial premium review requires successful and failed passes");
-    if (review.status === "failed" && review.passes.length > 0 && failedPasses === 0) throw new Error("failed premium review requires a failed pass");
-  }
-
-  if (result.comparison !== null) {
-    const comparison = object(result.comparison, "comparison");
-    string(comparison.previousSessionId, "previousSessionId");
-    string(comparison.summary, "comparison.summary");
-    if (comparison.priorityIssueImproved !== null && typeof comparison.priorityIssueImproved !== "boolean") throw new Error("priorityIssueImproved is invalid");
-  }
-
-  if (score !== null && (recognitionConfidence < 0.55 || result.scoreRationale.length < 2)) throw new Error("score requires usable recognition and two supported criteria");
-  if (score === null && result.scoreRationale.length > 0) throw new Error("score rationale requires a score");
-
-  if (result.status === "unable") {
-    if (videoCheck.outcome !== "unable" || didWell.length || corrections.length || cues.length) throw new Error("unable result cannot contain coaching");
-    if (result.overallAssessment !== null || score !== null || !videoCheck.retryReason || !videoCheck.retryInstruction || totalReps !== null || consistentReps !== null || result.repTimeline.length || result.nextSetPlan.length || Number(precisionRequest.requestedRuns) !== 0) throw new Error("unable result requires retry guidance and no assessment");
-  } else if (videoCheck.outcome === "unable" || !result.overallAssessment) {
-    throw new Error("analyzed result requires visible assessment evidence");
-  } else if (!recognition.label) {
-    throw new Error("analyzed result requires the nearest exercise label");
-  } else if (result.nextSetPlan.length === 0) {
-    throw new Error("analyzed result requires at least one next-set action");
-  }
-
-  return value as AnalysisCandidate;
-}

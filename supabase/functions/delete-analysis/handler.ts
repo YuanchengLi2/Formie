@@ -1,6 +1,8 @@
 export type DeleteAnalysisSession = {
   id: string;
   videoPath: string | null;
+  analysisVideoPath: string | null;
+  artifactPaths: string[];
 };
 
 export type DeleteAnalysisDependencies = {
@@ -32,7 +34,12 @@ export async function deleteAnalysisHandler(request: Request, dependencies: Dele
     const session = await dependencies.findSession(sessionId, userId);
     if (!session) return json({ message: "Analysis not found", code: "NOT_FOUND" }, 404);
 
-    if (session.videoPath) await dependencies.removeVideos([session.videoPath]);
+    const paths = [
+      ...(session.videoPath ? [session.videoPath] : []),
+      ...(session.analysisVideoPath ? [session.analysisVideoPath] : []),
+      ...session.artifactPaths,
+    ];
+    if (paths.length > 0) await dependencies.removeVideos(paths);
     await dependencies.deleteSession(session.id, userId);
     return json({ deleted: true }, 200);
   } catch (error) {

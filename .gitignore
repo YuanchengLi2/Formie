@@ -8,18 +8,28 @@ node_modules/
 .worktrees/
 .expo/
 .expo-export-check/
+.expo-export-*/
 dist/
+dist-ios-*/
 dist-final-check/
 dist-verify/
 dist-android-*/
 .asset-pack-preview/
 form-expo-qr.png
+form-dev-*.png
+form-ios-*-qr*.png
+formie-*-qr*.png
+/tmp/
 web-build/
 .form-scaffold/
 supabase/.branches/
 supabase/.temp/
+supabase/seed/criteria-v3/*.sql
+!supabase/seed/criteria-v3/manifest.json
 
 # Native and editor artifacts
+/android/
+/ios/
 *.log
 .DS_Store
 __pycache__/

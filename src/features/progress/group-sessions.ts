@@ -1,6 +1,6 @@
 import { formatExerciseFamily, inferExerciseFamily, type ExerciseFamily } from "@/features/exercises/exercise-family";
 
-export type AnalysisHistoryStatus = "processing" | "complete" | "partial" | "unable";
+export type AnalysisHistoryStatus = "processing" | "complete" | "partial" | "unable" | "failed";
 
 export type AnalysisHistoryItem = {
   sessionId: string;

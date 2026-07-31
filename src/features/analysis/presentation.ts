@@ -11,7 +11,7 @@ export function getVisibleFindings(findings: CoachingFinding[]): CoachingFinding
     .filter((finding) =>
       finding.evidence.some(
         (evidence) =>
-          evidence.confidence >= 0.75 &&
+          evidence.confidence >= 0.4 &&
           evidence.visualEvidence.trim().length > 0 &&
           evidence.endMs > evidence.startMs &&
           evidence.visibleBodyAreas.length > 0,
@@ -22,6 +22,15 @@ export function getVisibleFindings(findings: CoachingFinding[]): CoachingFinding
 
 export function getRecognitionLabel(result: AnalysisResult): string {
   return result.recognition.label ?? "Exercise attempt";
+}
+
+export function severityAlignedAssessment(result: AnalysisResult, findings = getVisibleFindings(result.priorityCorrections)): string | null {
+  const majorFinding = findings.find((finding) => finding.severity === "high");
+  if (!majorFinding) return result.overallAssessment;
+  return [
+    majorFinding.evidence[0]?.visualEvidence,
+    majorFinding.actionableCorrection?.instruction ?? majorFinding.correction,
+  ].filter(Boolean).join(" ");
 }
 
 export type ResultPresentation = {
@@ -38,13 +47,14 @@ export type ResultPresentation = {
 };
 
 export function getResultPresentation(result: AnalysisResult): ResultPresentation {
+  const priorityCorrections = getVisibleFindings(result.priorityCorrections);
   return {
     status: result.status,
     exerciseLabel: getRecognitionLabel(result),
-    overallAssessment: result.overallAssessment,
+    overallAssessment: severityAlignedAssessment(result, priorityCorrections),
     score: result.score,
     didWell: getVisibleFindings(result.didWell),
-    priorityCorrections: getVisibleFindings(result.priorityCorrections),
+    priorityCorrections,
     coachingCues: getVisibleFindings(result.coachingCues),
     comparison: result.comparison,
     retryReason: result.videoCheck.retryReason,

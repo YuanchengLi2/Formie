@@ -6,18 +6,21 @@ describe("RecordingTipsScreen", () => {
   it("shows forgiving phone-placement guidance", async () => {
     const screen = await render(<RecordingTipsScreen onContinue={jest.fn()} onOpenSpaceHelp={jest.fn()} />);
 
-    expect(screen.getByText("Record your full set.")).toBeTruthy();
-    expect(screen.getByText(/let FORM identify and coach the attempt/)).toBeTruthy();
+    expect(screen.getByText("Set up your camera.")).toBeTruthy();
+    expect(screen.queryByText(
+      "Front, side, back, low, and high views are all okay. Keep the complete movement and exercise-critical areas clear and undistorted.",
+    )).toBeNull();
+    expect(screen.getByText(
+      "Front, side, back, low, or high: keep the complete movement clear and undistorted",
+    )).toBeTruthy();
     expect(screen.queryByText(/Use the rear camera for better quality/)).toBeNull();
     expect(screen.getByText("Use 0.5x if space is limited")).toBeTruthy();
-    expect(screen.queryByText(/side or diagonal/i)).toBeNull();
-    expect(screen.getByText("Keep the full movement visible")).toBeTruthy();
-    expect(screen.getByText("Capture most of your body or the area you want coached")).toBeTruthy();
+    expect(screen.getByText("Keep the working joints, equipment, and support in frame")).toBeTruthy();
     expect(screen.getByLabelText("Animated phone placement guide")).toBeTruthy();
     expect(screen.getByTestId("recording-tips-motion-card")).toBeTruthy();
     expect(screen.getAllByTestId(/recording-tip-row-/)).toHaveLength(4);
     expect(screen.queryByLabelText("Phone placement from the production mockup")).toBeNull();
-    expect(screen.getByText(/consent to private video upload for AI form analysis/i)).toBeTruthy();
+    expect(screen.queryByText(/recording|record your|video upload|private video/i)).toBeNull();
     expect(screen.queryByText(/squat|curl|press/i)).toBeNull();
   });
 

@@ -21,7 +21,7 @@ describe("full recording timeline", () => {
   });
 
   it("plots every AI coaching moment, including multiple and between-rep evidence", () => {
-    const moments = buildPlaybackCoachingMoments([{ id: "bar-path", title: "Level the bar", detail: "The right side leads.", whyItMatters: "The press becomes uneven.", correction: "Press both sides together.", cue: "Level bar.", severity: "high", evidence: [
+    const moments = buildPlaybackCoachingMoments([{ id: "bar-path", coachingArea: "form", title: "Level the bar", detail: "The right side leads.", whyItMatters: "The press becomes uneven.", correction: "Press both sides together.", cue: "Level bar.", severity: "high", evidence: [
       { startMs: 1_000, peakMs: 1_250, endMs: 1_500, repNumber: 1, phase: "lowering", visualEvidence: "Right side leads.", visibleBodyAreas: ["bar"], confidence: 0.91, focusRegion: null },
       { startMs: 2_000, peakMs: 2_250, endMs: 2_500, repNumber: null, phase: "reset", visualEvidence: "Bar remains tilted between reps.", visibleBodyAreas: ["bar"], confidence: 0.87, focusRegion: null },
     ] }]);
