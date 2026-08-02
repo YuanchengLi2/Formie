@@ -132,6 +132,25 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     setZoom(nextZoom);
   }, []);
 
+  const applyAvailableLenses = useCallback((lenses: string[]) => {
+    setAvailableLenses(lenses);
+    if (selectedLens === undefined) {
+      const preset = resolveCameraZoom("1x", lenses);
+      setSelectedLens(preset.lens);
+      setActiveZoomLabel("1x");
+      setCameraZoom(preset.zoom);
+    }
+  }, [selectedLens, setCameraZoom]);
+
+  const discoverAvailableLenses = useCallback(async () => {
+    try {
+      const lenses = await cameraRef.current?.getAvailableLensesAsync();
+      if (lenses) applyAvailableLenses(lenses);
+    } catch {
+      // Lens presets are optional; preview and recording must remain usable.
+    }
+  }, [applyAvailableLenses]);
+
   const pinchGesture = useMemo(
     () => Gesture.Pinch()
       .runOnJS(true)
@@ -174,15 +193,8 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         mirror={facing === "front"}
         mode="video"
         mute
-        onAvailableLensesChanged={({ lenses }) => {
-          setAvailableLenses(lenses);
-          if (selectedLens === undefined) {
-            const preset = resolveCameraZoom("1x", lenses);
-            setSelectedLens(preset.lens);
-            setActiveZoomLabel("1x");
-            setCameraZoom(preset.zoom);
-          }
-        }}
+        onAvailableLensesChanged={({ lenses }) => applyAvailableLenses(lenses)}
+        onCameraReady={() => void discoverAvailableLenses()}
         selectedLens={selectedLens}
         style={{ flex: 1 }}
         videoQuality={captureVideoSettings.quality}

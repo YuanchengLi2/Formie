@@ -3,15 +3,20 @@ import { act, fireEvent, render } from "@testing-library/react-native";
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
+const mockGetAvailableLensesAsync = jest.fn<Promise<string[]>, []>();
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ back: mockBack, replace: mockReplace }),
 }));
 
 jest.mock("expo-camera", () => {
+  const React = require("react");
   const { View } = require("react-native");
   return {
-    CameraView: View,
+    CameraView: React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+      React.useImperativeHandle(ref, () => ({ getAvailableLensesAsync: mockGetAvailableLensesAsync }));
+      return React.createElement(View, props);
+    }),
     useCameraPermissions: () => [{ granted: true, canAskAgain: true }, jest.fn()],
   };
 });
@@ -49,6 +54,7 @@ describe("CameraScreen capture lifecycle", () => {
     jest.useRealTimers();
     mockBack.mockClear();
     mockReplace.mockClear();
+    mockGetAvailableLensesAsync.mockReset();
     (analysisUploadCoordinator.reset as jest.Mock).mockClear();
     useCaptureStore.getState().dispatch({ type: "reset" });
     useCaptureStore.getState().dispatch({
@@ -122,5 +128,35 @@ describe("CameraScreen capture lifecycle", () => {
 
     expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("ultraWideCamera");
     expect(screen.getByLabelText("Camera zoom 0.5x").props.accessibilityState).toEqual({ selected: true });
+  });
+
+  it("discovers the native ultrawide lens when the camera becomes ready", async () => {
+    mockGetAvailableLensesAsync.mockResolvedValue(["builtInWideAngleCamera", "builtInUltraWideCamera"]);
+    const screen = await render(<CameraScreen />);
+    const preview = screen.getByLabelText("Camera preview");
+
+    await act(async () => preview.props.onCameraReady());
+    await fireEvent.press(screen.getByLabelText("Camera zoom 0.5x"));
+
+    expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("builtInUltraWideCamera");
+  });
+
+  it("does not offer 0.5x when the active camera has no ultrawide lens", async () => {
+    mockGetAvailableLensesAsync.mockResolvedValue(["builtInWideAngleCamera"]);
+    const screen = await render(<CameraScreen />);
+
+    await act(async () => screen.getByLabelText("Camera preview").props.onCameraReady());
+
+    expect(screen.queryByLabelText("Camera zoom 0.5x")).toBeNull();
+    expect(screen.getByLabelText("Camera zoom 1x")).toBeTruthy();
+  });
+
+  it("keeps recording available when native lens discovery fails", async () => {
+    mockGetAvailableLensesAsync.mockRejectedValue(new Error("Lens discovery unavailable"));
+    const screen = await render(<CameraScreen />);
+
+    await act(async () => screen.getByLabelText("Camera preview").props.onCameraReady());
+
+    expect(screen.getByLabelText("Start countdown")).toBeTruthy();
   });
 });
