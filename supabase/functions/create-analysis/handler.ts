@@ -36,7 +36,11 @@ export async function createAnalysisHandler(request: Request, dependencies: Crea
 
   if (!body || typeof body !== "object" || Array.isArray(body)) return json({ message: "Invalid request body", code: "INVALID_BODY" }, 400);
   const keys = Object.keys(body);
-  if (keys.some((key) => key !== "previousSessionId" && key !== "clientRequestId" && key !== "declaration" && key !== "privacySafeFallback")) return json({ message: "Invalid request body", code: "INVALID_BODY" }, 400);
+  if (keys.some((key) => key !== "previousSessionId" && key !== "clientRequestId" && key !== "declaration" && key !== "privacySafeFallback" && key !== "uploadProfile")) return json({ message: "Invalid request body", code: "INVALID_BODY" }, 400);
+  const uploadProfile = (body as Record<string, unknown>).uploadProfile;
+  if (uploadProfile !== undefined && uploadProfile !== "single_analysis_v1") {
+    return json({ message: "Invalid upload profile", code: "INVALID_BODY" }, 400);
+  }
   const privacySafeFallback = (body as Record<string, unknown>).privacySafeFallback;
   if (privacySafeFallback !== undefined && typeof privacySafeFallback !== "boolean") {
     return json({ message: "privacySafeFallback must be a boolean", code: "INVALID_BODY" }, 400);
@@ -88,6 +92,10 @@ export async function createAnalysisHandler(request: Request, dependencies: Crea
     });
     const shouldCreateFallback = privacySafeFallback === true
       && supportsUpperBodyPrivacyFallback(declaration.exercise.label);
+    if (uploadProfile === "single_analysis_v1") {
+      const analysisUpload = await dependencies.createSignedUpload(`${userId}/${session.id}/analysis-input.mp4`, { upsert: false });
+      return json({ sessionId: session.id, analysisUpload }, 201);
+    }
     const [upload, analysisUpload, privacySafeUpload] = await Promise.all([
       dependencies.createSignedUpload(`${userId}/${session.id}/original.mp4`, { upsert: false }),
       dependencies.createSignedUpload(`${userId}/${session.id}/analysis-input.mp4`, { upsert: false }),

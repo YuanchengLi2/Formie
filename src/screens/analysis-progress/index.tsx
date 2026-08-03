@@ -24,6 +24,7 @@ type AnalysisProgressScreenProps = {
 export function AnalysisProgressScreen({ stage, failureMessage, onRetryAnalysis, retryingAnalysis = false, retryAnalysisError = null, onRecordAgain, onGoHome, onRetryUpload }: AnalysisProgressScreenProps) {
   const insets = useSafeAreaInsets();
   const progress = analysisProgress(stage);
+  const durableRetry = stage === "retry_wait";
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -38,7 +39,7 @@ export function AnalysisProgressScreen({ stage, failureMessage, onRetryAnalysis,
         <Animated.View entering={FadeInDown.duration(220)} style={{ flex: 1, justifyContent: "center", gap: spacing.xxl }}>
           <View style={{ gap: spacing.md }}>
             <Text selectable style={[typography.title, { color: colors.text }]}>Analyzing your movement</Text>
-            <Text selectable style={[typography.label, { maxWidth: 560, color: colors.gold }]}>Keep Formie open and stay on this page until your coaching is ready.</Text>
+            <Text selectable style={[typography.label, { maxWidth: 560, color: colors.gold }]}>{durableRetry ? "Finishing your coaching. You can leave this screen; we’ll continue automatically." : "Keep Formie open and stay on this page until your coaching is ready."}</Text>
           </View>
 
           <View

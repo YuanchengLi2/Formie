@@ -18,8 +18,8 @@ function request(body: unknown = { sessionId: "session-1" }) {
   });
 }
 
-function dependencies(outcome: "ready" | "not_found" | "video_missing" | "busy" | "declaration_required" = "ready"): ReanalyzeVideoDependencies & {
-  verifyReusableInput: jest.Mock<Promise<"ready" | "not_found" | "video_missing">, [string, string]>;
+function dependencies(outcome: "ready" | "not_found" | "video_missing" | "video_too_long" | "busy" | "declaration_required" = "ready"): ReanalyzeVideoDependencies & {
+  verifyReusableInput: jest.Mock<Promise<"ready" | "not_found" | "video_missing" | "video_too_long">, [string, string]>;
 } {
   return {
     authenticate: jest.fn(async () => "user-1"),
@@ -35,7 +35,7 @@ describe("reanalyzeVideoHandler", () => {
     const response = await reanalyzeVideoHandler(request(), deps);
 
     expect(response.status).toBe(202);
-    await expect(response.json()).resolves.toEqual({ sessionId: "session-1", status: "queued", stage: "video_check" });
+    await expect(response.json()).resolves.toEqual({ sessionId: "session-1", status: "queued", stage: "input_ready" });
     expect(deps.resetSession).toHaveBeenCalledWith("session-1", "user-1", undefined);
   });
 
@@ -51,6 +51,7 @@ describe("reanalyzeVideoHandler", () => {
   it.each([
     ["not_found", 404, "NOT_FOUND"],
     ["video_missing", 409, "VIDEO_NOT_FOUND"],
+    ["video_too_long", 409, "VIDEO_TOO_LONG"],
     ["busy", 409, "ALREADY_PROCESSING"],
     ["declaration_required", 409, "SET_DECLARATION_REQUIRED"],
   ] as const)("maps %s reset outcomes", async (outcome, expectedStatus, expectedCode) => {
@@ -77,6 +78,17 @@ describe("reanalyzeVideoHandler", () => {
     await expect(response.json()).resolves.toMatchObject({ code: "REANALYZE_FAILED" });
   });
 
+  it("queues v48 reanalysis without a v49 cutover gate", async () => {
+    const deps = dependencies();
+
+    const response = await reanalyzeVideoHandler(request(), deps);
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({ sessionId: "session-1", status: "queued", stage: "input_ready" });
+    expect(deps.verifyReusableInput).toHaveBeenCalledWith("session-1", "user-1");
+    expect(deps.resetSession).toHaveBeenCalledWith("session-1", "user-1", undefined);
+  });
+
   it("does not clear the saved result when the retained input is stale", async () => {
     const deps = dependencies();
     deps.verifyReusableInput.mockResolvedValue("video_missing");
@@ -85,6 +97,17 @@ describe("reanalyzeVideoHandler", () => {
 
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ code: "VIDEO_NOT_FOUND" });
+    expect(deps.resetSession).not.toHaveBeenCalled();
+  });
+
+  it("does not clear the saved result when the retained input exceeds the analysis limit", async () => {
+    const deps = dependencies();
+    deps.verifyReusableInput.mockResolvedValue("video_too_long");
+
+    const response = await reanalyzeVideoHandler(request(), deps);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "VIDEO_TOO_LONG" });
     expect(deps.resetSession).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import type { SetDeclaration } from "@/features/analysis/set-declaration";
 
+import { captureVideoSettings } from "./video-settings";
 import type {
   RecordedSet,
   UploadArtifactTarget,
@@ -10,6 +11,7 @@ import type {
 
 const NETWORK_ATTEMPTS = 2;
 const NETWORK_STEP_TIMEOUT_MS = 45_000;
+const SINGLE_UPLOAD_TIMEOUT_MS = 15_000;
 
 export type UploadCoordinatorDependencies = {
   getAccessToken: () => Promise<string>;
@@ -23,9 +25,10 @@ export type UploadCoordinatorDependencies = {
   ) => Promise<UploadTarget>;
   uploadVideo: (recording: RecordedSet, target: UploadArtifactTarget, signal: AbortSignal) => Promise<void>;
   normalizeVideo: (recording: RecordedSet) => Promise<RecordedSet>;
+  prepareAnalysisVideo?: (recording: RecordedSet) => Promise<RecordedSet>;
   normalizePrivacySafeFallback: (recording: RecordedSet) => Promise<RecordedSet>;
   bindLocalRecording: (sessionId: string, recording: RecordedSet) => Promise<void>;
-  completeUpload: (accessToken: string, sessionId: string, durationMs: number, hasPrivacySafeFallback: boolean, signal: AbortSignal) => Promise<void>;
+  completeUpload: (accessToken: string, sessionId: string, durationMs: number, hasPrivacySafeFallback: boolean, signal: AbortSignal, metadata?: { byteLength?: number }) => Promise<void>;
 };
 
 async function retryNetworkStep<T>(
@@ -44,6 +47,16 @@ async function retryNetworkStep<T>(
     }
   }
   throw lastError;
+}
+
+async function singleNetworkStep<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SINGLE_UPLOAD_TIMEOUT_MS);
+  try {
+    return await operation(controller.signal);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function createUploadCoordinator(dependencies: UploadCoordinatorDependencies) {
@@ -101,7 +114,7 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
     const requestId = clientRequestId;
 
     const operation = (async () => {
-      if (!Number.isInteger(recording.durationMs) || recording.durationMs < 3_000 || recording.durationMs > 15_000) {
+      if (!Number.isInteger(recording.durationMs) || recording.durationMs < captureVideoSettings.minimumDurationMs || recording.durationMs > captureVideoSettings.maxDurationSeconds * 1_000) {
         throw new Error("Recordings must be between 3 and 15 seconds.");
       }
 
@@ -123,11 +136,34 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
         localRecordingBound = true;
       }
 
+      if (!target.original) {
+        if (!normalizedRecording) {
+          emit("normalizing", target);
+          normalizedRecording = await (dependencies.prepareAnalysisVideo ?? dependencies.normalizeVideo)(recording);
+        }
+        emit("uploading_video", target);
+        await singleNetworkStep((signal) => dependencies.uploadVideo(normalizedRecording as RecordedSet, target.analysis, signal));
+        emit("finalizing", target);
+        const accessToken = await dependencies.getAccessToken();
+        await singleNetworkStep((signal) => dependencies.completeUpload(
+          accessToken,
+          target.sessionId,
+          recording.durationMs,
+          false,
+          signal,
+          { byteLength: normalizedRecording?.byteLength },
+        ));
+        const result = { sessionId: target.sessionId, target };
+        clear();
+        return result;
+      }
+
       const preparationTasks: Promise<void>[] = [];
+      const originalTarget = target.original;
       if (!originalUploaded) {
         emit("uploading_original", target);
         preparationTasks.push(
-          retryNetworkStep((signal) => dependencies.uploadVideo(recording, target.original, signal))
+          retryNetworkStep((signal) => dependencies.uploadVideo(recording, originalTarget as UploadArtifactTarget, signal))
             .then(() => {
               originalUploaded = true;
             }),

@@ -69,6 +69,19 @@ function normalizedWords(value: string): string {
   return value.toLocaleLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
 }
 
+const OBSERVATION_STOP_WORDS = new Set(["a", "an", "and", "as", "at", "be", "becomes", "by", "during", "for", "from", "in", "is", "it", "of", "on", "or", "that", "the", "this", "to", "with", "your"]);
+
+function isSpecificObservation(value: string, context: string): boolean {
+  if (TIMING_LANGUAGE.test(value)) return true;
+  const contextWords = new Set(normalizedWords(context).split(" ").filter((word) => word.length > 3 && !OBSERVATION_STOP_WORDS.has(word)));
+  const observationWords = new Set(normalizedWords(value).split(" ").filter((word) => word.length > 3 && !OBSERVATION_STOP_WORDS.has(word)));
+  let overlap = 0;
+  for (const word of observationWords) {
+    if (contextWords.has(word)) overlap += 1;
+  }
+  return overlap >= 2;
+}
+
 function sentenceCase(value: string): string {
   return value.length === 0 ? value : `${value[0].toLocaleUpperCase()}${value.slice(1)}`;
 }
@@ -223,11 +236,11 @@ export function enforceCorrectionCoaching<T extends CoachingContractFinding>(fin
     `The clearest example appears ${timingPhrase(evidence)}.`,
     `This position change is visible ${timingPhrase(evidence)}.`,
   ], 4);
-  const whatHappened = uniqueSentences([
-    ...objectiveFallback.slice(0, 2),
-    ...sentenceList(finding.expandedCoaching?.whatHappened, 4).filter((sentence) => isVisibleCopy(sentence, context)),
-    ...objectiveFallback.slice(2),
-  ], 4);
+  const requestedWhatHappened = sentenceList(finding.expandedCoaching?.whatHappened, 4)
+    .filter((sentence) => isVisibleCopy(sentence, context) && isSpecificObservation(sentence, context));
+  const whatHappened = requestedWhatHappened.length >= 1
+    ? uniqueSentences(requestedWhatHappened, 4)
+    : uniqueSentences([...requestedWhatHappened, ...objectiveFallback], 4);
   const whyTeaching = uniqueSentences([
     ...sentenceList(finding.expandedCoaching?.whyItMatters, 3).filter((sentence) => isVisibleCopy(sentence, context)),
     whyItMatters,

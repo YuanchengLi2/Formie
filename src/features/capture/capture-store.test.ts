@@ -87,7 +87,7 @@ describe("capture state", () => {
     const checked = captureReducer(recorded, {
       type: "recording_preflight_completed",
       result: {
-        outcome: "rerecord",
+        outcome: "usable",
         reason: "Your full body leaves the frame.",
         checks: {
           activityType: "dynamic_reps",
@@ -127,7 +127,7 @@ describe("capture state", () => {
       },
     });
 
-    expect(checked.recordingPreflight).toEqual(expect.objectContaining({ outcome: "rerecord" }));
+    expect(checked.recordingPreflight).toEqual(expect.objectContaining({ outcome: "usable" }));
     expect(captureReducer(checked, { type: "recording_preflight_retry_requested" }).recordingPreflight).toBeNull();
     expect(captureReducer(checked, { type: "discard_recording" }).recordingPreflight).toBeNull();
   });

@@ -44,6 +44,9 @@ function validFinding(id = "elbow-drift"): CoachingFinding {
 function validResult(): AnalysisResult {
   return {
     status: "complete",
+    analysisBasis: "observed",
+    viewNotes: [],
+    generalGuidance: [],
     recognition: {
       label: "Standing Dumbbell Curl",
       variation: "Alternating curl",
@@ -76,6 +79,7 @@ function validResult(): AnalysisResult {
       { id: "dumbbell-path", label: "Dumbbell Path", score: 76, observed: "The dumbbells follow the same path until the final repetitions.", evidenceIds: ["elbow-drift"] },
       { id: "torso-control", label: "Torso Control", score: 91, observed: "The torso stays upright throughout the visible set.", evidenceIds: ["controlled-lowering"] },
       { id: "top-range", label: "Top Range", score: 80, observed: "The final curl finishes slightly lower than the opening curl.", evidenceIds: ["elbow-drift"] },
+      { id: "rep-consistency", label: "Rep Consistency", score: 79, observed: "The final repetition differs from the opening repetitions.", evidenceIds: ["elbow-drift"] },
     ],
     equipmentObservations: [{
       id: "load-visible",
@@ -171,17 +175,31 @@ describe("analysisResultSchema", () => {
     expect(parsed.priorityCorrections[0].observedIssueRegions).toBeUndefined();
   });
 
-  it("requires three to five movement-specific scores when scores are present", () => {
+  it("accepts up to four uniquely named movement-specific scores", () => {
     const result = validResult();
-    result.movementScores = result.movementScores!.slice(0, 2);
+    result.movementScores = result.movementScores!.slice(0, 3);
+    expect(analysisResultSchema.safeParse(result).success).toBe(true);
+    result.movementScores = Array.from({ length: 4 }, (_, index) => ({
+      id: index < 2 ? "duplicate-score" : `score-${index}`,
+      label: index < 2 ? "Duplicate score" : `Movement ${index}`,
+      score: 80,
+      observed: "This visible quality stays repeatable.",
+      evidenceIds: ["elbow-drift"],
+    }));
     expect(analysisResultSchema.safeParse(result).success).toBe(false);
-    result.movementScores = Array.from({ length: 6 }, (_, index) => ({
+    result.movementScores = Array.from({ length: 4 }, (_, index) => ({
       id: `score-${index}`,
       label: `Movement ${index}`,
       score: 80,
       observed: "This visible quality stays repeatable.",
       evidenceIds: ["elbow-drift"],
     }));
+    expect(analysisResultSchema.safeParse(result).success).toBe(true);
+  });
+
+  it("rejects the retired mixed result type", () => {
+    const result = validResult();
+    result.analysisBasis = "mixed" as never;
     expect(analysisResultSchema.safeParse(result).success).toBe(false);
   });
 
@@ -299,17 +317,35 @@ describe("analysisResultSchema", () => {
     expect(analysisResultSchema.safeParse(result).success).toBe(false);
   });
 
-  it("accepts low-confidence visible evidence while rejecting values below the lenient floor", () => {
+  it("accepts low-confidence visible evidence without using confidence as a rejection gate", () => {
     const result = validResult();
     result.priorityCorrections[0].evidence[0].confidence = 0.4;
     result.priorityCorrections[0].evidence[0].focusRegion!.confidence = 0.4;
     expect(analysisResultSchema.safeParse(result).success).toBe(true);
 
     result.priorityCorrections[0].evidence[0].confidence = 0.39;
+    expect(analysisResultSchema.safeParse(result).success).toBe(true);
+  });
+
+  it("allows declaration-only guidance without score or fabricated findings", () => {
+    const result = validResult();
+    result.analysisBasis = "declared_only";
+    result.score = null;
+    result.movementScores = [];
+    result.priorityCorrections = [];
+    result.coachingCues = [];
+    result.didWell = [];
+    result.equipmentObservations = [];
+    result.repTimeline = [];
+    result.nextSetPlan = [];
+    result.generalGuidance = ["Keep the declared range controlled.", "Use a stable setup for the next set."];
+    expect(analysisResultSchema.safeParse(result).success).toBe(true);
+
+    result.generalGuidance = ["Keep the declared range controlled."];
     expect(analysisResultSchema.safeParse(result).success).toBe(false);
   });
 
-  it("allows an approximate marker within one second of its referenced repetition", () => {
+  it("allows broad evidence windows while requiring the referenced repetition to exist", () => {
     const result = validResult();
     result.priorityCorrections[0].evidence[0].peakMs = 9_500;
     result.priorityCorrections[0].evidence[0].endMs = 9_800;
@@ -317,6 +353,9 @@ describe("analysisResultSchema", () => {
 
     result.priorityCorrections[0].evidence[0].peakMs = 10_001;
     result.priorityCorrections[0].evidence[0].endMs = 10_200;
+    expect(analysisResultSchema.safeParse(result).success).toBe(true);
+
+    result.priorityCorrections[0].evidence[0].repNumber = 99;
     expect(analysisResultSchema.safeParse(result).success).toBe(false);
   });
 

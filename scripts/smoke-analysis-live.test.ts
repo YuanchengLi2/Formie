@@ -1,50 +1,40 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-describe("live analysis smoke contract", () => {
+describe("live v49 isolated-pipeline smoke contract", () => {
   const source = readFileSync(resolve(__dirname, "smoke-analysis-live.ts"), "utf8");
 
-  it("verifies the deployed whole-set pipeline without removed post-analysis cards", () => {
-    expect(source).toContain('storedSession.pipeline_version !== "gemini-analyst-coach-v33"');
-    expect(source).toContain("wholeSetCoverage");
-    expect(source).toContain('typeof movementAnalysis !== "string"');
-    expect(source).toContain('["beginning", "middle", "end"]');
-    expect(source).not.toContain("gemini-single-pass-coverage-v3");
-    expect(source).toContain('call.stage === "repairing_analysis"');
-    expect(source).not.toContain('call.stage === "understanding_movement"');
-    expect(source).toContain("LIVE_SET_DECLARATION_JSON");
-    expect(source).toContain("Declared exercise was renamed");
-    expect(source).toContain("Correction has no valid primary evidence");
-    expect(source).toContain("LIVE_EXPECT_VISIBLE_TERMS");
-    expect(source).toContain("equipment_observations");
-    expect(source).toContain("movementScores.length < 3");
-    expect(source).toContain("new Set(movementScoreLabels).size");
-    expect(source).toContain("analysis_fallback_video_path");
-    expect(source).toContain("fallbackStoragePath");
-    expect(source).toContain("successfulAnalystTelemetry");
-    expect(source).toContain('call.stage === "checking_consistency"');
-    expect(source).toContain('call.stage === "double_checking"');
-    expect(source).toContain("LIVE_VERIFY_REANALYSIS");
-    expect(source).toContain('runAnalysis("reanalysis")');
-    expect(source).toContain("reanalyzedCorrections.length < 4");
-    expect(source).toContain("coaching_cues");
-    expect(source).toContain("actionTopics.length < 2");
-    expect(source).toContain("Advice was presented as an observed fault");
-    expect(source).toContain("This is general advice for your next set, not a mistake observed in this recording.");
-    expect(source).toContain("GEMINI_PROHIBITED_CONTENT");
-    expect(source).toContain("exercise_guide");
-    expect(source).toContain("coaching_coverage");
-    expect(source).toContain("Fresh analysis retained removed post-analysis cards");
-    expect(source).toContain("exerciseGuide !== null || coachingCoverage.length > 0");
-    expect(source).not.toContain('["surroundings", "equipment_setup", "grip_contact", "starting_position", "movement_execution", "support_balance"]');
+  it("invokes only the v49 producer and reads only v49 run storage", () => {
+    expect(source).toContain('/functions/v1/analyze-video-v49');
+    expect(source).toContain('PIPELINE_VERSION = "gemini-problem-finder-v49"');
+    expect(source).toContain('from("analysis_v49_runs")');
+    expect(source).toContain('from("analysis_v49_stage_runs")');
+    expect(source).not.toMatch(/functions\/v1\/analyze-video["`]/);
+    expect(source).not.toContain('from("analysis_stage_runs")');
   });
 
-  it("checks a four-problem whole-lift floor without imposing a correction maximum", () => {
-    expect(source).toContain("corrections.length < 4");
-    expect(source).not.toContain("correctionCapacityForDuration");
-    expect(source).not.toContain("corrections.length > correctionCapacity");
-    expect(source).not.toContain("formCorrections");
-    expect(source).not.toContain("corrections.length < 3");
-    expect(source).not.toContain("fewer than three corrections");
+  it("checks immutable evidence, strict client parsing, and exact model-call counts", () => {
+    expect(source).toContain("Problem evidence was separated or lost");
+    expect(source).toContain("analysisResultSchema.parse");
+    expect(source).toContain("problemCalls.length !== 1");
+    expect(source).toContain("writerCalls.length !== 1");
+    expect(source).toContain("Unable run fabricated writer output");
+  });
+
+  it("checks concurrent entry and saved-video reanalysis through a new run ID", () => {
+    expect(source).toContain("LIVE_CONCURRENT_START");
+    expect(source).toContain('/functions/v1/reanalyze-video');
+    expect(source).toContain("active_v49_run_id === firstRunId");
+  });
+
+  it("invokes the active primary run without exposing a caller-selected run ID", () => {
+    expect(source).toContain("body: JSON.stringify({ sessionId })");
+    expect(source).not.toContain("body: JSON.stringify({ sessionId, runId })");
+  });
+
+  it("creates a capture-ready fixture that satisfies the production preprocessing constraint", () => {
+    expect(source).toContain('analysis_input_strategy: "capture_ready_video"');
+    expect(source).toContain("analysis_preprocessing_confidence: 1");
+    expect(source).toContain('p_user_id: userId');
   });
 });

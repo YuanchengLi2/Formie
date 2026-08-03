@@ -12,19 +12,13 @@ import { typography } from "@/theme/type";
 type RecordingPreflightScreenProps =
   | { mode: "checking"; onBack: () => void }
   | {
-      mode: "rejected";
+      mode: "advisory";
       localVideoUri: string;
-      reason: string;
+      reason?: string | null;
       guidance: RecordingPreflightGuidance;
       onBack: () => void;
-      onRetake: () => void;
-      onReviewSetup: () => void;
-    }
-  | {
-      mode: "unavailable";
-      onBack: () => void;
-      onRetry: () => void;
-      onRetake: () => void;
+      onContinue: () => void;
+      onRetake?: () => void;
     };
 
 function RecordingIssueVideo({ localVideoUri }: { localVideoUri: string }) {
@@ -37,7 +31,7 @@ function RecordingIssueVideo({ localVideoUri }: { localVideoUri: string }) {
   return (
     <View style={{ width: "100%", height: 220, overflow: "hidden", borderRadius: radii.lg, borderCurve: "continuous", backgroundColor: colors.cameraBlack }}>
       <VideoView
-        accessibilityLabel="Recording that needs a camera adjustment"
+        accessibilityLabel="Recording tips preview"
         contentFit="contain"
         fullscreenOptions={{ enable: true }}
         nativeControls
@@ -83,29 +77,20 @@ export function RecordingPreflightScreen(props: RecordingPreflightScreenProps) {
           <ActivityIndicator accessibilityLabel="Checking recording" color={colors.gold} size="large" />
           <Text selectable style={[typography.title, { color: colors.text, textAlign: "center" }]}>Checking your recording</Text>
         </View>
-      ) : props.mode === "rejected" ? (
+      ) : (
         <View style={{ width: "100%", maxWidth: 520, alignSelf: "center", gap: spacing.xl }}>
           <View style={{ alignItems: "center", gap: spacing.md }}>
-            <View style={{
-              width: 72,
-              height: 72,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 36,
-              backgroundColor: colors.goldSoft,
-            }}>
-              <ProductionIcon name="warning" label="Recording warning" size={40} tintColor={colors.gold} />
+            <View style={{ width: 72, height: 72, alignItems: "center", justifyContent: "center", borderRadius: 36, backgroundColor: colors.goldSoft }}>
+              <ProductionIcon name="warning" label="Recording tips" size={40} tintColor={colors.gold} />
             </View>
-            <Text selectable style={[typography.title, { color: colors.text, textAlign: "center" }]}>
-              Adjust your camera and try again
-            </Text>
+            <Text selectable style={[typography.title, { color: colors.text, textAlign: "center" }]}>A few recording tips</Text>
+            <Text selectable style={[typography.body, { color: colors.textSecondary, textAlign: "center" }]}>These suggestions improve visual evidence, but they never block analysis.</Text>
           </View>
 
           <RecordingIssueVideo localVideoUri={props.localVideoUri} />
 
           <View style={{ gap: spacing.md, padding: spacing.lg, borderRadius: radii.lg, borderCurve: "continuous", backgroundColor: colors.surface }}>
-            <Text selectable style={[typography.heading, { color: colors.text }]}>What needs to change</Text>
-            <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{props.reason}</Text>
+            {props.reason ? <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{props.reason}</Text> : null}
             <View style={{ gap: spacing.xs }}>
               <Text selectable style={[typography.label, { color: colors.text }]}>Place your phone</Text>
               <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{props.guidance.phoneSetup}</Text>
@@ -115,38 +100,13 @@ export function RecordingPreflightScreen(props: RecordingPreflightScreenProps) {
               <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{props.guidance.positioning}</Text>
             </View>
             <View style={{ gap: spacing.xs }}>
-              <Text selectable style={[typography.label, { color: colors.text }]}>Make sure we can see</Text>
+              <Text selectable style={[typography.label, { color: colors.text }]}>Keep visible</Text>
               <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{props.guidance.visibilityTarget}</Text>
             </View>
           </View>
           <View style={{ gap: spacing.md }}>
-            <FormButton label="Retake Recording" onPress={props.onRetake} />
-            <FormButton label="Review Exercise Setup" variant="secondary" onPress={props.onReviewSetup} />
-          </View>
-        </View>
-      ) : (
-        <View style={{ width: "100%", maxWidth: 520, alignSelf: "center", gap: spacing.xl }}>
-          <View style={{ alignItems: "center", gap: spacing.md }}>
-            <View style={{
-              width: 72,
-              height: 72,
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 36,
-              backgroundColor: colors.goldSoft,
-            }}>
-              <ProductionIcon name="warning" label="Recording check unavailable" size={40} tintColor={colors.gold} />
-            </View>
-            <Text selectable style={[typography.title, { color: colors.text, textAlign: "center" }]}>
-              Recording check unavailable
-            </Text>
-            <Text selectable style={[typography.body, { color: colors.textSecondary, textAlign: "center" }]}>
-              Formie couldn’t confirm that this video is ready for trustworthy analysis.
-            </Text>
-          </View>
-          <View style={{ gap: spacing.md }}>
-            <FormButton label="Try check again" onPress={props.onRetry} />
-            <FormButton label="Re-record this set" variant="secondary" onPress={props.onRetake} />
+            <FormButton label="Continue with recording" onPress={props.onContinue} />
+            {props.onRetake ? <FormButton label="Record another set" variant="secondary" onPress={props.onRetake} /> : null}
           </View>
         </View>
       )}

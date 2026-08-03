@@ -1,4 +1,6 @@
 export type GeminiInputFile = { uri: string; mimeType: string };
+export type GeminiInlineVideo = { kind: "inline"; data: string; mimeType: string };
+export type GeminiVideoInput = GeminiInputFile | GeminiInlineVideo;
 export type JsonSchema = Record<string, unknown>;
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high";
 export type MediaResolution = "MEDIA_RESOLUTION_LOW" | "MEDIA_RESOLUTION_MEDIUM" | "MEDIA_RESOLUTION_HIGH";
@@ -51,7 +53,7 @@ function geminiResponseSchema(value: unknown): unknown {
 }
 
 export type VideoGenerateContentRequest = {
-  contents: { role: "user"; parts: ({ fileData: { fileUri: string; mimeType: string }; videoMetadata?: { fps?: number; startOffset?: string; endOffset?: string } } | { text: string })[] }[];
+  contents: { role: "user"; parts: ({ fileData: { fileUri: string; mimeType: string } } | { inlineData: { data: string; mimeType: string } } | { videoMetadata: { fps?: number; startOffset?: string; endOffset?: string } } | { text: string })[] }[];
   generationConfig: GenerateConfig;
 };
 
@@ -71,17 +73,36 @@ export type ImageGenerateContentRequest = {
   generationConfig: GenerateConfig;
 };
 
-function generationConfig(schema: JsonSchema, thinkingLevel: ThinkingLevel): GenerateConfig {
+export type GenerateContentOptions = {
+  /** Bounds a provider call so a failed model cannot hold an analysis session forever. */
+  timeoutMs?: number;
+};
+
+function validateTemperature(value: number | undefined): void {
+  if (
+    value !== undefined
+    && (!Number.isFinite(value) || value < 0 || value > 2)
+  ) {
+    throw new Error("temperature must be between 0 and 2");
+  }
+}
+
+function generationConfig(schema: JsonSchema, thinkingLevel: ThinkingLevel, temperature?: number, preserveSchemaBounds = false): GenerateConfig {
+  validateTemperature(temperature);
   return {
     thinkingConfig: { thinkingLevel },
     responseMimeType: "application/json",
-    responseJsonSchema: geminiResponseSchema(schema) as JsonSchema,
+    responseJsonSchema: (preserveSchemaBounds ? schema : geminiResponseSchema(schema)) as JsonSchema,
+    ...(temperature === undefined ? {} : { temperature }),
   };
 }
 
-export function buildVideoGenerateContentRequest(input: { file: GeminiInputFile; prompt: string; schema: JsonSchema; fps: number | null; thinkingLevel: ThinkingLevel; mediaResolution: MediaResolution; window?: { startMs: number; endMs: number } | null; windows?: { startMs: number; endMs: number }[] }): VideoGenerateContentRequest {
+export function buildVideoGenerateContentRequest(input: { file?: GeminiInputFile; video?: GeminiVideoInput; prompt: string; schema: JsonSchema; fps: number | null; thinkingLevel: ThinkingLevel; mediaResolution: MediaResolution; temperature?: number; preserveSchemaBounds?: boolean; window?: { startMs: number; endMs: number } | null; windows?: { startMs: number; endMs: number }[] }): VideoGenerateContentRequest {
+  const video = input.video ?? input.file;
+  if (!video) throw new Error("video input is required");
   if (input.fps !== null && (!Number.isFinite(input.fps) || input.fps <= 0 || input.fps > 24)) throw new Error("fps must be between 0 and 24");
   if (input.window && input.windows) throw new Error("provide window or windows, not both");
+  validateTemperature(input.temperature);
   const windows = input.windows ?? (input.window ? [input.window] : []);
   if (windows.length > 3) throw new Error("at most three video windows are allowed");
   windows.forEach((window) => {
@@ -94,14 +115,17 @@ export function buildVideoGenerateContentRequest(input: { file: GeminiInputFile;
       ...(input.fps === null ? {} : { fps: input.fps }),
       ...(window ? { startOffset: `${window.startMs / 1_000}s`, endOffset: `${window.endMs / 1_000}s` } : {}),
     };
+    const media = "kind" in video
+      ? { inlineData: { data: video.data, mimeType: video.mimeType } }
+      : { fileData: { fileUri: video.uri, mimeType: video.mimeType } };
     return input.fps === null && !window
-      ? { fileData: { fileUri: input.file.uri, mimeType: input.file.mimeType } }
-      : { fileData: { fileUri: input.file.uri, mimeType: input.file.mimeType }, videoMetadata };
+      ? media
+      : { ...media, videoMetadata };
   };
   const fileParts = windows.length > 0 ? windows.map(filePart) : [filePart()];
   return {
     contents: [{ role: "user", parts: [...fileParts, { text: input.prompt }] }],
-    generationConfig: { ...generationConfig(input.schema, input.thinkingLevel), mediaResolution: input.mediaResolution },
+    generationConfig: { ...generationConfig(input.schema, input.thinkingLevel, input.temperature, input.preserveSchemaBounds), mediaResolution: input.mediaResolution },
   };
 }
 
@@ -121,16 +145,7 @@ export function buildImageGenerateContentRequest(input: {
   if (input.maxOutputTokens !== undefined && (!Number.isInteger(input.maxOutputTokens) || input.maxOutputTokens <= 0)) {
     throw new Error("maxOutputTokens must be a positive integer");
   }
-  if (
-    input.temperature !== undefined
-    && (
-      !Number.isFinite(input.temperature)
-      || input.temperature < 0
-      || input.temperature > 2
-    )
-  ) {
-    throw new Error("temperature must be between 0 and 2");
-  }
+  validateTemperature(input.temperature);
   return {
     contents: [{
       role: "user",
@@ -140,7 +155,7 @@ export function buildImageGenerateContentRequest(input: {
       ],
     }],
     generationConfig: {
-      ...generationConfig(input.schema, input.thinkingLevel),
+      ...generationConfig(input.schema, input.thinkingLevel, input.temperature),
       ...(input.mediaResolution ? { mediaResolution: input.mediaResolution } : {}),
       ...(input.maxOutputTokens ? { maxOutputTokens: input.maxOutputTokens } : {}),
       ...(input.temperature !== undefined ? { temperature: input.temperature } : {}),
@@ -177,9 +192,21 @@ export function createGenerateContentClient(input: { apiKey: string; fetcher?: t
   if (!input.apiKey) throw new Error("GEMINI_API_KEY is required");
   const fetcher = input.fetcher ?? fetch;
   return {
-    async generate(model: string, request: VideoGenerateContentRequest | TextGenerateContentRequest | ImageGenerateContentRequest) {
+    async generate(model: string, request: VideoGenerateContentRequest | TextGenerateContentRequest | ImageGenerateContentRequest, options: GenerateContentOptions = {}) {
       if (!model) throw new Error("Gemini model is required");
-      const response = await fetcher(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": input.apiKey }, body: JSON.stringify(request) });
+      const timeoutMs = options.timeoutMs ?? 45_000;
+      if (!Number.isInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 120_000) throw new Error("Gemini timeout must be between one and 120 seconds");
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      let response: Response;
+      try {
+        response = await fetcher(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": input.apiKey }, body: JSON.stringify(request), signal: controller.signal });
+      } catch (error) {
+        if (controller.signal.aborted) throw new GeminiGenerateContentError(504, "request timed out");
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+      }
       const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
       if (!response.ok) {
         const error = payload.error && typeof payload.error === "object" ? payload.error as Record<string, unknown> : null;

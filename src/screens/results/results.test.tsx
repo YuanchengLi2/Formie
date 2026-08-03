@@ -57,6 +57,9 @@ function finding(id: string, title: string): CoachingFinding {
 function result(): AnalysisResult {
   return {
     status: "partial",
+    analysisBasis: "observed",
+    viewNotes: ["Hips are partly obscured."],
+    generalGuidance: ["Keep the setup stable.", "Use a controlled range."],
     recognition: { label: "High-to-low cable row", variation: null, equipment: ["cable machine"], confidence: 0.76, alternatives: ["High row"], catalogExerciseId: null, exerciseFamily: "row" },
     videoCheck: { outcome: "partial", usableObservations: ["tempo", "elbow path"], limitations: ["hips obscured"], retryReason: null, retryInstruction: null },
     overallAssessment: "The set keeps a stable base while the shoulder position changes late. The opening movement is controlled and the handle path stays repeatable. The main weakness is the late shoulder rise, so keep both shoulders level on the next set.",
@@ -75,6 +78,7 @@ function result(): AnalysisResult {
       { id: "handle-path", label: "Handle Path", score: 78, observed: "The handle path remains steady until the final repetitions.", evidenceIds: ["fix-0"] },
       { id: "shoulder-level", label: "Shoulder Level", score: 66, observed: "The right shoulder rises near the end of the set.", evidenceIds: ["fix-0"] },
       { id: "lowering-control", label: "Lowering Control", score: 84, observed: "The return stays controlled across most repetitions.", evidenceIds: ["fix-1"] },
+      { id: "rep-consistency", label: "Rep Consistency", score: 72, observed: "The final repetitions differ from the opening pattern.", evidenceIds: ["fix-0"] },
     ],
     equipmentObservations: [{ id: "stack-load", category: "visible_load", title: "Selected stack load", observation: "The selector is visible, but the selected number is not readable.", coachingRelevance: "Use the same visible selector position when comparing the next set.", load: { value: null, unit: null, scope: null, certainty: "unknown", basis: "not_readable" }, evidence: [{ startMs: 1_000, peakMs: 1_300, endMs: 1_600, visualEvidence: "The selector pin is visible while the number is blurred.", visibleReferences: ["weight stack", "selector pin"], confidence: 0.88, focusRegion: null }] }],
     didWell: Array.from({ length: 5 }, (_, index) => finding(`well-${index}`, `Did well ${index + 1}`)),
@@ -136,7 +140,8 @@ describe("ResultsScreen", () => {
     const screen = await renderResults();
 
     expect(screen.getByText("COACHING REVIEW")).toBeTruthy();
-    expect(screen.queryByText(/coaching points/i)).toBeNull();
+    expect(screen.queryByTestId("issue-carousel")).toBeNull();
+    expect(screen.queryByText("ALL COACHING POINTS")).toBeNull();
     expect(screen.queryByText("Each tab has one job: see the mistake, understand it, then fix one thing.")).toBeNull();
     expect(screen.getByText("WHAT HAPPENED")).toBeTruthy();
     expect(screen.queryByText("WHY IT MATTERS")).toBeNull();
@@ -175,7 +180,7 @@ describe("ResultsScreen", () => {
     expect(screen.getByLabelText("Recording timeline").props.accessibilityRole).toBe("adjustable");
     expect(screen.getByLabelText("Play recording in video")).toBeTruthy();
     expect(screen.getAllByLabelText(/Review .* at/).length).toBeGreaterThan(0);
-    expect(screen.getAllByTestId(/timeline-evidence-marker-/).length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId(/timeline-evidence-marker-/)).toHaveLength(4);
   }, 10_000);
 
   it("renders the supported strengths and focused next-set plan", async () => {
@@ -186,6 +191,7 @@ describe("ResultsScreen", () => {
     expect(screen.getAllByTestId(/^summary-strength-well-\d+$/)).toHaveLength(3);
     expect(StyleSheet.flatten(screen.getByTestId("summary-strength-well-0").props.style)).toMatchObject({ color: colors.success });
     expect(StyleSheet.flatten(screen.getByTestId("summary-strength-well-0-card").props.style)).toMatchObject({ backgroundColor: "rgba(53,208,127,0.10)" });
+    expect(screen.queryByTestId(/timeline-evidence-marker-observed-well-0-/)).toBeNull();
     expect(screen.getAllByTestId(/^summary-focus-fix-\d+$/)).toHaveLength(4);
     expect(screen.getAllByTestId(/^summary-next-/).filter((node) => !String(node.props.testID).endsWith("-card"))).toHaveLength(3);
     expect(screen.queryByText("Improve priority 1.")).toBeNull();
@@ -198,6 +204,14 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("Issue 1 of 4")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Next problem"));
     expect(screen.getAllByText("Priority 2").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders every returned correction instead of truncating focus areas at four", async () => {
+    const value = result();
+    value.priorityCorrections = Array.from({ length: 6 }, (_, index) => finding(`fix-${index}`, `Priority ${index + 1}`));
+    const screen = await renderResults(jest.fn(), value);
+    expect(screen.getAllByTestId(/^summary-focus-fix-\d+$/)).toHaveLength(6);
+    expect(screen.getByText("Issue 1 of 6")).toBeTruthy();
   });
 
   it("orders the personalized set sections and gives every ranked weakness a next-set action", async () => {
@@ -256,19 +270,35 @@ describe("ResultsScreen", () => {
     expect(screen.getByTestId("anatomy-body-image")).toBeTruthy();
     expect(screen.getByLabelText("Rotatable anatomy model")).toBeTruthy();
     expect(screen.getByLabelText("Rotate anatomy")).toBeTruthy();
-    expect(screen.getByTestId("anatomy-target-chest")).toBeTruthy();
-    expect(screen.getByTestId("anatomy-target-front_shoulders")).toBeTruthy();
-    expect(screen.getByTestId("anatomy-target-triceps")).toBeTruthy();
-    expect(screen.queryByTestId("anatomy-issue-shoulders")).toBeNull();
-    expect(screen.getByText("Target Muscles")).toBeTruthy();
-    expect(screen.getByText("Your Form")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Your Form"));
+    expect(screen.queryByLabelText("Zoom out anatomy")).toBeNull();
+    expect(screen.getByLabelText("Your Form").props.accessibilityState).toEqual({ selected: true });
     expect(screen.queryByTestId("anatomy-target-chest")).toBeNull();
     expect(screen.getByTestId("anatomy-issue-shoulders")).toBeTruthy();
+    expect(screen.getByText("Target Muscles")).toBeTruthy();
+    expect(screen.getByText("Your Form")).toBeTruthy();
     expect(screen.getByText("Observed issue areas")).toBeTruthy();
     expect(screen.queryByText(/never claims actual muscle activation/i)).toBeNull();
     expect(screen.getByTestId("anatomy-gesture-surface")).toBeTruthy();
-    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-"))).toBe(false);
+    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(true);
+    await fireEvent.press(screen.getByLabelText("Target Muscles"));
+    expect(screen.getByTestId("anatomy-target-lats")).toBeTruthy();
+    expect(screen.getByTestId("anatomy-target-upper_back")).toBeTruthy();
+    expect(screen.getByTestId("anatomy-secondary-biceps")).toBeTruthy();
+    expect(screen.getByText("Primary muscles")).toBeTruthy();
+    expect(screen.getByText("Supporting muscles")).toBeTruthy();
+  });
+
+  it("still renders red issue regions when a custom exercise has no target-muscle catalog entry", async () => {
+    const value = result();
+    value.setDeclaration = {
+      ...value.setDeclaration!,
+      exercise: { source: "custom", catalogExerciseId: null, label: "Custom cable movement" },
+    };
+    const screen = await renderResults(jest.fn(), value);
+
+    expect(screen.getByTestId("muscle-focus-figure")).toBeTruthy();
+    expect(screen.getByTestId("anatomy-issue-shoulders")).toBeTruthy();
+    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(true);
   });
 
   it("uses one compact Coach's Note card with separate Scores and Coach's Note views", async () => {
@@ -295,6 +325,7 @@ describe("ResultsScreen", () => {
     expect(screen.getByText(/When one shoulder rises first/)).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("What to do next"));
     expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("coaching-supporting-copy").props.children).toContain("Both shoulders finish at the same height.");
 
     await fireEvent.press(screen.getByLabelText("Next problem"));
     expect(screen.getByText("Issue 2 of 4")).toBeTruthy();
@@ -306,14 +337,24 @@ describe("ResultsScreen", () => {
     expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
   });
 
-  it("limits the complete visible coaching message to three sentences including its bold opening", async () => {
+  it("uses purpose-specific first sentences instead of repeating the issue title across tabs", async () => {
     const value = result();
-    value.priorityCorrections[0].expandedCoaching!.whatHappened = "First visible sentence. Second visible sentence. Third visible sentence. Fourth sentence must be removed.";
+    value.priorityCorrections[0].title = "Control the late descent";
+    value.priorityCorrections[0].expandedCoaching!.whatHappened = "The first visible sentence explains what happened. The second visible sentence adds the rep moment. The third visible sentence completes the observation.";
     const screen = await renderResults(jest.fn(), value);
 
-    expect(screen.getByText("First visible sentence.")).toBeTruthy();
-    expect(screen.getByText("Second visible sentence. Third visible sentence.")).toBeTruthy();
-    expect(screen.queryByText(/Fourth sentence/)).toBeNull();
+    expect(screen.getByTestId("coaching-topic-sentence").props.children).toBe("The first visible sentence explains what happened.");
+    expect(screen.getByTestId("coaching-supporting-copy").props.children).toBe(
+      "The second visible sentence adds the rep moment. The third visible sentence completes the observation.",
+    );
+
+    await fireEvent.press(screen.getByLabelText("Why it matters"));
+    expect(screen.getByTestId("coaching-topic-sentence").props.children).toBe("When one shoulder rises first, the weight follows a tilted path.");
+    expect(screen.getByTestId("coaching-supporting-copy").props.children).toBe("That makes the next repetition harder to repeat evenly.");
+
+    await fireEvent.press(screen.getByLabelText("What to do next"));
+    expect(screen.getByTestId("coaching-topic-sentence").props.children).toBe("Start the next rep with both shoulders level.");
+    expect(screen.getByTestId("coaching-supporting-copy").props.children).toBe("Both shoulders finish at the same height.");
   });
 
   it("uses compact summary and list typography", async () => {
@@ -323,13 +364,16 @@ describe("ResultsScreen", () => {
     expect(StyleSheet.flatten(screen.getByTestId("summary-next-plan-1-card").props.style)).toMatchObject({ minHeight: 56 });
   });
 
-  it("keeps every issue inline instead of opening a More Details page", async () => {
+  it("navigates every returned issue without rendering the redundant issue belt", async () => {
     const screen = await renderResults();
 
     expect(screen.queryByTestId("all-issues-list")).toBeNull();
+    expect(screen.queryByTestId("issue-carousel")).toBeNull();
+    expect(screen.queryAllByTestId(/^issue-carousel-card-/)).toHaveLength(0);
     expect(screen.queryByText(/more details/i)).toBeNull();
-    expect(screen.queryAllByLabelText(/^Open issue details:/)).toHaveLength(0);
-    await fireEvent.press(screen.getAllByText("Priority 1")[0]);
+    await fireEvent.press(screen.getByLabelText("Next problem"));
+    expect(screen.getByText("Issue 2 of 4")).toBeTruthy();
+    expect(screen.getByTestId("active-coaching-panel").props.accessibilityLabel).toContain("Priority 2");
   });
 
   it("keeps the final issue panel at a stable phone width", async () => {
@@ -348,7 +392,7 @@ describe("ResultsScreen", () => {
     });
   });
 
-  it("explains a new single-pass score without a legacy scorecard", async () => {
+  it("explains a current movement score without a legacy scorecard", async () => {
     const value = result();
     value.scoreRationale = [
       { criterion: "setup_stability", observed: "The support base stays planted.", impact: 5, confidence: 0.9, evidenceIds: ["well-0"] },
@@ -449,6 +493,33 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("YOUR NEXT SET")).toBeNull();
   });
 
+  it("renders declaration-only guidance without creating a video finding marker", async () => {
+    const value = result();
+    value.analysisBasis = "declared_only";
+    value.viewNotes = ["No visual claim is made for the stored recording."];
+    value.generalGuidance = ["Set the phone so the movement stays in view.", "Use a controlled range for the declared amount."];
+    value.coachNote = null;
+    value.overallAssessment = "The declared set details are available for next-set guidance.";
+    value.score = null;
+    value.movementScores = [];
+    value.didWell = [];
+    value.priorityCorrections = [];
+    value.coachingCues = [];
+    value.nextSetPlan = [];
+
+    const screen = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
+        <ResultsScreen result={value} onRecordAnother={jest.fn()} />
+      </SafeAreaProvider>,
+    );
+
+    expect(screen.queryByTestId("general-guidance-section")).toBeNull();
+    expect(screen.queryByText("DECLARED-SET GUIDANCE")).toBeNull();
+    expect(screen.queryByTestId("view-notes-section")).toBeNull();
+    expect(screen.queryByText(/Issue \d+ of/)).toBeNull();
+    expect(screen.queryByTestId(/timeline-evidence-marker-/)).toBeNull();
+  });
+
   it("uses the selected primary evidence peak for the displayed issue", async () => {
     const value = result();
     value.priorityCorrections[0].primaryEvidenceIndex = 1;
@@ -521,11 +592,13 @@ describe("ResultsScreen", () => {
     expect(screen.getByText(/Dumbbell Bench Press.*8 reps.*40 lb per hand/)).toBeTruthy();
   });
 
-  it("uses declared-exercise anatomy instead of Gemini's mismatched muscle list", async () => {
+  it("uses Gemini's video-derived muscle focus instead of replacing it with the static catalog", async () => {
     const screen = await renderResults();
 
-    expect(screen.getByText("Pectorals, Front shoulders, Triceps")).toBeTruthy();
-    expect(screen.queryByText("Latissimus dorsi, Upper back, Biceps")).toBeNull();
+    await fireEvent.press(screen.getByLabelText("Target Muscles"));
+    expect(screen.getByText("Latissimus dorsi, Upper back")).toBeTruthy();
+    expect(screen.getByText("Biceps")).toBeTruthy();
+    expect(screen.queryByText("Pectorals")).toBeNull();
   });
 
   it("labels the audited number as a technique score and explains every strict criterion and cap", async () => {

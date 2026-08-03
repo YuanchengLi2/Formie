@@ -11,7 +11,6 @@ export function getVisibleFindings(findings: CoachingFinding[]): CoachingFinding
     .filter((finding) =>
       finding.evidence.some(
         (evidence) =>
-          evidence.confidence >= 0.4 &&
           evidence.visualEvidence.trim().length > 0 &&
           evidence.endMs > evidence.startMs &&
           evidence.visibleBodyAreas.length > 0,

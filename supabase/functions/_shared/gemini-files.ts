@@ -10,6 +10,20 @@ export type GeminiFile = {
   state: "PROCESSING" | "ACTIVE" | "FAILED";
 };
 
+export async function reuseOrUploadGeminiFile(input: {
+  existingName: string | null;
+  getFile: (name: string) => Promise<GeminiFile>;
+  upload: () => Promise<GeminiFile>;
+}): Promise<GeminiFile> {
+  if (!input.existingName) return input.upload();
+  try {
+    return await input.getFile(input.existingName);
+  } catch (error) {
+    if (!(error instanceof Error) || !/(?:^|\D)404(?:\D|$)/.test(error.message)) throw error;
+    return input.upload();
+  }
+}
+
 function videoMimeType(value: string): string {
   const normalized = value.toLowerCase();
   if (normalized.includes("quicktime") || normalized.includes("mov")) return "video/quicktime";

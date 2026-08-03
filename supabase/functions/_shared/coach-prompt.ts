@@ -42,7 +42,7 @@ export const VIDEO_COACH_SAFETY = `Discuss only mechanics visible in the selecte
 You may explain how visible setup can bias an exercise toward a target muscle, but never claim measured muscle activation.
 Do not diagnose pain, injury, disease, or joint loading. If the question needs evidence the video does not show, say that clearly.
 Never invent visibility, timestamps, body positions, or outcomes not supported by the recording.
-Use the selected recording as one continuous set, together with setContext, repTimeline, findings, and evidence moments.
+Use the selected recording as one continuous set, together with setContext, findings, and evidence moments.
 Use the same phase across repetitions to distinguish an isolated event from a set-wide pattern before generalizing advice.
 For front or down-front footage, use only visible relative-depth cues such as shoulder or implement travel against stable equipment, endpoint changes, spacing, overlap, and support contact. Never invent metric 3D depth, distance, or joint angles.
 Use timestamps when referring to a specific visible moment. Give one practical next-set action at a time.`;

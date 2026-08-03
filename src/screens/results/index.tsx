@@ -8,7 +8,7 @@ import { MuscleFocusFigure } from "@/components/muscle-focus-figure";
 import { resolveExerciseMuscleFocus } from "@/features/analysis/exercise-muscle-focus";
 import { getResultPresentation } from "@/features/analysis/presentation";
 import { resolvePlaybackWindow, sourceToClipMs, type PlaybackWindow } from "@/features/analysis/playback-window";
-import { buildCoachingReviewPoints, type ReviewFrame, type ReviewPurpose } from "@/features/analysis/review-frames";
+import { buildCoachingReviewPoints, buildReviewFrames, type ReviewFrame, type ReviewPurpose } from "@/features/analysis/review-frames";
 import type { AnalysisResult, AnatomyRegion } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
@@ -38,19 +38,20 @@ export function conciseCopy(value: string, maxSentences: number, maxWords: numbe
   return `${words.slice(0, maxWords).join(" ").replace(/[.!?]+$/, "")}…`;
 }
 
-function splitOpeningSentence(value: string): { topic: string; supporting: string } {
-  const match = value.trim().match(/^(.+?[.!?])(?:\s+|$)([\s\S]*)$/);
+function splitOpeningSentence(value: string): { headline: string; supporting: string } {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(.+?[.!?])(?:\s+|$)([\s\S]*)$/);
   return match
-    ? { topic: match[1].trim(), supporting: match[2].trim() }
-    : { topic: value.trim(), supporting: "" };
+    ? { headline: match[1].trim(), supporting: match[2].trim() }
+    : { headline: trimmed, supporting: "" };
 }
 
 function CoachingCopy({ value, testID }: { value: string; testID: string }) {
-  const { topic, supporting } = splitOpeningSentence(value);
+  const copy = splitOpeningSentence(value);
   return (
     <View testID={testID} style={{ gap: 4 }}>
-      <Text selectable testID="coaching-topic-sentence" style={{ color: colors.text, fontSize: 15, lineHeight: 21, fontWeight: "700" }}>{topic}</Text>
-      {supporting ? <Text selectable testID="coaching-supporting-copy" style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 21, fontWeight: "400" }}>{supporting}</Text> : null}
+      <Text selectable testID="coaching-topic-sentence" style={{ color: colors.text, fontSize: 15, lineHeight: 21, fontWeight: "700" }}>{copy.headline}</Text>
+      {copy.supporting ? <Text selectable testID="coaching-supporting-copy" style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 21, fontWeight: "400" }}>{copy.supporting}</Text> : null}
     </View>
   );
 }
@@ -106,6 +107,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
   const wideWorkspace = width >= 820;
   const presentation = getResultPresentation(result);
   const points = useMemo(() => buildCoachingReviewPoints(result), [result]);
+  const synchronizedReviewFrames = useMemo(() => buildReviewFrames(result).observed, [result]);
   const [pointIndex, setPointIndex] = useState(0);
   const [purpose, setPurpose] = useState<ReviewPurpose>("observed");
   const movementScores = result.movementScores ?? [];
@@ -114,17 +116,22 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
   const selectedIndex = Math.min(pointIndex, Math.max(0, points.length - 1));
   const point = points[selectedIndex] ?? null;
   const activeFrame = point?.[purpose] ?? null;
-  const observedFrames = points.map((item) => item.observed);
   const hasMajorCorrection = presentation.priorityCorrections.some((finding) => finding.severity === "high");
   const declaredExercise = result.setDeclaration?.exercise.label ?? result.recognition.label ?? "";
   const exerciseMuscleFocus = useMemo(
-    () => resolveExerciseMuscleFocus(declaredExercise),
-    [declaredExercise],
+    () => (
+      result.muscleFocus.primary.length > 0
+      || result.muscleFocus.secondary.length > 0
+      || result.muscleFocus.unclassified.length > 0
+        ? result.muscleFocus
+        : resolveExerciseMuscleFocus(declaredExercise)
+    ),
+    [declaredExercise, result.muscleFocus],
   );
-  const hasMuscleFocus = exerciseMuscleFocus !== null;
   const issueRegions = Array.from(new Set(
     presentation.priorityCorrections.flatMap((finding) => finding.observedIssueRegions ?? []),
   )) as AnatomyRegion[];
+  const hasMuscleFocus = exerciseMuscleFocus !== null || issueRegions.length > 0;
   const hasPersonalizedSummary = hasMuscleFocus || Boolean(result.coachNote);
   const wholeSetSummary = (
     hasPersonalizedSummary
@@ -153,7 +160,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
     };
   });
   const summaryStrengths = presentation.didWell.slice(0, 3).map((finding) => ({ id: finding.id, text: finding.title }));
-  const summaryFocusAreas = presentation.priorityCorrections.slice(0, 4).map((finding) => ({ id: finding.id, text: finding.title }));
+  const summaryFocusAreas = presentation.priorityCorrections.map((finding) => ({ id: finding.id, text: finding.title }));
   const summaryNextActions = nextSetActions.slice(0, 3).map((item) => ({ id: item.id, text: item.action }));
   const coachNote = result.coachNote?.trim() || null;
   const conciseWholeSetSummary = wholeSetSummary ? conciseCopy(wholeSetSummary, 2, 45) : null;
@@ -188,7 +195,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
       <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
         <Pressable accessibilityLabel="Previous problem" accessibilityRole="button" onPress={() => movePoint(-1)} style={({ pressed }) => ({ width: 48, height: 48, alignItems: "center", justifyContent: "center", borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: pressed ? colors.goldSoft : colors.surface })}><Text style={{ color: colors.text, fontSize: 26 }}>‹</Text></Pressable>
         <View style={{ flex: 1, minWidth: 0, minHeight: 64, justifyContent: "center", gap: spacing.xs }}>
-          <Text selectable style={[typography.label, { color: colors.gold }]}>{point.kind === "issue" ? "Issue" : "Advice"} {selectedIndex + 1} of {points.length}</Text>
+          <Text selectable style={[typography.label, { color: colors.gold }]}>{point.observed.finding.coachingType === "optimization" ? "Optimization" : point.kind === "issue" ? "Issue" : "Advice"} {selectedIndex + 1} of {points.length}</Text>
           <Text selectable style={[typography.heading, { color: colors.text, flexShrink: 1 }]}>{point.observed.finding.title}</Text>
           <Text selectable style={[typography.caption, { color: colors.textMuted }]}>{point.observed.evidence.phase ?? "Visible moment"} · {formatAnalysisTimestamp(activeFrameTimeMs)}</Text>
         </View>
@@ -210,11 +217,11 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
           <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>{purpose === "observed" ? "WHAT HAPPENED" : purpose === "why" ? "WHY IT MATTERS" : "WHAT TO DO NEXT"}</Text>
           <CoachingCopy
             testID={purpose === "observed" ? "coaching-what-happened" : purpose === "why" ? "coaching-why-it-matters" : "coaching-what-to-do-next"}
-            value={conciseCopy(purpose === "observed"
+            value={(purpose === "observed"
               ? point.observed.body ?? point.observed.finding.detail
               : purpose === "why"
                 ? point.why.body ?? point.observed.finding.whyItMatters
-                : [point.next.title, point.next.body].filter(Boolean).join(" "), 3, 80)}
+                : [point.next.title, point.next.body].filter(Boolean).join(" ")).trim()}
           />
         </View>
       </View>
@@ -235,7 +242,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
       <View testID="coaching-workspace" style={{ flexDirection: wideWorkspace ? "row" : "column", alignItems: "flex-start", gap: spacing.lg }}>
         {videoUrl && durationMs ? (
           <View style={{ width: wideWorkspace ? "48%" : "100%", maxWidth: wideWorkspace ? 560 : undefined }}>
-            <FullRecording videoUrl={videoUrl} durationMs={durationMs} playbackWindow={playbackWindow} reviewFrames={observedFrames} selectedReviewFrame={activeFrame} onSelectReviewFrame={selectReviewFrame} showActiveFrameCard={false} />
+            <FullRecording videoUrl={videoUrl} durationMs={durationMs} playbackWindow={playbackWindow} reviewFrames={synchronizedReviewFrames} selectedReviewFrame={activeFrame} onSelectReviewFrame={selectReviewFrame} showActiveFrameCard={false} />
           </View>
         ) : null}
         {selectorCoachingPanel}

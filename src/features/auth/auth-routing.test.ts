@@ -101,10 +101,11 @@ describe("authentication routing", () => {
     }
 
     const resetSubmit = resetPassword.match(/onSubmit=\{async \(password\) => \{([\s\S]*?)\n\s*\}\}/)?.[1] ?? "";
-    expect(resetSubmit).toContain("router.replace");
+    expect(resetSubmit).not.toContain("router.replace");
+    expect(resetPassword).not.toContain("useRouter");
     expect(resetPassword).not.toContain("resetComplete");
     expect(resetPassword).not.toContain("resetInProgress");
-    expect(resetPassword).toContain("/login?reset=complete");
+    expect(resetPassword).not.toContain("/login?reset=complete");
 
     expect(verifyEmail).toContain("verifyEmailOtp");
     expect(verifyEmail).not.toContain("onRefresh");

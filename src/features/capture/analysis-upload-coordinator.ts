@@ -14,44 +14,39 @@ export const analysisUploadCoordinator = createUploadCoordinator({
       declaration,
       previousSessionId,
       clientRequestId,
-      privacySafeFallback: normalizeVideoForAnalysis.supportsPrivacySafeFallback,
+      uploadProfile: "single_analysis_v1",
       signal,
     });
     return {
       sessionId: session.sessionId,
-      original: {
-        signedUrl: session.upload.signedUrl,
-        uploadToken: session.upload.token,
-        path: session.upload.path,
-      },
       analysis: {
         signedUrl: session.analysisUpload.signedUrl,
         uploadToken: session.analysisUpload.token,
         path: session.analysisUpload.path,
       },
-      ...(session.privacySafeUpload ? {
-        privacySafe: {
-          signedUrl: session.privacySafeUpload.signedUrl,
-          uploadToken: session.privacySafeUpload.token,
-          path: session.privacySafeUpload.path,
-        },
-      } : {}),
     };
   },
-  uploadVideo: (recording, target, signal) => uploadVideoArtifact({ localUri: recording.localUri, signedUrl: target.signedUrl, uploadToken: target.uploadToken, signal }),
+  // A user-triggered retry may follow a timeout after Storage accepted all
+  // bytes but before the client received the response. Upsert makes replaying
+  // this same, session-scoped signed target idempotent without adding a silent
+  // automatic upload attempt.
+  uploadVideo: (recording, target, signal) => uploadVideoArtifact({ localUri: recording.localUri, signedUrl: target.signedUrl, uploadToken: target.uploadToken, upsert: true, signal }),
   normalizeVideo: normalizeVideoForAnalysis,
+  prepareAnalysisVideo: normalizeVideoForAnalysis.prepare,
   normalizePrivacySafeFallback: normalizeVideoForAnalysis.privacySafeUpperBody,
   bindLocalRecording: (sessionId, recording) => deviceVideoStore.bind(sessionId, recording),
-  completeUpload: async (accessToken, sessionId, durationMs, hasPrivacySafeFallback, signal) => {
+  completeUpload: async (accessToken, sessionId, durationMs, hasPrivacySafeFallback, signal, metadata) => {
+    const byteLength = metadata?.byteLength;
+    if (typeof byteLength !== "number" || !Number.isInteger(byteLength) || byteLength <= 0) {
+      throw new Error("The prepared analysis video size could not be determined. Please retry the upload.");
+    }
+    const preparedByteLength = byteLength as number;
     await completeAnalysisUpload({
       accessToken,
       sessionId,
       durationMs,
       signal,
-      analysisInput: { kind: "upright_video", durationPreserved: true },
-      ...(hasPrivacySafeFallback ? {
-        privacySafeFallback: { kind: "upper_body", durationPreserved: true },
-      } : {}),
+      analysisInput: { kind: "capture_ready_video", durationPreserved: true, byteLength: preparedByteLength },
     });
   },
 });

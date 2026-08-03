@@ -1,7 +1,7 @@
 import type { AnatomyRegion, MuscleRegion } from "@/features/analysis/result-schema";
 
 export type HighlightRegion = AnatomyRegion | MuscleRegion;
-export type AnatomyHighlight = "issue" | "target" | "rest" | "bone";
+export type AnatomyHighlight = "issue" | "secondary" | "target" | "rest" | "bone";
 
 const REGION_PATTERNS: Record<HighlightRegion, RegExp> = {
   chest: /pectoralis/,
@@ -48,10 +48,12 @@ export function anatomyHighlightForName(
   name: string,
   isMuscle: boolean,
   targetRegions: readonly MuscleRegion[],
+  secondaryRegions: readonly MuscleRegion[],
   issueRegions: readonly AnatomyRegion[],
 ): AnatomyHighlight {
   if (!isMuscle) return "bone";
   if (matchesAny(name, issueRegions)) return "issue";
+  if (matchesAny(name, secondaryRegions)) return "secondary";
   if (matchesAny(name, targetRegions)) return "target";
   return "rest";
 }

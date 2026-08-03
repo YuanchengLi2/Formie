@@ -51,12 +51,12 @@ export function buildRecordingPreflightAssessmentSchema(
           "other",
         ],
       },
-      description: "Empty when cameraQuality is sufficient. Otherwise list each limited or blocking camera-quality problem.",
+      description: "Empty when cameraQuality is sufficient. Otherwise list each observable camera-quality limitation.",
     },
     movementEvidence: {
       type: "string",
       enum: ["usable_reps", "usable_hold", "insufficient"],
-      description: "Usable only when the ordered frames demonstrate at least one complete repetition or sustained hold.",
+      description: "Describes whether the ordered frames show a complete repetition, sustained hold, or another limited movement sample.",
     },
     activeMovementFrameIndices: {
       type: "array",
@@ -251,14 +251,14 @@ ${input.frameTimesMs.map((timeMs, index) => `[${index}]=${timeMs}`).join(", ")}
 ${exerciseContext}
 ${requirementList}
 
-Report observable frame evidence for the server to decide whether the recording supports accurate, exercise-specific coaching. Do not decide the outcome yourself, do not judge whether technique is good or bad, and do not invent a rejection reason.
+Report observable frame evidence and practical camera suggestions for the full-video coach so it can provide accurate, exercise-specific coaching. Do not decide a pass/fail outcome, do not judge whether technique is good or bad, and do not invent an unsupported limitation.
 
 Evaluate the exercise-critical readiness factors across the whole ordered sequence:
 - the mandatory body regions, joints, equipment, bench, machine, cable, or other support needed for reliable exercise-specific advice are visible when needed;
-- the complete exercise-critical movement path remains visible through most of the active set, including at least one complete repetition or sustained hold;
+- whatever exercise movement is visible remains describable across the ordered set; a partial movement, setup movement, or sustained hold is valid limited evidence;
 - camera perspective and image detail preserve the mandatory body-to-body, body-to-equipment, and support relationships;
 - lighting, focus, blur, lens obstruction, and camera stability preserve enough usable detail;
-- setup-only footage, an incomplete movement, or ambiguous motion is insufficient.
+- setup-only footage, an incomplete movement, or ambiguous motion may limit which visual claims are supportable; describe that limitation without rejecting the recording.
 
 Return activeMovementFrameIndices containing every frame with active exercise movement or a sustained exercise hold. Return one requirementEvidence entry for every exact checklist item.
 - unusableFrameIndices must contain only active frames where that exact requirement cannot be seen or judged; use [] when it is usable in every active frame.
@@ -266,7 +266,7 @@ Checklist entries are conjunctive: every named part must actually be inside the 
 The server applies this governing visibility rule:
 1. Visibility passes when each requirement's unusableFrameIndices cover fewer than half the active movement frames, meaning the affected area and movement are visible in strictly more than half.
 A separate focused camera-geometry inspection decides whether perspective changes a required relationship. Do not infer failure merely from camera direction in this readiness inspection.
-A recording passes only when the visibility rule passes, the separate geometry inspection passes, and movementEvidence confirms a complete repetition or sustained hold.
+Use the visibility, geometry, and movement evidence only to decide which camera tips and claim limitations are useful. They never block upload or the complete-video analysis.
 Do not mark a frame unusable merely because the view is imperfect. Include it only when the exact requirement is actually hidden, cropped, too small, blurred, obstructed, or distorted enough that it cannot be judged.
 
 Mere presence of a person is not usable evidence. At the supplied 384-pixel-wide sampling resolution, mark a requirement unusable when its needed joints and adjoining segments are only a tiny silhouette and their locations or directions cannot actually be separated.
@@ -277,14 +277,14 @@ Classify cameraQuality as sufficient, limited, or insufficient for descriptive d
 Do not require perfect framing, full-body visibility, readable weight markings, or every possible support reference. A cropped non-critical region is limited or sufficient, not insufficient. For example, a squat can pass without the head or feet when the torso, hips, knees, and full descent-to-return path remain clear; omit claims about the cropped region.
 When only an optional coaching dimension is unavailable, keep the recording usable and omit claims about that dimension.
 
-Horizontal direction is never a rejection reason: front, back, side, and diagonal views are all allowed. Distance is acceptable whenever the complete movement and mandatory regions stay inside the frame and remain large and clear enough to distinguish. Do not reject merely because the whole body is not visible or the person could fill more of the frame.
-Camera direction alone is not a rejection reason. A separate focused inspection evaluates whether perspective actually changes the apparent exercise geometry.
+Horizontal direction is not a limitation by itself: front, back, side, and diagonal views are all allowed. Distance is acceptable whenever the complete movement and mandatory regions stay inside the frame and remain large and clear enough to distinguish. Do not limit claims merely because the whole body is not visible or the person could fill more of the frame.
+Camera direction alone is not a limitation. A separate focused inspection evaluates whether perspective actually changes the apparent exercise geometry.
 Set cameraLimitations to [] when cameraQuality is sufficient. Use one or more limitations when cameraQuality is limited or insufficient.
 
 Set cameraQuality to insufficient only when distortion, lighting, blur, obstruction, or instability prevents a mandatory relationship from being judged reliably.
-Set movementEvidence to usable_reps only for a complete observable repetition, usable_hold only for a sustained static hold, otherwise insufficient.
+Describe movementEvidence from what is visible: use usable_reps or usable_hold when the corresponding movement is clear, and use insufficient only as a diagnostic label when the sample is limited. This label never blocks upload or full-video analysis.
 
-The server, not you, calculates visibility, missingRequirements, blocking perspective distortion, the outcome, and the user-facing reason from frame evidence. Camera side, height, distance, and cameraQuality labels alone never veto a recording.
+The server, not you, calculates visibility, missingRequirements, perspective notes, the advisory outcome, and the user-facing note from frame evidence. Camera side, height, distance, and cameraQuality labels alone never veto a recording.
 When movementEvidence is usable and every requirement has fewer than half the active frames in unusableFrameIndices, guidance must be null.
 Otherwise return structured guidance with:
 - phoneHeight: the lowest practical height that preserves the checklist relationships;

@@ -10,8 +10,8 @@ describe("capture countdown", () => {
     expect(formatElapsed(61_000)).toBe("01:01");
   });
 
-  it("caps camera finalization overhead without inflating short recordings", () => {
-    expect(normalizeRecordedDuration(15_127)).toBe(15_000);
+  it("preserves camera finalization duration so over-limit recordings can be rejected", () => {
+    expect(normalizeRecordedDuration(15_127)).toBe(15_127);
     expect(normalizeRecordedDuration(10_127)).toBe(10_127);
     expect(normalizeRecordedDuration(2_999)).toBe(2_999);
   });

@@ -78,7 +78,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     }
 
     try {
-      const result = await cameraRef.current.recordAsync({ maxDuration: captureVideoSettings.maxDurationSeconds });
+      const result = await cameraRef.current.recordAsync({ maxDuration: captureVideoSettings.maxDurationSeconds, codec: "avc1" });
       if (exitRequestedRef.current) return;
       if (!result?.uri) throw new Error("The camera did not save the recording");
       const saved = await deviceVideoStore.persist({
@@ -197,6 +197,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         onCameraReady={() => void discoverAvailableLenses()}
         selectedLens={selectedLens}
         style={{ flex: 1 }}
+        videoBitrate={captureVideoSettings.bitrate}
         videoQuality={captureVideoSettings.quality}
         videoStabilizationMode="auto"
         zoom={zoom}

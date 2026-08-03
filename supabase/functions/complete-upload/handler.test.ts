@@ -20,6 +20,70 @@ function dependencies(overrides: Partial<CompleteUploadDependencies> = {}): Comp
 }
 
 describe("completeUploadHandler", () => {
+  it("identifies the active upload contract on every response", async () => {
+    const response = await completeUploadHandler(
+      request({
+        sessionId: "session-1",
+        durationMs: 12_000,
+        analysisInput: { kind: "capture_ready_video", durationPreserved: true, byteLength: 4_500_000 },
+      }),
+      dependencies(),
+    );
+
+    expect(response.headers.get("X-Formie-Upload-Contract")).toBe("single-analysis-v1");
+  });
+
+  it("finalizes a single capture-ready analysis video without an original upload", async () => {
+    const deps = dependencies({
+      findSession: jest.fn(async () => ({ id: "session-1", videoPath: null })),
+      videoExists: jest.fn(async (path) => path.endsWith("/analysis-input.mp4")),
+    });
+
+    const response = await completeUploadHandler(
+      request({
+        sessionId: "session-1",
+        durationMs: 12_000,
+        analysisInput: { kind: "capture_ready_video", durationPreserved: true, byteLength: 4_500_000 },
+      }),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(deps.markProcessing).toHaveBeenCalledWith(expect.objectContaining({
+      videoPath: "user-1/session-1/analysis-input.mp4",
+      analysisVideoPath: "user-1/session-1/analysis-input.mp4",
+      analysisInputStrategy: "capture_ready_video",
+    }));
+  });
+
+  it("queues the legacy analyzer without creating a v49 run", async () => {
+    const deps = dependencies();
+
+    const response = await completeUploadHandler(request({ sessionId: "session-1", durationMs: 12_000 }), deps);
+
+    expect(response.status).toBe(200);
+    expect(deps.markProcessing).toHaveBeenCalled();
+  });
+
+  it("accepts a capture-ready video larger than the old inline Gemini payload limit", async () => {
+    const deps = dependencies({
+      findSession: jest.fn(async () => ({ id: "session-1", videoPath: null })),
+      videoExists: jest.fn(async (path) => path.endsWith("/analysis-input.mp4")),
+    });
+
+    const response = await completeUploadHandler(
+      request({
+        sessionId: "session-1",
+        durationMs: 12_000,
+        analysisInput: { kind: "capture_ready_video", durationPreserved: true, byteLength: 25_000_000 },
+      }),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(deps.markProcessing).toHaveBeenCalled();
+  });
+
   it("marks an owned uploaded video ready for the video-only criteria pipeline", async () => {
     const deps = dependencies();
     const response = await completeUploadHandler(

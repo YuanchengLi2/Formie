@@ -1,6 +1,6 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
-import { exactFrameUploadPaths } from "../_shared/exact-frame-requests.ts";
+import { historicalAnalysisArtifactPaths } from "../_shared/legacy-analysis-artifacts.ts";
 import { deleteAnalysisHandler } from "./handler.ts";
 
 Deno.serve(async (request) => {
@@ -22,7 +22,7 @@ Deno.serve(async (request) => {
         id: session.id,
         videoPath: session.video_path,
         analysisVideoPath: session.analysis_video_path,
-        artifactPaths: exactFrameUploadPaths(userId, sessionId),
+        artifactPaths: historicalAnalysisArtifactPaths(userId, sessionId),
       };
     },
     removeVideos: async (paths) => {

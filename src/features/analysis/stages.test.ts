@@ -1,23 +1,12 @@
 import { analysisStages, getAnalysisStageState } from "./stages";
 
-describe("analysis stages", () => {
-  it("maps every persisted backend stage without inventing percentages", () => {
-    expect(analysisStages.map((stage) => stage.id)).toEqual([
-      "video_check",
-      "video_processing",
-      "technique_review",
-      "coaching",
-    ]);
-
-    expect(getAnalysisStageState("technique_review")).toEqual([
-      "complete",
-      "complete",
-      "active",
-      "pending",
-    ]);
+describe("v46 analysis stages", () => {
+  it("maps only the persisted v46 stages", () => {
+    expect(analysisStages.map((stage) => stage.id)).toEqual(["input_ready", "analyzing", "finalizing", "complete"]);
+    expect(getAnalysisStageState("finalizing")).toEqual(["complete", "complete", "active", "pending"]);
   });
 
-  it("keeps all stages pending until analysis persists one", () => {
+  it("keeps all stages pending before persistence", () => {
     expect(getAnalysisStageState(null)).toEqual(Array(4).fill("pending"));
   });
 });

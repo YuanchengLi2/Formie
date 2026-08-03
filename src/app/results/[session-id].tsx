@@ -6,11 +6,14 @@ import * as WebBrowser from "expo-web-browser";
 
 import { declarationForReanalysis } from "@/features/analysis/reanalysis-declaration";
 import type { SetDeclaration } from "@/features/analysis/set-declaration";
+import { AnalysisApiError, reanalyzeAnalysis } from "@/features/analysis/api";
 import { useAnalysisStatus } from "@/features/analysis/use-analysis-status";
+import { getAccessToken } from "@/features/auth/access-token";
 import { useExerciseTutorial } from "@/features/analysis/use-exercise-tutorial";
 import { useCaptureStore } from "@/features/capture/capture-store";
 import { deviceVideoStore } from "@/features/capture/device-video-store";
 import type { RecordedSet } from "@/features/capture/types";
+import { queryClient } from "@/lib/query-client";
 import { ResultsScreen } from "@/screens/results";
 import { SetDeclarationScreen } from "@/screens/set-declaration";
 import { colors } from "@/theme/colors";
@@ -30,18 +33,30 @@ export default function ResultsRoute() {
   const reanalysis = useMutation({
     mutationFn: async (declaration?: SetDeclaration) => {
       if (!declaration) throw new Error("Set details are required");
-      const localRecording = reanalysisRecording ?? await deviceVideoStore.find(sessionId);
-      if (!localRecording) throw new Error("This recording is no longer saved on this device.");
-      resetCapture({
-        type: "local_reanalysis_prepared",
-        recording: localRecording,
-        declaration,
-        previousSessionId: sessionId,
-      });
-      return { kind: "local" as const };
+      try {
+        const accessToken = await getAccessToken();
+        await reanalyzeAnalysis({ accessToken, sessionId, declaration });
+        return { kind: "server" as const };
+      } catch (error) {
+        // A missing retained artifact is the one case where the existing
+        // device recording is useful: let the user explicitly re-upload it.
+        if (!(error instanceof AnalysisApiError) || error.code !== "VIDEO_NOT_FOUND") throw error;
+        const localRecording = reanalysisRecording ?? await deviceVideoStore.find(sessionId);
+        if (!localRecording) throw error;
+        resetCapture({
+          type: "local_reanalysis_prepared",
+          recording: localRecording,
+          declaration,
+          previousSessionId: sessionId,
+        });
+        return { kind: "local" as const };
+      }
     },
-    onSuccess: () => {
-      router.replace("/analysis/review");
+    onSuccess: (result) => {
+      if (result.kind === "server") {
+        queryClient.removeQueries({ queryKey: ["analysis-status", sessionId] });
+      }
+      router.replace(result.kind === "server" ? `/analysis/${sessionId}` : "/analysis/review");
     },
   });
   const prepareReanalysis = async () => {
@@ -49,10 +64,6 @@ export default function ResultsRoute() {
     setReanalysisPreparationError(null);
     try {
       const localRecording = await deviceVideoStore.find(sessionId);
-      if (!localRecording) {
-        setReanalysisPreparationError("This recording is no longer saved on this device.");
-        return;
-      }
       setReanalysisRecording(localRecording);
       setConfirmingReanalysis(true);
     } finally {
@@ -78,14 +89,15 @@ export default function ResultsRoute() {
     status.data.setDeclaration,
   );
 
-  if (confirmingReanalysis && reanalysisRecording) {
+  if (confirmingReanalysis) {
     return (
       <SetDeclarationScreen
-        localVideoUri={reanalysisRecording.localUri}
+        localVideoUri={reanalysisRecording?.localUri ?? ""}
         initialDeclaration={initialReanalysisDeclaration}
         analyzeLabel="Analyze Again"
         secondaryLabel="Cancel"
         showSide={false}
+        showVideoPreview={Boolean(reanalysisRecording)}
         onAnalyze={(declaration) => reanalysis.mutate(declaration)}
         onRetake={() => {
           setConfirmingReanalysis(false);

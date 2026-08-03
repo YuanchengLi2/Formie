@@ -30,7 +30,8 @@ describe("recording preflight model contract", () => {
     expect(prompt).toContain("mandatory body regions");
     expect(prompt).toContain("equipment");
     expect(prompt).toContain("support");
-    expect(prompt).toContain("complete repetition");
+    expect(prompt).toContain("partial movement");
+    expect(prompt).not.toContain("at least one complete repetition");
     expect(prompt).toContain("sustained hold");
     expect(prompt).toContain("distance");
     expect(prompt).toContain("obstruction");
@@ -96,7 +97,7 @@ describe("recording preflight model contract", () => {
     });
 
     expect(prompt).toContain("separate focused camera-geometry inspection");
-    expect(prompt).toContain("Camera direction alone is not a rejection reason");
+    expect(prompt).toContain("Camera direction alone is not a limitation");
     expect(prompt).toContain("cameraLimitations");
     expect(recordingPreflightAssessmentSchema.required).toContain("cameraLimitations");
   });

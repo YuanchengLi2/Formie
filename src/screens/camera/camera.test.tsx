@@ -12,11 +12,13 @@ jest.mock("expo-router", () => ({
 jest.mock("expo-camera", () => {
   const React = require("react");
   const { View } = require("react-native");
+  const CameraView = React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+    React.useImperativeHandle(ref, () => ({ getAvailableLensesAsync: mockGetAvailableLensesAsync }));
+    return React.createElement(View, props);
+  });
+  CameraView.displayName = "CameraView";
   return {
-    CameraView: React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
-      React.useImperativeHandle(ref, () => ({ getAvailableLensesAsync: mockGetAvailableLensesAsync }));
-      return React.createElement(View, props);
-    }),
+    CameraView,
     useCameraPermissions: () => [{ granted: true, canAskAgain: true }, jest.fn()],
   };
 });
@@ -158,5 +160,14 @@ describe("CameraScreen capture lifecycle", () => {
     await act(async () => screen.getByLabelText("Camera preview").props.onCameraReady());
 
     expect(screen.getByLabelText("Start countdown")).toBeTruthy();
+  });
+
+  it("renders the compact 720p AVC capture profile", async () => {
+    const screen = await render(<CameraScreen />);
+    const preview = screen.getByLabelText("Camera preview");
+
+    expect(preview.props.videoQuality).toBe("720p");
+    expect(preview.props.videoBitrate).toBe(2_750_000);
+    expect(preview.props.mute).toBe(true);
   });
 });

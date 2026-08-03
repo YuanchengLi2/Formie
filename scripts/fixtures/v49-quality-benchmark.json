@@ -1,0 +1,20 @@
+{
+  "benchmarks": [
+    {
+      "name": "retained-incline-row",
+      "sessionId": "7d376dd9-13e7-4e4e-9f55-409edc56a985",
+      "expectedConcepts": [
+        { "id": "bench-angle", "label": "high bench angle", "terms": ["bench angle", "bench is too high", "bench too high", "more upright"] },
+        { "id": "pull-direction", "label": "pulling toward the hip instead of upward", "terms": ["toward the hip", "towards the hip", "pulling to the hip", "elbows upward", "pull upward"] },
+        { "id": "spine-rounding", "label": "excessive spinal rounding", "terms": ["spine rounding", "spinal rounding", "rounded spine", "rounding through the back", "thoracic rounding"] }
+      ]
+    }
+  ],
+  "genericFallbackPatterns": [
+    "keep that body position steady",
+    "maintain proper form",
+    "control the movement",
+    "use a comfortable range",
+    "stay stable throughout"
+  ]
+}

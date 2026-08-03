@@ -3,10 +3,12 @@ import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "@tanstack/react-query";
 
 import { useAnalysisStatus } from "@/features/analysis/use-analysis-status";
-import { AnalysisApiError } from "@/features/analysis/api";
+import { AnalysisApiError, reanalyzeAnalysis } from "@/features/analysis/api";
+import { getAccessToken } from "@/features/auth/access-token";
 import { useCaptureStore } from "@/features/capture/capture-store";
 import { deviceVideoStore } from "@/features/capture/device-video-store";
 import { AnalysisProgressScreen } from "@/screens/analysis-progress";
+import { queryClient } from "@/lib/query-client";
 
 export default function AnalysisProgressRoute() {
   const router = useRouter();
@@ -17,28 +19,43 @@ export default function AnalysisProgressRoute() {
     mutationFn: async () => {
       const declaration = status.data?.setDeclaration;
       if (!declaration) throw new Error("The saved set details are unavailable.");
-      const recording = await deviceVideoStore.find(sessionId);
-      if (!recording) throw new Error("This recording is no longer saved on this device.");
-      resetCapture({
-        type: "local_reanalysis_prepared",
-        recording,
-        declaration,
-        previousSessionId: sessionId,
-      });
+      try {
+        const accessToken = await getAccessToken();
+        await reanalyzeAnalysis({ accessToken, sessionId, declaration });
+        return { kind: "server" as const };
+      } catch (error) {
+        if (!(error instanceof AnalysisApiError) || error.code !== "VIDEO_NOT_FOUND") throw error;
+        const recording = await deviceVideoStore.find(sessionId);
+        if (!recording) throw error;
+        resetCapture({
+          type: "local_reanalysis_prepared",
+          recording,
+          declaration,
+          previousSessionId: sessionId,
+        });
+        return { kind: "local" as const };
+      }
     },
-    onSuccess: () => {
-      router.replace("/analysis/review");
+    onSuccess: (result) => {
+      if (result.kind === "server") {
+        queryClient.removeQueries({ queryKey: ["analysis-status", sessionId] });
+      }
+      router.replace(result.kind === "server" ? `/analysis/${sessionId}` : "/analysis/review");
     },
   });
 
   useEffect(() => {
-    if (status.data?.result) router.replace(`/results/${sessionId}` as Href);
-  }, [router, sessionId, status.data?.result]);
+    const terminal = status.data?.status === "complete"
+      || status.data?.status === "partial"
+      || status.data?.status === "unable";
+    if (terminal && status.data?.result) router.replace(`/results/${sessionId}` as Href);
+  }, [router, sessionId, status.data?.result, status.data?.status]);
 
   const failureMessage = status.data?.status === "failed"
-    ? status.data.failureCode === "GEMINI_FILE_FAILED"
+    ? status.data.failureReason
+      ?? (status.data.failureCode === "GEMINI_FILE_FAILED"
       ? "The video could not be processed. Record again with the full set visible."
-      : "Formie couldn't finish this analysis. Your recording is still saved."
+      : "Formie couldn't finish this analysis. Your recording is still saved.")
     : status.error instanceof AnalysisApiError && status.error.code === "NETWORK_ERROR"
       ? "Connection lost while checking your analysis. Reconnect and try again."
       : status.error instanceof Error

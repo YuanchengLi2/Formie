@@ -1,3 +1,8 @@
+import {
+  MAX_ANALYSIS_VIDEO_DURATION_MS,
+  MIN_ANALYSIS_VIDEO_DURATION_MS,
+} from "../_shared/analysis-settings.ts";
+
 export type CompleteUploadSession = {
   id: string;
   videoPath: string | null;
@@ -12,7 +17,7 @@ export type CompleteUploadDependencies = {
     userId: string;
     videoPath: string;
     durationMs: number;
-    analysisInputStrategy: "video" | "trimmed_crop" | "upright_video";
+    analysisInputStrategy: "video" | "trimmed_crop" | "upright_video" | "capture_ready_video";
     analysisVideoPath?: string | null;
     analysisFallbackVideoPath?: string | null;
     analysisDurationMs?: number | null;
@@ -68,7 +73,13 @@ function parsePreprocessing(value: unknown, durationMs: number): { applied: fals
 }
 
 function json(payload: unknown, status: number): Response {
-  return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Formie-Upload-Contract": "single-analysis-v1",
+    },
+  });
 }
 
 export async function uploadedVideoIsVisible(
@@ -98,7 +109,7 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
   if (
     keys.some((key) => key !== "sessionId" && key !== "durationMs" && key !== "preprocessing" && key !== "analysisInput" && key !== "privacySafeFallback") ||
     typeof sessionId !== "string" || !sessionId ||
-    typeof durationMs !== "number" || !Number.isInteger(durationMs) || durationMs < 3_000 || durationMs > 15_000
+    typeof durationMs !== "number" || !Number.isInteger(durationMs) || durationMs < MIN_ANALYSIS_VIDEO_DURATION_MS || durationMs > MAX_ANALYSIS_VIDEO_DURATION_MS
   ) {
     return json({ message: "Invalid upload metadata", code: "INVALID_BODY" }, 400);
   }
@@ -112,10 +123,19 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
     Object.keys(analysisInput).length === 2 &&
     (analysisInput as Record<string, unknown>).kind === "upright_video" &&
     (analysisInput as Record<string, unknown>).durationPreserved === true;
-  if (analysisInput !== undefined && !uprightVideo) {
+  const captureReadyVideo = analysisInput !== undefined &&
+    analysisInput !== null &&
+    typeof analysisInput === "object" &&
+    !Array.isArray(analysisInput) &&
+    Object.keys(analysisInput).length === 3 &&
+    (analysisInput as Record<string, unknown>).kind === "capture_ready_video" &&
+    (analysisInput as Record<string, unknown>).durationPreserved === true &&
+    Number.isInteger((analysisInput as Record<string, unknown>).byteLength) &&
+    Number((analysisInput as Record<string, unknown>).byteLength) > 0;
+  if (analysisInput !== undefined && !uprightVideo && !captureReadyVideo) {
     return json({ message: "Invalid analysis input metadata", code: "INVALID_BODY" }, 400);
   }
-  if (uprightVideo && body.preprocessing !== undefined) {
+  if ((uprightVideo || captureReadyVideo) && body.preprocessing !== undefined) {
     return json({ message: "Analysis input cannot be both upright and trimmed", code: "INVALID_BODY" }, 400);
   }
   const fallback = body.privacySafeFallback;
@@ -137,11 +157,12 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
     const userId = await dependencies.authenticate(request);
     const session = await dependencies.findSession(sessionId, userId);
     if (!session) return json({ message: "Analysis not found", code: "NOT_FOUND" }, 404);
-    const videoPath = session.videoPath ?? `${userId}/${sessionId}/original.mp4`;
+    const analysisPath = `${userId}/${sessionId}/analysis-input.mp4`;
+    const videoPath = captureReadyVideo ? analysisPath : (session.videoPath ?? `${userId}/${sessionId}/original.mp4`);
     if (!(await uploadedVideoIsVisible(videoPath, dependencies.videoExists, dependencies.wait))) {
       return json({ message: "The uploaded video was not found", code: "VIDEO_NOT_FOUND" }, 409);
     }
-    const analysisVideoPath = preprocessing.applied || uprightVideo ? `${userId}/${sessionId}/analysis-input.mp4` : null;
+    const analysisVideoPath = preprocessing.applied || uprightVideo || captureReadyVideo ? analysisPath : null;
     if (analysisVideoPath && !(await uploadedVideoIsVisible(analysisVideoPath, dependencies.videoExists, dependencies.wait))) {
       return json({ message: "The cropped analysis video was not found", code: "VIDEO_NOT_FOUND" }, 409);
     }
@@ -156,8 +177,8 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
       userId,
       videoPath,
       durationMs,
-      analysisInputStrategy: uprightVideo ? "upright_video" : preprocessing.applied ? "trimmed_crop" : "video",
-      ...(uprightVideo ? {
+      analysisInputStrategy: captureReadyVideo ? "capture_ready_video" : uprightVideo ? "upright_video" : preprocessing.applied ? "trimmed_crop" : "video",
+      ...(captureReadyVideo || uprightVideo ? {
         analysisVideoPath,
         analysisDurationMs: durationMs,
         sourceStartMs: 0,

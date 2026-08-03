@@ -1,11 +1,11 @@
 import { parseSetDeclaration, type SetDeclaration } from "../_shared/set-declaration.ts";
 
-export type ReanalysisResetOutcome = "ready" | "not_found" | "video_missing" | "busy" | "declaration_required";
+export type ReanalysisResetOutcome = "ready" | "not_found" | "video_missing" | "video_too_long" | "busy" | "declaration_required";
 
 export type ReanalyzeVideoDependencies = {
   authenticate: (request: Request) => Promise<string>;
   canonicalizeDeclaration: (declaration: SetDeclaration) => Promise<SetDeclaration>;
-  verifyReusableInput: (sessionId: string, userId: string) => Promise<"ready" | "not_found" | "video_missing">;
+  verifyReusableInput: (sessionId: string, userId: string) => Promise<"ready" | "not_found" | "video_missing" | "video_too_long">;
   resetSession: (sessionId: string, userId: string, declaration?: SetDeclaration) => Promise<ReanalysisResetOutcome>;
 };
 
@@ -42,13 +42,15 @@ export async function reanalyzeVideoHandler(request: Request, dependencies: Rean
     const input = await dependencies.verifyReusableInput(sessionId, userId);
     if (input === "not_found") return json({ message: "Analysis not found", code: "NOT_FOUND" }, 404);
     if (input === "video_missing") return json({ message: "The original video is no longer available", code: "VIDEO_NOT_FOUND" }, 409);
+    if (input === "video_too_long") return json({ message: "Video inputs are limited to 15 seconds", code: "VIDEO_TOO_LONG" }, 409);
     if (declaration) declaration = await dependencies.canonicalizeDeclaration(declaration);
     const outcome = await dependencies.resetSession(sessionId, userId, declaration);
     if (outcome === "not_found") return json({ message: "Analysis not found", code: "NOT_FOUND" }, 404);
     if (outcome === "video_missing") return json({ message: "The original video is no longer available", code: "VIDEO_NOT_FOUND" }, 409);
+    if (outcome === "video_too_long") return json({ message: "Video inputs are limited to 15 seconds", code: "VIDEO_TOO_LONG" }, 409);
     if (outcome === "busy") return json({ message: "This analysis is already processing", code: "ALREADY_PROCESSING" }, 409);
     if (outcome === "declaration_required") return json({ message: "Confirm the exercise, completed amount, and load before reanalysis", code: "SET_DECLARATION_REQUIRED" }, 409);
-    return json({ sessionId, status: "queued", stage: "video_check" }, 202);
+    return json({ sessionId, status: "queued", stage: "input_ready" }, 202);
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);
     if (error instanceof Error && error.message === "INVALID_EXERCISE") return json({ message: "Selected exercise is unavailable", code: "INVALID_EXERCISE" }, 400);

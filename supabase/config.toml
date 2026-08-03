@@ -67,10 +67,19 @@ verify_enabled = true
 enabled = true
 file_size_limit = "250MiB"
 
+[functions.analyze-video]
+verify_jwt = false
+
+[functions.analyze-video-v49]
+verify_jwt = true
+
 [functions.coach-chat]
 verify_jwt = true
 
 [functions.cleanup-expired-analyses]
+verify_jwt = false
+
+[functions.retry-analysis]
 verify_jwt = false
 
 [functions.send-feedback]

@@ -251,12 +251,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     },
     async updateRecoveredPassword(password) {
       await service.updateRecoveredPassword(password);
-      await service.logOut();
-      queryClient.clear();
-      await clearPendingVerification();
+      try {
+        await clearPendingVerification();
+      } catch {
+        // The credential update is authoritative. A local resume-state cleanup
+        // failure must not turn a successful password change into a failure.
+      }
       setPendingVerification(null);
       setRecoveryMode(false);
-      setSession(null);
     },
     async requestEmailChange(email) {
       await service.requestEmailChange(email);
@@ -273,7 +275,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
     },
     async updatePassword(password, code) {
       await service.updatePassword(password, code);
-      setSession(await currentSession());
     },
     async logOut() {
       await service.logOut();

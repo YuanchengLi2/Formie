@@ -3,26 +3,33 @@ import { View } from "react-native";
 import { Image } from "expo-image";
 
 import { AnatomyInteractionSurface } from "@/components/anatomy-interaction-surface";
+import { AnatomyZoneHighlights } from "@/components/anatomy-zone-highlights";
 import {
   anatomyRotationFromDrag,
   normalizedAnatomyRotation,
 } from "@/components/anatomy-rotation";
 import { AnatomyRotationControl } from "@/components/anatomy-rotation-control";
+import { nextAnatomyZoom } from "@/components/anatomy-zoom";
 import type { AnatomyRegion, MuscleRegion } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 
 export type AnatomyModelProps = {
   targetRegions: MuscleRegion[];
+  secondaryRegions: MuscleRegion[];
   issueRegions: AnatomyRegion[];
 };
 
-export function AnatomyModel({ targetRegions, issueRegions }: AnatomyModelProps) {
+export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: AnatomyModelProps) {
   const [rotation, setRotation] = useState(0);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const progress = normalizedAnatomyRotation(rotation);
   const backFacing = progress >= 0.25 && progress < 0.75;
   const rotate = useCallback((deltaX: number) => {
     setRotation((current) => anatomyRotationFromDrag(current, deltaX));
+  }, []);
+  const zoom = useCallback((scale: number) => {
+    setZoomLevel((current) => nextAnatomyZoom(current, scale));
   }, []);
 
   return (
@@ -31,6 +38,7 @@ export function AnatomyModel({ targetRegions, issueRegions }: AnatomyModelProps)
         accessibilityLabel="Rotatable anatomy model"
         accessibilityRole="adjustable"
         onRotate={rotate}
+        onZoom={zoom}
         testID="anatomy-gesture-surface"
         style={{
           width: "100%",
@@ -43,21 +51,27 @@ export function AnatomyModel({ targetRegions, issueRegions }: AnatomyModelProps)
           backgroundColor: colors.background,
         }}
       >
-        <Image
-          accessibilityLabel={`${backFacing ? "Back" : "Front"} anatomical muscle figure`}
-          contentFit="fill"
-          source={require("../../assets/production/anatomy-body-front-back.png")}
-          testID="anatomy-body-image"
-          style={{
-            position: "absolute",
-            inset: 0,
-            left: backFacing ? "-100%" : "0%",
-            width: "200%",
-            height: "100%",
-          }}
-        />
+        <View style={{ position: "absolute", inset: 0, transform: [{ scale: zoomLevel }] }}>
+          <Image
+            accessibilityLabel={`${backFacing ? "Back" : "Front"} anatomical muscle figure`}
+            contentFit="fill"
+            source={require("../../assets/production/anatomy-body-front-back.png")}
+            testID="anatomy-body-image"
+            style={{
+              position: "absolute",
+              inset: 0,
+              left: backFacing ? "-100%" : "0%",
+              width: "200%",
+              height: "100%",
+            }}
+          />
+          <AnatomyZoneHighlights targetRegions={targetRegions} secondaryRegions={secondaryRegions} issueRegions={issueRegions} face={backFacing ? "back" : "front"} />
+        </View>
         {targetRegions.map((region) => (
           <View key={`target-${region}`} pointerEvents="none" testID={`anatomy-target-${region}`} />
+        ))}
+        {secondaryRegions.map((region) => (
+          <View key={`secondary-${region}`} pointerEvents="none" testID={`anatomy-secondary-${region}`} />
         ))}
         {issueRegions.map((region) => (
           <View key={`issue-${region}`} pointerEvents="none" testID={`anatomy-issue-${region}`} />

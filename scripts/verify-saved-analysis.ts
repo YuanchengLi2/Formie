@@ -16,11 +16,15 @@ async function main() {
   });
   const [{ data: session, error: sessionError }, { data: result, error: resultError }] = await Promise.all([
     admin.from("analysis_sessions").select("*").eq("id", sessionId).single(),
-    admin.from("analysis_results").select("*").eq("session_id", sessionId).single(),
+    admin.from("analysis_results").select("*").eq("session_id", sessionId).maybeSingle(),
   ]);
   if (sessionError) throw sessionError;
   if (resultError) throw resultError;
-  const payload = resultPayload(session, result);
+  const { data: v49Run, error: v49Error } = session.active_v49_run_id
+    ? await admin.from("analysis_v49_runs").select("public_result").eq("run_id", session.active_v49_run_id).maybeSingle()
+    : { data: null, error: null };
+  if (v49Error) throw v49Error;
+  const payload = resultPayload(session, result, v49Run?.public_result ?? null);
   const parsed = analysisResultSchema.safeParse(payload);
   if (!parsed.success) {
     console.error(parsed.error.issues);
@@ -29,7 +33,7 @@ async function main() {
     console.log(JSON.stringify({
       sessionId,
       status: session.status,
-      pipelineVersion: result.pipeline_version,
+      pipelineVersion: session.pipeline_version,
       resultOpens: true,
       normalizedLoads: parsed.data.equipmentObservations?.map((item) => item.load) ?? [],
     }));

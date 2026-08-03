@@ -1,6 +1,8 @@
 import type { SetDeclaration } from "@/features/analysis/set-declaration";
 import type { UploadTarget } from "./types";
 import { createUploadCoordinator, type UploadCoordinatorDependencies } from "./upload-coordinator";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 const target: UploadTarget = {
   sessionId: "session-1",
@@ -18,6 +20,14 @@ const target: UploadTarget = {
     signedUrl: "https://storage.example/privacy",
     uploadToken: "privacy-token",
     path: "user-1/session-1/privacy-safe-upper-body.mp4",
+  },
+};
+const singleTarget: UploadTarget = {
+  sessionId: "session-single",
+  analysis: {
+    signedUrl: "https://storage.example/analysis-single",
+    uploadToken: "analysis-single-token",
+    path: "user-1/session-single/analysis-input.mp4",
   },
 };
 
@@ -51,6 +61,10 @@ function dependencies(overrides: Partial<UploadCoordinatorDependencies> = {}): U
 }
 
 describe("upload coordinator", () => {
+  it("makes an explicit single-upload retry idempotent after an ambiguous timeout", () => {
+    const source = readFileSync(resolve(__dirname, "analysis-upload-coordinator.ts"), "utf8");
+    expect(source).toContain("upsert: true");
+  });
   it("rejects recordings beyond 15 seconds before creating or uploading anything", async () => {
     const deps = dependencies();
     const coordinator = createUploadCoordinator(deps);
@@ -71,6 +85,23 @@ describe("upload coordinator", () => {
     expect((deps.uploadVideo as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(
       (deps.completeUpload as jest.Mock).mock.invocationCallOrder[0],
     );
+  });
+
+  it("uses one streamed analysis upload and no original/privacy uploads for the v1 profile", async () => {
+    const prepared = { ...recording, localUri: "file:///set-prepared.mp4", byteLength: 4_500_000 };
+    const deps = dependencies({
+      createSession: jest.fn(async () => singleTarget),
+      prepareAnalysisVideo: jest.fn(async () => prepared),
+    });
+    const coordinator = createUploadCoordinator(deps);
+
+    await coordinator.run(recording, declaration);
+
+    expect(deps.uploadVideo).toHaveBeenCalledTimes(1);
+    expect(deps.uploadVideo).toHaveBeenCalledWith(prepared, singleTarget.analysis, expect.any(AbortSignal));
+    expect(deps.normalizeVideo).not.toHaveBeenCalled();
+    expect(deps.normalizePrivacySafeFallback).not.toHaveBeenCalled();
+    expect(deps.completeUpload).toHaveBeenCalledWith("user-jwt", "session-single", 12_000, false, expect.any(AbortSignal), { byteLength: 4_500_000 });
   });
 
   it("prepares analysis artifacts while the original video uploads", async () => {

@@ -1,6 +1,10 @@
+import { MAX_ANALYSIS_VIDEO_DURATION_MS } from "../_shared/analysis-settings.ts";
+
 export type RetainedAnalysisInput = {
   videoPath: string | null;
+  analysisVideoPath?: string | null;
   geminiFileName: string | null;
+  durationMs?: number | null;
 };
 
 export type RetainedAnalysisInputDependencies = {
@@ -11,8 +15,14 @@ export type RetainedAnalysisInputDependencies = {
 export async function verifyRetainedAnalysisInput(
   input: RetainedAnalysisInput,
   dependencies: RetainedAnalysisInputDependencies,
-): Promise<"ready" | "video_missing"> {
+): Promise<"ready" | "video_missing" | "video_too_long"> {
+  if (typeof input.durationMs === "number" && input.durationMs > MAX_ANALYSIS_VIDEO_DURATION_MS) {
+    return "video_too_long";
+  }
   if (input.videoPath && await dependencies.videoExists(input.videoPath)) {
+    return "ready";
+  }
+  if (input.analysisVideoPath && await dependencies.videoExists(input.analysisVideoPath)) {
     return "ready";
   }
   if (!input.geminiFileName) {

@@ -58,6 +58,29 @@ describe("create analysis handler", () => {
     expect(deps.createSignedUpload).toHaveBeenCalledTimes(3);
   });
 
+  it("creates only one analysis upload for the single-analysis profile", async () => {
+    const deps = dependencies();
+    const response = await createAnalysisHandler(
+      new Request("https://example.test", {
+        method: "POST",
+        body: JSON.stringify({ declaration, uploadProfile: "single_analysis_v1" }),
+      }),
+      deps,
+    );
+
+    expect(response.status).toBe(201);
+    expect(deps.createSignedUpload).toHaveBeenCalledTimes(1);
+    expect(deps.createSignedUpload).toHaveBeenCalledWith("user-123/session-456/analysis-input.mp4", { upsert: false });
+    await expect(response.json()).resolves.toEqual({
+      sessionId: "session-456",
+      analysisUpload: {
+        signedUrl: "https://storage.example/analysis-input",
+        token: "analysis-upload-token",
+        path: "user-123/session-456/analysis-input.mp4",
+      },
+    });
+  });
+
   it("does not reserve a privacy-safe artifact when the installed client cannot create one", async () => {
     const deps = dependencies();
     const response = await createAnalysisHandler(

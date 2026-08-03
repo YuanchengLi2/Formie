@@ -59,44 +59,24 @@ function frameFor(
 }
 
 export function buildReviewFrames(result: AnalysisResult): ReviewFrameGroups {
-  const visibleFindings = [...result.priorityCorrections, ...result.coachingCues, ...(result.didWell ?? [])];
-  const observed = visibleFindings.flatMap((finding) => finding.evidence.map((evidence, index) => frameFor(
-    "observed",
-    finding,
-    evidence,
-    index,
-    finding.title,
-    evidence.visualEvidence,
-  )));
-  const why = visibleFindings.flatMap((finding) => finding.evidence.map((evidence, index) => frameFor(
-    "why",
-    finding,
-    evidence,
-    index,
-    finding.title,
-    finding.whyItMatters,
-  )));
-  const findingsById = new Map(visibleFindings.map((finding) => [finding.id, finding]));
-  const next = (result.nextSetPlan ?? []).flatMap((item) => {
-    const finding = item.relatedFindingId ? findingsById.get(item.relatedFindingId) : null;
-    if (!finding) return [];
-    return finding.evidence.map((evidence, index) => frameFor(
-      "next",
-      finding,
-      evidence,
-      index,
-      item.action,
-      undefined,
-      item.id,
-    ));
-  });
-
+  const points = buildCoachingReviewPoints(result);
+  const observed = points.map((point) => point.observed);
+  const why = points.map((point) => point.why);
+  const next = points.map((point) => point.next);
   const byTime = (left: ReviewFrame, right: ReviewFrame) => left.timeMs - right.timeMs;
   return { observed: observed.sort(byTime), why: why.sort(byTime), next: next.sort(byTime) };
 }
 
 export function buildCoachingReviewPoints(result: AnalysisResult): CoachingReviewPoint[] {
-  const findings = result.priorityCorrections.map((finding) => ({ finding, kind: "issue" as const }));
+  const cueFindings: { finding: CoachingFinding; kind: "issue" | "advice" }[] = [];
+  for (const finding of result.coachingCues) {
+    if (finding.coachingType === "correction") cueFindings.push({ finding, kind: "issue" });
+    if (finding.coachingType === "optimization") cueFindings.push({ finding, kind: "advice" });
+  }
+  const findings: { finding: CoachingFinding; kind: "issue" | "advice" }[] = [
+    ...result.priorityCorrections.map((finding) => ({ finding, kind: "issue" as const })),
+    ...cueFindings,
+  ];
   return findings.map(({ finding, kind }) => {
     const evidenceIndex = Math.min(finding.primaryEvidenceIndex ?? 0, finding.evidence.length - 1);
     const evidence = finding.evidence[evidenceIndex];
@@ -126,9 +106,7 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       evidence,
       evidenceIndex,
       expanded?.whatToDo ?? action?.instruction ?? finding.correction ?? finding.cue ?? finding.title,
-      expanded?.whatToDo ? undefined : compactParagraph([
-        expanded?.successCheck ?? action?.successCheck,
-      ], 1),
+      compactParagraph([expanded?.successCheck ?? action?.successCheck], 1),
     );
     const paragraph = [
       observed.body,

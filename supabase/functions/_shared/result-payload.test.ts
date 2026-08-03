@@ -2,6 +2,68 @@ import { resultPayload } from "./result-payload";
 import { analysisResultSchema } from "../../../src/features/analysis/result-schema";
 
 describe("resultPayload", () => {
+  it("returns an isolated v49 public result directly without legacy normalization", () => {
+    const v49 = {
+      status: "complete",
+      analysisBasis: "observed",
+      recognition: { label: "Chest-Supported Row", variation: null, equipment: ["dumbbells"], confidence: 1, alternatives: [], catalogExerciseId: 14, exerciseFamily: "row", source: "user_declared" },
+      overallAssessment: "The Chest-Supported Row needs a more upward pull.",
+      muscleFocus: { primary: [{ name: "Latissimus dorsi", region: "lats" }], secondary: [], unclassified: [] },
+      coachNote: "Drive the elbows upward.", score: 65, scoreRationale: [], movementScores: [], scorecard: null, equipmentObservations: [], didWell: [], priorityCorrections: [], coachingCues: [],
+      setContext: { cameraView: null, visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: "Full video" },
+      setSummary: { totalReps: 10, consistentReps: null, verdict: "Fix pull direction." }, nextSetPlan: [], precisionRequest: { requestedRuns: 0, reason: null, targets: [] }, comparison: null,
+    };
+    expect(resultPayload({ pipeline_version: "gemini-problem-finder-v49", active_v49_run_id: "run-1" }, null, v49)).toBe(v49);
+  });
+  it("maps current whole-video results directly and normalizes the retired mixed label on readable v46 results", () => {
+    const result = {
+      status: "complete",
+      video_check: { outcome: "usable", usableObservations: ["Full set"], limitations: [], retryReason: null, retryInstruction: null },
+      overall_assessment: "The complete set was reviewed.",
+      muscle_focus: { primary: [{ name: "Quadriceps", region: "quads" }], secondary: [], unclassified: [] },
+      coach_note: "Keep the same path.",
+      score: 93,
+      score_rationale: [],
+      movement_scores: [
+        { id: "a", label: "Depth", score: 90, observed: "Visible", evidenceIds: [] },
+        { id: "b", label: "Knee Path", score: 91, observed: "Visible", evidenceIds: [] },
+        { id: "c", label: "Torso", score: 94, observed: "Visible", evidenceIds: [] },
+        { id: "d", label: "Tempo", score: 97, observed: "Visible", evidenceIds: [] },
+      ],
+      equipment_observations: [], did_well: [], priority_corrections: [], coaching_cues: [],
+      set_context: { cameraView: null, visibleReferences: [], sequenceSummary: "Four reps", changeAcrossSet: "Stable", coachingBasis: "Visible set" },
+      set_summary: { totalReps: 4, consistentReps: 4, verdict: "Consistent" },
+      rep_timeline: [], next_set_plan: [], comparison: null,
+    };
+    const payload = resultPayload({ pipeline_version: "gemini-whole-video-v47", detected_label: "Squat", detected_equipment: [], exercise_family: "squat" }, result);
+    expect(payload?.score).toBe(93);
+    expect(payload?.movementScores).toHaveLength(4);
+    expect(payload?.priorityCorrections).toBe(result.priority_corrections);
+    expect(payload).not.toHaveProperty("videoCheck");
+    expect(payload).not.toHaveProperty("repTimeline");
+    expect(resultPayload(
+      { pipeline_version: "gemini-whole-video-v48", detected_label: "Squat", detected_equipment: [], exercise_family: "squat" },
+      result,
+    )?.score).toBe(93);
+    const recheckPayload = resultPayload(
+      { pipeline_version: "gemini-whole-video-v48-recheck1", detected_label: "Squat", detected_equipment: [], exercise_family: "squat" },
+      result,
+    );
+    expect(recheckPayload?.movementScores).toHaveLength(4);
+    expect(recheckPayload?.priorityCorrections).toBe(result.priority_corrections);
+    expect(recheckPayload).not.toHaveProperty("repTimeline");
+    const tabSpecificPayload = resultPayload(
+      { pipeline_version: "gemini-whole-video-v48-recheck2", detected_label: "Squat", detected_equipment: [], exercise_family: "squat" },
+      result,
+    );
+    expect(tabSpecificPayload?.priorityCorrections).toBe(result.priority_corrections);
+    expect(tabSpecificPayload).not.toHaveProperty("repTimeline");
+    expect(resultPayload(
+      { pipeline_version: "gemini-whole-video-v46", detected_label: "Squat", detected_equipment: [], exercise_family: "squat" },
+      { ...result, analysis_basis: "mixed" },
+    )?.analysisBasis).toBe("observed");
+  });
+
   it("maps persisted Gemini recognition and coaching into the app contract", () => {
     expect(resultPayload(
       { detected_label: "Curl", detected_variation: null, detected_equipment: ["dumbbells"], recognition_confidence: 0.9, recognition_alternatives: [], exercise_id: 35, corrected_label: null, corrected_exercise_id: null, camera_view: "side" },
@@ -109,7 +171,7 @@ describe("resultPayload", () => {
       },
     );
 
-    expect(payload?.movementScores?.[0]).toMatchObject({ label: "Dumbbell Path", score: 64 });
+    expect(payload?.movementScores).toEqual([]);
     expect(payload?.priorityCorrections[0].observedIssueRegions).toEqual(["elbows", "lats"]);
     expect(analysisResultSchema.safeParse(payload).success).toBe(true);
   });
@@ -248,7 +310,7 @@ describe("resultPayload", () => {
     expect(analysisResultSchema.safeParse(payload).success).toBe(true);
   });
 
-  it("normalizes legacy corrections to three or four safe coaching sentences", () => {
+  it("preserves legacy anatomical and coaching language without rewriting it", () => {
     const correction = {
       id: "legacy-elbows",
       title: "Keep elbows steady",
@@ -273,10 +335,12 @@ describe("resultPayload", () => {
       .flatMap((value) => value.match(/[^.!?]+[.!?]+(?:["'”’)]*)|[^.!?]+$/g) ?? [])
       .filter((value) => value.trim());
 
-    expect(sentences.length).toBeGreaterThanOrEqual(3);
-    expect(sentences.length).toBeLessThanOrEqual(4);
-    expect(sentences.join(" ")).not.toMatch(/muscle|isolation|joint|strain/i);
-    expect(normalized?.actionableCorrection?.instruction).toMatch(/^(Keep|Guide|Move|Pull|Lower|Raise|Press|Start|Hold|Control)\b/);
+    expect(sentences.length).toBeGreaterThanOrEqual(5);
+    expect(normalized?.detail).toBe(correction.detail);
+    expect(normalized?.whyItMatters).toBe(correction.whyItMatters);
+    expect(normalized?.whyItMatters).toMatch(/triceps isolation|joint strain/i);
+    expect(normalized?.actionableCorrection?.instruction).toBe(correction.correction);
+    expect(normalized?.actionableCorrection?.successCheck).toBe(correction.cue);
   });
 
   it("keeps unable uploads scoreless instead of applying the viewable-workout fallback", () => {

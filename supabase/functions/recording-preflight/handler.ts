@@ -6,6 +6,10 @@ import {
   flattenBlockingVisibilityRequirements,
   type VisibilityRequirements,
 } from "./visibility-requirements.ts";
+import {
+  MAX_ANALYSIS_VIDEO_DURATION_MS,
+  MIN_ANALYSIS_VIDEO_DURATION_MS,
+} from "../_shared/analysis-settings.ts";
 
 export type RecordingPreflightFrame = {
   timeMs: number;
@@ -70,7 +74,7 @@ export type RecordingPreflightAssessment = RecordingPreflightChecks & {
 };
 
 export type RecordingPreflightDecision = {
-  outcome: "usable" | "rerecord";
+  outcome: "usable";
   reason: string | null;
   checks: RecordingPreflightChecks;
   guidance: RecordingPreflightGuidance | null;
@@ -369,14 +373,14 @@ export function parseRecordingPreflightAssessment(
       ? "sufficient" as const
       : "limited" as const;
   const reason = missingRequirements.length > 0
-    ? `The recording does not keep ${formatRequirementList(missingRequirements)} visible through most of the active movement.`
+    ? `The quick check saw limited visibility for ${formatRequirementList(missingRequirements)}; full-video coaching will use every supported detail.`
     : perspectiveDistortedRequirements.length > 0
-      ? `The camera perspective changes the apparent ${formatRequirementList(perspectiveDistortedRequirements)} enough that form or range could be judged incorrectly.`
-    : usableMovement
-      ? null
-      : assessment.activityType === "static_hold"
-        ? "The recording does not show one sustained hold clearly enough to analyze."
-        : "The recording does not show one complete repetition clearly enough to analyze.";
+      ? `The camera angle may limit some perspective-sensitive claims about ${formatRequirementList(perspectiveDistortedRequirements)}; full-video coaching will continue with supported observations.`
+      : usableMovement
+        ? null
+        : assessment.activityType === "static_hold"
+        ? "The quick check saw limited hold evidence; full-video coaching will still review the recording."
+        : "The quick check saw limited repetition evidence; full-video coaching will still review the recording.";
 
   return {
     activityType: assessment.activityType,
@@ -410,8 +414,10 @@ export function deriveRecordingPreflightDecision(
       || (assessment.activityType === "static_hold" && assessment.movementEvidence === "usable_hold")
     );
   return {
-    outcome: usable ? "usable" : "rerecord",
-    reason: usable ? null : assessment.reason,
+    // Preflight is advisory only. The uploaded video must still reach the
+    // complete-video analyst so imperfect framing can produce useful coaching.
+    outcome: "usable",
+    reason: assessment.reason,
     checks: {
       activityType: assessment.activityType,
       visibility: assessment.visibility,
@@ -446,7 +452,7 @@ export async function recordingPreflightHandler(
   if (!Array.isArray(frames) || frames.length !== PREFLIGHT_FRAME_COUNT || !frames.every(validFrame)) {
     return json({ message: `${PREFLIGHT_FRAME_COUNT} valid recording frames are required`, code: "INVALID_BODY" }, 400);
   }
-  if (!Number.isInteger(body.durationMs) || Number(body.durationMs) < 3_000 || Number(body.durationMs) > 15_000) {
+  if (!Number.isInteger(body.durationMs) || Number(body.durationMs) < MIN_ANALYSIS_VIDEO_DURATION_MS || Number(body.durationMs) > MAX_ANALYSIS_VIDEO_DURATION_MS) {
     return json({ message: "Recording duration must be between 3 and 15 seconds", code: "INVALID_BODY" }, 400);
   }
   const rawExerciseName = body.exerciseName;

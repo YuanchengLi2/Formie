@@ -31,34 +31,28 @@ function resultWithTwoMoments(): AnalysisResult {
 }
 
 describe("buildReviewFrames", () => {
-  it("includes supported strengths in the synchronized review instead of hiding them", () => {
+  it("does not create timeline markers for strengths", () => {
     const value = resultWithTwoMoments();
     value.didWell = [{ ...value.priorityCorrections[0], id: "stable-start", title: "Stable setup" }];
 
-    expect(buildReviewFrames(value).observed.map((frame) => frame.findingId)).toContain("stable-start");
+    expect(buildReviewFrames(value).observed.map((frame) => frame.findingId)).not.toContain("stable-start");
   });
 
-  it("derives multiple honest video frames for every supported purpose", () => {
+  it("creates one primary-evidence frame per displayed issue for every purpose", () => {
     const groups = buildReviewFrames(resultWithTwoMoments());
 
-    expect(groups.observed).toHaveLength(2);
-    expect(groups.why.map((frame) => frame.body)).toEqual([
-      "Uneven shoulders reduce repeatability.",
-      "Uneven shoulders reduce repeatability.",
-    ]);
-    expect(groups.next.map((frame) => frame.title)).toEqual([
-      "Square your shoulders before each pull",
-      "Square your shoulders before each pull",
-    ]);
-    expect(groups.next.map((frame) => frame.body)).toEqual([undefined, undefined]);
-    expect(new Set([...groups.observed, ...groups.why, ...groups.next].map((frame) => frame.id)).size).toBe(6);
-    expect(groups.next[1].evidence.visualEvidence).toBe("The same rise repeats.");
+    expect(groups.observed).toHaveLength(1);
+    expect(groups.why.map((frame) => frame.body)).toEqual(["Uneven shoulders reduce repeatability."]);
+    expect(groups.next.map((frame) => frame.title)).toEqual(["Square your shoulders before each pull."]);
+    expect(groups.next.map((frame) => frame.body)).toEqual(["Both shoulders begin and finish level."]);
+    expect(new Set([...groups.observed, ...groups.why, ...groups.next].map((frame) => frame.id)).size).toBe(3);
   });
 
   it("omits next-set instructions that have no related visible finding", () => {
     const result = resultWithTwoMoments();
     result.nextSetPlan = [{ id: "unsupported", action: "Sleep eight hours", rationale: "Recover.", relatedFindingId: null }];
-    expect(buildReviewFrames(result).next).toEqual([]);
+    expect(buildReviewFrames(result).next.map((frame) => frame.title)).toEqual(["Square your shoulders before each pull."]);
+    expect(buildReviewFrames(result).next.map((frame) => frame.title)).not.toContain("Sleep eight hours");
   });
 
   it("creates one complete arrow point for every correction", () => {
@@ -120,6 +114,42 @@ describe("buildReviewFrames", () => {
     expect(points.map((point) => point.id)).not.toContain("setup-advice");
   });
 
+  it("keeps correction-labeled coaching cues in the complete issue list", () => {
+    const value = resultWithTwoMoments();
+    const source = value.priorityCorrections[0];
+    value.coachingCues = [{
+      ...source,
+      id: "late-correction",
+      coachingType: "correction",
+      title: "Control the late return",
+      detail: "The return speeds up near the end of the set.",
+      correction: "Keep the late return as controlled as the opening repetitions.",
+      cue: "Match the opening tempo.",
+    }];
+
+    const points = buildCoachingReviewPoints(value);
+
+    expect(points.map((point) => point.id)).toEqual(["uneven-shoulders", "late-correction"]);
+    expect(points[1].kind).toBe("issue");
+  });
+
+  it("shows an analyst-labeled optimization after corrections as an honest advice card", () => {
+    const value = resultWithTwoMoments();
+    const source = value.priorityCorrections[0];
+    value.coachingCues = [{
+      ...source,
+      id: "optimization-1",
+      coachingType: "optimization",
+      title: "Keep the start consistent",
+      detail: "The starting position is already repeatable.",
+      correction: "Use the same starting position next set.",
+      cue: "Same start next set.",
+    }];
+    const points = buildCoachingReviewPoints(value);
+    expect(points.map((point) => point.kind)).toEqual(["issue", "advice"]);
+    expect(points[1].observed.finding.coachingType).toBe("optimization");
+  });
+
   it("uses the correction's selected primary evidence peak for every selector view", () => {
     const value = resultWithTwoMoments();
     value.priorityCorrections[0].primaryEvidenceIndex = 1;
@@ -147,7 +177,7 @@ describe("buildReviewFrames", () => {
     expect(point.observed.body).toBe(value.priorityCorrections[0].expandedCoaching?.whatHappened);
     expect(point.why.body).toBe(value.priorityCorrections[0].expandedCoaching?.whyItMatters);
     expect(point.next.title).toBe("Start the next rep with both shoulders level.");
-    expect(point.next.body).toBeUndefined();
+    expect(point.next.body).toBe("Both shoulders finish at the same height.");
     expect(point.observed.body).toBe(value.priorityCorrections[0].expandedCoaching?.whatHappened);
     expect(point.observed.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(5);
     expect(point.why.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);

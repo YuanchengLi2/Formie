@@ -152,7 +152,7 @@ describe("auth service", () => {
     expect(client.refreshSession).toHaveBeenCalledTimes(1);
   });
 
-  it("reauthenticates before changing a signed-in password and keeps the session", async () => {
+  it("reauthenticates before changing a signed-in password without making success depend on a refresh", async () => {
     const client = authClient();
     client.reauthenticate.mockResolvedValue({ data: {}, error: null });
     client.updateUser.mockResolvedValue({ data: { user: {} }, error: null });
@@ -166,7 +166,7 @@ describe("auth service", () => {
       password: "new-password",
       nonce: "654321",
     });
-    expect(client.refreshSession).toHaveBeenCalledTimes(1);
+    expect(client.refreshSession).not.toHaveBeenCalled();
     expect(client.signOut).not.toHaveBeenCalled();
   });
 

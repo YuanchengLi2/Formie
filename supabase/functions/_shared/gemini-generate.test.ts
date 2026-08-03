@@ -1,9 +1,48 @@
-import { buildImageGenerateContentRequest, buildTextGenerateContentRequest, buildVideoGenerateContentRequest, parseGenerateContentResponse } from "./gemini-generate";
+import { buildImageGenerateContentRequest, buildTextGenerateContentRequest, buildVideoGenerateContentRequest, createGenerateContentClient, parseGenerateContentResponse } from "./gemini-generate";
 
 const file = { uri: "gemini://video", mimeType: "video/mp4" };
 const schema = { type: "object", required: ["status"], properties: { status: { type: "string" } } };
 
-describe("single-pass Gemini request construction", () => {
+describe("whole-video Gemini request construction", () => {
+  it("builds a fixed 12 FPS high-thinking inline whole-video request", () => {
+    const request = buildVideoGenerateContentRequest({
+      video: { kind: "inline", data: "encoded-video", mimeType: "video/mp4" },
+      prompt: "Watch the complete exercise before coaching.",
+      schema,
+      fps: 12,
+      thinkingLevel: "high",
+      mediaResolution: "MEDIA_RESOLUTION_HIGH",
+      temperature: 0,
+    });
+
+    expect(request.contents[0].parts[0]).toEqual({
+      inlineData: { mimeType: "video/mp4", data: "encoded-video" },
+      videoMetadata: { fps: 12 },
+    });
+    expect(request.generationConfig).toMatchObject({
+      thinkingConfig: { thinkingLevel: "high" },
+      mediaResolution: "MEDIA_RESOLUTION_HIGH",
+      temperature: 0,
+    });
+  });
+
+  it("builds one fixed 12 FPS high-thinking inline replay window", () => {
+    const request = buildVideoGenerateContentRequest({
+      video: { kind: "inline", data: "encoded-video", mimeType: "video/mp4" },
+      prompt: "Review only this uncertain moment.",
+      schema,
+      fps: 12,
+      thinkingLevel: "high",
+      mediaResolution: "MEDIA_RESOLUTION_HIGH",
+      window: { startMs: 2_000, endMs: 5_000 },
+    });
+
+    expect(request.contents[0].parts[0]).toEqual({
+      inlineData: { mimeType: "video/mp4", data: "encoded-video" },
+      videoMetadata: { fps: 12, startOffset: "2s", endOffset: "5s" },
+    });
+  });
+
   it("preserves Gemini prompt blocks as a stable provider error", () => {
     expect(() => parseGenerateContentResponse({
       promptFeedback: { blockReason: "PROHIBITED_CONTENT" },
@@ -58,6 +97,22 @@ describe("single-pass Gemini request construction", () => {
     });
 
     expect(request.generationConfig.temperature).toBe(0);
+  });
+
+  it("turns a provider call that exceeds its bound into a terminal timeout", async () => {
+    jest.useFakeTimers();
+    try {
+      const fetcher = jest.fn(async (_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+      }));
+      const client = createGenerateContentClient({ apiKey: "key", fetcher });
+      const pending = client.generate("gemini-test", buildTextGenerateContentRequest({ prompt: "Write", schema, thinkingLevel: "low" }), { timeoutMs: 1_000 });
+      const assertion = expect(pending).rejects.toMatchObject({ code: "GEMINI_HTTP_504", status: 504 });
+      await jest.advanceTimersByTimeAsync(1_000);
+      await assertion;
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("sends only the disputed video windows for a contradiction review", () => {
@@ -122,5 +177,19 @@ describe("single-pass Gemini request construction", () => {
         },
       },
     });
+  });
+
+  it("preserves supported schema bounds when a caller requires provider enforcement", () => {
+    const request = buildVideoGenerateContentRequest({
+      file,
+      prompt: "Return at least four findings",
+      schema: { type: "object", properties: { findings: { type: "array", minItems: 4, items: { type: "string" } } } },
+      fps: 4,
+      thinkingLevel: "high",
+      mediaResolution: "MEDIA_RESOLUTION_HIGH",
+      preserveSchemaBounds: true,
+    });
+
+    expect((request.generationConfig.responseJsonSchema as any).properties.findings.minItems).toBe(4);
   });
 });

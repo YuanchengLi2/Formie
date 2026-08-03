@@ -73,6 +73,19 @@ function dependencies(overrides: Partial<RecordingPreflightDependencies> = {}): 
 }
 
 describe("recordingPreflightHandler", () => {
+  it("keeps every recording uploadable and returns camera issues as advisory guidance", async () => {
+    const response = await recordingPreflightHandler(new Request("https://example.test/recording-preflight", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer user-jwt" },
+      body: JSON.stringify({ frames, durationMs: 10_000, exerciseName: "Goblet Squat", catalogExerciseId: 4 }),
+    }), dependencies());
+    expect(await response.json()).toMatchObject({
+      outcome: "usable",
+      reason: "The quick check saw limited visibility for hips and knees through the full depth and return; full-video coaching will use every supported detail.",
+      guidance: expect.any(Object),
+    });
+  });
+
   it("derives rejection from insufficient analysis visibility and returns personalized guidance", async () => {
     const deps = dependencies();
     const response = await recordingPreflightHandler(new Request("https://example.test/recording-preflight", {
@@ -83,8 +96,8 @@ describe("recordingPreflightHandler", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      outcome: "rerecord",
-      reason: "The recording does not keep hips and knees through the full depth and return visible through most of the active movement.",
+      outcome: "usable",
+      reason: "The quick check saw limited visibility for hips and knees through the full depth and return; full-video coaching will use every supported detail.",
       checks: {
         activityType: "dynamic_reps",
         visibility: "insufficient",
@@ -260,8 +273,8 @@ describe("recordingPreflightHandler", () => {
     }), deps);
 
     expect(await response.json()).toMatchObject({
-      outcome: "rerecord",
-      reason: expect.stringMatching(/camera perspective.*torso and pelvis.*hips and knees/i),
+      outcome: "usable",
+      reason: "The camera angle may limit some perspective-sensitive claims about torso and pelvis relationship and hips and knees through the full depth and return; full-video coaching will continue with supported observations.",
       checks: {
         visibility: "sufficient",
         cameraQuality: "insufficient",
@@ -321,7 +334,7 @@ describe("recordingPreflightHandler", () => {
     }), deps);
 
     expect(await response.json()).toMatchObject({
-      outcome: "rerecord",
+      outcome: "usable",
       checks: {
         cameraQuality: "limited",
         cameraLimitations: ["framing"],
@@ -361,8 +374,8 @@ describe("recordingPreflightHandler", () => {
     }), deps);
 
     expect(await response.json()).toMatchObject({
-      outcome: "rerecord",
-      reason: "The recording does not keep torso and pelvis relationship visible through most of the active movement.",
+      outcome: "usable",
+      reason: "The quick check saw limited visibility for torso and pelvis relationship; full-video coaching will use every supported detail.",
       checks: {
         cameraQuality: "limited",
         cameraLimitations: ["perspective_distortion"],
@@ -410,7 +423,7 @@ describe("recordingPreflightHandler", () => {
       body: JSON.stringify({ frames, durationMs: 10_000 }),
     }), deps);
 
-    expect((await response.json()).outcome).toBe("rerecord");
+    expect((await response.json()).outcome).toBe("usable");
   });
 
   it("rejects oversized or incomplete frame sets before calling the model", async () => {
@@ -448,7 +461,7 @@ describe("recordingPreflightHandler", () => {
     }), deps);
 
     expect(await response.json()).toMatchObject({
-      outcome: "rerecord",
+      outcome: "usable",
       checks: {
         visibility: "insufficient",
         missingRequirements: ["hips and knees through the full depth and return"],

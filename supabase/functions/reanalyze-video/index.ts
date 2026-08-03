@@ -18,14 +18,14 @@ Deno.serve(async (request) => {
     verifyReusableInput: async (sessionId, userId) => {
       const { data, error } = await admin
         .from("analysis_sessions")
-        .select("video_path,gemini_file_name")
+        .select("video_path,analysis_video_path,gemini_file_name,duration_ms")
         .eq("id", sessionId)
         .eq("user_id", userId)
         .maybeSingle();
       if (error) throw error;
       if (!data) return "not_found";
       return verifyRetainedAnalysisInput(
-        { videoPath: data.video_path, geminiFileName: data.gemini_file_name },
+        { videoPath: data.video_path, analysisVideoPath: data.analysis_video_path, geminiFileName: data.gemini_file_name, durationMs: data.duration_ms },
         {
           videoExists: async (path) => {
             const { data: exists, error: storageError } = await admin.storage.from("analysis-videos").exists(path);

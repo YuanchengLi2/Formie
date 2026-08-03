@@ -58,6 +58,10 @@ Deno.serve(async (request) => {
       if (!session) return null;
       const { data: result, error: resultError } = await admin.from("analysis_results").select("*").eq("session_id", sessionId).maybeSingle();
       if (resultError) throw resultError;
+      const { data: v49Run, error: v49Error } = session.active_v49_run_id
+        ? await admin.from("analysis_v49_runs").select("public_result").eq("run_id", session.active_v49_run_id).eq("session_id", sessionId).maybeSingle()
+        : { data: null, error: null };
+      if (v49Error) throw v49Error;
       return {
         id: session.id,
         userId: session.user_id,
@@ -67,7 +71,7 @@ Deno.serve(async (request) => {
         geminiFileName: typeof session.gemini_file_name === "string" ? session.gemini_file_name : null,
         geminiFileUri: typeof session.gemini_file_uri === "string" ? session.gemini_file_uri : null,
         geminiFileState: session.gemini_file_state ?? null,
-        result: resultPayload(session, result),
+        result: resultPayload(session, result, v49Run?.public_result ?? null),
       };
     },
     listThreads: async (userId) => {

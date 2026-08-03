@@ -3,7 +3,6 @@ import { buildCoachAnswerPrompt, buildCoachLocatorPrompt, buildCoachPrompt, reso
 describe("video coach prompt", () => {
   const analysis = {
     setContext: { cameraView: "down-front", visibleReferences: ["shoulder relative to pad", "handle endpoint"], sequenceSummary: "Eight reps were visible.", changeAcrossSet: "The final two handle endpoints were shorter.", coachingBasis: "Repeat the earlier endpoint without shoulder rise." },
-    repTimeline: [{ repNumber: 1, assessment: "consistent" }, { repNumber: 8, assessment: "breakdown" }],
     priorityCorrections: [{ id: "corr_1", title: "Shoulder rise", detail: "The shoulder rises near lockout.", evidence: [{ peakMs: 1300, repNumber: 8, phase: "top", visualEvidence: "The shoulder lifts above its earlier position." }] }],
   };
 

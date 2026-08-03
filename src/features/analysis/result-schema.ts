@@ -2,7 +2,6 @@ import { z } from "zod";
 import { exerciseFamilies } from "@/features/exercises/exercise-family";
 import { setDeclarationSchema } from "./set-declaration";
 
-const EVIDENCE_REP_TOLERANCE_MS = 1_000;
 export const muscleRegions = ["chest", "front_shoulders", "rear_shoulders", "upper_back", "lats", "biceps", "triceps", "forearms", "abs", "obliques", "lower_back", "glutes", "quads", "hamstrings", "adductors", "calves"] as const;
 export const anatomyRegions = ["chest", "shoulders", "upper_back", "lats", "upper_arms", "elbows", "forearms", "wrists", "torso", "lower_back", "hips", "glutes", "quads", "hamstrings", "adductors", "knees", "calves", "ankles"] as const;
 type MuscleRegionName = (typeof muscleRegions)[number];
@@ -99,10 +98,23 @@ const movementScoreSchema = z.object({
   evidenceIds: z.array(z.string().min(1)).default([]),
 });
 
-const movementScoresSchema = z.union([
-  z.array(movementScoreSchema).length(0),
-  z.array(movementScoreSchema).min(3).max(5),
-]).optional();
+const movementScoresSchema = z.array(movementScoreSchema).max(4).superRefine((scores, context) => {
+  const ids = new Set<string>();
+  const labels = new Set<string>();
+  scores.forEach((score, index) => {
+    const normalizedLabel = score.label.toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (ids.has(score.id)) {
+      context.addIssue({ code: "custom", path: [index, "id"], message: "Movement score IDs must be unique" });
+    }
+    if (labels.has(normalizedLabel)) {
+      context.addIssue({ code: "custom", path: [index, "label"], message: "Movement score labels must be unique" });
+    }
+    ids.add(score.id);
+    labels.add(normalizedLabel);
+  });
+});
+
+const optionalMovementScoresSchema = movementScoresSchema.optional();
 
 const scoreCriterionSchema = z.object({
   key: z.enum(["setup_stability", "path_alignment", "range_positions", "control_tempo", "rep_consistency"]),
@@ -188,7 +200,8 @@ export const evidenceMomentSchema = z
     visualEvidence: z.string().min(1),
     coachingNote: z.string().min(1).max(360).optional(),
     visibleBodyAreas: z.array(z.string().min(1)).min(1),
-    confidence: z.number().min(0.4).max(1),
+    // Confidence is descriptive evidence, never an acceptance gate for v46.
+    confidence: z.number().min(0).max(1),
     measurementIds: z.array(z.string().min(1)).optional(),
     focusRegion: visualFocusRegionSchema.nullable().optional(),
   })
@@ -200,6 +213,7 @@ export const evidenceMomentSchema = z
 
 export const coachingFindingSchema = z.object({
   id: z.string().min(1),
+  coachingType: z.enum(["correction", "optimization"]).optional(),
   coachingArea: z.enum([
     "form",
     "load",
@@ -348,14 +362,17 @@ const precisionRequestSchema = z.object({
 export const analysisResultSchema = z
   .object({
     status: z.enum(["complete", "partial", "unable"]),
+    analysisBasis: z.enum(["observed", "declared_only"]).optional().default("observed"),
+    viewNotes: z.array(z.string().min(1)).optional().default([]),
+    generalGuidance: z.array(z.string().min(1)).optional().default([]),
     recognition: recognitionSchema,
-    videoCheck: videoCheckSchema,
+    videoCheck: videoCheckSchema.optional().default({ outcome: "usable", usableObservations: [], limitations: [], retryReason: null, retryInstruction: null }),
     overallAssessment: z.string().min(1).nullable(),
     muscleFocus: muscleFocusSchema,
     coachNote: z.string().min(1).nullable().optional().default(null),
     score: z.number().min(0).max(100).nullable(),
     scoreRationale: z.array(scoreRationaleSchema),
-    movementScores: movementScoresSchema,
+    movementScores: optionalMovementScoresSchema,
     scorecard: techniqueScorecardSchema.nullable().optional(),
     equipmentObservations: z.array(equipmentObservationSchema).max(4).optional(),
     exerciseGuide: exerciseGuideSchema.nullable().optional(),
@@ -379,8 +396,7 @@ export const analysisResultSchema = z
         for (const evidence of finding.evidence) {
           if (evidence.repNumber === null) continue;
           const rep = reps.get(evidence.repNumber);
-          const peak = evidence.peakMs ?? evidence.startMs;
-          if (!rep || peak < rep.startMs - EVIDENCE_REP_TOLERANCE_MS || peak > rep.endMs + EVIDENCE_REP_TOLERANCE_MS) context.addIssue({ code: "custom", path: ["repTimeline"], message: "Finding evidence must stay within one second of its referenced repetition" });
+          if (!rep) context.addIssue({ code: "custom", path: ["repTimeline"], message: "Finding evidence must reference a repetition in the timeline" });
         }
       }
     }
@@ -413,8 +429,20 @@ export const analysisResultSchema = z
     if (!result.overallAssessment) {
       context.addIssue({ code: "custom", path: ["overallAssessment"], message: "Analyzed results require an overall assessment" });
     }
-    if (result.score === null) {
+    if (
+      result.analysisBasis !== "declared_only"
+      && result.score === null
+      && ((result.movementScores ?? []).length > 0 || findings.length > 0)
+    ) {
       context.addIssue({ code: "custom", path: ["score"], message: "Analyzed results require a numeric score" });
+    }
+    if (result.analysisBasis === "declared_only") {
+      if (result.score !== null) context.addIssue({ code: "custom", path: ["score"], message: "Declaration-only guidance cannot include a movement score" });
+      if ((result.movementScores ?? []).length > 0) context.addIssue({ code: "custom", path: ["movementScores"], message: "Declaration-only guidance cannot include movement scores" });
+      if ((result.repTimeline ?? []).length > 0) context.addIssue({ code: "custom", path: ["repTimeline"], message: "Declaration-only guidance cannot include a repetition timeline" });
+      if (findings.length > 0) context.addIssue({ code: "custom", path: ["priorityCorrections"], message: "Declaration-only guidance cannot include observed findings" });
+      if ((result.equipmentObservations ?? []).length > 0) context.addIssue({ code: "custom", path: ["equipmentObservations"], message: "Declaration-only guidance cannot include equipment observations" });
+      if (result.generalGuidance.length < 2) context.addIssue({ code: "custom", path: ["generalGuidance"], message: "Declaration-only guidance requires at least two instructions" });
     }
     for (const [index, finding] of result.priorityCorrections.entries()) {
       if (!finding.actionableCorrection) {

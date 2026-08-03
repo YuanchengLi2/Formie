@@ -1,6 +1,9 @@
 import { playbackWindowFromSession } from "./analysis-playback-window";
 
 describe("playbackWindowFromSession", () => {
+  it("uses the complete recording for an isolated v49 result", () => {
+    expect(playbackWindowFromSession({ duration_ms: 9_133, active_v49_run_id: "run-1" })).toEqual({ sourceStartMs: 0, sourceEndMs: 9_133 });
+  });
   it("returns the validated active-set interval from the saved analyst decision", () => {
     expect(playbackWindowFromSession({
       duration_ms: 20_000,

@@ -1,8 +1,8 @@
 export const analysisStages = [
-  { id: "video_check", label: "Checking your recording" },
-  { id: "video_processing", label: "Preparing the full video" },
-  { id: "technique_review", label: "Reviewing visible technique" },
-  { id: "coaching", label: "Preparing your coaching" },
+  { id: "input_ready", label: "Uploading video" },
+  { id: "analyzing", label: "Watching the complete exercise" },
+  { id: "finalizing", label: "Finalizing" },
+  { id: "complete", label: "Complete" },
 ] as const;
 
 export type AnalysisStageId = (typeof analysisStages)[number]["id"];

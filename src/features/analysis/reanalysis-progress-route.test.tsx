@@ -17,16 +17,42 @@ const declaration: SetDeclaration = {
   styles: ["slow_tempo"],
   focusNote: null,
 };
-
+const mockStatus: {
+  data: {
+    sessionId: string;
+    status: string;
+    stage: string;
+    failureCode: string | null;
+    durationMs: number;
+    videoUrl: string | null;
+    setDeclaration: SetDeclaration | null;
+    result: Record<string, unknown> | null;
+  };
+  error: null;
+  refetch: typeof mockRefetch;
+} = {
+  data: {
+    sessionId: "session-1",
+    status: "failed",
+    stage: "video_check",
+    failureCode: "DECLARED_CONTEXT_MISMATCH",
+    durationMs: 12_000,
+    videoUrl: "https://storage.example/saved.mp4",
+    setDeclaration: declaration,
+    result: null,
+  },
+  error: null,
+  refetch: mockRefetch,
+};
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ "session-id": "session-1" }),
   useRouter: () => ({ replace: mockReplace }),
 }));
 jest.mock("@tanstack/react-query", () => ({
-  useMutation: (options: { mutationFn: () => Promise<unknown>; onSuccess?: () => void }) => {
+  useMutation: (options: { mutationFn: () => Promise<unknown>; onSuccess?: (value: unknown) => void }) => {
     return {
     mutate: () => {
-      void options.mutationFn().then(() => options.onSuccess?.());
+      void options.mutationFn().then((value) => options.onSuccess?.(value));
     },
     isPending: false,
     error: null,
@@ -53,20 +79,7 @@ jest.mock("@/features/capture/device-video-store", () => ({
   },
 }));
 jest.mock("@/features/analysis/use-analysis-status", () => ({
-  useAnalysisStatus: () => ({
-    data: {
-      sessionId: "session-1",
-      status: "failed",
-      stage: "video_check",
-      failureCode: "DECLARED_CONTEXT_MISMATCH",
-      durationMs: 12_000,
-      videoUrl: "https://storage.example/saved.mp4",
-      setDeclaration: declaration,
-      result: null,
-    },
-    error: null,
-    refetch: mockRefetch,
-  }),
+  useAnalysisStatus: () => mockStatus,
 }));
 jest.mock("@/screens/analysis-progress", () => ({
   AnalysisProgressScreen: ({
@@ -125,29 +138,48 @@ describe("AnalysisProgressRoute declaration authority", () => {
     mockRefetch.mockClear();
     mockRefetch.mockResolvedValue(undefined);
     mockSetDeclarationProps.mockClear();
+    mockStatus.data = {
+      sessionId: "session-1",
+      status: "failed",
+      stage: "video_check",
+      failureCode: "DECLARED_CONTEXT_MISMATCH",
+      durationMs: 12_000,
+      videoUrl: "https://storage.example/saved.mp4",
+      setDeclaration: declaration,
+      result: null,
+    };
   });
 
-  it("reuploads the device-local video instead of resetting a missing server video", async () => {
+  it("resets the retained server video without uploading the device copy", async () => {
     const screen = await render(<AnalysisProgressRoute />);
 
     expect(screen.getByText("Formie couldn't finish this analysis. Your recording is still saved.")).toBeTruthy();
     expect(mockSetDeclarationProps).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByText("Retry Analysis"));
 
-    await waitFor(() => expect(mockFindDeviceVideo).toHaveBeenCalledWith("session-1"));
-    expect(mockDispatch).toHaveBeenNthCalledWith(1, {
-      type: "local_reanalysis_prepared",
-      recording: {
-        localUri: "file:///formie-recordings/session-1.mp4",
-        durationMs: 12_000,
-        mimeType: "video/mp4",
-      },
+    await waitFor(() => expect(mockReanalyzeAnalysis).toHaveBeenCalled());
+    expect(mockReanalyzeAnalysis).toHaveBeenCalledWith({
+      accessToken: "token",
+      sessionId: "session-1",
       declaration,
-      previousSessionId: "session-1",
     });
-    expect(mockDispatch).toHaveBeenCalledTimes(1);
-    expect(mockReplace).toHaveBeenCalledWith("/analysis/review");
-    expect(mockReanalyzeAnalysis).not.toHaveBeenCalled();
+    expect(mockDispatch).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith("/analysis/session-1");
+    expect(mockFindDeviceVideo).not.toHaveBeenCalled();
     expect(mockRefetch).not.toHaveBeenCalled();
+  });
+
+  it("does not navigate to results from a stale result while the session is still processing", async () => {
+    mockStatus.data = {
+      ...mockStatus.data,
+      status: "processing",
+      stage: "analyzing",
+      failureCode: null,
+      result: { status: "complete" },
+    };
+
+    await render(<AnalysisProgressRoute />);
+
+    expect(mockReplace).not.toHaveBeenCalledWith("/results/session-1");
   });
 });

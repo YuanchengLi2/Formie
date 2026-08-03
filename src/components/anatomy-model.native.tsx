@@ -7,20 +7,23 @@ import { loadAsync, Renderer } from "expo-three";
 import * as THREE from "three";
 
 import { AnatomyInteractionSurface } from "@/components/anatomy-interaction-surface";
+import { AnatomyZoneHighlights } from "@/components/anatomy-zone-highlights";
 import {
   anatomyHighlightForName,
   fittedAnatomyScale,
   isSurfaceAnatomyMuscle,
   type AnatomyHighlight,
 } from "@/components/anatomy-region-mapping";
-import { anatomyRotationFromDrag } from "@/components/anatomy-rotation";
+import { anatomyRotationFromDrag, normalizedAnatomyRotation } from "@/components/anatomy-rotation";
 import { AnatomyRotationControl } from "@/components/anatomy-rotation-control";
+import { nextAnatomyZoom } from "@/components/anatomy-zoom";
 import type { AnatomyRegion, MuscleRegion } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 
 export type AnatomyModelProps = {
   targetRegions: MuscleRegion[];
+  secondaryRegions: MuscleRegion[];
   issueRegions: AnatomyRegion[];
 };
 
@@ -57,9 +60,16 @@ function makeMaterialPalette(): MaterialPalette {
       roughness: 0.62,
       metalness: 0,
     }),
-    issue: new THREE.MeshStandardMaterial({
+    secondary: new THREE.MeshStandardMaterial({
       color: 0xf05a5a,
       emissive: 0x5b1414,
+      emissiveIntensity: 0.95,
+      roughness: 0.62,
+      metalness: 0,
+    }),
+    issue: new THREE.MeshStandardMaterial({
+      color: 0xf1b542,
+      emissive: 0x5b3b0c,
       emissiveIntensity: 0.95,
       roughness: 0.62,
       metalness: 0,
@@ -98,6 +108,7 @@ function applyAnatomyMaterials(
   root: THREE.Object3D,
   palette: MaterialPalette,
   targetRegions: readonly MuscleRegion[],
+  secondaryRegions: readonly MuscleRegion[],
   issueRegions: readonly AnatomyRegion[],
 ) {
   root.traverse((object) => {
@@ -115,6 +126,7 @@ function applyAnatomyMaterials(
       name,
       muscle,
       targetRegions,
+      secondaryRegions,
       issueRegions,
     );
     mesh.material = palette[highlight];
@@ -123,9 +135,10 @@ function applyAnatomyMaterials(
   });
 }
 
-export function AnatomyModel({ targetRegions, issueRegions }: AnatomyModelProps) {
+export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: AnatomyModelProps) {
   const [failed, setFailed] = useState(false);
   const [rotation, setRotation] = useState(0);
+  const [zoomLevel, setZoomLevel] = useState(1);
   const mountedRef = useRef(true);
   const modelRef = useRef<THREE.Group | null>(null);
   const rootRef = useRef<THREE.Object3D | null>(null);
@@ -136,8 +149,9 @@ export function AnatomyModel({ targetRegions, issueRegions }: AnatomyModelProps)
   const zoomRef = useRef(1);
   const pitchRef = useRef(0);
   const targetRegionsRef = useRef(targetRegions);
+  const secondaryRegionsRef = useRef(secondaryRegions);
   const issueRegionsRef = useRef(issueRegions);
-  const regionKey = `${targetRegions.join(",")}|${issueRegions.join(",")}`;
+  const regionKey = `${targetRegions.join(",")}|${secondaryRegions.join(",")}|${issueRegions.join(",")}`;
 
   useEffect(() => () => {
     mountedRef.current = false;
@@ -147,12 +161,14 @@ export function AnatomyModel({ targetRegions, issueRegions }: AnatomyModelProps)
 
   useEffect(() => {
     targetRegionsRef.current = targetRegions;
+    secondaryRegionsRef.current = secondaryRegions;
     issueRegionsRef.current = issueRegions;
     if (rootRef.current && paletteRef.current) {
       applyAnatomyMaterials(
         rootRef.current,
         paletteRef.current,
         targetRegions,
+        secondaryRegions,
         issueRegions,
       );
       renderRef.current?.();
@@ -184,13 +200,16 @@ export function AnatomyModel({ targetRegions, issueRegions }: AnatomyModelProps)
     });
   }, []);
 
-  const zoom = useCallback((scale: number) => {
-    zoomRef.current = Math.max(0.78, Math.min(1.42, zoomRef.current * scale));
+  const applyZoom = useCallback((scale: number) => {
+    const nextZoom = nextAnatomyZoom(zoomRef.current, scale);
+    zoomRef.current = nextZoom;
+    setZoomLevel(nextZoom);
     modelRef.current?.scale.setScalar(
-      fittedAnatomyScale(fittedScaleRef.current, zoomRef.current),
+      fittedAnatomyScale(fittedScaleRef.current, nextZoom),
     );
     renderRef.current?.();
   }, []);
+  const zoom = useCallback((scale: number) => applyZoom(scale), [applyZoom]);
 
   const onContextCreate = useCallback(async (gl: ExpoWebGLRenderingContext) => {
     try {
@@ -231,6 +250,7 @@ export function AnatomyModel({ targetRegions, issueRegions }: AnatomyModelProps)
         root,
         palette,
         targetRegionsRef.current,
+        secondaryRegionsRef.current,
         issueRegionsRef.current,
       );
 
@@ -242,7 +262,7 @@ export function AnatomyModel({ targetRegions, issueRegions }: AnatomyModelProps)
       const wrapper = new THREE.Group();
       wrapper.add(root);
       fittedScaleRef.current = 1.82 / Math.max(size.y, 0.001);
-      wrapper.scale.setScalar(fittedScaleRef.current);
+      wrapper.scale.setScalar(fittedAnatomyScale(fittedScaleRef.current, zoomRef.current));
       scene.add(wrapper);
 
       modelRef.current = wrapper;
@@ -257,6 +277,8 @@ export function AnatomyModel({ targetRegions, issueRegions }: AnatomyModelProps)
       if (mountedRef.current) setFailed(true);
     }
   }, []);
+
+  const backFacing = normalizedAnatomyRotation(rotation) >= 0.25 && normalizedAnatomyRotation(rotation) < 0.75;
 
   return (
     <View style={{ gap: spacing.sm }}>
@@ -278,13 +300,16 @@ export function AnatomyModel({ targetRegions, issueRegions }: AnatomyModelProps)
         }}
       >
         {failed ? (
-          <Image
-            accessibilityLabel="Anatomical muscle figure"
-            contentFit="contain"
-            source={require("../../assets/production/anatomy-body-front-back.png")}
-            testID="anatomy-body-image"
-            style={{ width: "100%", height: 430 }}
-          />
+          <View style={{ position: "absolute", inset: 0, transform: [{ scale: zoomLevel }] }}>
+            <Image
+              accessibilityLabel="Anatomical muscle figure"
+              contentFit="fill"
+              source={require("../../assets/production/anatomy-body-front-back.png")}
+              testID="anatomy-body-image"
+              style={{ position: "absolute", inset: 0, left: backFacing ? "-100%" : "0%", width: "200%", height: "100%" }}
+            />
+            <AnatomyZoneHighlights targetRegions={targetRegions} secondaryRegions={secondaryRegions} issueRegions={issueRegions} face={backFacing ? "back" : "front"} />
+          </View>
         ) : (
           <GLView
             onContextCreate={onContextCreate}
@@ -294,6 +319,9 @@ export function AnatomyModel({ targetRegions, issueRegions }: AnatomyModelProps)
         )}
         {targetRegions.map((region) => (
           <View key={`target-${region}`} pointerEvents="none" testID={`anatomy-target-${region}`} />
+        ))}
+        {secondaryRegions.map((region) => (
+          <View key={`secondary-${region}`} pointerEvents="none" testID={`anatomy-secondary-${region}`} />
         ))}
         {issueRegions.map((region) => (
           <View key={`issue-${region}`} pointerEvents="none" testID={`anatomy-issue-${region}`} />

@@ -41,6 +41,7 @@ export type EvidenceMoment = {
 
 export type CoachingFinding = {
   id: string;
+  coachingType?: "correction" | "optimization";
   coachingArea: CoachingArea;
   title: string;
   detail: string;
@@ -105,13 +106,18 @@ export type TechniqueScorecard = {
 
 export type AnalysisCandidate = {
   status: "complete" | "partial" | "unable";
+  /** Whole-video provenance. Historical candidates may omit these fields. */
+  analysisBasis?: "observed" | "declared_only";
+  viewNotes?: string[];
+  generalGuidance?: string[];
   recognition: { label: string | null; variation: string | null; equipment: string[]; confidence: number; alternatives: string[]; catalogExerciseId: number | null; exerciseFamily: ExerciseFamily; source?: "user_declared" | "legacy_model" };
-  videoCheck: { outcome: "usable" | "partial" | "unable"; usableObservations: string[]; limitations: string[]; retryReason: string | null; retryInstruction: string | null };
+  /** Historical result compatibility. The active pipeline exposes analysisBasis/viewNotes instead. */
+  videoCheck?: { outcome: "usable" | "partial" | "unable"; usableObservations: string[]; limitations: string[]; retryReason: string | null; retryInstruction: string | null };
   overallAssessment: string | null;
   muscleFocus: MuscleFocus;
   coachNote: string | null;
   score: number | null;
-  scoreRationale: Array<{ criterion: ScoreCriterionKey; observed: string; impact: number | null; confidence: number; evidenceIds: string[] }>;
+  scoreRationale: Array<{ criterion: string; observed: string; impact: number | null; confidence: number; evidenceIds: string[] }>;
   movementScores?: MovementScore[];
   scorecard: TechniqueScorecard | null;
   equipmentObservations: EquipmentObservation[];
@@ -122,7 +128,8 @@ export type AnalysisCandidate = {
   coachingCues: CoachingFinding[];
   setContext: { cameraView: string | null; visibleReferences: string[]; sequenceSummary: string | null; changeAcrossSet: string | null; coachingBasis: string | null };
   setSummary: { totalReps: number | null; consistentReps: number | null; verdict: string | null };
-  repTimeline: Array<{ repNumber: number; startMs: number; peakMs: number; endMs: number; assessment: "strong" | "consistent" | "breakdown" | "uncertain"; note: string }>;
+  /** Historical result compatibility. v46 does not publish a rep timeline. */
+  repTimeline?: Array<{ repNumber: number; startMs: number; peakMs: number; endMs: number; assessment: "strong" | "consistent" | "breakdown" | "uncertain"; note: string }>;
   nextSetPlan: Array<{ id: string; action: string; rationale: string; successCheck?: string; relatedFindingId: string | null }>;
   precisionRequest: { requestedRuns: number; reason: string | null; targets: Array<{ kind: "recognition" | "timestamp" | "technique"; findingId: string | null; startMs: number | null; endMs: number | null; question: string }> };
   comparison: { previousSessionId: string; summary: string; priorityIssueImproved: boolean | null } | null;

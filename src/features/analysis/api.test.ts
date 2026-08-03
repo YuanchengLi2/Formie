@@ -1,5 +1,14 @@
 import { AnalysisApiError, checkRecordingPreflight, completeAnalysisUpload, createAnalysisSession, getAnalysisStatus, getExerciseGuide, getExerciseTutorial, processAnalysis, processAndLoadAnalysis, reanalyzeAnalysis, uploadAnalysisVideo } from "./api";
 
+jest.mock("expo-file-system", () => ({
+  File: class {
+    readonly exists = true;
+    readonly arrayBuffer = jest.fn(() => {
+      throw new Error("The native upload must not materialize the file in JavaScript.");
+    });
+  },
+}));
+
 const declaration = {
   exercise: { source: "catalog" as const, catalogExerciseId: 2, label: "Flat Dumbbell Bench Press" },
   amount: { kind: "reps" as const, value: 8, countScope: "total" as const },
@@ -168,7 +177,7 @@ describe("analysis API", () => {
     });
 
     expect(response.sessionId).toBe("session-123");
-    expect(response.upload.path).toBe("user/session.mp4");
+    expect(response.upload!.path).toBe("user/session.mp4");
     expect(response.analysisUpload.path).toBe("user/analysis-input.mp4");
     expect(response.privacySafeUpload?.path).toBe("user/privacy-safe-upper-body.mp4");
     expect(fetcher).toHaveBeenCalledTimes(1);
@@ -225,23 +234,70 @@ describe("analysis API", () => {
   });
 
   it("uploads the original bytes through the signed URL token", async () => {
-    const fetcher = jest
-      .fn()
-      .mockResolvedValueOnce(new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "Content-Type": "video/mp4" } }))
-      .mockResolvedValueOnce(new Response(null, { status: 200 }));
+    const fetcher = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
 
     await uploadAnalysisVideo({
       localUri: "file:///recording.mp4",
       signedUrl: "https://storage.example/object/upload/sign/analysis-videos/user/session/original.mp4",
       uploadToken: "signed-upload-token",
+      body: new Blob([new Uint8Array([1, 2, 3])], { type: "video/mp4" }),
       fetcher,
     });
 
-    const [uploadUrl, uploadRequest] = fetcher.mock.calls[1];
+    const [uploadUrl, uploadRequest] = fetcher.mock.calls[0];
     expect(uploadUrl).toBe("https://storage.example/object/upload/sign/analysis-videos/user/session/original.mp4?token=signed-upload-token");
-    expect(uploadRequest).toEqual(expect.objectContaining({ method: "PUT", body: expect.any(ArrayBuffer) }));
+    expect(uploadRequest).toEqual(expect.objectContaining({ method: "PUT", body: expect.any(Blob) }));
     expect(uploadRequest.headers).toEqual(expect.objectContaining({ "Content-Type": "video/mp4", "x-upsert": "false" }));
     expect(uploadRequest.headers.Authorization).toBeUndefined();
+  });
+
+  it("passes the native File directly as the streaming upload body", async () => {
+    const fetcher = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+
+    await uploadAnalysisVideo({
+      localUri: "file:///recording.mp4",
+      signedUrl: "https://storage.example/object/upload/sign/analysis-videos/user/session/analysis-input.mp4",
+      uploadToken: "signed-upload-token",
+      fetcher,
+    });
+
+    const body = fetcher.mock.calls[0][1].body as { arrayBuffer?: jest.Mock };
+    expect(body.arrayBuffer).toBeDefined();
+    expect(body.arrayBuffer).not.toHaveBeenCalled();
+  });
+
+  it("supports an idempotent user-triggered retry for the single analysis artifact", async () => {
+    const fetcher = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    await uploadAnalysisVideo({
+      localUri: "file:///recording.mp4",
+      signedUrl: "https://storage.example/analysis-input.mp4",
+      uploadToken: "signed-upload-token",
+      upsert: true,
+      body: new Blob([new Uint8Array([1])], { type: "video/mp4" }),
+      fetcher,
+    });
+    expect(fetcher.mock.calls[0][1].headers["x-upsert"]).toBe("true");
+  });
+
+  it("requests the single-analysis profile and accepts only one analysis target", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({
+      sessionId: "session-single",
+      analysisUpload: { signedUrl: "https://storage.example/analysis", token: "analysis-token", path: "user/session-single/analysis-input.mp4" },
+    }), { status: 201, headers: { "Content-Type": "application/json" } }));
+
+    const response = await createAnalysisSession({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      declaration,
+      uploadProfile: "single_analysis_v1",
+    });
+
+    expect(response.upload).toBeUndefined();
+    expect(response.privacySafeUpload).toBeUndefined();
+    expect(fetcher).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      body: JSON.stringify({ declaration, uploadProfile: "single_analysis_v1" }),
+    }));
   });
 
   it("marks the uploaded analysis artifact as upright and full length", async () => {
@@ -389,6 +445,7 @@ describe("analysis API", () => {
       status: "failed",
       stage: "analyzing",
       failureCode: "ANALYSIS_FAILED",
+      failureReason: "The movement is outside the frame.",
       durationMs: 3_826,
       videoUrl: null,
       result: null,
@@ -399,7 +456,7 @@ describe("analysis API", () => {
       baseUrl: "https://example.supabase.co/functions/v1",
       fetcher,
       sessionId: "session-123",
-    })).resolves.toMatchObject({ status: "failed", failureCode: "ANALYSIS_FAILED" });
+    })).resolves.toMatchObject({ status: "failed", failureCode: "ANALYSIS_FAILED", failureReason: "The movement is outside the frame." });
   });
 
   it("retries a transient worker resource limit without losing the session", async () => {
@@ -430,7 +487,7 @@ describe("analysis API", () => {
     const fetcher = jest.fn(async () => new Response(JSON.stringify({
       sessionId: "session-123",
       status: "processing",
-      stage: "writing_coaching",
+      stage: "analyzing",
       durationMs: 10_000,
       playbackWindow: { sourceStartMs: 1_200, sourceEndMs: 8_700 },
       videoUrl: "https://storage.example/signed-original.mp4",
@@ -440,20 +497,18 @@ describe("analysis API", () => {
     await expect(getAnalysisStatus({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" })).resolves.toMatchObject({
       videoUrl: "https://storage.example/signed-original.mp4",
       playbackWindow: { sourceStartMs: 1_200, sourceEndMs: 8_700 },
-      frameRequests: [],
-      exactFrameUploads: [],
     });
   });
 
   it("queues the same saved video for development reanalysis", async () => {
-    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "queued", stage: "video_check" }), { status: 202 }));
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "queued", stage: "input_ready" }), { status: 202 }));
 
     await expect(reanalyzeAnalysis({
       accessToken: "user-jwt",
       baseUrl: "https://example.supabase.co/functions/v1",
       fetcher,
       sessionId: "session-123",
-    })).resolves.toEqual({ sessionId: "session-123", status: "queued", stage: "video_check" });
+    })).resolves.toEqual({ sessionId: "session-123", status: "queued", stage: "input_ready" });
 
     expect(fetcher).toHaveBeenCalledWith(
       "https://example.supabase.co/functions/v1/reanalyze-video",
@@ -462,7 +517,7 @@ describe("analysis API", () => {
   });
 
   it("can replace the declaration while reusing the same saved video", async () => {
-    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "queued", stage: "video_check" }), { status: 202 }));
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "queued", stage: "input_ready" }), { status: 202 }));
 
     await reanalyzeAnalysis({
       accessToken: "user-jwt",

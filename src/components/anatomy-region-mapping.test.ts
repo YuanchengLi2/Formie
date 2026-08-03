@@ -48,6 +48,7 @@ describe("anatomy region mapping", () => {
       "Latissimus Dorsi Muscle",
       true,
       ["lats"],
+      [],
       ["lats"],
     )).toBe("issue");
   });
@@ -57,6 +58,7 @@ describe("anatomy region mapping", () => {
       "Left Scapula",
       false,
       ["upper_back"],
+      [],
       ["shoulders"],
     )).toBe("bone");
   });

@@ -1,6 +1,6 @@
 import { createAdminClient } from "../_shared/auth.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
-import { exactFrameUploadPaths } from "../_shared/exact-frame-requests.ts";
+import { historicalAnalysisArtifactPaths } from "../_shared/legacy-analysis-artifacts.ts";
 import { cleanupExpiredAnalysesHandler, type RetentionCandidate } from "./handler.ts";
 
 function requireScheduledRequest(request: Request): Promise<void> {
@@ -63,7 +63,7 @@ Deno.serve(async (request) => {
             analysisVideoPath: session.analysis_video_path,
             artifactPaths: [
               ...(poseBySession.get(session.id) ?? []),
-              ...exactFrameUploadPaths(session.user_id, session.id),
+              ...historicalAnalysisArtifactPaths(session.user_id, session.id),
             ],
           });
         }

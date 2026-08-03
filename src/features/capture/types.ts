@@ -14,6 +14,9 @@ export type RecordedSet = {
   localUri: string;
   durationMs: number;
   mimeType: string;
+  byteLength?: number;
+  /** True when the analysis copy was transcoded because its stored pixels were not upright. */
+  normalizationApplied?: boolean;
 };
 
 export type UploadArtifactTarget = {
@@ -62,28 +65,23 @@ export type RecordingPreflightGuidance = {
 };
 
 export type RecordingPreflightResult =
-  | {
-      outcome: "usable" | "rerecord";
-      reason: string | null;
-      checks: RecordingPreflightChecks;
-      guidance: RecordingPreflightGuidance | null;
-    }
-  | {
-      outcome: "unavailable";
-      reason: null;
-      checks: null;
-      guidance: null;
-    };
+  {
+    outcome: "usable";
+    reason: string | null;
+    checks: RecordingPreflightChecks;
+    guidance: RecordingPreflightGuidance | null;
+  };
 
 export type UploadTarget = {
   sessionId: string;
-  original: UploadArtifactTarget;
+  original?: UploadArtifactTarget;
   analysis: UploadArtifactTarget;
   privacySafe?: UploadArtifactTarget;
 };
 
 export type UploadSubstage =
   | "creating_session"
+  | "uploading_video"
   | "uploading_original"
   | "normalizing"
   | "uploading_analysis"

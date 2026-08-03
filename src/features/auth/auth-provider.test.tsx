@@ -17,6 +17,7 @@ const mockSignUp = jest.fn();
 const mockSignInWithPassword = jest.fn();
 const mockResend = jest.fn();
 const mockSignOut = jest.fn();
+const mockUpdateUser = jest.fn();
 
 jest.mock("@/lib/supabase", () => ({
   supabase: {
@@ -25,7 +26,7 @@ jest.mock("@/lib/supabase", () => ({
       onAuthStateChange: (...args: unknown[]) => mockOnAuthStateChange(...args),
       signInWithPassword: (...args: unknown[]) => mockSignInWithPassword(...args),
       signUp: (...args: unknown[]) => mockSignUp(...args),
-      updateUser: jest.fn(),
+      updateUser: (...args: unknown[]) => mockUpdateUser(...args),
       resend: (...args: unknown[]) => mockResend(...args),
       resetPasswordForEmail: (...args: unknown[]) => mockResetPasswordForEmail(...args),
       setSession: (...args: unknown[]) => mockSetSession(...args),
@@ -65,6 +66,7 @@ function Probe() {
       <Pressable accessibilityRole="button" onPress={() => void auth.refreshVerification()}><Text>Continue after verification</Text></Pressable>
       <Pressable accessibilityRole="button" onPress={() => void auth.verifyEmailOtp("123456")}><Text>Verify email code</Text></Pressable>
       <Pressable accessibilityRole="button" onPress={() => void auth.requestPasswordReset("user@example.com")}><Text>Request reset code</Text></Pressable>
+      <Pressable accessibilityRole="button" onPress={() => void auth.updateRecoveredPassword("new-password")}><Text>Complete password reset</Text></Pressable>
       <Pressable
         accessibilityRole="button"
         onPress={() => void auth.signUp({
@@ -101,6 +103,7 @@ describe("AuthProvider", () => {
     mockSignInWithPassword.mockResolvedValue({ data: { session: null }, error: null });
     mockResend.mockResolvedValue({ data: {}, error: null });
     mockSignOut.mockResolvedValue({ data: {}, error: null });
+    mockUpdateUser.mockResolvedValue({ data: { user: {} }, error: null });
   });
 
   it("resolves a signed-out startup without exposing app access", async () => {
@@ -210,6 +213,36 @@ describe("AuthProvider", () => {
       type: "recovery",
     });
     expect(await screen.findByText("password_recovery")).toBeTruthy();
+  });
+
+  it("keeps the verified recovery session after the password is updated", async () => {
+    const recoverySession = {
+      user: {
+        email: "user@example.com",
+        is_anonymous: false,
+        email_confirmed_at: "2026-07-24T04:20:00Z",
+        user_metadata: {},
+      },
+    };
+    mockLoadPendingVerification.mockResolvedValue({ email: "user@example.com", type: "recovery" });
+    mockGetSession
+      .mockResolvedValueOnce({ data: { session: null }, error: null })
+      .mockResolvedValueOnce({ data: { session: recoverySession }, error: null });
+    const screen = await render(<AuthProvider><Probe /></AuthProvider>);
+    expect(await screen.findByText("verification_pending")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("Verify email code"));
+    });
+    expect(await screen.findByText("password_recovery")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("Complete password reset"));
+    });
+
+    expect(mockUpdateUser).toHaveBeenCalledWith({ password: "new-password" });
+    expect(mockSignOut).not.toHaveBeenCalled();
+    expect(await screen.findByText("authenticated")).toBeTruthy();
   });
 
   it("emails a password reset from Settings without leaving an authenticated session", async () => {

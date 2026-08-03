@@ -119,7 +119,6 @@ export function createAuthService(client: AuthClient, redirectUrl: string) {
     },
     async updatePassword(password: string, nonce: string) {
       await requireSuccess(client.updateUser({ password, nonce }));
-      await requireSuccess(client.refreshSession());
     },
     async refreshSession() {
       await requireSuccess(client.refreshSession());

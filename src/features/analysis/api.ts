@@ -1,10 +1,23 @@
 import { z } from "zod";
+import { File } from "expo-file-system";
 
 import { exerciseFamilies } from "@/features/exercises/exercise-family";
 import { analysisResultSchema, type AnalysisResult } from "./result-schema";
 import { setDeclarationSchema, type SetDeclaration } from "./set-declaration";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+type UploadBody = BodyInit;
+
+async function resolveNativeUploadFetcher(): Promise<Fetcher> {
+  try {
+    const module = await import("expo/fetch");
+    return module.fetch as unknown as Fetcher;
+  } catch {
+    // Jest/web can use the standard fetch implementation; native Expo uses
+    // expo/fetch, which understands File-system-backed File bodies.
+    return fetch;
+  }
+}
 
 const signedUploadSchema = z.object({
   signedUrl: z.string().url(),
@@ -14,7 +27,7 @@ const signedUploadSchema = z.object({
 
 const createSessionResponseSchema = z.object({
   sessionId: z.string().min(1),
-  upload: signedUploadSchema,
+  upload: signedUploadSchema.optional(),
   analysisUpload: signedUploadSchema,
   privacySafeUpload: signedUploadSchema.optional(),
 });
@@ -24,6 +37,8 @@ const statusResponseSchema = z.object({
   status: z.enum(["created", "uploading", "queued", "processing", "complete", "partial", "unable", "failed"]),
   stage: z.string().min(1).nullable(),
   failureCode: z.string().min(1).nullable().optional().default(null),
+  failureReason: z.string().min(1).nullable().optional().default(null),
+  analysisNextRetryAt: z.string().nullable().optional(),
   durationMs: z.number().int().positive().nullable().optional().default(null),
   playbackWindow: z.object({
     sourceStartMs: z.number().int().nonnegative(),
@@ -32,8 +47,6 @@ const statusResponseSchema = z.object({
   videoUrl: z.string().url().nullable().optional().default(null),
   setDeclaration: setDeclarationSchema.nullable().optional(),
   result: analysisResultSchema.nullable(),
-  frameRequests: z.array(z.never()).optional().default([]),
-  exactFrameUploads: z.array(signedUploadSchema).max(25).optional().default([]),
   retrying: z.boolean().optional(),
   attempt: z.number().int().positive().optional(),
 });
@@ -41,7 +54,7 @@ const statusResponseSchema = z.object({
 const reanalysisResponseSchema = z.object({
   sessionId: z.string().min(1),
   status: z.literal("queued"),
-  stage: z.literal("video_check"),
+  stage: z.literal("input_ready"),
 });
 
 export const tutorialVideoSchema = z.object({
@@ -186,23 +199,10 @@ const recordingPreflightGuidanceSchema = z.object({
 });
 
 export const recordingPreflightResultSchema = z.object({
-  outcome: z.enum(["usable", "rerecord"]),
+  outcome: z.literal("usable"),
   reason: z.string().min(1).nullable(),
   checks: recordingPreflightChecksSchema,
   guidance: recordingPreflightGuidanceSchema.nullable(),
-}).superRefine((result, context) => {
-  const checksPass = result.checks.visibility !== "insufficient"
-    && result.checks.cameraQuality !== "insufficient"
-    && (
-      (result.checks.activityType === "dynamic_reps" && result.checks.movementEvidence === "usable_reps")
-      || (result.checks.activityType === "static_hold" && result.checks.movementEvidence === "usable_hold")
-    );
-  if (
-    (result.outcome === "usable" && (!checksPass || result.reason !== null || result.guidance !== null))
-    || (result.outcome === "rerecord" && (checksPass || !result.reason || !result.guidance))
-  ) {
-    context.addIssue({ code: "custom", message: "Recording preflight result is inconsistent" });
-  }
 });
 
 export const exerciseGuideSchema = z.object({
@@ -293,7 +293,7 @@ async function requestJson<T>(
 }
 
 export async function createAnalysisSession(
-  input: RequestContext & { previousSessionId?: string; clientRequestId?: string; declaration: SetDeclaration; privacySafeFallback?: boolean },
+  input: RequestContext & { previousSessionId?: string; clientRequestId?: string; declaration: SetDeclaration; privacySafeFallback?: boolean; uploadProfile?: "single_analysis_v1" },
 ): Promise<CreateAnalysisSessionResponse> {
   const declaration = setDeclarationSchema.parse(input.declaration);
   return requestJson(
@@ -305,6 +305,7 @@ export async function createAnalysisSession(
         ...(input.previousSessionId ? { previousSessionId: input.previousSessionId } : {}),
         ...(input.clientRequestId ? { clientRequestId: input.clientRequestId } : {}),
         declaration,
+        ...(input.uploadProfile ? { uploadProfile: input.uploadProfile } : {}),
         ...(input.privacySafeFallback !== undefined ? { privacySafeFallback: input.privacySafeFallback } : {}),
       }),
     },
@@ -316,6 +317,9 @@ export async function uploadAnalysisVideo(input: {
   localUri: string;
   signedUrl: string;
   uploadToken: string;
+  upsert?: boolean;
+  /** Test/native adapter escape hatch; production callers leave this unset. */
+  body?: UploadBody;
   fetcher?: Fetcher;
   signal?: AbortSignal;
 }): Promise<void> {
@@ -349,16 +353,22 @@ export async function uploadSignedAnalysisArtifact(input: {
   signedUrl: string;
   uploadToken: string;
   upsert?: boolean;
+  mimeType?: string;
+  /** Test/native adapter escape hatch; production callers leave this unset. */
+  body?: UploadBody;
   fetcher?: Fetcher;
   signal?: AbortSignal;
 }): Promise<void> {
-  const fetcher = input.fetcher ?? fetch;
-  const localResponse = await fetcher(input.localUri, { signal: input.signal });
-  if (!localResponse.ok) {
-    throw new AnalysisApiError("Recorded video could not be read", localResponse.status, "VIDEO_READ_FAILED");
+  const fetcher = input.fetcher ?? await resolveNativeUploadFetcher();
+  let body: UploadBody;
+  if (input.body !== undefined) {
+    body = input.body;
+  } else {
+    const file = new File(input.localUri);
+    if (!file.exists) throw new AnalysisApiError("Recorded video could not be read", 0, "VIDEO_READ_FAILED");
+    body = file;
   }
-  const body = await localResponse.arrayBuffer();
-  const contentType = localResponse.headers.get("Content-Type") || "video/mp4";
+  const contentType = input.mimeType || "video/mp4";
   const uploadUrl = new URL(input.signedUrl);
   if (!uploadUrl.searchParams.has("token")) uploadUrl.searchParams.set("token", input.uploadToken);
   const uploadResponse = await fetcher(uploadUrl.toString(), {
@@ -378,7 +388,9 @@ export async function uploadSignedAnalysisArtifact(input: {
 export async function completeAnalysisUpload(input: RequestContext & {
   sessionId: string;
   durationMs: number;
-  analysisInput?: { kind: "upright_video"; durationPreserved: true };
+  analysisInput?:
+    | { kind: "upright_video"; durationPreserved: true }
+    | { kind: "capture_ready_video"; durationPreserved: true; byteLength: number };
   privacySafeFallback?: { kind: "upper_body"; durationPreserved: true };
 }): Promise<{ processing: true }> {
   return requestJson(

@@ -34,15 +34,15 @@ describe("RecordingPreflightScreen", () => {
     mockPlayer.muted = false;
   });
 
-  it("shows the rejected recording beside personalized camera guidance with no bypass", async () => {
+  it("shows advisory camera guidance with an explicit continue action", async () => {
     const onRetake = jest.fn();
-    const onReviewSetup = jest.fn();
+    const onContinue = jest.fn();
     const onBack = jest.fn();
     const screen = await renderPreflight(
       <RecordingPreflightScreen
-        mode="rejected"
-        localVideoUri="file:///recordings/rejected-set.mp4"
-        reason="Your knees and feet leave the frame at the bottom of each squat."
+        mode="advisory"
+        localVideoUri="file:///recordings/set.mp4"
+        reason="Your knees and feet are partly hidden at the bottom of each squat."
         guidance={{
           phoneSetup: "Raise the phone near hip height and point it level at the center of the movement.",
           positioning: "Move back until the entire squat remains inside the frame.",
@@ -50,46 +50,39 @@ describe("RecordingPreflightScreen", () => {
         }}
         onBack={onBack}
         onRetake={onRetake}
-        onReviewSetup={onReviewSetup}
+        onContinue={onContinue}
       />,
     );
 
-    expect(screen.getByText("Adjust your camera and try again")).toBeTruthy();
-    expect(screen.queryByText(
-      "A small camera adjustment will help Formie see the movement clearly enough for reliable coaching.",
-    )).toBeNull();
-    expect(screen.getByLabelText("Recording that needs a camera adjustment").props.nativeControls).toBe(true);
+    expect(screen.getByText("A few recording tips")).toBeTruthy();
+    expect(screen.getByText("These suggestions improve visual evidence, but they never block analysis.")).toBeTruthy();
+    expect(screen.getByLabelText("Recording tips preview").props.nativeControls).toBe(true);
     expect(mockPlayer.loop).toBe(true);
     expect(mockPlayer.muted).toBe(true);
     expect(mockPlay).toHaveBeenCalledTimes(1);
-    expect(screen.getByText("What needs to change")).toBeTruthy();
     expect(screen.getByText("Place your phone")).toBeTruthy();
     expect(screen.getByText("Frame the movement")).toBeTruthy();
-    expect(screen.getByText("Make sure we can see")).toBeTruthy();
-    expect(screen.queryByText("Use recording anyway")).toBeNull();
-    expect(screen.queryByText("Analyze Anyway")).toBeNull();
+    expect(screen.getByText("Keep visible")).toBeTruthy();
 
     await fireEvent.press(screen.getByLabelText("Back"));
     expect(onBack).toHaveBeenCalledTimes(1);
-    await fireEvent.press(screen.getByLabelText("Retake Recording"));
+    await fireEvent.press(screen.getByLabelText("Record another set"));
     expect(onRetake).toHaveBeenCalledTimes(1);
-    await fireEvent.press(screen.getByLabelText("Review Exercise Setup"));
-    expect(onReviewSetup).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByLabelText("Continue with recording"));
+    expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
-  it("blocks when the check is unavailable and offers back, retry, or rerecord", async () => {
-    const onRetry = jest.fn();
-    const onRetake = jest.fn();
+  it("keeps advisory guidance non-blocking", async () => {
+    const onContinue = jest.fn();
     const onBack = jest.fn();
     const screen = await renderPreflight(
-      <RecordingPreflightScreen mode="unavailable" onBack={onBack} onRetry={onRetry} onRetake={onRetake} />,
+      <RecordingPreflightScreen mode="advisory" localVideoUri="file:///recordings/set.mp4" guidance={{ phoneSetup: "Keep the phone level.", positioning: "Keep the movement in frame.", visibilityTarget: "Keep the moving joints visible." }} onBack={onBack} onContinue={onContinue} />,
     );
 
-    expect(screen.queryByText("Use recording anyway")).toBeNull();
     await fireEvent.press(screen.getByLabelText("Back"));
     expect(onBack).toHaveBeenCalledTimes(1);
-    await fireEvent.press(screen.getByLabelText("Try check again"));
-    expect(onRetry).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByLabelText("Continue with recording"));
+    expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
   it("lets the user leave while the recording check is running", async () => {

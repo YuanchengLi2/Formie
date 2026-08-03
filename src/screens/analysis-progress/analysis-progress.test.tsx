@@ -15,8 +15,8 @@ describe("AnalysisProgressScreen", () => {
     expect(screen.getByTestId("analysis-generated-motion", { includeHiddenElements: true }).props.accessibilityLabel).toBe("Curl analysis frame 1 of 3");
     expect(screen.queryByTestId("analysis-scan-line", { includeHiddenElements: true })).toBeNull();
     expect(screen.getByTestId("analysis-motion-mapping", { includeHiddenElements: true }).props.accessibilityState).toEqual({ selected: true });
-    expect(screen.getByText("Analyzing the full set")).toBeTruthy();
-    expect(screen.getByLabelText("Analyzing the full set").props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByText("Watching the complete exercise")).toBeTruthy();
+    expect(screen.getByLabelText("Watching the complete exercise").props.accessibilityState).toEqual({ selected: true });
     expect(screen.getByText("Keep Formie open and stay on this page until your coaching is ready.")).toBeTruthy();
     expect(screen.queryByLabelText("Formie logo")).toBeNull();
     expect(screen.queryByText(/Your recording is ready/i)).toBeNull();

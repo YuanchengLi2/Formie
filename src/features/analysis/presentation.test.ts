@@ -30,6 +30,9 @@ function finding(id: string, severity: CoachingFinding["severity"] = "important"
 function result(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
   return {
     status: "complete",
+    analysisBasis: "observed",
+    viewNotes: [],
+    generalGuidance: [],
     recognition: {
       label: "Standing Dumbbell Curl",
       variation: null,
@@ -71,9 +74,9 @@ describe("result presentation", () => {
     expect(visible.map((item) => item.title)).toEqual(["High", "Another high", "Important", "Note"]);
   });
 
-  it("keeps supported advice at the analyzer confidence floor", () => {
+  it("keeps supported advice even when its confidence is low", () => {
     const supported = finding("Visible optimization", "note");
-    supported.evidence[0].confidence = 0.4;
+    supported.evidence[0].confidence = 0.05;
     expect(getVisibleFindings([supported])).toEqual([supported]);
   });
 
