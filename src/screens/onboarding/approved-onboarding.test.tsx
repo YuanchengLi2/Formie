@@ -72,10 +72,13 @@ describe("approved onboarding screen", () => {
     expect(screen.queryByTestId("phone-frame")).toBeNull();
   });
 
-  it.each(["welcome", "product-value", "why-formie", "product-demonstration", "long-term-value", "loading"] as const)("renders the extracted, frame-free %s artwork", async (step) => {
+  it.each(["welcome", "product-value", "why-formie", "product-demonstration", "long-term-value", "loading"] as const)("renders native copy around the exact illustration-only %s artwork", async (step) => {
     const { screen } = await renderStep(step);
-    const image = screen.getByTestId(`approved-artwork-${step}`);
+    const image = screen.getByTestId(`approved-illustration-${step}`);
     expect(image.props.contentFit).toBe("contain");
+    expect(screen.getByText(copyForStep[step].title)).toBeTruthy();
+    expect(screen.getByText(copyForStep[step].subtitle)).toBeTruthy();
+    expect(screen.queryByTestId(`approved-artwork-${step}`)).toBeNull();
     expect(screen.queryByTestId("phone-frame")).toBeNull();
     expect(screen.queryByTestId("screenshot-cta-overlay")).toBeNull();
   });
@@ -91,10 +94,10 @@ describe("approved onboarding screen", () => {
     expect(age.props.onBack).toHaveBeenCalledTimes(1);
   });
 
-  it("renders Welcome from the approved artwork without recreating it", async () => {
+  it("renders Welcome from native copy and the approved illustration cutout", async () => {
     const { screen } = await renderStep("welcome");
 
-    const image = screen.getByTestId("approved-artwork-welcome");
+    const image = screen.getByTestId("approved-illustration-welcome");
     expect(image.props.contentFit).toBe("contain");
     expect(screen.queryByLabelText("Welcome lifting artwork")).toBeNull();
   });
@@ -106,7 +109,7 @@ describe("approved onboarding screen", () => {
     ["long-term-value", "progress-history-native-artwork"],
   ] as const)("renders the approved PNG directly on %s", async (step, oldTestID) => {
     const { screen } = await renderStep(step);
-    const image = screen.getByTestId(`approved-artwork-${step}`);
+    const image = screen.getByTestId(`approved-illustration-${step}`);
     expect(image.props.contentFit).toBe("contain");
     expect(screen.queryByTestId(oldTestID)).toBeNull();
   });
@@ -352,5 +355,18 @@ describe("approved onboarding screen", () => {
     expect(screen.queryByLabelText("Approved Formie premium design")).toBeNull();
     expect(screen.getByTestId("premium-upright-card")).not.toHaveStyle({ transform: expect.anything() });
     expect(screen.getByText("$9.99")).toBeTruthy();
+    for (const decoration of ["dumbbell", "ball", "kettlebell", "athlete", "plate", "bag"]) {
+      expect(screen.getByTestId(`premium-art-${decoration}`)).toBeTruthy();
+    }
+    expect(screen.queryByTestId("approved-premium-screenshot")).toBeNull();
   });
 });
+
+const copyForStep = {
+  welcome: { title: "FORMIE", subtitle: "Your personal AI lifting coach." },
+  "product-value": { title: "Stop guessing your form.", subtitle: "See exactly what happened—and what to do next." },
+  "why-formie": { title: "Your lift isn’t generic.", subtitle: "So your feedback shouldn’t be either." },
+  "product-demonstration": { title: "Your lift, fully decoded.", subtitle: "Formie finds the moment, explains it, and gives you the next move." },
+  "long-term-value": { title: "Every set adds context.", subtitle: "See whether the same cue is getting easier, cleaner, and more consistent." },
+  loading: { title: "Building your profile...", subtitle: "Combining your goals, experience, and training context." },
+} as const;

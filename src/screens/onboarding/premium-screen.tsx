@@ -1,4 +1,5 @@
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -19,6 +20,15 @@ const benefits = [
   "Complete personalized coaching",
 ];
 
+const premiumArtwork = {
+  dumbbell: require("../../../assets/production/onboarding/extracted/premium/dumbbell.png"),
+  ball: require("../../../assets/production/onboarding/extracted/premium/ball.png"),
+  kettlebell: require("../../../assets/production/onboarding/extracted/premium/kettlebell.png"),
+  athlete: require("../../../assets/production/onboarding/extracted/premium/athlete.png"),
+  plate: require("../../../assets/production/onboarding/extracted/premium/plate.png"),
+  bag: require("../../../assets/production/onboarding/extracted/premium/bag.png"),
+} as const;
+
 export function PremiumScreen({ price, purchaseAvailable, busy, error, onPurchase }: PremiumScreenProps) {
   const { height, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -28,8 +38,16 @@ export function PremiumScreen({ price, purchaseAvailable, busy, error, onPurchas
   const ctaHeight = short ? theme.layout.short.ctaHeight : compact ? theme.layout.compact.ctaHeight : theme.layout.regular.ctaHeight;
   return <View testID="premium-native-screen" style={[styles.screen, { paddingTop: Math.max(insets.top, 8), paddingBottom: Math.max(insets.bottom, 10) }]}>
     <StatusBar hidden />
+    <View pointerEvents="none" style={styles.artworkLayer}>
+      <Image testID="premium-art-dumbbell" source={premiumArtwork.dumbbell} contentFit="contain" style={[styles.artwork, styles.dumbbell]} />
+      <Image testID="premium-art-ball" source={premiumArtwork.ball} contentFit="contain" style={[styles.artwork, styles.ball]} />
+      <Image testID="premium-art-kettlebell" source={premiumArtwork.kettlebell} contentFit="contain" style={[styles.artwork, styles.kettlebell]} />
+      <Image testID="premium-art-athlete" source={premiumArtwork.athlete} contentFit="contain" style={[styles.artwork, styles.athlete]} />
+      <Image testID="premium-art-plate" source={premiumArtwork.plate} contentFit="contain" style={[styles.artwork, styles.plate]} />
+      <Image testID="premium-art-bag" source={premiumArtwork.bag} contentFit="contain" style={[styles.artwork, styles.bag]} />
+    </View>
     <ScrollView style={styles.scroller} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}><View style={[styles.content, compact && styles.contentCompact, short && styles.contentShort]}>
-      <View style={styles.heading}><Text style={styles.eyebrow}>FORMIE MONTHLY</Text><Text style={[styles.title, short && styles.titleShort]}>Get the answer after every set.</Text><Text style={[styles.subtitle, short && styles.subtitleShort]}>Personalized feedback from the movement visible in your recording.</Text></View>
+      <View style={styles.heading}><Text style={styles.eyebrow}>YOUR FORM, WITHOUT THE GUESSING</Text><Text style={[styles.title, short && styles.titleShort]}>Get the <Text style={styles.titleGold}>answer</Text> after every set.</Text><Text style={[styles.subtitle, short && styles.subtitleShort]}>Your squat is ready for its next clear correction.</Text></View>
       <View testID="premium-upright-card" style={[styles.card, compact && styles.cardCompact, short && styles.cardShort]}>
         <View style={styles.priceRow}><Text style={[styles.price, short && styles.priceShort]}>{price}</Text><Text style={styles.perMonth}> / month</Text></View>
         <Text style={styles.limit}>10 complete analyses each month</Text>
@@ -45,8 +63,9 @@ export function PremiumScreen({ price, purchaseAvailable, busy, error, onPurchas
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: theme.colors.background, paddingHorizontal: 20 }, scroller: { flex: 1, width: "100%" }, scrollContent: { flexGrow: 1, justifyContent: "center", paddingVertical: 8 }, content: { width: "100%", maxWidth: 520, alignSelf: "center", justifyContent: "center", gap: 14 }, contentCompact: { gap: 9 }, contentShort: { gap: 5 },
-  heading: { gap: 6 }, eyebrow: { color: theme.colors.gold, fontSize: 10, fontWeight: "800", letterSpacing: 2 }, title: { color: theme.colors.text, fontSize: 34, lineHeight: 38, fontWeight: "800", letterSpacing: -1 }, titleShort: { fontSize: 25, lineHeight: 28 }, subtitle: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 19 }, subtitleShort: { fontSize: 11, lineHeight: 14 },
+  screen: { flex: 1, overflow: "hidden", backgroundColor: theme.colors.background, paddingHorizontal: 20 }, scroller: { zIndex: 2, flex: 1, width: "100%" }, scrollContent: { flexGrow: 1, justifyContent: "center", paddingVertical: 8 }, content: { width: "100%", maxWidth: 520, alignSelf: "center", justifyContent: "center", gap: 14 }, contentCompact: { gap: 9 }, contentShort: { gap: 5 },
+  artworkLayer: { ...StyleSheet.absoluteFillObject, zIndex: 1 }, artwork: { position: "absolute" }, dumbbell: { width: 145, height: 115, left: -28, top: 24 }, ball: { width: 118, height: 160, right: -32, top: 58 }, kettlebell: { width: 84, height: 155, left: -30, top: "54%" }, athlete: { width: 74, height: 162, right: -18, top: "50%" }, plate: { width: 100, height: 155, right: -35, bottom: 36 }, bag: { width: 126, height: 105, left: -18, bottom: 8 },
+  heading: { gap: 6, paddingHorizontal: 14 }, eyebrow: { color: theme.colors.gold, fontSize: 10, fontWeight: "800", letterSpacing: 2, textAlign: "center" }, title: { color: theme.colors.text, fontSize: 34, lineHeight: 38, fontWeight: "800", letterSpacing: -1, textAlign: "center" }, titleGold: { color: theme.colors.gold }, titleShort: { fontSize: 25, lineHeight: 28 }, subtitle: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 19, textAlign: "center" }, subtitleShort: { fontSize: 11, lineHeight: 14 },
   card: { width: "100%", borderRadius: 24, borderWidth: 1.5, borderColor: theme.colors.goldMuted, backgroundColor: "#0B0B0A", padding: 20, gap: 12 }, cardCompact: { padding: 15, gap: 8 }, cardShort: { padding: 10, gap: 5 }, priceRow: { flexDirection: "row", alignItems: "flex-end" }, price: { color: theme.colors.text, fontSize: 48, lineHeight: 52, fontWeight: "800", fontVariant: ["tabular-nums"] }, priceShort: { fontSize: 34, lineHeight: 37 }, perMonth: { color: theme.colors.textMuted, fontSize: 14, paddingBottom: 6 }, limit: { color: theme.colors.gold, fontSize: 13, fontWeight: "700" }, benefits: { gap: 3 }, benefit: { minHeight: 38, flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 7 }, benefitShort: { minHeight: 25, paddingTop: 3 }, check: { width: 21, height: 21, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.gold }, checkText: { color: "#080808", fontSize: 12, fontWeight: "900" }, benefitText: { flex: 1, color: theme.colors.text, fontSize: 13, lineHeight: 17 }, benefitTextShort: { fontSize: 10.5, lineHeight: 13 }, cancel: { color: theme.colors.textMuted, fontSize: 10, lineHeight: 14, textAlign: "center" },
-  error: { minHeight: 18, color: "#FF7C7C", fontSize: 12, textAlign: "center" }, errorSpace: { minHeight: 18 }, actions: { width: "100%", maxWidth: 520, alignSelf: "center" }, cta: { width: "100%", borderRadius: 15, backgroundColor: theme.colors.gold, paddingHorizontal: 24, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, ctaBusy: { flexDirection: "row", alignItems: "center", gap: 8 }, ctaText: { color: "#080808", fontSize: 19, fontWeight: "800" }, arrow: { color: "#080808", fontSize: 30, lineHeight: 32 },
+  error: { minHeight: 18, color: "#FF7C7C", fontSize: 12, textAlign: "center" }, errorSpace: { minHeight: 18 }, actions: { zIndex: 3, width: "100%", maxWidth: 520, alignSelf: "center" }, cta: { width: "100%", borderRadius: 15, backgroundColor: theme.colors.gold, paddingHorizontal: 24, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, ctaBusy: { flexDirection: "row", alignItems: "center", gap: 8 }, ctaText: { color: "#080808", fontSize: 19, fontWeight: "800" }, arrow: { color: "#080808", fontSize: 30, lineHeight: 32 },
 });
