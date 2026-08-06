@@ -47,7 +47,16 @@ async function sendEmail(input: {
 Deno.serve(async (request) => {
   const options = preflight(request);
   if (options) return options;
-  const response = await createSendFeedbackHandler(request, { authenticate, sendEmail });
+  const response = await createSendFeedbackHandler(request, {
+    authenticate,
+    hasPriorityAccess: async (userId) => {
+      const admin = createAdminClient();
+      const { data, error } = await admin.from("user_access_entitlements").select("status,current_period_end").eq("user_id", userId).maybeSingle();
+      if (error) throw error;
+      return Boolean(data?.status === "active" && data.current_period_end && new Date(data.current_period_end).getTime() > Date.now());
+    },
+    sendEmail,
+  });
   const headers = new Headers(response.headers);
   for (const [key, value] of Object.entries(corsHeaders)) headers.set(key, value);
   return new Response(response.body, { status: response.status, headers });

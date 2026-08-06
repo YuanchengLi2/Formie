@@ -13,6 +13,28 @@ Deno.serve(async (request) => {
       const { data } = await admin.from("analysis_sessions").select("id").eq("id", sessionId).eq("user_id", userId).maybeSingle();
       return Boolean(data);
     },
+    reserveCredit: async ({ userId, clientRequestId }) => {
+      const { data, error } = await admin.rpc("reserve_analysis_credit_for_user", {
+        p_user_id: userId,
+        p_client_request_id: clientRequestId,
+        p_kind: "analysis",
+        p_session_id: null,
+      });
+      if (error) {
+        const code = error.message.match(/ANALYSIS_[A-Z_]+/)?.[0] ?? "ANALYSIS_ACCESS_FAILED";
+        throw Object.assign(new Error(error.message), { code });
+      }
+      const row = (Array.isArray(data) ? data[0] : data) as { reservation_id?: unknown; status?: unknown; remaining?: unknown; period_ends_at?: unknown } | null;
+      if (!row || typeof row.reservation_id !== "string") throw Object.assign(new Error("Analysis access reservation was invalid"), { code: "ANALYSIS_ACCESS_FAILED" });
+      return { reservationId: row.reservation_id, status: row.status === "already_reserved" ? "already_reserved" : "reserved", remaining: typeof row.remaining === "number" ? row.remaining : null, periodEndsAt: typeof row.period_ends_at === "string" ? row.period_ends_at : null };
+    },
+    attachCredit: async (reservationId, sessionId) => {
+      const { error } = await admin.from("analysis_credit_reservations").update({ session_id: sessionId }).eq("id", reservationId);
+      if (error) throw error;
+    },
+    cancelCredit: async (userId, reservationId) => {
+      await admin.from("analysis_credit_reservations").update({ status: "cancelled", cancelled_at: new Date().toISOString() }).eq("id", reservationId).eq("user_id", userId).eq("status", "reserved");
+    },
     findCatalogExercise: async (exerciseId) => {
       const { data, error } = await admin
         .from("exercise_variants_v2")

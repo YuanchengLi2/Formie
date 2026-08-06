@@ -258,6 +258,25 @@ describe("upload coordinator", () => {
     expect(deps.createSession).toHaveBeenCalledTimes(2);
   });
 
+  it("releases one reserved credit exactly once when cancellation is repeated", async () => {
+    const cancelReservation = jest.fn(async () => undefined);
+    let finishUpload!: () => void;
+    const uploadVideo = jest.fn(() => new Promise<void>((resolve) => { finishUpload = resolve; }));
+    const coordinator = createUploadCoordinator(dependencies({
+      createSession: jest.fn(async () => ({ ...singleTarget, reservationId: "reservation-1" })),
+      prepareAnalysisVideo: jest.fn(async () => ({ ...recording, byteLength: 4_500_000 })),
+      uploadVideo,
+      cancelReservation,
+    }));
+    const running = coordinator.run(recording, declaration).catch(() => undefined);
+    await new Promise(setImmediate);
+
+    await Promise.all([coordinator.cancelReservation(), coordinator.cancelReservation()]);
+    expect(cancelReservation).toHaveBeenCalledTimes(1);
+    finishUpload();
+    await running;
+  });
+
   it("does not reuse a failed session for a different declaration", async () => {
     const changed = { ...declaration, amount: { ...declaration.amount, value: 10 } };
     const completeUpload = jest.fn()

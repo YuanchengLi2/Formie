@@ -51,6 +51,24 @@ Deno.serve(async (request) => {
         exercise: { source: "catalog", catalogExerciseId: data.id, label: data.name },
       };
     },
+    reserveCredit: async ({ userId, sessionId, clientRequestId }) => {
+      const { data, error } = await admin.rpc("reserve_analysis_credit_for_user", {
+        p_user_id: userId,
+        p_client_request_id: clientRequestId,
+        p_kind: "reanalysis",
+        p_session_id: sessionId,
+      });
+      if (error) {
+        const code = error.message.match(/ANALYSIS_[A-Z_]+/)?.[0] ?? "ANALYSIS_ACCESS_FAILED";
+        throw Object.assign(new Error(error.message), { code });
+      }
+      const row = (Array.isArray(data) ? data[0] : data) as { reservation_id?: unknown; remaining?: unknown; period_ends_at?: unknown } | null;
+      if (!row || typeof row.reservation_id !== "string") throw Object.assign(new Error("Analysis access reservation was invalid"), { code: "ANALYSIS_ACCESS_FAILED" });
+      return { reservationId: row.reservation_id, remaining: typeof row.remaining === "number" ? row.remaining : null, periodEndsAt: typeof row.period_ends_at === "string" ? row.period_ends_at : null };
+    },
+    cancelCredit: async (userId, reservationId) => {
+      await admin.from("analysis_credit_reservations").update({ status: "cancelled", cancelled_at: new Date().toISOString() }).eq("id", reservationId).eq("user_id", userId).eq("status", "reserved");
+    },
     resetSession: async (sessionId, userId, declaration) => {
       const { data, error } = await admin.rpc("reset_analysis_for_reanalysis", {
         p_session_id: sessionId,

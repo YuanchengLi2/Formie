@@ -3,6 +3,7 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@revenuecat/purchases-js": "^1.49.1",
     "@supabase/supabase-js": "^2.110.5",
     "@tanstack/react-query": "^5.101.2",
     "expo": "~54.0.0",
@@ -32,6 +33,7 @@
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
+    "react-native-purchases": "^10.6.0",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
@@ -71,7 +73,7 @@
     "smoke:coach-live": "tsx scripts/smoke-coach-live.ts",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:analysis": "jest --runInBand supabase/functions/retry-analysis supabase/functions/reanalyze-video supabase/functions/complete-upload/handler.test.ts supabase/functions/analyze-video/short-clip-recheck.test.ts supabase/functions/_shared/boundary-free-analysis.test.ts supabase/functions/_shared/gemini-cost.test.ts supabase/functions/_shared/result-payload.test.ts supabase/functions/_shared/analysis-settings.test.ts supabase/functions/_shared/gemini-generate.test.ts supabase/functions/create-analysis/handler.test.ts supabase/functions/recording-preflight/handler.test.ts src/features/analysis/result-schema.test.ts src/features/analysis/reanalysis-migration.test.ts src/features/analysis/api.test.ts src/features/analysis/progress-stages.test.ts src/features/analysis/review-frames.test.ts src/features/analysis/stages.test.ts src/features/capture/upload-coordinator.test.ts src/features/capture/video-normalizer.test.ts src/features/capture/video-settings.test.ts src/screens/camera/camera.test.tsx src/screens/results/results.test.tsx src/screens/finding-detail/finding-detail.test.tsx"
+    "test:analysis": "jest --runInBand supabase/functions/retry-analysis supabase/functions/reanalyze-video supabase/functions/complete-upload/handler.test.ts supabase/functions/analyze-video/short-clip-recheck.test.ts supabase/functions/analyze-video/terminal-state-wiring.test.ts supabase/functions/analyze-video/writer-fallback-wiring.test.ts supabase/functions/_shared/boundary-free-analysis.test.ts supabase/functions/_shared/gemini-cost.test.ts supabase/functions/_shared/result-payload.test.ts supabase/functions/_shared/analysis-settings.test.ts supabase/functions/_shared/gemini-generate.test.ts supabase/functions/create-analysis/handler.test.ts supabase/functions/recording-preflight/handler.test.ts supabase/functions/refresh-entitlement/handler.test.ts supabase/functions/reconcile-entitlements/handler.test.ts supabase/functions/cancel-analysis/handler.test.ts supabase/functions/_shared/revenuecat.test.ts supabase/functions/create-analysis/subscription-activation-wiring.test.ts src/features/analysis/result-schema.test.ts src/features/analysis/reanalysis-migration.test.ts src/features/analysis/api.test.ts src/features/analysis/progress-stages.test.ts src/features/analysis/review-frames.test.ts src/features/analysis/stages.test.ts src/features/capture/upload-coordinator.test.ts src/features/capture/video-normalizer.test.ts src/features/capture/video-settings.test.ts src/features/onboarding/onboarding-store.test.ts src/features/onboarding/preview-fixture.test.ts src/features/access/access-provider.test.ts src/features/analytics/product-analytics.test.ts src/screens/camera/camera.test.tsx src/screens/results/results.test.tsx src/screens/onboarding/approved-onboarding.test.tsx src/screens/finding-detail/finding-detail.test.tsx"
   },
   "private": true
 }

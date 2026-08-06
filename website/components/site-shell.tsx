@@ -6,6 +6,7 @@ const nav = [
   { href: "/#how-it-works", label: "How it works" },
   { href: "/#coaching", label: "Coaching" },
   { href: "/#pricing", label: "Pricing" },
+  { href: "/manage-subscription", label: "Manage Subscription" },
 ];
 
 export function DownloadButton({ compact = false }: { compact?: boolean }) {
@@ -20,6 +21,17 @@ export function DownloadButton({ compact = false }: { compact?: boolean }) {
   return <a className={`button ${compact ? "compact" : ""}`} href={url} rel="noreferrer">Download Formie</a>;
 }
 
+export function AppStoreBadge() {
+  const url = process.env.NEXT_PUBLIC_APP_STORE_URL;
+  if (!url) return <span className="app-store-badge disabled" aria-disabled="true"><Image src="/assets/download-on-app-store.svg" width={120} height={40} alt="Download on the App Store — coming soon" /></span>;
+  return <a className="app-store-badge" href={url} aria-label="Download Formie on the App Store"><Image src="/assets/download-on-app-store.svg" width={120} height={40} alt="Download on the App Store" priority /></a>;
+}
+
+export function StoreBadgeGroup() {
+  const googlePlayUrl = process.env.NEXT_PUBLIC_GOOGLE_PLAY_URL;
+  return <div className="store-badge-group"><AppStoreBadge />{googlePlayUrl ? <a className="google-play-badge" href={googlePlayUrl} aria-label="Get Formie on Google Play"><Image src="/assets/get-it-on-google-play.svg" width={124} height={48} alt="Get it on Google Play" /></a> : <span className="google-play-coming" aria-disabled="true"><span className="google-play-badge"><Image src="/assets/get-it-on-google-play.svg" width={124} height={48} alt="Google Play" /></span><small>Coming soon</small></span>}</div>;
+}
+
 export function SiteHeader() {
   return (
     <header className="site-header">
@@ -30,7 +42,7 @@ export function SiteHeader() {
       <nav aria-label="Main navigation">
         {nav.map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}
       </nav>
-      <DownloadButton compact />
+      <StoreBadgeGroup />
     </header>
   );
 }

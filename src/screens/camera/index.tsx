@@ -11,7 +11,7 @@ import { FormButton } from "@/components/form-button";
 import { useCaptureStore } from "@/features/capture/capture-store";
 import { useCapturePreferences } from "@/features/capture/capture-preferences";
 import { analysisUploadCoordinator } from "@/features/capture/analysis-upload-coordinator";
-import { normalizeRecordedDuration } from "@/features/capture/countdown";
+import { recordedDurationFromCapture } from "@/features/capture/countdown";
 import { deviceVideoStore } from "@/features/capture/device-video-store";
 import type { RecordedSet } from "@/features/capture/types";
 import { captureVideoSettings } from "@/features/capture/video-settings";
@@ -42,6 +42,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const zoomRef = useRef(0);
   const pinchStartZoomRef = useRef(0);
   const exitRequestedRef = useRef(false);
+  const requestedStopAtRef = useRef<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const capturePreferences = useCapturePreferences((state) => state.preferences);
   const hydrateCapturePreferences = useCapturePreferences((state) => state.hydrate);
@@ -72,6 +73,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const startNativeRecording = useCallback(async () => {
     if (!cameraRef.current) return;
     const actualStart = Date.now();
+    requestedStopAtRef.current = null;
     dispatch({ type: "recording_started", startedAt: actualStart });
     if (capturePreferences.hapticsEnabled) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -83,7 +85,12 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
       if (!result?.uri) throw new Error("The camera did not save the recording");
       const saved = await deviceVideoStore.persist({
         localUri: result.uri,
-        durationMs: normalizeRecordedDuration(Date.now() - actualStart),
+        durationMs: recordedDurationFromCapture({
+          startedAtMs: actualStart,
+          resolvedAtMs: Date.now(),
+          requestedStopAtMs: requestedStopAtRef.current,
+          maxDurationMs: captureVideoSettings.maxDurationSeconds * 1_000,
+        }),
         mimeType: "video/mp4",
       } satisfies RecordedSet);
       dispatch({ type: "recording_finished", recording: saved });
@@ -242,7 +249,10 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
           setElapsedMs(0);
           dispatch({ type: "begin_countdown", previousSessionId, countdownSeconds: capturePreferences.countdownSeconds });
         }}
-        onStop={() => cameraRef.current?.stopRecording()}
+        onStop={() => {
+          requestedStopAtRef.current = Date.now();
+          cameraRef.current?.stopRecording();
+        }}
         onRetryUpload={() => undefined}
         onDiscardRecording={discardRecording}
         zoomed={zoom > 0.005}

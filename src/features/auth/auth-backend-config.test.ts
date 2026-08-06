@@ -17,13 +17,24 @@ describe("Supabase authentication configuration", () => {
     expect(config).toContain("enable_anonymous_sign_ins = false");
     expect(config).toContain("enable_manual_linking = true");
     expect(config).toContain("[auth.email]");
+    expect(config).toMatch(/\[auth\.email\][^[]*enable_signup = true/);
     expect(config).toContain("enable_confirmations = true");
     expect(config).toContain("double_confirm_changes = false");
   });
 
-  it("allowlists the installed FORM callback without a wildcard", () => {
-    expect(config).toContain('additional_redirect_urls = ["form://auth/callback"]');
+  it("uses the production Site URL and allowlists native, production-web, and localhost-web callbacks", () => {
+    expect(config).toContain('site_url = "https://useformie.com"');
+    expect(config).toContain('"form://auth/callback"');
+    expect(config).toContain('"https://useformie.com/auth/callback"');
+    expect(config).toContain('"http://localhost:3000/auth/callback"');
+    expect(config).toContain('"http://localhost:8081/**"');
+    expect(config).toContain('"http://localhost:8082/**"');
     expect(config).not.toContain('form://**');
+  });
+
+  it("enables both social providers used by the app", () => {
+    expect(config).toMatch(/\[auth\.external\.google\][^[]*enabled = true/);
+    expect(config).toMatch(/\[auth\.external\.apple\][^[]*enabled = true/);
   });
 
   it("preserves the existing MFA and email abuse protections", () => {
@@ -55,7 +66,7 @@ describe("Supabase authentication configuration", () => {
     expect(config).toContain("Formie verification code");
     expect(confirmationTemplate).toContain("Formie account");
     expect(recoveryTemplate).toContain("Formie password");
-    expect(config).toContain('additional_redirect_urls = ["form://auth/callback"]');
+    expect(config).toContain('"form://auth/callback"');
   });
 
   it("uses Resend custom SMTP without committing sender credentials", () => {

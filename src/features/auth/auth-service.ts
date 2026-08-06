@@ -1,39 +1,20 @@
-import type { AuthCallback } from "./auth-callback";
+export type SocialProvider = "apple" | "google";
 
 type AuthResult = {
   error: unknown;
-  data?: { user?: { identities?: unknown[] | null } | null };
-};
-export type AuthSignUpInput = {
-  displayName: string;
-  email: string;
-  password: string;
-  legalAcceptedAt: string;
-};
-export type AuthClient = {
-  signInWithPassword: (input: { email: string; password: string }) => Promise<AuthResult>;
-  signUp: (input: {
-    email: string;
-    password: string;
-    options: { emailRedirectTo: string; data: Record<string, unknown> };
-  }) => Promise<AuthResult>;
-  updateUser: (attributes: Record<string, unknown>, options?: { emailRedirectTo?: string }) => Promise<AuthResult>;
-  resend: (input: { type: "signup" | "email_change"; email: string; options: { emailRedirectTo: string } }) => Promise<AuthResult>;
-  resetPasswordForEmail: (email: string, options: { redirectTo: string }) => Promise<AuthResult>;
-  setSession: (input: { access_token: string; refresh_token: string }) => Promise<AuthResult>;
-  exchangeCodeForSession: (code: string) => Promise<AuthResult>;
-  verifyOtp: (input:
-    | { token_hash: string; type: "email" | "recovery" | "signup" | "email_change" }
-    | { email: string; token: string; type: "recovery" | "signup" | "email_change" }
-  ) => Promise<AuthResult>;
-  reauthenticate: () => Promise<AuthResult>;
-  refreshSession: () => Promise<AuthResult>;
-  signOut: (options: { scope: "local" }) => Promise<AuthResult>;
+  data?: { url?: string | null; session?: unknown };
 };
 
-function normalizedEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
+export type AuthClient = {
+  signInWithOAuth: (input: {
+    provider: SocialProvider;
+    options: { redirectTo: string; skipBrowserRedirect: true };
+  }) => Promise<AuthResult>;
+  exchangeCodeForSession: (code: string) => Promise<AuthResult>;
+  signInWithOtp: (input: { email: string; options: { shouldCreateUser: true } }) => Promise<AuthResult>;
+  verifyOtp: (input: { email: string; token: string; type: "email" }) => Promise<AuthResult>;
+  signOut: (options: { scope: "local" }) => Promise<AuthResult>;
+};
 
 async function requireSuccess<T extends AuthResult>(operation: Promise<T>): Promise<T> {
   const result = await operation;
@@ -42,88 +23,43 @@ async function requireSuccess<T extends AuthResult>(operation: Promise<T>): Prom
 }
 
 export function createAuthService(client: AuthClient, redirectUrl: string) {
+  const authenticatedSession = (result: AuthResult) => {
+    const session = result.data?.session as { user?: { id?: string } } | null | undefined;
+    if (!session?.user?.id) throw new Error("The provider did not return an authenticated session.");
+    return session;
+  };
   return {
-    async logIn(email: string, password: string) {
-      await requireSuccess(client.signInWithPassword({ email: normalizedEmail(email), password }));
-    },
-    async signUp(input: AuthSignUpInput) {
-      const result = await requireSuccess(client.signUp({
-        email: normalizedEmail(input.email),
-        password: input.password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            display_name: input.displayName,
-            legal_accepted_at: input.legalAcceptedAt,
-          },
-        },
-      }));
-      if (result.data?.user && Array.isArray(result.data.user.identities) && result.data.user.identities.length === 0) {
-        throw new Error("User already registered");
+    async createOAuthUrl(provider: SocialProvider): Promise<string> {
+      if (provider !== "apple" && provider !== "google") {
+        throw new Error("Formie sign-in supports only Apple and Google.");
       }
+      const result = await requireSuccess(client.signInWithOAuth({
+        provider,
+        options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
+      }));
+      const url = result.data?.url;
+      if (!url) throw new Error("The sign-in provider did not return a login URL.");
+      return url;
     },
-    async resendVerification(email: string, type: "signup" | "email_change") {
-      await requireSuccess(client.resend({
-        type,
-        email: normalizedEmail(email),
-        options: { emailRedirectTo: redirectUrl },
+    async completeOAuth(code: string) {
+      const result = await requireSuccess(client.exchangeCodeForSession(code));
+      return authenticatedSession(result);
+    },
+    async sendEmailCode(email: string): Promise<void> {
+      await requireSuccess(client.signInWithOtp({
+        email: email.trim().toLowerCase(),
+        options: { shouldCreateUser: true },
       }));
     },
-    async requestPasswordReset(email: string) {
-      await requireSuccess(client.resetPasswordForEmail(normalizedEmail(email), {
-        redirectTo: redirectUrl,
+    async verifyEmailCode(email: string, token: string) {
+      const result = await requireSuccess(client.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: token.trim(),
+        type: "email",
       }));
+      return authenticatedSession(result);
     },
-    async completeCallback(callback: AuthCallback) {
-      if (callback.kind === "error") throw new Error(callback.message);
-      if (callback.kind === "session") {
-        await requireSuccess(client.setSession({ access_token: callback.accessToken, refresh_token: callback.refreshToken }));
-        return;
-      }
-      if (callback.kind === "code") {
-        await requireSuccess(client.exchangeCodeForSession(callback.code));
-        return;
-      }
-      await requireSuccess(client.verifyOtp({ token_hash: callback.tokenHash, type: callback.otpType }));
-    },
-    async verifyEmailOtp(
-      email: string,
-      token: string,
-      type: "recovery" | "signup" | "email_change",
-    ) {
-      await requireSuccess(client.verifyOtp({
-        email: normalizedEmail(email),
-        token,
-        type,
-      }));
-    },
-    async updateRecoveredPassword(password: string) {
-      await requireSuccess(client.updateUser({ password }));
-    },
-    async requestEmailChange(email: string) {
-      await requireSuccess(client.updateUser(
-        { email: normalizedEmail(email) },
-        { emailRedirectTo: redirectUrl },
-      ));
-    },
-    async verifyEmailChange(email: string, code: string) {
-      await requireSuccess(client.verifyOtp({
-        email: normalizedEmail(email),
-        token: code,
-        type: "email_change",
-      }));
-      await requireSuccess(client.refreshSession());
-    },
-    async requestPasswordChange() {
-      await requireSuccess(client.reauthenticate());
-    },
-    async updatePassword(password: string, nonce: string) {
-      await requireSuccess(client.updateUser({ password, nonce }));
-    },
-    async refreshSession() {
-      await requireSuccess(client.refreshSession());
-    },
-    async logOut() {
+    async logOut(): Promise<void> {
       await requireSuccess(client.signOut({ scope: "local" }));
     },
   };

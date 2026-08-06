@@ -39,17 +39,25 @@ type HomeScreenProps = {
   onOpenProgress?: () => void;
   metrics?: ProgressMetrics | null;
   metricsLoading?: boolean;
+  analysisBalanceLabel?: string;
+  analysisResetLabel?: string | null;
   now?: Date;
 };
 
-function HomeHeader({ onOpenProfile }: { onOpenProfile: () => void }) {
+function HomeHeader({ onOpenProfile, analysisBalanceLabel, analysisResetLabel }: { onOpenProfile: () => void; analysisBalanceLabel: string; analysisResetLabel?: string | null }) {
   return (
     <View testID="home-top-bar" style={{ minHeight: 68, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
       <FormWordmark size={56} />
-      <Pressable accessibilityLabel="Open settings" accessibilityRole="button" onPress={onOpenProfile} style={{ width: 54, height: 54, alignItems: "center", justifyContent: "center", borderRadius: radii.pill, borderWidth: 1, borderColor: colors.gold }}>
-        <View style={{ width: 9, height: 9, borderRadius: 5, borderWidth: 1, borderColor: colors.gold }} />
-        <View style={{ width: 17, height: 8, marginTop: 3, borderTopLeftRadius: 9, borderTopRightRadius: 9, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.gold }} />
-      </Pressable>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+        <View accessibilityLabel={`Analysis balance: ${analysisBalanceLabel}${analysisResetLabel ? `. ${analysisResetLabel}` : ""}`} style={{ minHeight: 40, maxWidth: 128, justifyContent: "center", paddingHorizontal: 10, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+          <Text numberOfLines={2} style={{ color: colors.gold, fontSize: 11, lineHeight: 14, fontWeight: "800", textAlign: "center" }}>{analysisBalanceLabel}</Text>
+          {analysisResetLabel ? <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 9, lineHeight: 12, textAlign: "center" }}>{analysisResetLabel}</Text> : null}
+        </View>
+        <Pressable accessibilityLabel="Open settings" accessibilityRole="button" onPress={onOpenProfile} style={{ width: 46, height: 46, alignItems: "center", justifyContent: "center", borderRadius: radii.pill, borderWidth: 1, borderColor: colors.gold }}>
+          <View style={{ width: 9, height: 9, borderRadius: 5, borderWidth: 1, borderColor: colors.gold }} />
+          <View style={{ width: 17, height: 8, marginTop: 3, borderTopLeftRadius: 9, borderTopRightRadius: 9, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.gold }} />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -71,13 +79,15 @@ export function HomeScreen({
   onOpenProgress = () => undefined,
   metrics = null,
   metricsLoading = false,
+  analysisBalanceLabel = "Checking analyses",
+  analysisResetLabel = null,
   now = new Date(),
 }: HomeScreenProps) {
   const viewport = useWindowDimensions();
   if (!historyResolved) {
     return (
       <View accessibilityLabel="Loading recording history" style={{ flex: 1, gap: spacing.lg, padding: spacing.lg, backgroundColor: colors.background }}>
-        <HomeHeader onOpenProfile={onOpenProfile} />
+        <HomeHeader onOpenProfile={onOpenProfile} analysisBalanceLabel={analysisBalanceLabel} analysisResetLabel={analysisResetLabel} />
         <View style={{ flex: 1, justifyContent: "center", gap: spacing.md, opacity: 0.52 }}>
           <View style={{ width: "72%", height: 38, borderRadius: radii.sm, backgroundColor: colors.surfaceRaised }} />
           <View style={{ width: "92%", height: 300, borderRadius: radii.lg, backgroundColor: colors.surface }} />
@@ -90,7 +100,7 @@ export function HomeScreen({
   if (recentAnalyses.length === 0) {
     return (
       <ScrollView accessibilityLabel="First recording hero" alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={commonContentStyle}>
-        <HomeHeader onOpenProfile={onOpenProfile} />
+        <HomeHeader onOpenProfile={onOpenProfile} analysisBalanceLabel={analysisBalanceLabel} analysisResetLabel={analysisResetLabel} />
         <Animated.View entering={FadeInDown.duration(220)} style={{ gap: spacing.sm }}>
           <Text selectable style={[typography.title, { color: colors.text }]}>Ready to move better?</Text>
           <Text selectable style={[typography.body, { maxWidth: 330, color: colors.textSecondary }]}>Record a set. Get clear coaching on what changed.</Text>
@@ -110,7 +120,7 @@ export function HomeScreen({
 
   return (
     <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={commonContentStyle}>
-      <HomeHeader onOpenProfile={onOpenProfile} />
+      <HomeHeader onOpenProfile={onOpenProfile} analysisBalanceLabel={analysisBalanceLabel} analysisResetLabel={analysisResetLabel} />
       <Animated.View entering={FadeInDown.duration(220)} style={{ gap: spacing.xs }}>
         <Text selectable style={[typography.title, { color: colors.text }]}>Your Formie dashboard</Text>
         <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{weekLabel}</Text>

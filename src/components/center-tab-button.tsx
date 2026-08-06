@@ -5,19 +5,28 @@ import { colors } from "@/theme/colors";
 
 export function CenterTabButton({
   onPress,
+  label = "Record",
+  accessibilityLabel = label,
+  disabled = false,
 }: {
   onPress: (event: GestureResponderEvent) => void;
+  label?: string;
+  accessibilityLabel?: string;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
-      accessibilityLabel="Record"
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => ({
         flex: 1,
         alignItems: "center",
         justifyContent: "flex-start",
-        opacity: pressed ? 0.78 : 1,
+        opacity: disabled ? 0.48 : pressed ? 0.78 : 1,
+        transform: [{ scale: pressed ? 0.94 : 1 }],
       })}
     >
       <View
@@ -30,17 +39,18 @@ export function CenterTabButton({
           justifyContent: "center",
           borderRadius: 28,
           borderWidth: 3,
-          borderColor: colors.background,
-          backgroundColor: colors.gold,
-          boxShadow: "0 5px 18px rgba(200,169,107,0.32)",
+          borderColor: "#F7D98B",
+          backgroundColor: disabled ? colors.surfaceRaised : colors.gold,
+          boxShadow: "0 5px 22px rgba(244,181,49,0.48)",
         }}
       >
-        <Text selectable={false} style={{ color: colors.background, fontSize: 20, lineHeight: 23, fontWeight: "900" }}>
-          ●
-        </Text>
+        <View testID="center-tab-lens" style={{ width: 35, height: 35, borderRadius: 18, borderWidth: 2, borderColor: "#F9E3A7", alignItems: "center", justifyContent: "center", overflow: "hidden", backgroundColor: colors.background }}>
+          {[0, 60, 120].map((rotation) => <View key={rotation} testID="center-tab-aperture-blade" style={{ position: "absolute", width: 24, height: 5, borderRadius: 3, backgroundColor: colors.gold, transform: [{ rotate: `${rotation}deg` }, { translateX: 5 }] }} />)}
+          <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: "#F8E9C3", borderWidth: 1, borderColor: colors.gold }} />
+        </View>
       </View>
-      <Text selectable={false} style={{ marginTop: 1, color: colors.gold, fontSize: 11, lineHeight: 14, fontWeight: "700" }}>
-        Record
+      <Text selectable={false} style={{ marginTop: 1, color: disabled ? colors.textMuted : colors.gold, fontSize: 11, lineHeight: 14, fontWeight: "700" }}>
+        {label}
       </Text>
     </Pressable>
   );

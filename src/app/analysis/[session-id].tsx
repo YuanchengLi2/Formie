@@ -3,6 +3,7 @@ import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "@tanstack/react-query";
 
 import { useAnalysisStatus } from "@/features/analysis/use-analysis-status";
+import { cancelAnalysis } from "@/features/access/api";
 import { AnalysisApiError, reanalyzeAnalysis } from "@/features/analysis/api";
 import { getAccessToken } from "@/features/auth/access-token";
 import { useCaptureStore } from "@/features/capture/capture-store";
@@ -21,7 +22,8 @@ export default function AnalysisProgressRoute() {
       if (!declaration) throw new Error("The saved set details are unavailable.");
       try {
         const accessToken = await getAccessToken();
-        await reanalyzeAnalysis({ accessToken, sessionId, declaration });
+        const clientRequestId = globalThis.crypto?.randomUUID?.() ?? `reanalysis-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        await reanalyzeAnalysis({ accessToken, sessionId, declaration, clientRequestId });
         return { kind: "server" as const };
       } catch (error) {
         if (!(error instanceof AnalysisApiError) || error.code !== "VIDEO_NOT_FOUND") throw error;
@@ -70,6 +72,7 @@ export default function AnalysisProgressRoute() {
       retryingAnalysis={reanalysis.isPending}
       retryAnalysisError={reanalysis.error instanceof Error ? reanalysis.error.message : null}
       onRecordAgain={failureMessage ? () => {
+        void cancelAnalysis({ sessionId }).catch(() => undefined);
         resetCapture({ type: "reset" });
         router.replace("/exercise-selection");
       } : undefined}

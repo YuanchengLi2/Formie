@@ -1,4 +1,4 @@
-import { countdownSequence, formatElapsed, normalizeRecordedDuration } from "./countdown";
+import { countdownSequence, formatElapsed, normalizeRecordedDuration, recordedDurationFromCapture } from "./countdown";
 
 describe("capture countdown", () => {
   it("counts from the requested delay through zero", () => {
@@ -14,5 +14,17 @@ describe("capture countdown", () => {
     expect(normalizeRecordedDuration(15_127)).toBe(15_127);
     expect(normalizeRecordedDuration(10_127)).toBe(10_127);
     expect(normalizeRecordedDuration(2_999)).toBe(2_999);
+  });
+
+  it("excludes native file-finalization latency from manually stopped recordings", () => {
+    expect(recordedDurationFromCapture({ startedAtMs: 1_000, resolvedAtMs: 11_480, requestedStopAtMs: 11_000, maxDurationMs: 15_000 })).toBe(10_000);
+  });
+
+  it("uses the configured duration when the camera automatically stops at the limit", () => {
+    expect(recordedDurationFromCapture({ startedAtMs: 1_000, resolvedAtMs: 16_240, requestedStopAtMs: null, maxDurationMs: 15_000 })).toBe(15_000);
+  });
+
+  it("preserves an early native stop when no manual stop was requested", () => {
+    expect(recordedDurationFromCapture({ startedAtMs: 1_000, resolvedAtMs: 10_500, requestedStopAtMs: null, maxDurationMs: 15_000 })).toBe(9_500);
   });
 });

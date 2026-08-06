@@ -4,6 +4,8 @@ import { act, fireEvent, render } from "@testing-library/react-native";
 
 const mockLoadOrCreate = jest.fn();
 const mockSave = jest.fn();
+const mockRecordAcquisition = jest.fn();
+const mockInvoke = jest.fn();
 const mockAuth = {
   phase: "authenticated",
   user: { id: "user-1", email: "yuan@example.com", user_metadata: {} },
@@ -13,8 +15,21 @@ jest.mock("@/features/auth/auth-provider", () => ({
   useAuth: () => mockAuth,
 }));
 
+const mockOnboarding: { status: string; answers: Record<string, unknown>; markProfileSynced: jest.Mock } = {
+  status: "complete",
+  answers: {},
+  markProfileSynced: jest.fn(),
+};
+jest.mock("@/features/onboarding/onboarding-store", () => ({
+  useOnboarding: () => mockOnboarding,
+}));
+
 jest.mock("@/lib/supabase", () => ({
-  supabase: { from: jest.fn() },
+  supabase: { from: jest.fn(), rpc: jest.fn(), functions: { invoke: (...args: unknown[]) => mockInvoke(...args) } },
+}));
+
+jest.mock("@/features/onboarding/acquisition-reporting", () => ({
+  recordOnboardingAcquisition: (...args: unknown[]) => mockRecordAcquisition(...args),
 }));
 
 jest.mock("./profile-repository", () => {
@@ -35,7 +50,18 @@ function profile(overrides: Partial<UserProfile> = {}): UserProfile {
     displayName: "Yuan Cheng",
     experience: null,
     primaryGoal: null,
+    ageYears: null,
+    gender: null,
+    heightCm: null,
+    weightKg: null,
+    measurementSystem: null,
+    biggestFrustration: null,
+    workoutsPerWeek: null,
+    customMilestone: null,
+    onboardingVersion: "approved-v1",
+    onboardingCompleted: true,
     legalAcceptedAt: "2026-07-23T22:45:00.000Z",
+    marketingOptIn: false,
     videoRetentionDays: null,
     retentionEffectiveAt: null,
     createdAt: "2026-07-23T22:45:00.000Z",
@@ -71,6 +97,10 @@ describe("ProfileProvider", () => {
     jest.clearAllMocks();
     mockAuth.phase = "authenticated";
     mockAuth.user = { id: "user-1", email: "yuan@example.com", user_metadata: {} };
+    mockOnboarding.status = "complete";
+    mockOnboarding.answers = {};
+    mockRecordAcquisition.mockResolvedValue("response-1");
+    mockInvoke.mockResolvedValue({ data: { status: "queued" }, error: null });
   });
 
   it("loads the authenticated profile and saves editable fields", async () => {
@@ -103,4 +133,17 @@ describe("ProfileProvider", () => {
     });
     expect(await screen.findByText("ready")).toBeTruthy();
   });
+
+  it("durably records acquisition before completing authenticated profile sync", async () => {
+    mockOnboarding.status = "profile_sync_required";
+    mockOnboarding.answers = { acquisitionSource: "google_search", acquisitionSourceOther: "" };
+    mockLoadOrCreate.mockResolvedValue(profile());
+    const screen = await render(<ProfileProvider><Probe /></ProfileProvider>);
+
+    expect(await screen.findByText("ready")).toBeTruthy();
+    expect(mockRecordAcquisition).toHaveBeenCalledWith(expect.anything(), mockOnboarding.answers, expect.any(String));
+    expect(mockOnboarding.markProfileSynced).toHaveBeenCalled();
+    expect(mockInvoke).toHaveBeenCalledWith("sync-acquisition-sheet", { method: "POST" });
+  });
+
 });

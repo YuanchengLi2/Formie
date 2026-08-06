@@ -74,6 +74,7 @@ export type RecordingPreflightResult =
 
 export type UploadTarget = {
   sessionId: string;
+  reservationId?: string;
   original?: UploadArtifactTarget;
   analysis: UploadArtifactTarget;
   privacySafe?: UploadArtifactTarget;

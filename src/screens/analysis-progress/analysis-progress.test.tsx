@@ -65,7 +65,7 @@ describe("AnalysisProgressScreen", () => {
     expect(screen.getByText("Analysis couldn’t finish")).toBeTruthy();
     expect(screen.getByText("FORM couldn't finish this analysis. Your recording is still saved.")).toBeTruthy();
     expect(screen.getByText("Your recording is still saved securely.")).toBeTruthy();
-    expect(screen.getByText("This failed attempt did not use a free analysis.")).toBeTruthy();
+    expect(screen.getByText("This failed attempt did not use an analysis credit.")).toBeTruthy();
     await fireEvent.press(screen.getByText("Retry Analysis"));
     await fireEvent.press(screen.getByText("Record Again"));
     await fireEvent.press(screen.getByText("Back to Home"));

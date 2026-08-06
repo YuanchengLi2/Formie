@@ -158,11 +158,12 @@ describe("AnalysisProgressRoute declaration authority", () => {
     await fireEvent.press(screen.getByText("Retry Analysis"));
 
     await waitFor(() => expect(mockReanalyzeAnalysis).toHaveBeenCalled());
-    expect(mockReanalyzeAnalysis).toHaveBeenCalledWith({
+    expect(mockReanalyzeAnalysis).toHaveBeenCalledWith(expect.objectContaining({
       accessToken: "token",
       sessionId: "session-1",
       declaration,
-    });
+      clientRequestId: expect.any(String),
+    }));
     expect(mockDispatch).not.toHaveBeenCalled();
     expect(mockReplace).toHaveBeenCalledWith("/analysis/session-1");
     expect(mockFindDeviceVideo).not.toHaveBeenCalled();

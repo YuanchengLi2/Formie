@@ -2,7 +2,7 @@ import { z } from "zod";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
-export const feedbackCategorySchema = z.enum(["bug", "feature_request", "general"]);
+export const feedbackCategorySchema = z.enum(["bug", "feature_request", "general", "priority_support"]);
 export type FeedbackCategory = z.infer<typeof feedbackCategorySchema>;
 
 export const feedbackDiagnosticsSchema = z.object({

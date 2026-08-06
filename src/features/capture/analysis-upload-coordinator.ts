@@ -1,3 +1,5 @@
+import { cancelAnalysisReservation } from "@/features/access/api";
+import { publishAccessMutation } from "@/features/access/access-events";
 import { completeAnalysisUpload, createAnalysisSession, uploadAnalysisVideo as uploadVideoArtifact } from "@/features/analysis/api";
 import { getAccessToken } from "@/features/auth/access-token";
 import { createUploadCoordinator } from "./upload-coordinator";
@@ -17,8 +19,10 @@ export const analysisUploadCoordinator = createUploadCoordinator({
       uploadProfile: "single_analysis_v1",
       signal,
     });
+    publishAccessMutation({ remaining: session.remaining ?? null, periodEndsAt: session.periodEndsAt ?? null });
     return {
       sessionId: session.sessionId,
+      reservationId: session.reservationId,
       analysis: {
         signedUrl: session.analysisUpload.signedUrl,
         uploadToken: session.analysisUpload.token,
@@ -49,4 +53,5 @@ export const analysisUploadCoordinator = createUploadCoordinator({
       analysisInput: { kind: "capture_ready_video", durationPreserved: true, byteLength: preparedByteLength },
     });
   },
+  cancelReservation: cancelAnalysisReservation,
 });

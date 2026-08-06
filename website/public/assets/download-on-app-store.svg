@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="40" viewBox="0 0 120 40" role="img" aria-labelledby="title">
+  <title id="title">Download on the App Store</title>
+  <rect x=".5" y=".5" width="119" height="39" rx="6" fill="#000" stroke="#a6a6a6"/>
+  <path fill="#fff" d="M24.8 20.7c0-3.2 2.6-4.8 2.7-4.9-1.5-2.2-3.9-2.5-4.7-2.5-2-.2-3.9 1.2-4.9 1.2-1 0-2.6-1.2-4.3-1.1-2.2 0-4.3 1.3-5.4 3.3-2.3 4-.6 9.9 1.7 13.1 1.1 1.6 2.5 3.4 4.3 3.3 1.7-.1 2.4-1.1 4.5-1.1s2.7 1.1 4.5 1.1c1.9 0 3-1.6 4.2-3.3 1.3-1.9 1.8-3.8 1.8-3.9-.1 0-3.6-1.4-3.6-5.2h-.8zm-3.3-9.5c.9-1.1 1.5-2.7 1.3-4.2-1.3.1-2.9.9-3.8 2-.8.9-1.6 2.5-1.4 4 1.5.1 3-.7 3.9-1.8z" transform="scale(.72) translate(10 5)"/>
+  <text x="42" y="14" fill="#fff" font-family="Arial,sans-serif" font-size="7">Download on the</text>
+  <text x="41" y="30" fill="#fff" font-family="Arial,sans-serif" font-size="17">App Store</text>
+</svg>

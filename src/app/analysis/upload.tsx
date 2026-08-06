@@ -43,9 +43,10 @@ export default function AnalysisUploadRoute() {
   }, [declaration, dispatch, phase, previousSessionId, recording, router]);
 
   const discard = () => {
-    analysisUploadCoordinator.reset();
-    dispatch({ type: "discard_recording" });
-    router.replace("/camera");
+    void analysisUploadCoordinator.cancelReservation().finally(() => {
+      dispatch({ type: "discard_recording" });
+      router.replace("/camera");
+    });
   };
 
   const missingRecording = !recording || !declaration ? "The saved recording or set details are no longer available." : null;

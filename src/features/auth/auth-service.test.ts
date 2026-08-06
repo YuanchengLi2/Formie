@@ -2,179 +2,79 @@ import { createAuthService } from "./auth-service";
 
 function authClient() {
   return {
-    signInWithPassword: jest.fn(),
-    signUp: jest.fn(),
-    updateUser: jest.fn(),
-    resend: jest.fn(),
-    resetPasswordForEmail: jest.fn(),
-    setSession: jest.fn(),
+    signInWithOAuth: jest.fn(),
     exchangeCodeForSession: jest.fn(),
+    signInWithOtp: jest.fn(),
     verifyOtp: jest.fn(),
-    reauthenticate: jest.fn(),
-    refreshSession: jest.fn(),
     signOut: jest.fn(),
   };
 }
 
-describe("auth service", () => {
+describe("social auth service", () => {
   const redirectUrl = "form://auth/callback";
 
-  it("logs in and creates a verification-required account", async () => {
+  it.each(["apple", "google"] as const)("starts %s PKCE OAuth without a password", async (provider) => {
     const client = authClient();
-    client.signInWithPassword.mockResolvedValue({ data: { session: { access_token: "token" } }, error: null });
-    client.signUp.mockResolvedValue({ data: { user: { id: "user-1" }, session: null }, error: null });
-    const service = createAuthService(client, redirectUrl);
+    client.signInWithOAuth.mockResolvedValue({ data: { url: `https://${provider}.example/login` }, error: null });
 
-    await service.logIn("USER@EXAMPLE.COM", "password");
-    expect(client.signInWithPassword).toHaveBeenCalledWith({ email: "user@example.com", password: "password" });
-
-    await service.signUp({
-      displayName: "Yuan Cheng",
-      email: "USER@EXAMPLE.COM",
-      password: "password",
-      legalAcceptedAt: "2026-07-23T22:45:00.000Z",
-    });
-    expect(client.signUp).toHaveBeenCalledWith({
-      email: "user@example.com",
-      password: "password",
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          display_name: "Yuan Cheng",
-          legal_accepted_at: "2026-07-23T22:45:00.000Z",
-        },
-      },
+    await expect(createAuthService(client, redirectUrl).createOAuthUrl(provider)).resolves.toBe(`https://${provider}.example/login`);
+    expect(client.signInWithOAuth).toHaveBeenCalledWith({
+      provider,
+      options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
     });
   });
 
-  it("rejects Supabase's obfuscated duplicate-signup response", async () => {
+  it("rejects unsupported identity providers before calling Supabase", async () => {
     const client = authClient();
-    client.signUp.mockResolvedValue({
-      data: { user: { id: "obfuscated-user", identities: [] }, session: null },
-      error: null,
-    });
-
-    await expect(createAuthService(client, redirectUrl).signUp({
-      displayName: "Yuan Cheng",
-      email: "user@example.com",
-      password: "password",
-      legalAcceptedAt: "2026-07-23T22:45:00.000Z",
-    })).rejects.toThrow("User already registered");
+    await expect(createAuthService(client, redirectUrl).createOAuthUrl("github" as never)).rejects.toThrow("Apple and Google");
+    expect(client.signInWithOAuth).not.toHaveBeenCalled();
   });
 
-  it("resends the appropriate verification email and requests neutral recovery", async () => {
+  it("exchanges only an OAuth authorization code for a session", async () => {
     const client = authClient();
-    client.resend.mockResolvedValue({ data: {}, error: null });
-    client.resetPasswordForEmail.mockResolvedValue({ data: {}, error: null });
-    const service = createAuthService(client, redirectUrl);
-
-    await service.resendVerification("user@example.com", "signup");
-    expect(client.resend).toHaveBeenCalledWith({
-      type: "signup",
-      email: "user@example.com",
-      options: { emailRedirectTo: redirectUrl },
-    });
-
-    await service.requestPasswordReset("user@example.com");
-    expect(client.resetPasswordForEmail).toHaveBeenCalledWith("user@example.com", { redirectTo: redirectUrl });
+    const session = { user: { id: "user-1" } };
+    client.exchangeCodeForSession.mockResolvedValue({ data: { session }, error: null });
+    await expect(createAuthService(client, redirectUrl).completeOAuth("pkce-code")).resolves.toBe(session);
+    expect(client.exchangeCodeForSession).toHaveBeenCalledWith("pkce-code");
   });
 
-  it("handles implicit, PKCE, and token-hash callbacks", async () => {
+  it("rejects an exchange response without an authenticated user", async () => {
     const client = authClient();
-    client.setSession.mockResolvedValue({ data: { session: {} }, error: null });
-    client.exchangeCodeForSession.mockResolvedValue({ data: { session: {} }, error: null });
-    client.verifyOtp.mockResolvedValue({ data: { session: {} }, error: null });
-    const service = createAuthService(client, redirectUrl);
-
-    await service.completeCallback({ kind: "session", accessToken: "access", refreshToken: "refresh", flow: "verification" });
-    expect(client.setSession).toHaveBeenCalledWith({ access_token: "access", refresh_token: "refresh" });
-
-    await service.completeCallback({ kind: "code", code: "pkce", flow: "recovery" });
-    expect(client.exchangeCodeForSession).toHaveBeenCalledWith("pkce");
-
-    await service.completeCallback({ kind: "otp", tokenHash: "hash", otpType: "email", flow: "verification" });
-    expect(client.verifyOtp).toHaveBeenCalledWith({ token_hash: "hash", type: "email" });
+    client.exchangeCodeForSession.mockResolvedValue({ data: { session: null }, error: null });
+    await expect(createAuthService(client, redirectUrl).completeOAuth("empty-code")).rejects.toThrow(/authenticated session/i);
   });
 
-  it("verifies an emailed signup or recovery code with its normalized email", async () => {
+  it("logs out the local device session", async () => {
     const client = authClient();
-    client.verifyOtp.mockResolvedValue({ data: { session: {} }, error: null });
-    const service = createAuthService(client, redirectUrl);
-
-    await service.verifyEmailOtp(" USER@Example.COM ", "123456", "signup");
-    expect(client.verifyOtp).toHaveBeenNthCalledWith(1, {
-      email: "user@example.com",
-      token: "123456",
-      type: "signup",
-    });
-
-    await service.verifyEmailOtp("user@example.com", "654321", "recovery");
-    expect(client.verifyOtp).toHaveBeenNthCalledWith(2, {
-      email: "user@example.com",
-      token: "654321",
-      type: "recovery",
-    });
-  });
-
-  it("updates a recovered password, refreshes verification, and logs out", async () => {
-    const client = authClient();
-    client.updateUser.mockResolvedValue({ data: { user: {} }, error: null });
-    client.refreshSession.mockResolvedValue({ data: { session: {} }, error: null });
-    client.signOut.mockResolvedValue({ error: null });
-    const service = createAuthService(client, redirectUrl);
-
-    await service.updateRecoveredPassword("new-password");
-    expect(client.updateUser).toHaveBeenCalledWith({ password: "new-password" });
-    await service.refreshSession();
-    expect(client.refreshSession).toHaveBeenCalled();
-    await service.logOut();
+    client.signOut.mockResolvedValue({ data: {}, error: null });
+    await createAuthService(client, redirectUrl).logOut();
     expect(client.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
-  it("changes email through an authenticated six-digit verification flow", async () => {
+  it("sends one email code for both existing and new accounts", async () => {
     const client = authClient();
-    client.updateUser.mockResolvedValue({ data: { user: {} }, error: null });
-    client.verifyOtp.mockResolvedValue({ data: { session: {} }, error: null });
-    client.refreshSession.mockResolvedValue({ data: { session: {} }, error: null });
-    const service = createAuthService(client, redirectUrl);
+    client.signInWithOtp.mockResolvedValue({ data: {}, error: null });
 
-    await service.requestEmailChange(" NEW@Example.COM ");
-    expect(client.updateUser).toHaveBeenCalledWith(
-      { email: "new@example.com" },
-      { emailRedirectTo: redirectUrl },
-    );
-    await service.verifyEmailChange("new@example.com", "123456");
-    expect(client.verifyOtp).toHaveBeenCalledWith({
-      email: "new@example.com",
-      token: "123456",
-      type: "email_change",
+    await createAuthService(client, redirectUrl).sendEmailCode(" Athlete@Example.com ");
+
+    expect(client.signInWithOtp).toHaveBeenCalledWith({
+      email: "athlete@example.com",
+      options: { shouldCreateUser: true },
     });
-    expect(client.refreshSession).toHaveBeenCalledTimes(1);
   });
 
-  it("reauthenticates before changing a signed-in password without making success depend on a refresh", async () => {
+  it("verifies a six digit email code and returns its session directly", async () => {
     const client = authClient();
-    client.reauthenticate.mockResolvedValue({ data: {}, error: null });
-    client.updateUser.mockResolvedValue({ data: { user: {} }, error: null });
-    client.refreshSession.mockResolvedValue({ data: { session: {} }, error: null });
-    const service = createAuthService(client, redirectUrl);
+    const session = { user: { id: "email-user", email: "athlete@example.com" } };
+    client.verifyOtp.mockResolvedValue({ data: { session }, error: null });
 
-    await service.requestPasswordChange();
-    expect(client.reauthenticate).toHaveBeenCalledTimes(1);
-    await service.updatePassword("new-password", "654321");
-    expect(client.updateUser).toHaveBeenCalledWith({
-      password: "new-password",
-      nonce: "654321",
-    });
-    expect(client.refreshSession).not.toHaveBeenCalled();
-    expect(client.signOut).not.toHaveBeenCalled();
+    await expect(createAuthService(client, redirectUrl).verifyEmailCode("Athlete@Example.com", " 123456 ")).resolves.toBe(session);
+    expect(client.verifyOtp).toHaveBeenCalledWith({ email: "athlete@example.com", token: "123456", type: "email" });
   });
 
-  it("throws backend errors without returning partial success", async () => {
+  it("rejects an email verification response without an authenticated user", async () => {
     const client = authClient();
-    const failure = new Error("Invalid login credentials");
-    client.signInWithPassword.mockResolvedValue({ data: { session: null }, error: failure });
-
-    await expect(createAuthService(client, redirectUrl).logIn("user@example.com", "bad-password")).rejects.toBe(failure);
+    client.verifyOtp.mockResolvedValue({ data: { session: null }, error: null });
+    await expect(createAuthService(client, redirectUrl).verifyEmailCode("athlete@example.com", "123456")).rejects.toThrow(/authenticated session/i);
   });
 });

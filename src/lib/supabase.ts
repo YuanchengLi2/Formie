@@ -1,8 +1,9 @@
 import * as SecureStore from "expo-secure-store";
 import { createClient, type SupportedStorage } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const isTestRuntime = process.env.NODE_ENV === "test";
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? (isTestRuntime ? "https://test.supabase.local" : undefined);
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? (isTestRuntime ? "test-anon-key" : undefined);
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Supabase public configuration is missing");
@@ -38,7 +39,8 @@ const secureSessionStorage: SupportedStorage = {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: secureSessionStorage,
-    autoRefreshToken: process.env.EXPO_OS === "web",
+    flowType: "pkce",
+    autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
   },

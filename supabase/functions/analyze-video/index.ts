@@ -33,7 +33,7 @@ import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 import { runShortClipRechecks } from "./short-clip-recheck.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v48-recheck2";
+const PIPELINE_VERSION = "gemini-whole-video-v53-readable-coaching";
 const ANALYST_MODEL = "gemini-3.6-flash";
 const WRITER_MODEL = "gemini-3.1-flash-lite";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
@@ -504,7 +504,9 @@ Deno.serve(async (request) => {
           ...(uploadDurationMs !== null ? { analysis_upload_duration_ms: uploadDurationMs } : {}),
           updated_at: new Date().toISOString(),
           ...extra,
-        }).eq("id", rawSession.id);
+        })
+          .eq("id", rawSession.id)
+          .not("status", "in", "(complete,partial,unable,failed)");
         if (error) throw databaseError("ANALYSIS_STATE_SAVE_FAILED", error);
       };
 
@@ -580,23 +582,31 @@ Deno.serve(async (request) => {
           const parsedAnalysis = analysis as unknown as ReturnType<typeof parseBoundaryFreeAnalysis>;
           await saveSessionStage("finalizing");
           const writing = await runStage(sessionId, "analyzing", { kind: "writer", analysis: parsedAnalysis }, async () => {
-            const requestBody = buildTextGenerateContentRequest({
-              prompt: buildWholeVideoWritingPrompt(parsedAnalysis, declaration),
-              schema: WHOLE_VIDEO_WRITING_SCHEMA,
-              thinkingLevel: "low",
-            });
-            const raw = await generate({
-              sessionId,
-              stage: "analyzing",
-              modelName: WRITER_MODEL,
-              request: requestBody,
-              fps: null,
-              timeoutMs: deadline.timeoutFor("analyzing"),
-            }) as JsonRecord;
             try {
+              const requestBody = buildTextGenerateContentRequest({
+                prompt: buildWholeVideoWritingPrompt(parsedAnalysis, declaration),
+                schema: WHOLE_VIDEO_WRITING_SCHEMA,
+                thinkingLevel: "low",
+              });
+              const raw = await generate({
+                sessionId,
+                stage: "analyzing",
+                modelName: WRITER_MODEL,
+                request: requestBody,
+                fps: null,
+                timeoutMs: deadline.timeoutFor("analyzing"),
+              }) as JsonRecord;
               return parseWholeVideoWriting(raw, parsedAnalysis) as unknown as JsonRecord;
             } catch (error) {
-              throw analysisContractError(error);
+              // Writer prose is optional. Keep the validated video evidence and
+              // derive readable, personalized copy from it when Flash-Lite is
+              // unavailable, late, or returns an awkward field.
+              console.warn(JSON.stringify({
+                event: "coaching_writer_fallback",
+                sessionId,
+                errorCode: errorCode(error),
+              }));
+              return parseWholeVideoWriting(null, parsedAnalysis) as unknown as JsonRecord;
             }
           });
           return { analysis: parsedAnalysis, writing: parseWholeVideoWriting(writing, parsedAnalysis) } as unknown as JsonRecord;
@@ -668,6 +678,7 @@ Deno.serve(async (request) => {
             if (telemetryError) throw databaseError("ANALYSIS_RESULT_SAVE_FAILED", telemetryError);
             const analysisTotalDurationMs = Math.max(0, Date.now() - analysisRunStartedAt);
               const { error: sessionError } = await admin.from("analysis_sessions").update({
+                status: candidate.status,
                 stage: "complete",
                 analysis_total_duration_ms: analysisTotalDurationMs,
                 analysis_model_call_count: modelCallCount ?? 0,

@@ -159,6 +159,9 @@ describe("analysis API", () => {
       new Response(
         JSON.stringify({
           sessionId: "session-123",
+          reservationId: "reservation-1",
+          remaining: 9,
+          periodEndsAt: "2026-09-01T00:00:00Z",
           upload: { signedUrl: "https://storage.example/upload", token: "upload-token", path: "user/session.mp4" },
           analysisUpload: { signedUrl: "https://storage.example/analysis", token: "analysis-token", path: "user/analysis-input.mp4" },
           privacySafeUpload: { signedUrl: "https://storage.example/privacy", token: "privacy-token", path: "user/privacy-safe-upper-body.mp4" },
@@ -177,6 +180,7 @@ describe("analysis API", () => {
     });
 
     expect(response.sessionId).toBe("session-123");
+    expect(response).toMatchObject({ reservationId: "reservation-1", remaining: 9, periodEndsAt: "2026-09-01T00:00:00Z" });
     expect(response.upload!.path).toBe("user/session.mp4");
     expect(response.analysisUpload.path).toBe("user/analysis-input.mp4");
     expect(response.privacySafeUpload?.path).toBe("user/privacy-safe-upper-body.mp4");
@@ -501,14 +505,14 @@ describe("analysis API", () => {
   });
 
   it("queues the same saved video for development reanalysis", async () => {
-    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "queued", stage: "input_ready" }), { status: 202 }));
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ sessionId: "session-123", status: "queued", stage: "input_ready", reservationId: "reservation-2", remaining: 8, periodEndsAt: "2026-09-01T00:00:00Z" }), { status: 202 }));
 
     await expect(reanalyzeAnalysis({
       accessToken: "user-jwt",
       baseUrl: "https://example.supabase.co/functions/v1",
       fetcher,
       sessionId: "session-123",
-    })).resolves.toEqual({ sessionId: "session-123", status: "queued", stage: "input_ready" });
+    })).resolves.toEqual({ sessionId: "session-123", status: "queued", stage: "input_ready", reservationId: "reservation-2", remaining: 8, periodEndsAt: "2026-09-01T00:00:00Z" });
 
     expect(fetcher).toHaveBeenCalledWith(
       "https://example.supabase.co/functions/v1/reanalyze-video",

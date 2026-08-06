@@ -3,89 +3,56 @@ import { Stack } from "expo-router/stack";
 import { StatusBar } from "expo-status-bar";
 
 import { AppProviders } from "@/components/app-providers";
+import { SubscriptionAccessGate } from "@/components/subscription-access-gate";
+import { AccessProvider, useAccess } from "@/features/access/access-provider";
+import { canOpenCompletedAccount } from "@/features/access/account-access";
 import { AuthProvider, useAuth } from "@/features/auth/auth-provider";
-import { ProfileProvider } from "@/features/profile/profile-provider";
+import { BillingProvider } from "@/features/billing/billing-provider";
+import { OnboardingProvider, useOnboarding } from "@/features/onboarding/onboarding-store";
+import { ProfileProvider, useProfile } from "@/features/profile/profile-provider";
 import { colors } from "@/theme/colors";
 
-const formTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    primary: colors.gold,
-    background: colors.background,
-    card: colors.background,
-    text: colors.text,
-    border: colors.border,
-    notification: colors.gold,
-  },
-};
+const formTheme = { ...DarkTheme, colors: { ...DarkTheme.colors, primary: colors.gold, background: colors.background, card: colors.background, text: colors.text, border: colors.border, notification: colors.gold } };
 
 function RootNavigator() {
   const auth = useAuth();
-  const { phase } = auth;
-  const signedOut = phase === "signed_out";
-  const verificationPending = phase === "verification_pending";
-  const passwordSetupRequired = phase === "password_recovery";
-  const appUnlocked = phase === "authenticated";
-  return (
-    <ThemeProvider value={formTheme}>
-        <StatusBar style="light" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.gold, headerShadowVisible: false, headerTitleStyle: { color: colors.gold, fontSize: 12, fontWeight: "600" } }}>
-          <Stack.Screen name="index" />
-          <Stack.Protected guard={signedOut}>
-            <Stack.Screen name="(auth)/login" />
-            <Stack.Screen name="(auth)/forgot-password" />
-          </Stack.Protected>
-          <Stack.Protected guard={signedOut}>
-            <Stack.Screen name="(auth)/sign-up" />
-          </Stack.Protected>
-          <Stack.Protected guard={verificationPending}>
-            <Stack.Screen name="(auth)/verify-email" />
-          </Stack.Protected>
-          <Stack.Protected guard={passwordSetupRequired}>
-            <Stack.Screen name="(auth)/reset-password" />
-          </Stack.Protected>
-          <Stack.Protected guard={phase === "initializing"}>
-            <Stack.Screen name="(auth)/auth/callback" />
-          </Stack.Protected>
-          <Stack.Protected guard={appUnlocked}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="account/change-email" options={{ headerShown: true, title: "Change Email", headerBackButtonDisplayMode: "minimal" }} />
-            <Stack.Screen name="account/change-password" options={{ headerShown: true, title: "Change Password", headerBackButtonDisplayMode: "minimal" }} />
-            <Stack.Screen name="exercise-selection" options={{ headerShown: true, title: "Choose Exercise", headerBackButtonDisplayMode: "minimal" }} />
-            <Stack.Screen name="exercise-guide" options={{ headerShown: true, title: "Exercise Guide", headerBackButtonDisplayMode: "minimal" }} />
-            <Stack.Screen name="recording-tips" options={{ headerShown: true, title: "Recording Tips", headerBackButtonDisplayMode: "minimal" }} />
-            <Stack.Screen name="camera" options={{ headerShown: false, gestureEnabled: false }} />
-            <Stack.Screen name="analysis/review" options={{ headerShown: false, gestureEnabled: false }} />
-            <Stack.Screen name="analysis/set-details" options={{ headerShown: false, gestureEnabled: false }} />
-            <Stack.Screen name="analysis/upload" options={{ headerShown: false, gestureEnabled: false }} />
-            <Stack.Screen name="analysis/[session-id]" options={{ headerShown: false, gestureEnabled: false }} />
-            <Stack.Screen name="results/[session-id]" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="no-phone-space"
-              options={{
-                headerShown: false,
-                title: "Quick Setup Ideas",
-                headerBackButtonDisplayMode: "minimal",
-                presentation: "formSheet",
-                sheetGrabberVisible: true,
-                sheetAllowedDetents: [0.72, 1],
-              }}
-            />
-          </Stack.Protected>
-        </Stack>
-    </ThemeProvider>
-  );
+  const profile = useProfile();
+  const access = useAccess();
+  const onboarding = useOnboarding();
+  const authenticated = auth.phase === "authenticated";
+  const profileComplete = profile.profile?.onboardingCompleted === true && profile.profile?.onboardingVersion === "approved-v1";
+  const appUnlocked = canOpenCompletedAccount({ authenticated, profileComplete, onboardingStatus: onboarding.status, accessStatus: access.access.status });
+  const onboardingAllowed = auth.phase === "signed_out" || (authenticated && !profileComplete);
+
+  return <ThemeProvider value={formTheme}>
+    <StatusBar style="light" />
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, headerStyle: { backgroundColor: colors.background }, headerTintColor: colors.gold, headerShadowVisible: false }}>
+      <Stack.Screen name="index" />
+      <Stack.Protected guard={onboardingAllowed}><Stack.Screen name="onboarding" /></Stack.Protected>
+      <Stack.Protected guard={auth.phase === "signed_out"}>
+        <Stack.Screen name="(auth)/login" />
+        <Stack.Screen name="(auth)/email" />
+        <Stack.Screen name="(auth)/email-code" />
+      </Stack.Protected>
+      <Stack.Protected guard={authenticated && profileComplete && (onboarding.status === "premium_required" || onboarding.status === "complete")}><Stack.Screen name="subscription" /></Stack.Protected>
+      <Stack.Protected guard={appUnlocked}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="account/send-feedback" options={{ headerShown: true, title: "Send Feedback", headerBackButtonDisplayMode: "minimal" }} />
+        <Stack.Screen name="exercise-selection" options={{ headerShown: true, title: "Choose Exercise", headerBackButtonDisplayMode: "minimal" }} />
+        <Stack.Screen name="exercise-guide" options={{ headerShown: true, title: "Exercise Guide", headerBackButtonDisplayMode: "minimal" }} />
+        <Stack.Screen name="recording-tips" options={{ headerShown: true, title: "Recording Tips", headerBackButtonDisplayMode: "minimal" }} />
+        <Stack.Screen name="camera" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="analysis/review" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="analysis/set-details" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="analysis/upload" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="analysis/[session-id]" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="results/[session-id]" />
+        <Stack.Screen name="no-phone-space" options={{ presentation: "formSheet", sheetGrabberVisible: true, sheetAllowedDetents: [0.72, 1] }} />
+      </Stack.Protected>
+    </Stack>
+  </ThemeProvider>;
 }
 
 export default function RootLayout() {
-  return (
-    <AppProviders>
-        <AuthProvider>
-        <ProfileProvider>
-          <RootNavigator />
-        </ProfileProvider>
-      </AuthProvider>
-    </AppProviders>
-  );
+  return <AppProviders><AuthProvider><OnboardingProvider><AccessProvider><BillingProvider><ProfileProvider><SubscriptionAccessGate><RootNavigator /></SubscriptionAccessGate></ProfileProvider></BillingProvider></AccessProvider></OnboardingProvider></AuthProvider></AppProviders>;
 }

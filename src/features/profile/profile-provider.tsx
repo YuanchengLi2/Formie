@@ -7,9 +7,12 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
+import { Platform } from "react-native";
 
 import { useAuth } from "@/features/auth/auth-provider";
+import { useOnboarding } from "@/features/onboarding/onboarding-store";
 import { supabase } from "@/lib/supabase";
+import { recordOnboardingAcquisition, type AcquisitionReportingClient } from "@/features/onboarding/acquisition-reporting";
 
 import {
   loadOrCreateUserProfile,
@@ -32,9 +35,14 @@ type ProfileContextValue = {
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
 const profileClient = supabase as unknown as UserProfileClient;
+const acquisitionClient = supabase as unknown as AcquisitionReportingClient;
 
 export function ProfileProvider({ children }: PropsWithChildren) {
   const auth = useAuth();
+  const onboarding = useOnboarding();
+  const shouldSyncOnboarding = onboarding.status === "profile_sync_required";
+  const onboardingAnswers = onboarding.answers;
+  const markProfileSynced = onboarding.markProfileSynced;
   const [status, setStatus] = useState<ProfileStatus>("idle");
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -52,13 +60,20 @@ export function ProfileProvider({ children }: PropsWithChildren) {
     let active = true;
     setStatus("loading");
     setError(null);
-    void loadOrCreateUserProfile(profileClient, auth.user)
-      .then((nextProfile) => {
+    const answers = shouldSyncOnboarding ? onboardingAnswers : undefined;
+    void loadOrCreateUserProfile(profileClient, auth.user, answers)
+      .then(async (nextProfile) => {
+        if (!active) return;
+        if (answers && nextProfile.onboardingCompleted) {
+          await recordOnboardingAcquisition(acquisitionClient, answers, Platform.OS);
+          void supabase.functions.invoke("sync-acquisition-sheet", { method: "POST" }).catch(() => undefined);
+        }
         if (!active) return;
         setProfile(nextProfile);
         setStatus("ready");
+        if (answers && nextProfile.onboardingCompleted) await markProfileSynced();
       })
-      .catch(() => {
+      .catch((reason: unknown) => {
         if (!active) return;
         setProfile(null);
         setStatus("error");
@@ -67,7 +82,7 @@ export function ProfileProvider({ children }: PropsWithChildren) {
     return () => {
       active = false;
     };
-  }, [auth.phase, auth.user, revision]);
+  }, [auth.phase, auth.user, markProfileSynced, onboardingAnswers, revision, shouldSyncOnboarding]);
 
   const saveProfile = useCallback(async (patch: UserProfilePatch) => {
     if (!auth.user || auth.phase !== "authenticated") {

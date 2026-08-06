@@ -104,7 +104,7 @@ export function AnalysisProgressScreen({ stage, failureMessage, onRetryAnalysis,
             <Text selectable style={[typography.heading, { color: colors.text }]}>Analysis couldn’t finish</Text>
             <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{failureMessage}</Text>
             <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Your recording is still saved securely.</Text>
-            <Text selectable style={[typography.caption, { color: colors.textMuted }]}>This failed attempt did not use a free analysis.</Text>
+            <Text selectable style={[typography.caption, { color: colors.textMuted }]}>This failed attempt did not use an analysis credit.</Text>
             {retryAnalysisError ? <Text accessibilityRole="alert" selectable style={[typography.caption, { color: colors.danger }]}>{retryAnalysisError}</Text> : null}
             {onRetryAnalysis ? <FormButton label={retryingAnalysis ? "Retrying…" : "Retry Analysis"} disabled={retryingAnalysis} onPress={onRetryAnalysis} /> : null}
             {onRetryUpload ? <FormButton label="Retry Upload" onPress={onRetryUpload} /> : null}

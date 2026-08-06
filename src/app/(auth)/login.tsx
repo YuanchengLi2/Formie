@@ -1,21 +1,19 @@
+import * as Linking from "expo-linking";
 import { type Href, useLocalSearchParams, useRouter } from "expo-router";
-
 import { useAuth } from "@/features/auth/auth-provider";
-import { LoginScreen } from "@/screens/auth";
+import { getLegalLinks } from "@/features/auth/legal-config";
+import { useOnboarding } from "@/features/onboarding/onboarding-store";
+import { SocialLoginScreen } from "@/screens/auth";
 
 export default function LoginRoute() {
+  const auth = useAuth(); const onboarding = useOnboarding();
   const router = useRouter();
-  const { reset } = useLocalSearchParams<{ reset?: string }>();
-  const auth = useAuth();
-  return (
-    <LoginScreen
-      initialError={auth.callbackError}
-      initialNotice={reset === "complete" ? "Password updated. Log in with your new password." : null}
-      onSubmit={async (email, password) => {
-        await auth.logIn(email, password);
-      }}
-      onCreateAccount={() => router.push("/sign-up" as Href)}
-      onForgotPassword={() => router.push("/forgot-password" as Href)}
-    />
-  );
+  const { error: routeError } = useLocalSearchParams<{ error?: string }>();
+  const legal = (() => { try { return getLegalLinks(); } catch { return null; } })();
+  return <SocialLoginScreen busyProvider={auth.signingIn} error={auth.error ?? (Array.isArray(routeError) ? routeError[0] : routeError) ?? null}
+    onOAuth={(provider) => void onboarding.startOAuth("login").then(() => auth.signInWithProvider(provider))}
+    onEmail={() => void onboarding.startOAuth("login").then(() => router.push("/(auth)/email?intent=login" as Href))}
+    onCreateAccount={() => void onboarding.startNewAccount().then(() => router.replace("/onboarding/welcome" as Href))}
+    onOpenTerms={() => { if (legal) void Linking.openURL(legal.termsUrl); }}
+    onOpenPrivacy={() => { if (legal) void Linking.openURL(legal.privacyUrl); }} />;
 }

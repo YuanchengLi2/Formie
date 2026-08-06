@@ -10,6 +10,17 @@ const metrics = {
 };
 
 describe("HomeScreen", () => {
+  it.each(["8 analyses left", "0 analyses left", "Unlimited", "Checking analyses"])("shows %s in the Home header", async (analysisBalanceLabel) => {
+    const screen = await render(<HomeScreen analysisBalanceLabel={analysisBalanceLabel} />);
+    expect(screen.getByText(analysisBalanceLabel)).toBeTruthy();
+    expect(screen.getByLabelText(`Analysis balance: ${analysisBalanceLabel}`)).toBeTruthy();
+  });
+
+  it("shows the live billing reset date beside the remaining balance", async () => {
+    const screen = await render(<HomeScreen analysisBalanceLabel="8 analyses left" analysisResetLabel="Resets Sep 1" />);
+    expect(screen.getByText("Resets Sep 1")).toBeTruthy();
+  });
+
   it("leaves recording exclusively to the permanent center tab", async () => {
     const screen = await render(<HomeScreen />);
 

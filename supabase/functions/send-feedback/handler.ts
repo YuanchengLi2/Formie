@@ -1,4 +1,4 @@
-type FeedbackCategory = "bug" | "feature_request" | "general";
+type FeedbackCategory = "bug" | "feature_request" | "general" | "priority_support";
 type FeedbackUser = { id: string; email: string };
 
 type EmailInput = {
@@ -11,6 +11,7 @@ type EmailInput = {
 
 export type SendFeedbackDependencies = {
   authenticate: (request: Request) => Promise<FeedbackUser>;
+  hasPriorityAccess?: (userId: string) => Promise<boolean>;
   sendEmail: (input: EmailInput) => Promise<{ id: string }>;
 };
 
@@ -31,6 +32,7 @@ function escapeHtml(value: string): string {
 }
 
 function title(category: FeedbackCategory): string {
+  if (category === "priority_support") return "Priority Support";
   if (category === "feature_request") return "Feature Request";
   if (category === "bug") return "Bug";
   return "General";
@@ -44,7 +46,7 @@ function parseBody(value: unknown) {
   const category = body.category;
   const message = typeof body.message === "string" ? body.message.trim() : "";
   if (clientRequestId.length < 8 || clientRequestId.length > 128) throw new Error("INVALID_BODY");
-  if (category !== "bug" && category !== "feature_request" && category !== "general") throw new Error("INVALID_BODY");
+  if (category !== "bug" && category !== "feature_request" && category !== "general" && category !== "priority_support") throw new Error("INVALID_BODY");
   if (message.length < 20 || message.length > 2000) throw new Error("INVALID_BODY");
   if (!body.diagnostics || typeof body.diagnostics !== "object" || Array.isArray(body.diagnostics)) throw new Error("INVALID_BODY");
   const diagnostics = body.diagnostics as Record<string, unknown>;
@@ -80,6 +82,9 @@ export async function createSendFeedbackHandler(request: Request, dependencies: 
     if (!user.email) throw new Error("UNAUTHORIZED");
   } catch {
     return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);
+  }
+  if (body.category === "priority_support" && dependencies.hasPriorityAccess && !(await dependencies.hasPriorityAccess(user.id))) {
+    return json({ message: "Priority support is available with an active Formie subscription.", code: "PRIORITY_SUPPORT_REQUIRED" }, 402);
   }
 
   const diagnosticsText = [

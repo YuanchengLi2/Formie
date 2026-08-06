@@ -1,4 +1,6 @@
 import { fireEvent, render } from "@testing-library/react-native";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import ResultsRoute from "@/app/results/[session-id]";
 import type { SetDeclaration } from "./set-declaration";
@@ -115,6 +117,14 @@ describe("ResultsRoute reanalysis confirmation", () => {
     });
   });
 
+  it("lets the server authoritatively reserve reanalysis instead of blocking on stale client access", () => {
+    const resultsRoute = readFileSync(resolve(__dirname, "../../app/results/[session-id].tsx"), "utf8");
+    const progressRoute = readFileSync(resolve(__dirname, "../../app/analysis/[session-id].tsx"), "utf8");
+    expect(resultsRoute).not.toContain("ensureAnalysisAccess");
+    expect(progressRoute).not.toContain("ensureAnalysisAccess");
+    expect(resultsRoute).toContain("submitError={reanalysis.error instanceof Error ? reanalysis.error.message : null}");
+  });
+
   it("opens the prefilled declaration form before every reanalysis", async () => {
     const screen = await render(<ResultsRoute />);
 
@@ -140,6 +150,17 @@ describe("ResultsRoute reanalysis confirmation", () => {
 
     await fireEvent.press(screen.getByText("Analyze Again"));
     await fireEvent.press(screen.getByText("Cancel"));
+
+    expect(screen.getByText("Analyze Again")).toBeTruthy();
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it("opens reanalysis even when the optional device copy cannot be loaded", async () => {
+    mockFindDeviceVideo.mockRejectedValue(new Error("Device file lookup failed"));
+    const screen = await render(<ResultsRoute />);
+
+    await fireEvent.press(screen.getByText("Analyze Again"));
+    await screen.findByText("Dumbbell Bench Press");
 
     expect(screen.getByText("Analyze Again")).toBeTruthy();
     expect(mockMutate).not.toHaveBeenCalled();

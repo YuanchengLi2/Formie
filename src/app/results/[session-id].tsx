@@ -35,7 +35,8 @@ export default function ResultsRoute() {
       if (!declaration) throw new Error("Set details are required");
       try {
         const accessToken = await getAccessToken();
-        await reanalyzeAnalysis({ accessToken, sessionId, declaration });
+        const clientRequestId = globalThis.crypto?.randomUUID?.() ?? `reanalysis-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        await reanalyzeAnalysis({ accessToken, sessionId, declaration, clientRequestId });
         return { kind: "server" as const };
       } catch (error) {
         // A missing retained artifact is the one case where the existing
@@ -62,10 +63,14 @@ export default function ResultsRoute() {
   const prepareReanalysis = async () => {
     setPreparingReanalysis(true);
     setReanalysisPreparationError(null);
+    setReanalysisRecording(null);
+    setConfirmingReanalysis(true);
     try {
       const localRecording = await deviceVideoStore.find(sessionId);
       setReanalysisRecording(localRecording);
-      setConfirmingReanalysis(true);
+    } catch {
+      // Reanalysis normally reuses the retained server video. A device copy is
+      // optional and is only needed if the server reports VIDEO_NOT_FOUND.
     } finally {
       setPreparingReanalysis(false);
     }
@@ -96,6 +101,8 @@ export default function ResultsRoute() {
         initialDeclaration={initialReanalysisDeclaration}
         analyzeLabel="Analyze Again"
         secondaryLabel="Cancel"
+        submitError={reanalysis.error instanceof Error ? reanalysis.error.message : null}
+        submitting={reanalysis.isPending}
         showSide={false}
         showVideoPreview={Boolean(reanalysisRecording)}
         onAnalyze={(declaration) => reanalysis.mutate(declaration)}

@@ -325,7 +325,7 @@ describe("ResultsScreen", () => {
     expect(screen.getByText(/When one shoulder rises first/)).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("What to do next"));
     expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
-    expect(screen.getByTestId("coaching-supporting-copy").props.children).toContain("Both shoulders finish at the same height.");
+    expect(screen.getByTestId("coaching-supporting-copy").props.children).toBe("Both shoulders finish at the same height.");
 
     await fireEvent.press(screen.getByLabelText("Next problem"));
     expect(screen.getByText("Issue 2 of 4")).toBeTruthy();
@@ -355,6 +355,8 @@ describe("ResultsScreen", () => {
     await fireEvent.press(screen.getByLabelText("What to do next"));
     expect(screen.getByTestId("coaching-topic-sentence").props.children).toBe("Start the next rep with both shoulders level.");
     expect(screen.getByTestId("coaching-supporting-copy").props.children).toBe("Both shoulders finish at the same height.");
+    expect(StyleSheet.flatten(screen.getByTestId("coaching-topic-sentence").props.style)).toMatchObject({ color: colors.text, fontWeight: "700" });
+    expect(StyleSheet.flatten(screen.getByTestId("coaching-supporting-copy").props.style)).toMatchObject({ color: colors.textSecondary, fontWeight: "400" });
   });
 
   it("uses compact summary and list typography", async () => {

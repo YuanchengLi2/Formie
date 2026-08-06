@@ -81,6 +81,19 @@ describe("create analysis handler", () => {
     });
   });
 
+  it("returns the authoritative remaining quota from the server reservation", async () => {
+    const deps = dependencies({
+      reserveCredit: jest.fn(async () => ({ reservationId: "reservation-1", status: "reserved", remaining: 9, periodEndsAt: "2026-09-01T00:00:00Z" })),
+      attachCredit: jest.fn(async () => undefined),
+      cancelCredit: jest.fn(async () => undefined),
+    });
+    const response = await createAnalysisHandler(new Request("https://example.test", {
+      method: "POST",
+      body: JSON.stringify({ declaration, clientRequestId: "request-123", uploadProfile: "single_analysis_v1" }),
+    }), deps);
+    await expect(response.json()).resolves.toMatchObject({ reservationId: "reservation-1", remaining: 9, periodEndsAt: "2026-09-01T00:00:00Z" });
+  });
+
   it("does not reserve a privacy-safe artifact when the installed client cannot create one", async () => {
     const deps = dependencies();
     const response = await createAnalysisHandler(

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { publishAccessMutation } from "@/features/access/access-events";
 import { File } from "expo-file-system";
 
 import { exerciseFamilies } from "@/features/exercises/exercise-family";
@@ -27,6 +28,9 @@ const signedUploadSchema = z.object({
 
 const createSessionResponseSchema = z.object({
   sessionId: z.string().min(1),
+  reservationId: z.string().min(1).optional(),
+  remaining: z.number().int().nonnegative().nullable().optional(),
+  periodEndsAt: z.string().min(1).nullable().optional(),
   upload: signedUploadSchema.optional(),
   analysisUpload: signedUploadSchema,
   privacySafeUpload: signedUploadSchema.optional(),
@@ -55,6 +59,9 @@ const reanalysisResponseSchema = z.object({
   sessionId: z.string().min(1),
   status: z.literal("queued"),
   stage: z.literal("input_ready"),
+  reservationId: z.string().min(1).optional(),
+  remaining: z.number().int().nonnegative().nullable().optional(),
+  periodEndsAt: z.string().min(1).nullable().optional(),
 });
 
 export const tutorialVideoSchema = z.object({
@@ -438,16 +445,19 @@ export async function processAnalysis(input: RequestContext & { sessionId: strin
   throw new AnalysisApiError("Analysis retry exhausted", 546, "WORKER_RESOURCE_LIMIT");
 }
 
-export async function reanalyzeAnalysis(input: RequestContext & { sessionId: string; declaration?: SetDeclaration }) {
-  return requestJson(
+export async function reanalyzeAnalysis(input: RequestContext & { sessionId: string; declaration?: SetDeclaration; clientRequestId?: string }) {
+  const result = await requestJson(
     "reanalyze-video",
     input,
     { method: "POST", body: JSON.stringify({
       sessionId: input.sessionId,
+      ...(input.clientRequestId ? { clientRequestId: input.clientRequestId } : {}),
       ...(input.declaration ? { declaration: input.declaration } : {}),
     }) },
     reanalysisResponseSchema,
   );
+  publishAccessMutation({ remaining: result.remaining ?? null, periodEndsAt: result.periodEndsAt ?? null });
+  return result;
 }
 
 export async function getExerciseGuide(

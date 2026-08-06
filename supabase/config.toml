@@ -18,11 +18,18 @@ port = 54323
 
 [auth]
 enabled = true
-site_url = "http://localhost:8082"
-additional_redirect_urls = ["form://auth/callback"]
+site_url = "https://useformie.com"
+additional_redirect_urls = [
+  "form://auth/callback",
+  "https://useformie.com/auth/callback",
+  "http://localhost:3000/auth/callback",
+  "http://localhost:8081/**",
+  "http://localhost:8082/**"
+]
 enable_signup = true
 enable_anonymous_sign_ins = false
 enable_manual_linking = true
+minimum_password_length = 8
 
 [auth.rate_limit]
 email_sent = 30
@@ -31,8 +38,20 @@ email_sent = 30
 enable_signup = true
 double_confirm_changes = false
 enable_confirmations = true
+secure_password_change = true
 max_frequency = "1m"
 otp_length = 6
+
+[auth.external.google]
+enabled = true
+client_id = "434965200177-sfosc0tjmh9t4hke0dgt4uuked3v6a8n.apps.googleusercontent.com"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+skip_nonce_check = false
+
+[auth.external.apple]
+enabled = true
+client_id = "app.form.coach.signin"
+secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
 
 [auth.email.smtp]
 enabled = true
@@ -93,3 +112,21 @@ verify_jwt = true
 
 [functions.send-support]
 verify_jwt = false
+
+[functions.refresh-entitlement]
+verify_jwt = true
+
+[functions.reconcile-entitlements]
+verify_jwt = false
+
+[functions.cancel-analysis]
+verify_jwt = true
+
+[functions.account-dashboard]
+verify_jwt = true
+
+[functions.revenuecat-webhook]
+verify_jwt = false
+
+[functions.sync-acquisition-sheet]
+verify_jwt = true

@@ -6,11 +6,16 @@ type CreatedSession = {
   previousSessionId: string | null;
 };
 
+type CreditReservation = { reservationId: string; status: "reserved" | "already_reserved"; remaining: number | null; periodEndsAt: string | null };
+
 export type CreateAnalysisDependencies = {
   authenticate: (request: Request) => Promise<string>;
   ownsSession: (sessionId: string, userId: string) => Promise<boolean>;
   findCatalogExercise: (exerciseId: number) => Promise<{ id: number; name: string } | null>;
   createSession: (input: { userId: string; previousSessionId: string | null; clientRequestId: string | null; declaration: SetDeclaration }) => Promise<CreatedSession>;
+  reserveCredit?: (input: { userId: string; clientRequestId: string; kind: "analysis" }) => Promise<CreditReservation>;
+  attachCredit?: (reservationId: string, sessionId: string) => Promise<void>;
+  cancelCredit?: (userId: string, reservationId: string) => Promise<void>;
   createSignedUpload: (path: string, options: { upsert: boolean }) => Promise<{ signedUrl: string; token: string; path: string }>;
 };
 
@@ -84,33 +89,50 @@ export async function createAnalysisHandler(request: Request, dependencies: Crea
       };
     }
 
-    const session = await dependencies.createSession({
-      userId,
-      previousSessionId: normalizedPreviousId,
-      clientRequestId: typeof clientRequestId === "string" ? clientRequestId.trim() : null,
-      declaration,
-    });
-    const shouldCreateFallback = privacySafeFallback === true
-      && supportsUpperBodyPrivacyFallback(declaration.exercise.label);
-    if (uploadProfile === "single_analysis_v1") {
-      const analysisUpload = await dependencies.createSignedUpload(`${userId}/${session.id}/analysis-input.mp4`, { upsert: false });
-      return json({ sessionId: session.id, analysisUpload }, 201);
+    const requestKey = typeof clientRequestId === "string" && clientRequestId.trim()
+      ? clientRequestId.trim()
+      : `analysis-${userId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    let reservation: CreditReservation | null = null;
+    try {
+      if (dependencies.reserveCredit) reservation = await dependencies.reserveCredit({ userId, clientRequestId: requestKey, kind: "analysis" });
+      const session = await dependencies.createSession({
+        userId,
+        previousSessionId: normalizedPreviousId,
+        clientRequestId: typeof clientRequestId === "string" ? clientRequestId.trim() : dependencies.reserveCredit ? requestKey : null,
+        declaration,
+      });
+      if (reservation && dependencies.attachCredit) await dependencies.attachCredit(reservation.reservationId, session.id);
+      const shouldCreateFallback = privacySafeFallback === true
+        && supportsUpperBodyPrivacyFallback(declaration.exercise.label);
+      if (uploadProfile === "single_analysis_v1") {
+        const analysisUpload = await dependencies.createSignedUpload(`${userId}/${session.id}/analysis-input.mp4`, { upsert: false });
+        return json({ sessionId: session.id, reservationId: reservation?.reservationId, remaining: reservation?.remaining, periodEndsAt: reservation?.periodEndsAt, analysisUpload }, 201);
+      }
+      const [upload, analysisUpload, privacySafeUpload] = await Promise.all([
+        dependencies.createSignedUpload(`${userId}/${session.id}/original.mp4`, { upsert: false }),
+        dependencies.createSignedUpload(`${userId}/${session.id}/analysis-input.mp4`, { upsert: false }),
+        shouldCreateFallback
+          ? dependencies.createSignedUpload(`${userId}/${session.id}/privacy-safe-upper-body.mp4`, { upsert: false })
+          : Promise.resolve(null),
+      ]);
+      return json({
+        sessionId: session.id,
+        reservationId: reservation?.reservationId,
+        remaining: reservation?.remaining,
+        periodEndsAt: reservation?.periodEndsAt,
+        upload,
+        analysisUpload,
+        ...(privacySafeUpload ? { privacySafeUpload } : {}),
+      }, 201);
+    } catch (error) {
+      if (reservation && dependencies.cancelCredit) await dependencies.cancelCredit(userId, reservation.reservationId).catch(() => undefined);
+      throw error;
     }
-    const [upload, analysisUpload, privacySafeUpload] = await Promise.all([
-      dependencies.createSignedUpload(`${userId}/${session.id}/original.mp4`, { upsert: false }),
-      dependencies.createSignedUpload(`${userId}/${session.id}/analysis-input.mp4`, { upsert: false }),
-      shouldCreateFallback
-        ? dependencies.createSignedUpload(`${userId}/${session.id}/privacy-safe-upper-body.mp4`, { upsert: false })
-        : Promise.resolve(null),
-    ]);
-    return json({
-      sessionId: session.id,
-      upload,
-      analysisUpload,
-      ...(privacySafeUpload ? { privacySafeUpload } : {}),
-    }, 201);
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);
+    if (error && typeof error === "object" && "code" in error && String((error as { code?: unknown }).code).startsWith("ANALYSIS_")) {
+      return json({ message: error instanceof Error ? error.message : "Analysis access is unavailable", code: String((error as { code?: unknown }).code) }, 402);
+    }
     return json({ message: "Analysis session could not be created", code: "CREATE_FAILED" }, 500);
   }
 }

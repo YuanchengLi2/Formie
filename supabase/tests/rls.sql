@@ -1,5 +1,5 @@
 begin;
-select plan(47);
+select plan(56);
 
 select has_table('public', 'analysis_sessions', 'analysis_sessions exists');
 select has_table('public', 'analysis_results', 'analysis_results exists');
@@ -83,6 +83,16 @@ select ok((select relrowsecurity from pg_class where oid = 'public.coach_message
 select ok((select relrowsecurity from pg_class where oid = 'public.user_profiles'::regclass), 'user profiles have RLS');
 select is((select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'user_profiles'), 3, 'user profiles expose only owner read, insert, and update policies');
 select has_column('public', 'user_profiles', 'onboarding_step', 'onboarding progress is resumable');
+select has_column('public', 'user_profiles', 'age_years', 'approved onboarding age is persisted');
+select has_column('public', 'user_profiles', 'gender', 'approved onboarding gender is persisted');
+select has_column('public', 'user_profiles', 'height_cm', 'canonical height is persisted');
+select has_column('public', 'user_profiles', 'weight_kg', 'canonical weight is persisted');
+select has_column('public', 'user_profiles', 'measurement_system', 'display measurement system is persisted');
+select has_column('public', 'user_profiles', 'biggest_frustration', 'approved frustration is persisted');
+select has_column('public', 'user_profiles', 'workouts_per_week', 'training frequency is persisted');
+select has_column('public', 'user_profiles', 'custom_milestone', 'custom milestone is persisted');
+select has_column('public', 'user_profiles', 'onboarding_version', 'onboarding schema version is persisted');
+select has_column('public', 'user_profiles', 'marketing_opt_in', 'optional marketing consent is persisted');
 select is((select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'coach_messages'), 1, 'coach messages expose only owner read policy');
 select is(
   (select count(*)::integer from pg_policies where schemaname = 'public' and tablename = 'analysis_sessions'),

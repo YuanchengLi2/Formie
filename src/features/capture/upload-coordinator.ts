@@ -29,6 +29,7 @@ export type UploadCoordinatorDependencies = {
   normalizePrivacySafeFallback: (recording: RecordedSet) => Promise<RecordedSet>;
   bindLocalRecording: (sessionId: string, recording: RecordedSet) => Promise<void>;
   completeUpload: (accessToken: string, sessionId: string, durationMs: number, hasPrivacySafeFallback: boolean, signal: AbortSignal, metadata?: { byteLength?: number }) => Promise<void>;
+  cancelReservation?: (reservationId: string) => Promise<void>;
 };
 
 async function retryNetworkStep<T>(
@@ -70,6 +71,7 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
   let declarationKey: string | null = null;
   let clientRequestId: string | null = null;
   let activeRun: Promise<{ sessionId: string; target: UploadTarget }> | null = null;
+  let cancellation: Promise<void> | null = null;
   let progress: UploadProgress | null = null;
   const listeners = new Set<(nextProgress: UploadProgress) => void>();
 
@@ -232,6 +234,15 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
   return {
     currentProgress: () => progress,
     reset,
+    cancelReservation: () => {
+      if (cancellation) return cancellation;
+      const reservationId = currentTarget?.reservationId;
+      cancellation = (async () => {
+        if (reservationId && dependencies.cancelReservation) await dependencies.cancelReservation(reservationId).catch(() => undefined);
+        reset();
+      })().finally(() => { cancellation = null; });
+      return cancellation;
+    },
     run,
     subscribe,
   };

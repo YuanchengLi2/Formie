@@ -58,6 +58,12 @@ describe("resultPayload", () => {
     );
     expect(tabSpecificPayload?.priorityCorrections).toBe(result.priority_corrections);
     expect(tabSpecificPayload).not.toHaveProperty("repTimeline");
+    const accuracyRestoredPayload = resultPayload(
+      { pipeline_version: "gemini-whole-video-v52", detected_label: "Squat", detected_equipment: [], exercise_family: "squat" },
+      result,
+    );
+    expect(accuracyRestoredPayload?.priorityCorrections).toBe(result.priority_corrections);
+    expect(accuracyRestoredPayload).not.toHaveProperty("repTimeline");
     expect(resultPayload(
       { pipeline_version: "gemini-whole-video-v46", detected_label: "Squat", detected_equipment: [], exercise_family: "squat" },
       { ...result, analysis_basis: "mixed" },

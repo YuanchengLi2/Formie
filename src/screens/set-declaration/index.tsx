@@ -28,6 +28,8 @@ type SetDeclarationScreenProps = {
   initialExerciseName?: string;
   analyzeLabel?: string;
   secondaryLabel?: string;
+  submitError?: string | null;
+  submitting?: boolean;
   showSide?: boolean;
   showVideoPreview?: boolean;
   onAnalyze: (declaration: SetDeclaration) => void;
@@ -110,6 +112,8 @@ export function SetDeclarationScreen({
   initialExerciseName,
   analyzeLabel,
   secondaryLabel = "Retake",
+  submitError = null,
+  submitting = false,
   showSide = true,
   showVideoPreview = true,
   onAnalyze,
@@ -379,10 +383,10 @@ export function SetDeclarationScreen({
           />
         </View>
 
-        {validationError ? <Text accessibilityRole="alert" style={[typography.caption, { color: colors.danger }]}>{validationError}</Text> : null}
+        {validationError || submitError ? <Text accessibilityRole="alert" style={[typography.caption, { color: colors.danger }]}>{validationError ?? submitError}</Text> : null}
 
         <View style={{ gap: spacing.sm }}>
-          <FormButton label={submitLabel} onPress={analyze} />
+          <FormButton label={submitting ? `${submitLabel}…` : submitLabel} disabled={submitting} onPress={analyze} />
           {!isFreshRecording ? <FormButton label={secondaryLabel} variant="secondary" onPress={onRetake} /> : null}
         </View>
       </ScrollView>

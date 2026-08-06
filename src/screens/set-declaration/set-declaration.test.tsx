@@ -38,6 +38,21 @@ describe("SetDeclarationScreen", () => {
     mockUseVideoPlayer.mockClear();
   });
 
+  it("shows a server submission error beside the analysis action", async () => {
+    const screen = await renderDeclaration(
+      <SetDeclarationScreen
+        localVideoUri="file:///set.mp4"
+        submitError="The saved video could not be queued for reanalysis."
+        submitting
+        onAnalyze={jest.fn()}
+        onRetake={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("The saved video could not be queued for reanalysis.");
+    expect(screen.getByLabelText("Submit for Analysis…")).toBeDisabled();
+  });
+
   it("can hide the clip because recording review lives on its own page", async () => {
     const screen = await renderDeclaration(
       <SetDeclarationScreen

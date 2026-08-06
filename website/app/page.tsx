@@ -3,11 +3,10 @@ import Image from "next/image";
 import { DownloadButton, SiteShell } from "@/components/site-shell";
 
 const benefits = [
-  "10 complete form analyses",
-  "Deeper coaching breakdowns",
-  "More access to Formie Coach",
-  "Early access to premium features",
-  "Priority support",
+  "Whole-set movement breakdowns",
+  "Visible evidence and timestamps",
+  "One personalized cue for your next set",
+  "Progress that stays connected over time",
 ];
 
 export default function HomePage() {
@@ -91,8 +90,8 @@ export default function HomePage() {
         <article className="v2-pro-card">
           <header>
             <span className="v2-kicker">Formie Pro</span>
-            <h2>10 analyses. $10.</h2>
-            <p>Ten complete reviews for the sets that deserve a closer look.</p>
+            <h2>$9.99 <small>/ month</small></h2>
+            <p>10 complete analyses each month for the sets that deserve a closer look.</p>
           </header>
           <div className="v2-plan-meter" aria-label="Ten analyses included">
             {Array.from({ length: 10 }, (_, index) => <i key={index} />)}

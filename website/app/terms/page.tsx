@@ -15,7 +15,7 @@ export default function TermsPage() {
       <h2>Your content</h2>
       <p>You retain ownership of recordings and messages you submit. You give Formie permission to host and process that content only as needed to provide, secure, support, and improve the service in accordance with the Privacy Policy and your settings.</p>
       <h2>Subscriptions</h2>
-      <p>Formie Pro is not yet available. Before paid subscriptions launch, the app and store listing will show final pricing, included analyses, renewal, cancellation, and refund terms. Purchases made through an app store are also governed by that store’s terms.</p>
+      <p>Formie Pro includes 10 analyses per monthly period. Apple or Google owns cancellation and renewal. Canceling stops renewal but analysis access continues through the paid-through date. After expiration, the account and saved results remain available, while new analyses require repurchase through the Formie app.</p>
       <h2>Acceptable use</h2>
       <p>Do not misuse the service, probe or bypass security, upload content you lack permission to use, interfere with other users, or use automated output to cause harm.</p>
       <h2>Availability and changes</h2>

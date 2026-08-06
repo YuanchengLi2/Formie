@@ -46,6 +46,14 @@ function splitOpeningSentence(value: string): { headline: string; supporting: st
     : { headline: trimmed, supporting: "" };
 }
 
+function combineCoachingCopy(headline: string | null | undefined, body: string | null | undefined): string {
+  const first = headline?.trim() ?? "";
+  const second = body?.trim() ?? "";
+  if (!first) return second;
+  if (!second) return first;
+  return `${first}${/[.!?]$/.test(first) ? "" : "."} ${second}`;
+}
+
 function CoachingCopy({ value, testID }: { value: string; testID: string }) {
   const copy = splitOpeningSentence(value);
   return (
@@ -116,6 +124,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
   const selectedIndex = Math.min(pointIndex, Math.max(0, points.length - 1));
   const point = points[selectedIndex] ?? null;
   const activeFrame = point?.[purpose] ?? null;
+  const selectedVideoFrame = point?.observed ?? null;
   const hasMajorCorrection = presentation.priorityCorrections.some((finding) => finding.severity === "high");
   const declaredExercise = result.setDeclaration?.exercise.label ?? result.recognition.label ?? "";
   const exerciseMuscleFocus = useMemo(
@@ -221,7 +230,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
               ? point.observed.body ?? point.observed.finding.detail
               : purpose === "why"
                 ? point.why.body ?? point.observed.finding.whyItMatters
-                : [point.next.title, point.next.body].filter(Boolean).join(" ")).trim()}
+                : combineCoachingCopy(point.next.title, point.next.body)).trim()}
           />
         </View>
       </View>
@@ -242,7 +251,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
       <View testID="coaching-workspace" style={{ flexDirection: wideWorkspace ? "row" : "column", alignItems: "flex-start", gap: spacing.lg }}>
         {videoUrl && durationMs ? (
           <View style={{ width: wideWorkspace ? "48%" : "100%", maxWidth: wideWorkspace ? 560 : undefined }}>
-            <FullRecording videoUrl={videoUrl} durationMs={durationMs} playbackWindow={playbackWindow} reviewFrames={synchronizedReviewFrames} selectedReviewFrame={activeFrame} onSelectReviewFrame={selectReviewFrame} showActiveFrameCard={false} />
+            <FullRecording videoUrl={videoUrl} durationMs={durationMs} playbackWindow={playbackWindow} reviewFrames={synchronizedReviewFrames} selectedReviewFrame={selectedVideoFrame} onSelectReviewFrame={selectReviewFrame} showActiveFrameCard={false} />
           </View>
         ) : null}
         {selectorCoachingPanel}

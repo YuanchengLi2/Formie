@@ -7,6 +7,8 @@ export type ReanalyzeVideoDependencies = {
   canonicalizeDeclaration: (declaration: SetDeclaration) => Promise<SetDeclaration>;
   verifyReusableInput: (sessionId: string, userId: string) => Promise<"ready" | "not_found" | "video_missing" | "video_too_long">;
   resetSession: (sessionId: string, userId: string, declaration?: SetDeclaration) => Promise<ReanalysisResetOutcome>;
+  reserveCredit?: (input: { userId: string; sessionId: string; clientRequestId: string }) => Promise<{ reservationId: string; remaining: number | null; periodEndsAt: string | null }>;
+  cancelCredit?: (userId: string, reservationId: string) => Promise<void>;
 };
 
 function json(payload: unknown, status: number): Response {
@@ -25,7 +27,7 @@ export async function reanalyzeVideoHandler(request: Request, dependencies: Rean
   if (!body || typeof body !== "object" || Array.isArray(body)) return json({ message: "Invalid request body", code: "INVALID_BODY" }, 400);
   const keys = Object.keys(body);
   const sessionId = (body as { sessionId?: unknown }).sessionId;
-  if (keys.some((key) => key !== "sessionId" && key !== "declaration") || typeof sessionId !== "string" || !sessionId.trim()) {
+  if (keys.some((key) => key !== "sessionId" && key !== "declaration" && key !== "clientRequestId") || typeof sessionId !== "string" || !sessionId.trim()) {
     return json({ message: "sessionId is required", code: "INVALID_BODY" }, 400);
   }
   let declaration: SetDeclaration | undefined;
@@ -39,21 +41,34 @@ export async function reanalyzeVideoHandler(request: Request, dependencies: Rean
 
   try {
     const userId = await dependencies.authenticate(request);
+    const rawRequestId = (body as { clientRequestId?: unknown }).clientRequestId;
+    const clientRequestId = typeof rawRequestId === "string" && rawRequestId.trim().length >= 8
+      ? rawRequestId.trim()
+      : `reanalysis-${sessionId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const input = await dependencies.verifyReusableInput(sessionId, userId);
     if (input === "not_found") return json({ message: "Analysis not found", code: "NOT_FOUND" }, 404);
     if (input === "video_missing") return json({ message: "The original video is no longer available", code: "VIDEO_NOT_FOUND" }, 409);
     if (input === "video_too_long") return json({ message: "Video inputs are limited to 15 seconds", code: "VIDEO_TOO_LONG" }, 409);
     if (declaration) declaration = await dependencies.canonicalizeDeclaration(declaration);
-    const outcome = await dependencies.resetSession(sessionId, userId, declaration);
-    if (outcome === "not_found") return json({ message: "Analysis not found", code: "NOT_FOUND" }, 404);
-    if (outcome === "video_missing") return json({ message: "The original video is no longer available", code: "VIDEO_NOT_FOUND" }, 409);
-    if (outcome === "video_too_long") return json({ message: "Video inputs are limited to 15 seconds", code: "VIDEO_TOO_LONG" }, 409);
-    if (outcome === "busy") return json({ message: "This analysis is already processing", code: "ALREADY_PROCESSING" }, 409);
-    if (outcome === "declaration_required") return json({ message: "Confirm the exercise, completed amount, and load before reanalysis", code: "SET_DECLARATION_REQUIRED" }, 409);
-    return json({ sessionId, status: "queued", stage: "input_ready" }, 202);
+    let reservation: { reservationId: string; remaining: number | null; periodEndsAt: string | null } | null = null;
+    try {
+      if (dependencies.reserveCredit) reservation = await dependencies.reserveCredit({ userId, sessionId, clientRequestId });
+      const outcome = await dependencies.resetSession(sessionId, userId, declaration);
+      if (outcome !== "ready" && reservation && dependencies.cancelCredit) await dependencies.cancelCredit(userId, reservation.reservationId).catch(() => undefined);
+      if (outcome === "not_found") return json({ message: "Analysis not found", code: "NOT_FOUND" }, 404);
+      if (outcome === "video_missing") return json({ message: "The original video is no longer available", code: "VIDEO_NOT_FOUND" }, 409);
+      if (outcome === "video_too_long") return json({ message: "Video inputs are limited to 15 seconds", code: "VIDEO_TOO_LONG" }, 409);
+      if (outcome === "busy") return json({ message: "This analysis is already processing", code: "ALREADY_PROCESSING" }, 409);
+      if (outcome === "declaration_required") return json({ message: "Confirm the exercise, completed amount, and load before reanalysis", code: "SET_DECLARATION_REQUIRED" }, 409);
+      return json({ sessionId, status: "queued", stage: "input_ready", reservationId: reservation?.reservationId, remaining: reservation?.remaining, periodEndsAt: reservation?.periodEndsAt }, 202);
+    } catch (error) {
+      if (reservation && dependencies.cancelCredit) await dependencies.cancelCredit(userId, reservation.reservationId).catch(() => undefined);
+      throw error;
+    }
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);
     if (error instanceof Error && error.message === "INVALID_EXERCISE") return json({ message: "Selected exercise is unavailable", code: "INVALID_EXERCISE" }, 400);
+    if (error && typeof error === "object" && "code" in error && String((error as { code?: unknown }).code).startsWith("ANALYSIS_")) return json({ message: error instanceof Error ? error.message : "Analysis access is unavailable", code: String((error as { code?: unknown }).code) }, 402);
     return json({ message: "The saved video could not be queued for reanalysis", code: "REANALYZE_FAILED" }, 500);
   }
 }

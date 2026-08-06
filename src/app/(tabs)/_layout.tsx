@@ -1,15 +1,20 @@
-import { Tabs, useRouter } from "expo-router";
+import { Alert } from "react-native";
+import { Tabs, type Href, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CenterTabButton } from "@/components/center-tab-button";
+import { useAccess } from "@/features/access/access-provider";
+import { resolveAnalysisEntry } from "@/features/access/account-access";
 import { CoachTabIcon } from "@/components/coach-tab-icon";
 import { ProductionIcon } from "@/components/production-icon";
 import { colors } from "@/theme/colors";
 
 export default function TabsLayout() {
   const router = useRouter();
+  const access = useAccess();
   const insets = useSafeAreaInsets();
   const bottomPadding = Math.max(insets.bottom, 10);
+  const analysisEntry = resolveAnalysisEntry(access.status, access.access);
   return (
     <Tabs
       screenOptions={{
@@ -38,7 +43,20 @@ export default function TabsLayout() {
         name="(record)"
         options={{
           title: "Record",
-          tabBarButton: () => <CenterTabButton onPress={() => router.push("/exercise-selection")} />,
+          tabBarButton: () => <CenterTabButton disabled={analysisEntry === "quota_exhausted"} label={analysisEntry === "purchase" ? "Purchase" : analysisEntry === "quota_exhausted" ? "0 analyses left" : "Record"} accessibilityLabel={analysisEntry === "purchase" ? "Purchase subscription" : analysisEntry === "quota_exhausted" ? "0 analyses left" : "Record"} onPress={() => {
+            if (analysisEntry === "purchase") {
+              router.push("/subscription" as Href);
+              return;
+            }
+            if (analysisEntry === "unavailable") {
+              Alert.alert("Analysis access unavailable", "Formie could not confirm your analysis balance. Check your connection and try again.", [
+                { text: "Cancel", style: "cancel" },
+                { text: "Try again", onPress: () => void access.refresh().catch(() => undefined) },
+              ]);
+              return;
+            }
+            router.push("/exercise-selection" as Href);
+          }} />,
         }}
       />
       <Tabs.Screen name="(progress)" options={{ title: "Progress", tabBarIcon: ({ color }) => <ProductionIcon name="tabProgress" label="Progress" size={26} tintColor={color} /> }} />

@@ -11,6 +11,7 @@ const categories: { value: FeedbackCategory; label: string }[] = [
   { value: "bug", label: "Bug" },
   { value: "feature_request", label: "Feature request" },
   { value: "general", label: "General" },
+  { value: "priority_support", label: "Priority support" },
 ];
 
 export function FeedbackScreen({
