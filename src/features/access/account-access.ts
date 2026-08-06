@@ -16,6 +16,16 @@ export function canOpenCompletedAccount({
   return accessStatus === "active" || accessStatus === "expired";
 }
 
+export function canOpenSubscriptionScreen({
+  authenticated,
+  profileComplete,
+}: {
+  authenticated: boolean;
+  profileComplete: boolean;
+}): boolean {
+  return authenticated && profileComplete;
+}
+
 export function resolveAnalysisEntry(
   providerStatus: "loading" | "ready" | "error",
   access: AccessStatus,

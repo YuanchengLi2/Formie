@@ -223,7 +223,14 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
       const result = { sessionId: target.sessionId, target };
       clear();
       return result;
-    })();
+    })().catch(async (error) => {
+      const reservationId = currentTarget?.reservationId;
+      if (reservationId && dependencies.cancelReservation) {
+        await dependencies.cancelReservation(reservationId).catch(() => undefined);
+      }
+      clear();
+      throw error;
+    });
     activeRun = operation;
     void operation.finally(() => {
       if (activeRun === operation) activeRun = null;

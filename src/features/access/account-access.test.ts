@@ -1,4 +1,4 @@
-import { canOpenCompletedAccount, formatAnalysisBalance, resolveAnalysisEntry } from "./account-access";
+import { canOpenCompletedAccount, canOpenSubscriptionScreen, formatAnalysisBalance, resolveAnalysisEntry } from "./account-access";
 import type { AccessStatus } from "./types";
 
 const access = (status: AccessStatus["status"], canAnalyze: boolean, remaining: number | null): AccessStatus => ({
@@ -33,6 +33,14 @@ describe("completed account admission", () => {
   it("never admits signed-out or incomplete profiles", () => {
     expect(canOpenCompletedAccount({ authenticated: false, profileComplete: true, onboardingStatus: "complete", accessStatus: "active" })).toBe(false);
     expect(canOpenCompletedAccount({ authenticated: true, profileComplete: false, onboardingStatus: "complete", accessStatus: "active" })).toBe(false);
+  });
+});
+
+describe("subscription screen admission", () => {
+  it("depends on the authenticated completed profile rather than stale onboarding state", () => {
+    expect(canOpenSubscriptionScreen({ authenticated: true, profileComplete: true })).toBe(true);
+    expect(canOpenSubscriptionScreen({ authenticated: false, profileComplete: true })).toBe(false);
+    expect(canOpenSubscriptionScreen({ authenticated: true, profileComplete: false })).toBe(false);
   });
 });
 

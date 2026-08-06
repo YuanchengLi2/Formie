@@ -5,7 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { AppProviders } from "@/components/app-providers";
 import { SubscriptionAccessGate } from "@/components/subscription-access-gate";
 import { AccessProvider, useAccess } from "@/features/access/access-provider";
-import { canOpenCompletedAccount } from "@/features/access/account-access";
+import { canOpenCompletedAccount, canOpenSubscriptionScreen } from "@/features/access/account-access";
 import { AuthProvider, useAuth } from "@/features/auth/auth-provider";
 import { BillingProvider } from "@/features/billing/billing-provider";
 import { OnboardingProvider, useOnboarding } from "@/features/onboarding/onboarding-store";
@@ -22,6 +22,7 @@ function RootNavigator() {
   const authenticated = auth.phase === "authenticated";
   const profileComplete = profile.profile?.onboardingCompleted === true && profile.profile?.onboardingVersion === "approved-v1";
   const appUnlocked = canOpenCompletedAccount({ authenticated, profileComplete, onboardingStatus: onboarding.status, accessStatus: access.access.status });
+  const subscriptionAvailable = canOpenSubscriptionScreen({ authenticated, profileComplete });
   const onboardingAllowed = auth.phase === "signed_out" || (authenticated && !profileComplete);
 
   return <ThemeProvider value={formTheme}>
@@ -34,7 +35,7 @@ function RootNavigator() {
         <Stack.Screen name="(auth)/email" />
         <Stack.Screen name="(auth)/email-code" />
       </Stack.Protected>
-      <Stack.Protected guard={authenticated && profileComplete && (onboarding.status === "premium_required" || onboarding.status === "complete")}><Stack.Screen name="subscription" /></Stack.Protected>
+      <Stack.Protected guard={subscriptionAvailable}><Stack.Screen name="subscription" /></Stack.Protected>
       <Stack.Protected guard={appUnlocked}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="account/send-feedback" options={{ headerShown: true, title: "Send Feedback", headerBackButtonDisplayMode: "minimal" }} />

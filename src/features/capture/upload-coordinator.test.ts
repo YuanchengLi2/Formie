@@ -277,6 +277,30 @@ describe("upload coordinator", () => {
     await running;
   });
 
+  it("releases a reserved credit after a terminal pre-completion failure", async () => {
+    const cancelReservation = jest.fn(async () => undefined);
+    const createSession = jest.fn()
+      .mockResolvedValueOnce({ ...singleTarget, sessionId: "failed-session", reservationId: "failed-reservation" })
+      .mockResolvedValueOnce({ ...singleTarget, sessionId: "retry-session", reservationId: "retry-reservation" });
+    const uploadVideo = jest.fn()
+      .mockRejectedValueOnce(new Error("upload failed"))
+      .mockResolvedValueOnce(undefined);
+    const coordinator = createUploadCoordinator(dependencies({
+      createSession,
+      prepareAnalysisVideo: jest.fn(async () => ({ ...recording, byteLength: 4_500_000 })),
+      uploadVideo,
+      cancelReservation,
+    }));
+
+    await expect(coordinator.run(recording, declaration)).rejects.toThrow("upload failed");
+    expect(cancelReservation).toHaveBeenCalledTimes(1);
+    expect(cancelReservation).toHaveBeenCalledWith("failed-reservation");
+
+    await expect(coordinator.run(recording, declaration)).resolves.toMatchObject({ sessionId: "retry-session" });
+    expect(createSession).toHaveBeenCalledTimes(2);
+    expect(cancelReservation).toHaveBeenCalledTimes(1);
+  });
+
   it("does not reuse a failed session for a different declaration", async () => {
     const changed = { ...declaration, amount: { ...declaration.amount, value: 10 } };
     const completeUpload = jest.fn()
