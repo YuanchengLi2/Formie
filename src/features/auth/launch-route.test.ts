@@ -43,10 +43,10 @@ describe("launch routing", () => {
     } as never)).toBe("/onboarding/age");
   });
 
-  it("requires account creation, profile sync, and premium in order", () => {
+  it("requires account creation and profile sync in order", () => {
     expect(resolveLaunchRoute({ phase: "signed_out", onboarding: "awaiting_account", profileComplete: false, profileOnboardingVersion: null, accessStatus: "unknown" } as never)).toBe("/onboarding/create-account");
     expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "profile_sync_required", currentStep: "create-account", profileComplete: false, profileOnboardingVersion: null, accessStatus: "unknown" } as never)).toBe("/onboarding/create-account");
-    expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "premium_required", profileComplete: true, profileOnboardingVersion: "approved-v1", accessStatus: "expired" } as never)).toBe("/subscription");
+    expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "premium_required", profileComplete: true, profileOnboardingVersion: "approved-v1", accessStatus: "expired" } as never)).toBe("/(tabs)/(home)");
   });
 
   it("starts approved onboarding for a restored legacy profile instead of opening Pricing", () => {
@@ -78,6 +78,16 @@ describe("launch routing", () => {
       profileOnboardingVersion: "approved-v1",
       accessStatus: "expired",
     } as never)).toBe("/(tabs)/(home)");
+  });
+
+  it("does not let a stale premium-required marker override a completed profile", () => {
+    expect(resolveLaunchRoute({
+      phase: "authenticated",
+      onboarding: "premium_required",
+      profileComplete: true,
+      profileOnboardingVersion: "approved-v1",
+      accessStatus: "expired",
+    })).toBe("/(tabs)/(home)");
   });
 
   it("lets confirmed access override a stale local premium-required flag", () => {

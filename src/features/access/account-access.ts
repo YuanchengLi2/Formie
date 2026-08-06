@@ -5,7 +5,6 @@ export type AnalysisEntry = "record" | "quota_exhausted" | "purchase" | "unavail
 export function canOpenCompletedAccount({
   authenticated,
   profileComplete,
-  onboardingStatus,
   accessStatus,
 }: {
   authenticated: boolean;
@@ -14,8 +13,7 @@ export function canOpenCompletedAccount({
   accessStatus: AccessStatus["status"];
 }): boolean {
   if (!authenticated || !profileComplete) return false;
-  if (accessStatus === "active") return true;
-  return accessStatus === "expired" && onboardingStatus !== "premium_required";
+  return accessStatus === "active" || accessStatus === "expired";
 }
 
 export function resolveAnalysisEntry(

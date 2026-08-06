@@ -25,8 +25,8 @@ describe("completed account admission", () => {
     expect(canOpenCompletedAccount({ authenticated: true, profileComplete: true, onboardingStatus: "logged_out", accessStatus: "active" })).toBe(true);
   });
 
-  it("keeps initial Premium locked until access is purchased", () => {
-    expect(canOpenCompletedAccount({ authenticated: true, profileComplete: true, onboardingStatus: "premium_required", accessStatus: "expired" })).toBe(false);
+  it("ignores stale premium state after the server profile is complete", () => {
+    expect(canOpenCompletedAccount({ authenticated: true, profileComplete: true, onboardingStatus: "premium_required", accessStatus: "expired" })).toBe(true);
     expect(canOpenCompletedAccount({ authenticated: true, profileComplete: true, onboardingStatus: "premium_required", accessStatus: "active" })).toBe(true);
   });
 

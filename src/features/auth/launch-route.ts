@@ -43,7 +43,7 @@ export function resolveLaunchRoute({
     return "/onboarding/welcome";
   }
 
-  if (accessStatus === "active" || (accessStatus === "expired" && onboarding !== "premium_required")) {
+  if (accessStatus === "active" || accessStatus === "expired") {
     return "/(tabs)/(home)";
   }
   return "/subscription";
