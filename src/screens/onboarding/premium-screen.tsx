@@ -18,12 +18,45 @@ export type PremiumScreenProps = {
 };
 
 const benefits = [
-  { id: "analyses", label: "10 analyses / month", glyph: "◫" },
-  { id: "coaching", label: "Personalized corrections", glyph: "◎" },
-  { id: "progress", label: "Progress tracking", glyph: "↗" },
+  { id: "analyses", label: "10 analyses / month", icon: "bars" },
+  { id: "coaching", label: "Personalized corrections", icon: "target" },
+  { id: "progress", label: "Progress tracking", icon: "chart" },
 ] as const;
 
 const cardBackground = require("../../../assets/production/paywall/pro-card-background.png");
+
+function BenefitIcon({ kind }: { kind: "bars" | "target" | "chart" }) {
+  if (kind === "bars") {
+    return (
+      <View style={styles.barsGlyph} accessibilityElementsHidden>
+        <View style={[styles.bar, styles.barShort]} />
+        <View style={[styles.bar, styles.barTall]} />
+        <View style={[styles.bar, styles.barMedium]} />
+      </View>
+    );
+  }
+
+  if (kind === "target") {
+    return (
+      <View style={styles.targetGlyph} accessibilityElementsHidden>
+        <View style={styles.targetRing} />
+        <View style={styles.targetHorizontal} />
+        <View style={styles.targetVertical} />
+        <View style={styles.targetDot} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.chartGlyph} accessibilityElementsHidden>
+      <View style={[styles.chartSegment, styles.chartSegmentOne]} />
+      <View style={[styles.chartSegment, styles.chartSegmentTwo]} />
+      <View style={[styles.chartSegment, styles.chartSegmentThree]} />
+      <View style={[styles.chartArrow, styles.chartArrowLeft]} />
+      <View style={[styles.chartArrow, styles.chartArrowRight]} />
+    </View>
+  );
+}
 
 export function PremiumScreen({ price, purchaseAvailable, busy, state = "idle", error, onBack, onPurchase, onPurchasePlan, onRetrySync }: PremiumScreenProps) {
   const insets = useSafeAreaInsets();
@@ -74,7 +107,7 @@ export function PremiumScreen({ price, purchaseAvailable, busy, state = "idle", 
           {benefits.map((benefit) => (
             <View key={benefit.id} testID={"premium-benefit-" + benefit.id} style={styles.benefit}>
               <View testID={"premium-benefit-icon-" + benefit.id} style={styles.benefitIcon}>
-                <Text selectable={false} style={styles.benefitGlyph}>{benefit.glyph}</Text>
+                <BenefitIcon kind={benefit.icon} />
               </View>
               <Text testID={"premium-benefit-text-" + benefit.id} selectable style={styles.benefitText}>{benefit.label}</Text>
             </View>
@@ -123,7 +156,24 @@ const styles = StyleSheet.create({
   unlockTitle: { color: "#F3F1EC", fontSize: 19, lineHeight: 25, fontWeight: "800", paddingBottom: 10 },
   benefit: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: 15, borderTopWidth: 1, borderTopColor: "#292929" },
   benefitIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#D9A536" },
-  benefitGlyph: { color: "#E7B33C", fontSize: 21, lineHeight: 24, fontWeight: "800" },
+  barsGlyph: { width: 22, height: 22, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3 },
+  bar: { width: 3, borderRadius: 2, backgroundColor: "#E7B33C" },
+  barShort: { height: 8 },
+  barTall: { height: 16 },
+  barMedium: { height: 12 },
+  targetGlyph: { width: 22, height: 22, alignItems: "center", justifyContent: "center" },
+  targetRing: { width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, borderColor: "#E7B33C" },
+  targetHorizontal: { position: "absolute", width: 22, height: 1.5, backgroundColor: "#E7B33C" },
+  targetVertical: { position: "absolute", width: 1.5, height: 22, backgroundColor: "#E7B33C" },
+  targetDot: { position: "absolute", width: 4, height: 4, borderRadius: 2, backgroundColor: "#E7B33C" },
+  chartGlyph: { width: 23, height: 22, position: "relative" },
+  chartSegment: { position: "absolute", height: 2, borderRadius: 2, backgroundColor: "#E7B33C", transformOrigin: "left center" },
+  chartSegmentOne: { width: 8, left: 1, top: 16, transform: [{ rotate: "-35deg" }] },
+  chartSegmentTwo: { width: 7, left: 7, top: 12, transform: [{ rotate: "25deg" }] },
+  chartSegmentThree: { width: 11, left: 12, top: 11, transform: [{ rotate: "-42deg" }] },
+  chartArrow: { position: "absolute", width: 7, height: 2, borderRadius: 2, backgroundColor: "#E7B33C", right: 0, top: 4 },
+  chartArrowLeft: { transform: [{ rotate: "45deg" }] },
+  chartArrowRight: { transform: [{ rotate: "-45deg" }] },
   benefitText: { flex: 1, color: "#E8E4DB", fontSize: 17, lineHeight: 22, fontWeight: "600" },
   error: { marginTop: 16, color: "#FF8A82", fontSize: 13, lineHeight: 18, textAlign: "center" },
   cta: { minHeight: 58, flexDirection: "row", gap: 9, alignItems: "center", justifyContent: "center", borderRadius: 5, borderCurve: "continuous", backgroundColor: "#F2B62E", paddingHorizontal: 14 },
