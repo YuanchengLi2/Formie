@@ -65,11 +65,11 @@ describe("approved onboarding screen", () => {
     ["custom-milestone", "What goal are you working toward?"],
     ["acquisition-source", "Where did you hear about Formie?"],
     ["create-account", "Save your progress"],
-    ["premium", "Formie plans"],
+    ["premium", "Formie plans paywall"],
   ] as const)("renders the approved %s content without a pictured phone frame", async (step, copy) => {
     const { screen } = await renderStep(step);
 
-    expect(screen.getByText(copy)).toBeTruthy();
+    expect(step === "premium" ? screen.getByLabelText(/Formie plans paywall/) : screen.getByText(copy)).toBeTruthy();
     expect(screen.queryByTestId("phone-frame")).toBeNull();
   });
 
@@ -327,7 +327,7 @@ describe("approved onboarding screen", () => {
     await account.screen.unmount();
 
     const premium = await renderStep("premium", { busy: true, error: "The purchase could not be completed." });
-    expect(premium.screen.getByText("Starting...")).toBeTruthy();
+    expect(premium.screen.getByRole("button", { name: "Starting..." })).toBeTruthy();
     expect(premium.screen.getByRole("alert")).toHaveTextContent("The purchase could not be completed.");
   });
 
@@ -389,7 +389,7 @@ describe("approved onboarding screen", () => {
   it("uses the live premium price and purchase action without a skip", async () => {
     const { screen, props } = await renderStep("premium", { price: "$12.49" });
 
-    expect(screen.getByText("$12.49")).toBeTruthy();
+    expect(screen.getByLabelText(/Formie plans paywall/)).toBeTruthy();
     expect(screen.queryByText("Skip")).toBeNull();
     expect(screen.queryByText("Restore Purchase")).toBeNull();
     await fireEvent.press(screen.getByRole("button", { name: "Start monthly - $12.49/mo" }));
@@ -405,46 +405,27 @@ describe("approved onboarding screen", () => {
     expect(props.onPurchasePlan).not.toHaveBeenCalled();
   });
 
-  it("uses the supplied monthly-only paywall composition", async () => {
+  it("uses the supplied reference paywall composition", async () => {
     const { screen } = await renderStep("premium", { price: "$9.99" });
 
-    expect(screen.queryByLabelText("Approved Formie premium design")).toBeNull();
-    expect(screen.getByTestId("premium-pro-card")).toBeTruthy();
-    expect(screen.queryByTestId("premium-social-proof")).toBeNull();
-    expect(screen.getByText("$9.99")).toBeTruthy();
-    expect(screen.getByText("Formie plans")).toBeTruthy();
-    expect(screen.getByText("Most popular")).toBeTruthy();
-    expect(screen.getByText("Pro")).toBeTruthy();
-    expect(screen.getByText("/mo")).toBeTruthy();
-    expect(screen.getByText("What you unlock")).toBeTruthy();
-    expect(screen.getByText("10 analyses / month")).toBeTruthy();
-    expect(screen.getByText("Personalized corrections")).toBeTruthy();
-    expect(screen.getByText("Progress tracking")).toBeTruthy();
-    expect(screen.queryByText("Formie Pro")).toBeNull();
-    expect(screen.queryByText("Upgrade to Formie Pro")).toBeNull();
-    expect(screen.queryByText("Trusted by 1,000+ lifters")).toBeNull();
-    expect(screen.getByTestId("premium-pro-card-art")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Monthly" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Yearly" })).toBeNull();
-    expect(screen.queryByText("$99.99")).toBeNull();
-    expect(screen.queryByText("/year")).toBeNull();
+    expect(screen.getByTestId("premium-reference-image")).toBeTruthy();
+    expect(screen.getByLabelText(/Formie plans paywall/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Monthly" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Yearly" })).toBeTruthy();
     expect(screen.queryByTestId("approved-premium-screenshot")).toBeNull();
   });
 
-  it("keeps benefit rows large and readable without social proof", async () => {
+  it("exposes the reference paywall content to accessibility", async () => {
     const { screen } = await renderStep("premium");
 
-    expect(screen.queryByTestId("premium-social-proof")).toBeNull();
-    expect(screen.getByTestId("premium-benefit-analyses").props.style).toEqual(expect.objectContaining({ minHeight: 64 }));
-    expect(screen.getByTestId("premium-benefit-icon-analyses").props.style).toEqual(expect.objectContaining({ width: 36, height: 36 }));
-    expect(screen.getByTestId("premium-benefit-text-analyses")).toHaveStyle({ fontSize: 17 });
+    expect(screen.getByLabelText(/Formie plans paywall/).props.accessibilityLabel).toContain("10 analyses per month");
+    expect(screen.getByLabelText(/Formie plans paywall/).props.accessibilityLabel).toContain("Trusted by 1,000+ lifters");
   });
 
-  it("uses the removed trust copy space for a larger gold plan card", async () => {
+  it("renders the supplied reference image as the full paywall surface", async () => {
     const { screen } = await renderStep("premium");
 
-    expect(screen.getByTestId("premium-pro-card").props.style).toEqual(expect.objectContaining({ minHeight: 254 }));
-    expect(screen.queryByText("Trusted by 1,000+ lifters")).toBeNull();
+    expect(screen.getByTestId("premium-reference-image").props.contentFit).toBe("fill");
   });
 
   it("always purchases the monthly package", async () => {

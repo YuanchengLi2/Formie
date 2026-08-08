@@ -1,7 +1,6 @@
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { PurchaseState } from "@/features/billing/types";
 
@@ -17,53 +16,16 @@ export type PremiumScreenProps = {
   onRetrySync?: () => void;
 };
 
-const benefits = [
-  { id: "analyses", label: "10 analyses / month", icon: "bars" },
-  { id: "coaching", label: "Personalized corrections", icon: "target" },
-  { id: "progress", label: "Progress tracking", icon: "chart" },
-] as const;
-
-const cardBackground = require("../../../assets/production/paywall/pro-card-background.png");
-
-function BenefitIcon({ kind }: { kind: "bars" | "target" | "chart" }) {
-  if (kind === "bars") {
-    return (
-      <View style={styles.barsGlyph} accessibilityElementsHidden>
-        <View style={[styles.bar, styles.barShort]} />
-        <View style={[styles.bar, styles.barTall]} />
-        <View style={[styles.bar, styles.barMedium]} />
-      </View>
-    );
-  }
-
-  if (kind === "target") {
-    return (
-      <View style={styles.targetGlyph} accessibilityElementsHidden>
-        <View style={styles.targetRing} />
-        <View style={styles.targetHorizontal} />
-        <View style={styles.targetVertical} />
-        <View style={styles.targetDot} />
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.chartGlyph} accessibilityElementsHidden>
-      <View style={[styles.chartSegment, styles.chartSegmentOne]} />
-      <View style={[styles.chartSegment, styles.chartSegmentTwo]} />
-      <View style={[styles.chartSegment, styles.chartSegmentThree]} />
-      <View style={[styles.chartArrow, styles.chartArrowLeft]} />
-      <View style={[styles.chartArrow, styles.chartArrowRight]} />
-    </View>
-  );
-}
+// This is the supplied paywall screenshot. It is deliberately rendered as one
+// surface so the production screen cannot drift from the approved artwork.
+const referencePaywall = require("../../../assets/production/paywall/reference/paywall-reference.png");
 
 export function PremiumScreen({ price, purchaseAvailable, busy, state = "idle", error, onBack, onPurchase, onPurchasePlan, onRetrySync }: PremiumScreenProps) {
-  const insets = useSafeAreaInsets();
   const billingState = state as string;
   const reconciling = busy || billingState === "purchasing" || billingState === "reconciling";
   const syncRequired = billingState === "sync_required";
   const ctaLabel = syncRequired ? "Check purchase" : reconciling ? "Starting..." : "Start monthly - " + price + "/mo";
+  const ctaDisabled = reconciling || (!purchaseAvailable && !syncRequired);
   const purchase = () => {
     if (syncRequired) {
       onRetrySync?.();
@@ -72,50 +34,44 @@ export function PremiumScreen({ price, purchaseAvailable, busy, state = "idle", 
     if (onPurchasePlan) onPurchasePlan("monthly");
     else onPurchase();
   };
-  const ctaDisabled = reconciling || (!purchaseAvailable && !syncRequired);
+  const accessibilitySummary = [
+    "Formie plans paywall",
+    "Pro, monthly, " + price + " per month",
+    "Most popular",
+    "10 analyses per month",
+    "Personalized corrections",
+    "Progress tracking",
+    "4.9/5",
+    "Trusted by 1,000+ lifters",
+  ].join(". ");
 
   return (
-    <View testID="premium-native-screen" style={[styles.screen, { paddingTop: Math.max(insets.top, 8), paddingBottom: Math.max(insets.bottom, 10) }]}>
-      <StatusBar style="light" />
-      <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Back" disabled={!onBack} onPress={onBack} style={({ pressed }) => [styles.back, { opacity: onBack ? pressed ? 0.65 : 1 : 0 }]}>
-          <Text selectable={false} style={styles.backText}>‹</Text>
-        </Pressable>
-        <Text selectable style={styles.headerTitle}>Formie plans</Text>
-        <View style={styles.headerSpacer} />
-      </View>
+    <View testID="premium-native-screen" style={styles.screen}>
+      <StatusBar hidden />
+      <Image testID="premium-reference-image" source={referencePaywall} contentFit="fill" style={StyleSheet.absoluteFillObject} />
 
-      <ScrollView style={styles.scroll} contentInsetAdjustmentBehavior="never" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View testID="premium-pro-card" style={styles.planCard}>
-          <Image testID="premium-pro-card-art" source={cardBackground} contentFit="cover" style={StyleSheet.absoluteFillObject} />
-          <View style={styles.planCopy}>
-            <View style={styles.badge}>
-              <Text selectable={false} style={styles.badgeStar}>★</Text>
-              <Text selectable style={styles.badgeText}>Most popular</Text>
-            </View>
-            <Text selectable style={styles.planName}>Pro</Text>
-            <View style={styles.priceRow}>
-              <Text selectable style={styles.price}>{price}</Text>
-              <Text selectable style={styles.period}>/mo</Text>
-            </View>
-            <Text selectable style={styles.description}>For lifters who want better form,{"\n"}better feedback, and faster progress.</Text>
-          </View>
-        </View>
+      <View
+        testID="premium-accessibility-summary"
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={accessibilitySummary}
+        pointerEvents="none"
+        style={styles.accessibilitySummary}
+      />
 
-        <View style={styles.unlock}>
-          <Text selectable style={styles.unlockTitle}>What you unlock</Text>
-          {benefits.map((benefit) => (
-            <View key={benefit.id} testID={"premium-benefit-" + benefit.id} style={styles.benefit}>
-              <View testID={"premium-benefit-icon-" + benefit.id} style={styles.benefitIcon}>
-                <BenefitIcon kind={benefit.icon} />
-              </View>
-              <Text testID={"premium-benefit-text-" + benefit.id} selectable style={styles.benefitText}>{benefit.label}</Text>
-            </View>
-          ))}
-        </View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        disabled={!onBack}
+        onPress={onBack}
+        hitSlop={12}
+        style={styles.backHotspot}
+      />
+      <Pressable accessibilityRole="button" accessibilityLabel="Monthly" accessibilityState={{ selected: true }} style={styles.monthlyHotspot} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Yearly" accessibilityState={{ disabled: true }} disabled style={styles.yearlyHotspot} />
 
-        {error ? <Text selectable accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-      </ScrollView>
+      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+      {reconciling ? <ActivityIndicator accessibilityLabel="Starting purchase" color="#080808" style={styles.busyIndicator} /> : null}
 
       <Pressable
         testID="onboarding-bottom-cta"
@@ -124,58 +80,19 @@ export function PremiumScreen({ price, purchaseAvailable, busy, state = "idle", 
         accessibilityState={{ disabled: ctaDisabled }}
         disabled={ctaDisabled}
         onPress={purchase}
-        style={({ pressed }) => [styles.cta, { opacity: ctaDisabled ? 0.45 : pressed ? 0.82 : 1 }]}
-      >
-        {reconciling ? <ActivityIndicator color="#080808" /> : null}
-        <Text selectable={false} style={styles.ctaText}>{ctaLabel}</Text>
-      </Pressable>
+        style={styles.ctaHotspot}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#050505", paddingHorizontal: 10 },
-  header: { minHeight: 50, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  back: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 22, borderCurve: "continuous", borderWidth: 1, borderColor: "#343434", backgroundColor: "#151515" },
-  backText: { color: "#F4F1E9", fontSize: 32, lineHeight: 34, marginTop: -2 },
-  headerTitle: { color: "#F5F3EF", fontSize: 24, lineHeight: 29, fontWeight: "800", letterSpacing: -0.3 },
-  headerSpacer: { width: 44 },
-  scroll: { flex: 1 },
-  scrollContent: { gap: 0, paddingTop: 6, paddingBottom: 18 },
-  planCard: { minHeight: 254, height: 254, overflow: "hidden", borderRadius: 5, borderCurve: "continuous", backgroundColor: "#C99223" },
-  planCopy: { width: "74%", minHeight: 254, padding: 22, gap: 0 },
-  badge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 7, backgroundColor: "rgba(255,248,222,0.86)" },
-  badgeStar: { color: "#302006", fontSize: 13 },
-  badgeText: { color: "#302006", fontSize: 12, fontWeight: "800" },
-  planName: { color: "#080808", fontSize: 39, lineHeight: 44, fontWeight: "900", marginTop: 14 },
-  priceRow: { flexDirection: "row", alignItems: "flex-end", marginTop: 0 },
-  price: { color: "#080808", fontSize: 39, lineHeight: 45, fontWeight: "900", fontVariant: ["tabular-nums"] },
-  period: { color: "#080808", fontSize: 19, lineHeight: 25, fontWeight: "800", paddingBottom: 3, paddingLeft: 4 },
-  description: { color: "#211706", fontSize: 16, lineHeight: 23, fontWeight: "600", marginTop: 14 },
-  unlock: { marginTop: 38 },
-  unlockTitle: { color: "#F3F1EC", fontSize: 19, lineHeight: 25, fontWeight: "800", paddingBottom: 10 },
-  benefit: { minHeight: 64, flexDirection: "row", alignItems: "center", gap: 15, borderTopWidth: 1, borderTopColor: "#292929" },
-  benefitIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#D9A536" },
-  barsGlyph: { width: 22, height: 22, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3 },
-  bar: { width: 3, borderRadius: 2, backgroundColor: "#E7B33C" },
-  barShort: { height: 8 },
-  barTall: { height: 16 },
-  barMedium: { height: 12 },
-  targetGlyph: { width: 22, height: 22, alignItems: "center", justifyContent: "center" },
-  targetRing: { width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, borderColor: "#E7B33C" },
-  targetHorizontal: { position: "absolute", width: 22, height: 1.5, backgroundColor: "#E7B33C" },
-  targetVertical: { position: "absolute", width: 1.5, height: 22, backgroundColor: "#E7B33C" },
-  targetDot: { position: "absolute", width: 4, height: 4, borderRadius: 2, backgroundColor: "#E7B33C" },
-  chartGlyph: { width: 23, height: 22, position: "relative" },
-  chartSegment: { position: "absolute", height: 2, borderRadius: 2, backgroundColor: "#E7B33C", transformOrigin: "left center" },
-  chartSegmentOne: { width: 8, left: 1, top: 16, transform: [{ rotate: "-35deg" }] },
-  chartSegmentTwo: { width: 7, left: 7, top: 12, transform: [{ rotate: "25deg" }] },
-  chartSegmentThree: { width: 11, left: 12, top: 11, transform: [{ rotate: "-42deg" }] },
-  chartArrow: { position: "absolute", width: 7, height: 2, borderRadius: 2, backgroundColor: "#E7B33C", right: 0, top: 4 },
-  chartArrowLeft: { transform: [{ rotate: "45deg" }] },
-  chartArrowRight: { transform: [{ rotate: "-45deg" }] },
-  benefitText: { flex: 1, color: "#E8E4DB", fontSize: 17, lineHeight: 22, fontWeight: "600" },
-  error: { marginTop: 16, color: "#FF8A82", fontSize: 13, lineHeight: 18, textAlign: "center" },
-  cta: { minHeight: 58, flexDirection: "row", gap: 9, alignItems: "center", justifyContent: "center", borderRadius: 5, borderCurve: "continuous", backgroundColor: "#F2B62E", paddingHorizontal: 14 },
-  ctaText: { color: "#080808", fontSize: 17, fontWeight: "900", textAlign: "center" },
+  screen: { flex: 1, backgroundColor: "#000000" },
+  accessibilitySummary: { position: "absolute", width: 1, height: 1, opacity: 0 },
+  backHotspot: { position: "absolute", left: "1.5%", top: "5%", width: "10%", height: "7%", backgroundColor: "transparent" },
+  monthlyHotspot: { position: "absolute", left: "20%", top: "10.5%", width: "30%", height: "6%", backgroundColor: "transparent" },
+  yearlyHotspot: { position: "absolute", left: "50%", top: "10.5%", width: "30%", height: "6%", backgroundColor: "transparent" },
+  ctaHotspot: { position: "absolute", left: "2%", right: "2%", bottom: "3%", height: "8%", backgroundColor: "transparent" },
+  busyIndicator: { position: "absolute", right: "10%", bottom: "5.5%" },
+  error: { position: "absolute", left: "8%", right: "8%", bottom: "12%", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 6, color: "#FF8A82", backgroundColor: "rgba(0,0,0,0.88)", textAlign: "center", fontSize: 13, lineHeight: 18 },
 });
