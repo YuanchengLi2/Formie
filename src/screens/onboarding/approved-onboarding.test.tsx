@@ -405,21 +405,31 @@ describe("approved onboarding screen", () => {
     expect(props.onPurchasePlan).not.toHaveBeenCalled();
   });
 
-  it("uses the supplied reference paywall composition", async () => {
+  it("uses the latest supplied reference paywall composition", async () => {
     const { screen } = await renderStep("premium", { price: "$9.99" });
 
     expect(screen.getByTestId("premium-reference-image")).toBeTruthy();
     expect(screen.getByLabelText(/Formie plans paywall/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Monthly" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Yearly" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Monthly" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Yearly" })).toBeNull();
     expect(screen.queryByTestId("approved-premium-screenshot")).toBeNull();
   });
 
   it("exposes the reference paywall content to accessibility", async () => {
     const { screen } = await renderStep("premium");
 
-    expect(screen.getByLabelText(/Formie plans paywall/).props.accessibilityLabel).toContain("10 analyses per month");
+    const summary = screen.getByLabelText(/Formie plans paywall/).props.accessibilityLabel;
+    expect(summary).toContain("Upgrade to Formie Pro");
+    expect(summary).toContain("AI form analysis for serious lifters");
+    expect(summary).toContain("10 analyses every month");
+    expect(summary).toContain("AI Form Analysis");
+    expect(summary).toContain("Personalized Feedback");
+    expect(summary).toContain("Progress Tracking");
+    expect(summary).toContain("Formie Coach");
+    expect(summary).toContain("Continue with Pro");
+    expect(summary).toContain("Secure payment");
     expect(screen.getByLabelText(/Formie plans paywall/).props.accessibilityLabel).toContain("Trusted by 1,000+ lifters");
+    expect(summary).toContain("Real progress. Real results.");
   });
 
   it("renders the supplied reference image as the full paywall surface", async () => {
