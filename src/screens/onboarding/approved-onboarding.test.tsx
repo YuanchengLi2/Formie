@@ -29,9 +29,7 @@ async function renderStep(step: OnboardingStep, overrides: Partial<ApprovedOnboa
     onPurchase: jest.fn(),
     onPurchasePlan: jest.fn(),
     price: "$9.99",
-    annualPrice: "$99.99",
     purchaseAvailable: true,
-    annualPurchaseAvailable: true,
     busy: false,
     ...overrides,
   };
@@ -111,13 +109,23 @@ describe("approved onboarding screen", () => {
     expect(screen.queryByLabelText("Welcome lifting artwork")).toBeNull();
   });
 
-  it("shows a white Sign in button on the welcome homepage", async () => {
+  it("shows an unboxed sign-in text action above the prominent welcome CTA", async () => {
     const onSignIn = jest.fn();
     const { screen } = await renderStep("welcome", { onSignIn });
-    const button = screen.getByRole("button", { name: "Sign in" });
-    expect(button).toHaveStyle({ backgroundColor: "#FFFFFF" });
+    const button = screen.getByRole("button", { name: "Already have an account? Sign in" });
+    expect(button).toHaveStyle({ minHeight: 44, backgroundColor: "transparent" });
+    expect(screen.getByText("Already have an account? Sign in")).toBeTruthy();
     await fireEvent.press(button);
     expect(onSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it("makes Get Started larger than a normal Continue CTA", async () => {
+    const welcome = await renderStep("welcome");
+    expect(welcome.screen.getByTestId("onboarding-bottom-cta")).toHaveStyle({ minHeight: 64 });
+    await welcome.screen.unmount();
+
+    const next = await renderStep("product-value");
+    expect(next.screen.getByTestId("onboarding-bottom-cta")).not.toHaveStyle({ minHeight: 64 });
   });
 
   it.each([
@@ -319,7 +327,7 @@ describe("approved onboarding screen", () => {
     await account.screen.unmount();
 
     const premium = await renderStep("premium", { busy: true, error: "The purchase could not be completed." });
-    expect(premium.screen.getByText("Starting…")).toBeTruthy();
+    expect(premium.screen.getByText("Starting...")).toBeTruthy();
     expect(premium.screen.getByRole("alert")).toHaveTextContent("The purchase could not be completed.");
   });
 
@@ -384,13 +392,13 @@ describe("approved onboarding screen", () => {
     expect(screen.getByText("$12.49")).toBeTruthy();
     expect(screen.queryByText("Skip")).toBeNull();
     expect(screen.queryByText("Restore Purchase")).toBeNull();
-    await fireEvent.press(screen.getByRole("button", { name: "Start monthly — $12.49/mo" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Start monthly - $12.49/mo" }));
     expect(props.onPurchasePlan).toHaveBeenCalledWith("monthly");
   });
 
   it("disables purchase when RevenueCat has no live monthly package", async () => {
     const { screen, props } = await renderStep("premium", { price: "Unavailable", purchaseAvailable: false });
-    const purchaseButton = screen.getByRole("button", { name: "Start monthly — Unavailable/mo" });
+    const purchaseButton = screen.getByRole("button", { name: /^Start monthly/ });
 
     expect(purchaseButton.props.accessibilityState.disabled).toBe(true);
     await fireEvent.press(purchaseButton);
@@ -402,9 +410,18 @@ describe("approved onboarding screen", () => {
 
     expect(screen.queryByLabelText("Approved Formie premium design")).toBeNull();
     expect(screen.getByTestId("premium-pro-card")).toBeTruthy();
-    expect(screen.getByTestId("premium-social-proof")).toBeTruthy();
+    expect(screen.queryByTestId("premium-social-proof")).toBeNull();
     expect(screen.getByText("$9.99")).toBeTruthy();
-    expect(screen.getByText("4.9/5")).toBeTruthy();
+    expect(screen.getByText("Formie plans")).toBeTruthy();
+    expect(screen.getByText("Most popular")).toBeTruthy();
+    expect(screen.getByText("Pro")).toBeTruthy();
+    expect(screen.getByText("/mo")).toBeTruthy();
+    expect(screen.getByText("What you unlock")).toBeTruthy();
+    expect(screen.getByText("10 analyses / month")).toBeTruthy();
+    expect(screen.getByText("Personalized corrections")).toBeTruthy();
+    expect(screen.getByText("Progress tracking")).toBeTruthy();
+    expect(screen.queryByText("Formie Pro")).toBeNull();
+    expect(screen.queryByText("Upgrade to Formie Pro")).toBeNull();
     expect(screen.queryByText("Trusted by 1,000+ lifters")).toBeNull();
     expect(screen.getByTestId("premium-pro-card-art")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Monthly" })).toBeNull();
@@ -414,24 +431,25 @@ describe("approved onboarding screen", () => {
     expect(screen.queryByTestId("approved-premium-screenshot")).toBeNull();
   });
 
-  it("keeps the review strip and benefit rows large and readable", async () => {
+  it("keeps benefit rows large and readable without social proof", async () => {
     const { screen } = await renderStep("premium");
 
-    expect(screen.getByTestId("premium-social-proof").props.style).toEqual(expect.objectContaining({ minHeight: 74 }));
-    expect(screen.getByTestId("premium-benefit-analyses").props.style).toEqual(expect.objectContaining({ minHeight: 70 }));
-    expect(screen.getByTestId("premium-benefit-icon-analyses").props.style).toEqual(expect.objectContaining({ width: 42, height: 42 }));
+    expect(screen.queryByTestId("premium-social-proof")).toBeNull();
+    expect(screen.getByTestId("premium-benefit-analyses").props.style).toEqual(expect.objectContaining({ minHeight: 64 }));
+    expect(screen.getByTestId("premium-benefit-icon-analyses").props.style).toEqual(expect.objectContaining({ width: 36, height: 36 }));
+    expect(screen.getByTestId("premium-benefit-text-analyses")).toHaveStyle({ fontSize: 17 });
   });
 
   it("uses the removed trust copy space for a larger gold plan card", async () => {
     const { screen } = await renderStep("premium");
 
-    expect(screen.getByTestId("premium-pro-card").props.style).toEqual(expect.objectContaining({ minHeight: 245 }));
+    expect(screen.getByTestId("premium-pro-card").props.style).toEqual(expect.objectContaining({ minHeight: 254 }));
     expect(screen.queryByText("Trusted by 1,000+ lifters")).toBeNull();
   });
 
   it("always purchases the monthly package", async () => {
     const { screen, props } = await renderStep("premium");
-    await fireEvent.press(screen.getByRole("button", { name: "Start monthly — $9.99/mo" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Start monthly - $9.99/mo" }));
     expect(props.onPurchasePlan).toHaveBeenCalledWith("monthly");
   });
 });

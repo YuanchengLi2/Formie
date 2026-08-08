@@ -15,6 +15,13 @@ describe("ProfileScreen", () => {
     expect(screen.queryByRole("button", { name: /delete account/i })).toBeNull();
   });
 
+  it("opens the subscription management callback from Settings", async () => {
+    const onManageSubscription = jest.fn();
+    const screen = await render(<ProfileScreen onManageSubscription={onManageSubscription} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Manage subscription" }));
+    expect(onManageSubscription).toHaveBeenCalledTimes(1);
+  });
+
   it("stages athlete and capture edits until Apply Settings", async () => {
     const onSaveProfile = jest.fn().mockResolvedValue(undefined);
     const onSaveCapturePreferences = jest.fn().mockResolvedValue(undefined);
@@ -59,8 +66,9 @@ describe("ProfileScreen", () => {
     expect(screen.getByText("Active · Next billing Sep 1, 2026 at 8:56 AM UTC")).toBeTruthy();
     expect(screen.getByText("Test period ends Sep 1, 2026 at 8:56 AM UTC")).toBeTruthy();
     expect(screen.getByText("Test Store lifecycle")).toBeTruthy();
-    await fireEvent.press(screen.getByText("Undo Cancellation"));
-    expect(onTestControl).toHaveBeenCalledWith("uncancel");
+    expect(screen.queryByText("Undo Cancellation")).toBeNull();
+    await fireEvent.press(screen.getByText("Start 20-minute Period"));
+    expect(onTestControl).toHaveBeenCalledWith("start_new_period");
   });
 
   it("shows the canceled access-end timestamp in Settings", async () => {

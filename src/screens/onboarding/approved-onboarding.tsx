@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { heightToCm, weightToKg } from "@/features/onboarding/onboarding-schema";
 import { onboardingSteps, type OnboardingAnswers, type OnboardingStep } from "@/features/onboarding/types";
-import type { BillingPlanCode, PurchaseState } from "@/features/billing/types";
+import type { PurchaseState } from "@/features/billing/types";
 import { AccountAccessScreen } from "@/components/account-access-screen";
 import { onboardingTheme } from "@/theme/onboarding";
 import { PremiumScreen } from "./premium-screen";
@@ -39,12 +39,10 @@ export type ApprovedOnboardingScreenProps = {
   onOpenTerms: () => void;
   onOpenPrivacy: () => void;
   onPurchase: () => void;
-  onPurchasePlan?: (plan: BillingPlanCode) => void;
+  onPurchasePlan?: (plan: "monthly") => void;
   onLogOut?: () => void;
   price: string;
-  annualPrice?: string;
   purchaseAvailable: boolean;
-  annualPurchaseAvailable?: boolean;
   busy: boolean;
   busyProvider?: Provider | null;
   error?: string | null;
@@ -162,7 +160,28 @@ function NativeArtworkScreen({ step, onNext, onBack, onSignIn }: { step: "welcom
   const density = getOnboardingDensity(height, insets.top, insets.bottom, width);
   const isWelcome = step === "welcome";
   const closeCopy = step !== "welcome" ? artworkClose[step] : undefined;
-  return <DensityContext.Provider value={density}><View testID={isWelcome ? "welcome-brand-screen" : "approved-artwork-screen"} style={[styles.approvedScreen, { paddingTop: Math.max(insets.top, 8), paddingBottom: Math.max(insets.bottom, 10) }]}><StatusBar hidden /><ScrollView style={styles.approvedScroll} contentContainerStyle={[styles.approvedScrollContent, density.short && styles.approvedScrollContentShort]} showsVerticalScrollIndicator={false}>{isWelcome ? null : <Header step={step} onBack={onBack} compact={density.compact} />}{isWelcome ? null : <View style={styles.approvedCopy}>{copy[step].eyebrow ? <Text style={styles.eyebrow}>{copy[step].eyebrow}</Text> : null}<Text style={[styles.approvedTitle, density.short && styles.approvedTitleShort]}>{copy[step].title}</Text><Text style={[styles.approvedSubtitle, density.short && styles.approvedSubtitleShort]}>{copy[step].subtitle}</Text></View>}<View style={[styles.approvedIllustrationWrap, isWelcome && styles.welcomeIllustrationWrap, density.short && styles.approvedIllustrationWrapShort]}><ApprovedIllustration step={step} /></View>{closeCopy ? <Text style={styles.artworkClose}>{closeCopy}</Text> : null}</ScrollView><View style={styles.approvedNativeCta}><GoldButton testID="onboarding-bottom-cta" label={isWelcome ? "Get Started" : "Continue"} onPress={onNext} />{isWelcome && onSignIn ? <Pressable testID="onboarding-sign-in" accessibilityRole="button" accessibilityLabel="Sign in" onPress={() => impactThen(onSignIn)} style={({ pressed }) => [styles.signInButton, pressed && styles.pressed]}><Text style={styles.signInButtonText}>Sign in</Text></Pressable> : null}</View></View></DensityContext.Provider>;
+  return <DensityContext.Provider value={density}>
+    <View testID={isWelcome ? "welcome-brand-screen" : "approved-artwork-screen"} style={[styles.approvedScreen, { paddingTop: Math.max(insets.top, 8), paddingBottom: Math.max(insets.bottom, 10) }]}>
+      <StatusBar hidden />
+      <ScrollView style={styles.approvedScroll} contentContainerStyle={[styles.approvedScrollContent, density.short && styles.approvedScrollContentShort]} showsVerticalScrollIndicator={false}>
+        {isWelcome ? null : <Header step={step} onBack={onBack} compact={density.compact} />}
+        {isWelcome ? null : <View style={styles.approvedCopy}>{copy[step].eyebrow ? <Text style={styles.eyebrow}>{copy[step].eyebrow}</Text> : null}<Text style={[styles.approvedTitle, density.short && styles.approvedTitleShort]}>{copy[step].title}</Text><Text style={[styles.approvedSubtitle, density.short && styles.approvedSubtitleShort]}>{copy[step].subtitle}</Text></View>}
+        <View style={[styles.approvedIllustrationWrap, isWelcome && styles.welcomeIllustrationWrap, density.short && styles.approvedIllustrationWrapShort]}><ApprovedIllustration step={step} /></View>
+        {closeCopy ? <Text style={styles.artworkClose}>{closeCopy}</Text> : null}
+      </ScrollView>
+      <View style={styles.approvedNativeCta}>
+        {isWelcome && onSignIn ? <Pressable testID="onboarding-sign-in" accessibilityRole="button" accessibilityLabel="Already have an account? Sign in" onPress={() => impactThen(onSignIn)} style={({ pressed }) => [styles.signInLink, pressed && styles.pressed]}><Text style={styles.signInLinkText}>Already have an account? <Text style={styles.signInLinkAccent}>Sign in</Text></Text></Pressable> : null}
+        {isWelcome ? <NativeGoldButton prominent testID="onboarding-bottom-cta" label="Get Started" onPress={onNext} /> : <GoldButton testID="onboarding-bottom-cta" label="Continue" onPress={onNext} />}
+      </View>
+    </View>
+  </DensityContext.Provider>;
+}
+
+function NativeGoldButton({ label, onPress, prominent, testID }: { label: string; onPress: () => void; prominent?: boolean; testID?: string }) {
+  const { compact, short } = useContext(DensityContext);
+  const baseHeight = short ? onboardingTheme.layout.short.ctaHeight : compact ? onboardingTheme.layout.compact.ctaHeight : onboardingTheme.layout.regular.ctaHeight;
+  const height = prominent ? baseHeight + (short ? 4 : 8) : baseHeight;
+  return <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={label} onPress={() => impactThen(onPress)} style={({ pressed }) => [styles.goldButton, compact && styles.goldButtonCompact, prominent && styles.goldButtonProminent, { height, minHeight: height, opacity: pressed ? 0.8 : 1 }]}><Image accessibilityElementsHidden source={goldGradient} contentFit="fill" style={styles.goldGradientImage} /><View style={[styles.goldButtonGradient, { height, minHeight: height }]}><Text style={[styles.goldButtonText, short && styles.goldButtonTextShort]}>{label}</Text><Text style={[styles.goldArrow, short && styles.goldArrowShort]}>→</Text></View></Pressable>;
 }
 
 function GoldButton({ label, onPress, disabled = false, testID }: { label: string; onPress: () => void; disabled?: boolean; testID?: string }) {
@@ -287,7 +306,7 @@ export function ApprovedOnboardingScreen(props: ApprovedOnboardingScreenProps) {
   if (props.step === "product-value" || props.step === "why-formie" || props.step === "product-demonstration" || props.step === "long-term-value") return <NativeArtworkScreen step={props.step} onNext={props.onNext} onBack={props.onBack} />;
   if (props.step === "loading") return <LoadingScreen onComplete={props.onLoadingComplete} />;
   if (props.step === "create-account") return <AccountScreen {...props} />;
-  if (props.step === "premium") return <PremiumScreen price={props.price} annualPrice={props.annualPrice} purchaseAvailable={props.purchaseAvailable} annualPurchaseAvailable={props.annualPurchaseAvailable} busy={props.busy} state={props.purchaseState} error={props.error} onRetrySync={props.onRetrySync} onBack={props.onBack} onPurchase={() => impactThen(props.onPurchase)} onPurchasePlan={(plan) => impactThen(() => props.onPurchasePlan ? props.onPurchasePlan(plan) : props.onPurchase())} />;
+  if (props.step === "premium") return <PremiumScreen price={props.price} purchaseAvailable={props.purchaseAvailable} busy={props.busy} state={props.purchaseState} error={props.error} onRetrySync={props.onRetrySync} onBack={props.onBack} onPurchase={() => impactThen(props.onPurchase)} onPurchasePlan={(plan) => impactThen(() => props.onPurchasePlan ? props.onPurchasePlan(plan) : props.onPurchase())} />;
   return <QuestionScreen {...props} />;
 }
 
@@ -298,8 +317,9 @@ const styles = StyleSheet.create({
   welcomeWordmark: { color: "#F7F6F4", fontSize: 45, lineHeight: 54, fontWeight: "300", letterSpacing: 11, marginLeft: 11 },
   welcomeTagline: { color: "#9E9993", fontSize: 17, lineHeight: 24, marginTop: 10 },
   welcomeCta: { width: "100%", maxWidth: 520, alignSelf: "center", paddingBottom: 4 },
-  signInButton: { width: "100%", minHeight: 52, marginTop: 10, alignItems: "center", justifyContent: "center", borderRadius: 14, borderCurve: "continuous", backgroundColor: "#FFFFFF" },
-  signInButtonText: { color: "#080808", fontSize: 17, lineHeight: 21, fontWeight: "800" },
+  signInLink: { width: "100%", minHeight: 44, alignItems: "center", justifyContent: "center", backgroundColor: "transparent" },
+  signInLinkText: { color: "#AAA6A2", fontSize: 15, lineHeight: 20, fontWeight: "600" },
+  signInLinkAccent: { color: "#E5AD32", fontWeight: "800" },
   approvedScreen: { flex: 1, overflow: "hidden", backgroundColor: "#050505", alignItems: "center", justifyContent: "center" },
   approvedNativeHeader: { width: "100%", maxWidth: 620, paddingHorizontal: 20 },
   approvedNativeCta: { width: "100%", maxWidth: 620, paddingHorizontal: 20, paddingTop: 10 },
@@ -342,7 +362,7 @@ const styles = StyleSheet.create({
   bodyCompact: { justifyContent: "center" },
   ctaWrap: { width: "100%", maxWidth: 520, alignSelf: "center", paddingHorizontal: 22, paddingTop: 8, paddingBottom: 12 }, ctaWrapCompact: { paddingTop: 5, paddingBottom: 8 },
   ctaWrapShort: { paddingHorizontal: 18, paddingTop: 3, paddingBottom: 6 },
-  goldButton: { width: "100%", minHeight: 62, borderRadius: 14, borderCurve: "continuous", overflow: "hidden" },
+  goldButton: { width: "100%", minHeight: 62, borderRadius: 14, borderCurve: "continuous", overflow: "hidden" }, goldButtonProminent: { borderRadius: 16 },
   goldGradientImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
   goldButtonGradient: { flex: 1, minHeight: 62, paddingHorizontal: 24, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   goldButtonCompact: { minHeight: 52 }, goldButtonShort: { minHeight: 46, paddingHorizontal: 18 },

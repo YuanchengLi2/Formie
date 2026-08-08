@@ -18,7 +18,7 @@ export function SocialProviderButtons({ onOAuth, onEmail, mode, busyProvider = n
   const googleLabel = "Sign in with Google";
   const emailLabel = mode === "onboarding" ? "Continue with email" : "Sign in with Email";
   return <View testID="social-provider-buttons" style={styles.actions}>
-    <Pressable testID="provider-apple" accessibilityLabel={appleLabel} accessibilityRole="button" accessibilityState={{ disabled: unavailable }} disabled={unavailable} onPress={() => onOAuth("apple")} style={({ pressed }) => [styles.provider, (pressed || unavailable) && styles.pressed]}>
+    <Pressable testID="provider-apple" accessibilityLabel={appleLabel} accessibilityRole="button" accessibilityState={{ disabled: unavailable }} disabled={unavailable} onPress={() => onOAuth("apple")} style={({ pressed }) => [styles.provider, styles.apple, (pressed || unavailable) && styles.pressed]}>
       <Image source={appleIcon} contentFit="contain" accessibilityLabel="Apple" style={[styles.icon, styles.appleIcon]} />
       <Text style={styles.appleText}>{busyProvider === "apple" ? "Connecting to Apple…" : appleLabel}</Text>
     </Pressable>
@@ -35,16 +35,17 @@ export function SocialProviderButtons({ onOAuth, onEmail, mode, busyProvider = n
 
 const styles = StyleSheet.create({
   actions: { gap: 22 },
-  provider: { minHeight: 58, borderRadius: 29, borderCurve: "continuous", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 18, backgroundColor: "#000000" },
-  google: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8D8E0" },
-  email: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#D8D8E0" },
+  provider: { minHeight: 58, borderRadius: 29, borderCurve: "continuous", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 18, backgroundColor: "#111110", borderWidth: 1, borderColor: "#E5AD32" },
+  apple: { backgroundColor: "#E5AD32", borderColor: "#E5AD32" },
+  google: { backgroundColor: "#111110" },
+  email: { backgroundColor: "#111110" },
   icon: { width: 22, height: 22 },
-  appleIcon: { tintColor: "#FFFFFF" },
-  appleText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
-  googleText: { color: "#202027", fontSize: 16, fontWeight: "600" },
-  emailText: { color: "#202027", fontSize: 16, fontWeight: "600" },
-  emailIcon: { width: 24, height: 18, overflow: "hidden", borderRadius: 2, borderWidth: 1.8, borderColor: "#303038" },
-  emailFlapLeft: { position: "absolute", top: 2, left: 0, width: 15, height: 1.8, backgroundColor: "#303038", transform: [{ rotate: "32deg" }] },
-  emailFlapRight: { position: "absolute", top: 2, right: 0, width: 15, height: 1.8, backgroundColor: "#303038", transform: [{ rotate: "-32deg" }] },
+  appleIcon: { tintColor: "#080808" },
+  appleText: { color: "#080808", fontSize: 16, fontWeight: "700" },
+  googleText: { color: "#F5F4F0", fontSize: 16, fontWeight: "600" },
+  emailText: { color: "#F5F4F0", fontSize: 16, fontWeight: "600" },
+  emailIcon: { width: 24, height: 18, overflow: "hidden", borderRadius: 2, borderWidth: 1.8, borderColor: "#E5AD32" },
+  emailFlapLeft: { position: "absolute", top: 2, left: 0, width: 15, height: 1.8, backgroundColor: "#E5AD32", transform: [{ rotate: "32deg" }] },
+  emailFlapRight: { position: "absolute", top: 2, right: 0, width: 15, height: 1.8, backgroundColor: "#E5AD32", transform: [{ rotate: "-32deg" }] },
   pressed: { opacity: 0.55 },
 });

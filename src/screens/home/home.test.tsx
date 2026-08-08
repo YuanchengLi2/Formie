@@ -14,13 +14,14 @@ describe("HomeScreen", () => {
     [9, 10, "ready", "9/10", "9 of 10 analyses remaining"],
     [0, 10, "ready", "0/10", "0 of 10 analyses remaining"],
     [null, 10, "checking", "—/10", "Analysis balance is being checked"],
-    [0, 10, "expired", "0/10", "Subscription required. 0 of 10 analyses available"],
-    [0, 10, "purchase", "Purchase a subscription to use the app", "Purchase a subscription to use the app"],
+    [0, 10, "expired", "0/10", "0 of 10 analyses available"],
+    [0, 10, "purchase", "0/10", "0 of 10 analyses available"],
   ] as const)("shows a compact quota bar for %s/%s %s", async (remaining, limit, status, fraction, label) => {
     const screen = await render(<HomeScreen analysisRemaining={remaining} analysisLimit={limit} analysisStatus={status} />);
     expect(screen.getByText(fraction)).toBeTruthy();
     expect(screen.getByLabelText(label)).toBeTruthy();
     expect(screen.queryByText(/analyses left|resets sep/i)).toBeNull();
+    expect(screen.queryByText(/Subscription required|Purchase a subscription to use the app/i)).toBeNull();
   });
 
   it("leaves recording exclusively to the permanent center tab", async () => {

@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { formatDashboardTimestamp, ManageSubscriptionClient, nextDashboardRefreshDelay } from "./manage-subscription-client";
+
+const styles = readFileSync(resolve(__dirname, "../globals.css"), "utf8");
 
 test("dashboard refreshes at the earlier paid-through or quota boundary", () => {
   const now = Date.parse("2026-08-31T23:59:55.000Z");
@@ -41,21 +45,29 @@ test("renewing account renders a compact complete billing portal", () => {
   assert.match(html, /Apple App Store/);
   assert.match(html, /View billing history/);
   assert.doesNotMatch(html, /plan-icon|quota-meter|>left<|Delete Formie account/);
+  assert.doesNotMatch(html, /FORMIE ACCOUNT|ACCOUNT INFRASTRUCTURE|SUBSCRIPTION CONTROLS/);
 });
 test("renewing Test Store account renders a real cancellation button instead of a dead app deep link", () => {
   const html = renderToStaticMarkup(<ManageSubscriptionClient initialDashboard={{ account: { email: "u@example.com", displayName: "Yuan", profileExists: true }, usage: { status: "active", used: 2, limit: 10, remaining: 8, periodStart: "2026-08-01T00:00:00Z", resetsAt: "2026-09-01T00:00:00Z" }, subscription: { state: "active_renewing", planCode: "monthly", willRenew: true, productIdentifier: "formie_monthly", store: "test_store", paidThrough: "2026-09-01T00:00:00Z", cancelUrl: null, renewalUrl: null, sandbox: true } }} />);
 
-  assert.match(html, /<button[^>]*class="portal-manage-action"[^>]*>Cancel Subscription<\/button>/);
+  assert.match(html, /portal-cancel-card/);
+  assert.match(html, /<button[^>]*class="portal-manage-action portal-cancel-action"[^>]*>Cancel Subscription<\/button>/);
   assert.match(html, /end of the current paid period/i);
   assert.doesNotMatch(html, /href="form:\/\/subscription"/);
+});
+test("manage subscription actions use large stacked touch targets", () => {
+  assert.match(styles, /\.portal-cancel-action\s*\{[^}]*min-height:\s*56px/);
+  assert.match(styles, /\.portal-resume-action\s*\{[^}]*min-height:\s*56px/);
+  assert.match(styles, /\.portal-secondary-action\s*\{[^}]*min-height:\s*56px/);
 });
 test("annual and checking-renewal states render from the server snapshot", () => {
   const html = renderToStaticMarkup(<ManageSubscriptionClient initialDashboard={{ account: { email: "u@example.com", displayName: "Yuan", profileExists: true }, usage: { status: "active", used: 4, limit: 10, remaining: 6, periodStart: "2026-08-01T00:00:00Z", resetsAt: "2026-09-01T00:00:00Z" }, subscription: { state: "renewal_pending", planCode: "annual", willRenew: true, billingPeriodStart: "2026-08-01T00:00:00Z", productIdentifier: "formie_yearly", store: "app_store", paidThrough: "2027-08-01T00:00:00Z", cancelUrl: null, renewalUrl: null, sandbox: false } }} />);
   assert.match(html, /Formie Pro Annual/);
   assert.match(html, /Checking renewal/);
   assert.match(html, /6 of 10 analyses remaining/);
+  assert.doesNotMatch(html, /VERIFYING RENEWAL/);
 });
-test("cancelled account shows access ending and the resume hierarchy", () => { const html = renderToStaticMarkup(<ManageSubscriptionClient initialDashboard={{ account: { email: null, displayName: "Yuan", profileExists: true }, usage: { status: "active", used: 2, limit: 10, remaining: 8, periodStart: "2026-08-01T00:00:00Z", resetsAt: "2026-09-01T00:00:00Z" }, subscription: { state: "active_cancelled", planCode: "monthly", productIdentifier: "monthly", store: "play_store", paidThrough: "2026-09-01T00:00:00Z", cancelUrl: null, renewalUrl: "https://play.google.com/store/account/subscriptions", sandbox: false } }} />); assert.match(html, /ACCESS ENDS ON/); assert.match(html, /KEEP FORMIE PRO/); assert.match(html, /Resume your subscription/); assert.match(html, /Resume Subscription/); assert.match(html, /Manage billing/); assert.match(html, /Billing details/); assert.match(html, /Access until/); assert.match(html, /Google Play/); assert.match(html, /8\/10/); assert.doesNotMatch(html, /Cancel Subscription|NEXT RESET|Resets/); });
+test("cancelled account shows access ending and the resume hierarchy", () => { const html = renderToStaticMarkup(<ManageSubscriptionClient initialDashboard={{ account: { email: null, displayName: "Yuan", profileExists: true }, usage: { status: "active", used: 2, limit: 10, remaining: 8, periodStart: "2026-08-01T00:00:00Z", resetsAt: "2026-09-01T00:00:00Z" }, subscription: { state: "active_cancelled", planCode: "monthly", productIdentifier: "monthly", store: "play_store", paidThrough: "2026-09-01T00:00:00Z", cancelUrl: null, renewalUrl: "https://play.google.com/store/account/subscriptions", sandbox: false } }} />); assert.match(html, /ACCESS ENDS ON/); assert.match(html, /portal-resume-card/); assert.match(html, /Resume your subscription/); assert.match(html, /Resume Subscription/); assert.match(html, /Manage billing/); assert.match(html, /Billing details/); assert.match(html, /Access until/); assert.match(html, /Google Play/); assert.match(html, /8\/10/); assert.doesNotMatch(html, /KEEP FORMIE PRO|SUBSCRIPTION CONTROLS|ACCOUNT INFRASTRUCTURE|FORMIE ACCOUNT|Cancel Subscription|NEXT RESET|Resets/); });
 test("active zero quota stays subscribed and shows its exact reset time", () => { const html = renderToStaticMarkup(<ManageSubscriptionClient initialDashboard={{ account: { email: null, displayName: "Yuan", profileExists: true }, usage: { status: "active", used: 10, limit: 10, remaining: 0, periodStart: "2026-08-01T00:00:00Z", resetsAt: "2026-09-01T00:00:00Z" }, subscription: { state: "active_renewing", productIdentifier: "monthly", store: "app_store", paidThrough: "2026-09-01T00:00:00Z", cancelUrl: "https://apple.test", renewalUrl: null, sandbox: false } }} />); assert.match(html, /0 of 10 analyses remaining/); assert.match(html, /10 analyses used/); assert.match(html, /NEXT RESET/); assert.match(html, /2026 at .*\b(?:UTC|GMT|[A-Z]{2,5})\b/); assert.doesNotMatch(html, /Resubscribe in the App/); });
 test("cancelled paid-through account with zero quota never claims a reset", () => { const html = renderToStaticMarkup(<ManageSubscriptionClient initialDashboard={{ account: { email: null, displayName: "Yuan", profileExists: true }, usage: { status: "active", used: 10, limit: 10, remaining: 0, periodStart: "2026-08-01T00:00:00Z", resetsAt: "2026-09-01T00:00:00Z" }, subscription: { state: "active_cancelled", productIdentifier: "monthly", store: "app_store", paidThrough: "2026-09-01T00:00:00Z", cancelUrl: null, renewalUrl: "https://apps.apple.com/account/subscriptions", sandbox: false } }} />); assert.match(html, /ACCESS ENDS ON/); assert.match(html, /0\/10/); assert.match(html, /10 analyses used/); assert.match(html, /Resume Subscription/); assert.match(html, /does not refill/i); assert.doesNotMatch(html, /Cancel Subscription|Your subscription has ended|NEXT RESET|Resets/); });
 test("expired account is directed to repurchase in the Formie app", () => {

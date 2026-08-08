@@ -73,7 +73,7 @@ export default function TabsLayout() {
                 paidThrough: access.access.paidThrough,
               }), cancelled ? [
                 { text: "Not now", style: "cancel" },
-                { text: "Manage subscription", onPress: () => router.push("/subscription" as Href) },
+                { text: "Manage subscription", onPress: () => router.push("/(tabs)/(profile)" as Href) },
               ] : [{ text: "OK" }]);
               return;
             }

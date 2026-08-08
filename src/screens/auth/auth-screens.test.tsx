@@ -18,8 +18,8 @@ describe("account access screens", () => {
     const screen = await render(withSafeArea(<SocialLoginScreen onOAuth={onOAuth} onEmail={onEmail} onCreateAccount={onCreateAccount} busyProvider={null} />));
 
     expect(screen.getByTestId("account-access-top-row")).toBeTruthy();
-    expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#FFFFFF" });
-    expect(screen.getByTestId("account-access-gold-bar")).toHaveStyle({ height: 3, backgroundColor: "#17171B" });
+    expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#050505" });
+    expect(screen.getByTestId("account-access-gold-bar")).toHaveStyle({ height: 3, backgroundColor: "#E5AD32" });
     expect(screen.queryByLabelText("Formie")).toBeNull();
     expect(screen.queryByText("Welcome back. Your coaching history is ready when you are.")).toBeNull();
     expect(screen.queryByText(/Create or restore|profile stays private/i)).toBeNull();
@@ -28,9 +28,9 @@ describe("account access screens", () => {
     expect(screen.getByText("Sign in with Email")).toBeTruthy();
     expect(screen.getByText("Create New Account")).toBeTruthy();
     expect(screen.getByTestId("account-access-scroll")).toBeTruthy();
-    expect(screen.getByTestId("provider-apple")).toHaveStyle({ minHeight: 58, backgroundColor: "#000000" });
-    expect(screen.getByTestId("provider-google")).toHaveStyle({ minHeight: 58, backgroundColor: "#FFFFFF" });
-    expect(screen.getByTestId("provider-email")).toHaveStyle({ minHeight: 58, backgroundColor: "#FFFFFF" });
+    expect(screen.getByTestId("provider-apple")).toHaveStyle({ minHeight: 58, backgroundColor: "#E5AD32" });
+    expect(screen.getByTestId("provider-google")).toHaveStyle({ minHeight: 58, backgroundColor: "#111110", borderColor: "#E5AD32" });
+    expect(screen.getByTestId("provider-email")).toHaveStyle({ minHeight: 58, backgroundColor: "#111110", borderColor: "#E5AD32" });
 
     await fireEvent.press(screen.getByText("Create New Account"));
     expect(onCreateAccount).toHaveBeenCalledTimes(1);
@@ -70,17 +70,17 @@ describe("account access screens", () => {
     expect(screen.getByText("Sign in with Google")).toBeTruthy();
     expect(screen.getByText("Continue with email")).toBeTruthy();
     expect(screen.queryByText("Create New Account")).toBeNull();
-    expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#FFFFFF" });
-    expect(screen.getByTestId("account-access-gold-bar")).toHaveStyle({ height: 3, backgroundColor: "#17171B" });
-    expect(screen.getByTestId("provider-apple")).toHaveStyle({ backgroundColor: "#000000" });
+    expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#050505" });
+    expect(screen.getByTestId("account-access-gold-bar")).toHaveStyle({ height: 3, backgroundColor: "#E5AD32" });
+    expect(screen.getByTestId("provider-apple")).toHaveStyle({ backgroundColor: "#E5AD32" });
     expect(screen.getByTestId("account-access-top-row")).toHaveStyle({ flexDirection: "row", gap: 14 });
     expect(screen.getByTestId("account-access-actions")).toHaveStyle({ width: "100%", maxWidth: 296, alignSelf: "center", marginTop: 116 });
     expect(screen.getByTestId("provider-apple")).toHaveStyle({ minHeight: 58 });
     expect(screen.getByTestId("social-provider-buttons")).toHaveStyle({ gap: 22 });
     const legalCheckbox = screen.getByLabelText("Agree to the Terms of Use and Privacy Policy");
-    expect(legalCheckbox).toHaveStyle({ width: 18, height: 18, backgroundColor: "#FFFFFF" });
+    expect(legalCheckbox).toHaveStyle({ width: 18, height: 18, backgroundColor: "#050505" });
     await fireEvent.press(legalCheckbox);
-    expect(legalCheckbox).toHaveStyle({ width: 18, height: 18, backgroundColor: "#1B1B20" });
+    expect(legalCheckbox).toHaveStyle({ width: 18, height: 18, backgroundColor: "#E5AD32" });
     expect(screen.getByText(/I agree to Formie's Terms of Use and Privacy Policy/)).toBeTruthy();
     expect(screen.getByText(/Send me tips, new features/)).toBeTruthy();
     expect(screen.queryByLabelText("Formie")).toBeNull();

@@ -37,7 +37,7 @@ export function AccountAccessScreen({ mode = "login", onOAuth, onEmail, onCreate
   const title = mode === "onboarding" ? "Save your progress" : "Welcome back";
 
   return <View testID="social-account-access" style={styles.screen}>
-    <StatusBar style="dark" />
+    <StatusBar style="light" />
     <View style={[styles.safeTop, { height: Math.max(insets.top, 12) }]} />
     <ScrollView testID="account-access-scroll" contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 24) }]} showsVerticalScrollIndicator={false}>
       <View testID="account-access-top-row" style={styles.topRow}>
@@ -47,7 +47,7 @@ export function AccountAccessScreen({ mode = "login", onOAuth, onEmail, onCreate
       <View style={styles.hero}><Text style={styles.title}>{title}</Text></View>
       <View testID="account-access-actions" style={styles.actions}>
         <SocialProviderButtons mode={mode} disabled={disabled} busyProvider={busyProvider} onOAuth={onOAuth} onEmail={onEmail} />
-        {busy && !busyProvider ? <View style={styles.busy}><ActivityIndicator color="#17171B" /><Text style={styles.busyText}>Connecting…</Text></View> : null}
+        {busy && !busyProvider ? <View style={styles.busy}><ActivityIndicator color="#E5AD32" /><Text style={styles.busyText}>Connecting…</Text></View> : null}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
         {mode === "login" && onCreateAccount ? <Pressable accessibilityRole="button" onPress={onCreateAccount} style={({ pressed }) => [styles.createAccount, pressed && styles.pressed]}><Text style={styles.createAccountText}>Create New Account</Text></Pressable> : null}
       </View>
@@ -60,27 +60,27 @@ export function AccountAccessScreen({ mode = "login", onOAuth, onEmail, onCreate
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#FFFFFF" },
-  safeTop: { width: "100%", backgroundColor: "#FFFFFF" },
+  screen: { flex: 1, backgroundColor: "#050505" },
+  safeTop: { width: "100%", backgroundColor: "#050505" },
   topRow: { width: "100%", minHeight: 36, flexDirection: "row", alignItems: "center", gap: 14 },
-  progressBar: { flex: 1, height: 3, backgroundColor: "#17171B", marginRight: 8 },
+  progressBar: { flex: 1, height: 3, backgroundColor: "#E5AD32", marginRight: 8 },
   content: { flexGrow: 1, width: "100%", maxWidth: 520, alignSelf: "center", justifyContent: "flex-start", paddingHorizontal: 20, paddingTop: 14 },
-  back: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#F7F7FB" },
-  backGlyph: { color: "#17171B", fontSize: 30, lineHeight: 32 },
+  back: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#111110", borderWidth: 1, borderColor: "#E5AD32" },
+  backGlyph: { color: "#E5AD32", fontSize: 30, lineHeight: 32 },
   hero: { alignItems: "flex-start" },
-  title: { color: "#09090B", fontSize: 34, lineHeight: 40, fontWeight: "800", letterSpacing: -1.1, textAlign: "left", marginTop: 12 },
+  title: { color: "#F5F4F0", fontSize: 34, lineHeight: 40, fontWeight: "800", letterSpacing: -1.1, textAlign: "left", marginTop: 12 },
   actions: { width: "100%", maxWidth: 296, alignSelf: "center", gap: 20, marginTop: 116 },
   busy: { minHeight: 28, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
-  busyText: { color: "#4B4B52", fontSize: 14 },
-  error: { color: "#B42318", fontSize: 14, lineHeight: 20, fontWeight: "600", textAlign: "center" },
+  busyText: { color: "#D8D3C8", fontSize: 14 },
+  error: { color: "#FF8A82", fontSize: 14, lineHeight: 20, fontWeight: "600", textAlign: "center" },
   createAccount: { minHeight: 48, alignItems: "center", justifyContent: "center" },
-  createAccountText: { color: "#17171B", fontSize: 16, fontWeight: "700", textDecorationLine: "underline" },
+  createAccountText: { color: "#E5AD32", fontSize: 16, fontWeight: "700", textDecorationLine: "underline" },
   consents: { width: "100%", maxWidth: 296, alignSelf: "center", gap: 10, marginTop: 20 },
   consentRow: { minHeight: 28, flexDirection: "row", alignItems: "flex-start", gap: 11 },
-  checkbox: { width: 18, height: 18, borderRadius: 2, borderWidth: 1.5, borderColor: "#A3A3AA", alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF", marginTop: 1 },
-  checkboxChecked: { borderColor: "#1B1B20", backgroundColor: "#1B1B20" },
-  check: { color: "#FFFFFF", fontSize: 13, lineHeight: 14, fontWeight: "900" },
-  consentText: { flex: 1, color: "#29292F", fontSize: 12, lineHeight: 15 },
-  link: { color: "#29292F", textDecorationLine: "underline" },
+  checkbox: { width: 18, height: 18, borderRadius: 2, borderWidth: 1.5, borderColor: "#8E8A86", alignItems: "center", justifyContent: "center", backgroundColor: "#050505", marginTop: 1 },
+  checkboxChecked: { borderColor: "#E5AD32", backgroundColor: "#E5AD32" },
+  check: { color: "#080808", fontSize: 13, lineHeight: 14, fontWeight: "900" },
+  consentText: { flex: 1, color: "#D8D3C8", fontSize: 12, lineHeight: 15 },
+  link: { color: "#E5AD32", textDecorationLine: "underline" },
   pressed: { opacity: 0.7 },
 });

@@ -6,7 +6,7 @@ The approved onboarding and social-auth flow is wired to RevenueCat. The local C
 
 - RevenueCat project: `Form Ai`.
 - RevenueCat app: `Test Store` only (no real App Store or Google Play app configuration yet).
-- Offering: `default` with `$rc_monthly` for the current monthly Test Store product and `$rc_annual` for Test Store product `yearly`.
+- Offering: `default` exposes `$rc_monthly` for the current monthly Test Store product. The legacy `$rc_annual` mapping remains only so existing provider records can be read; annual is not exposed as a new purchase option.
 - Entitlement: `formie_pro`.
 - Test Store keys are loaded only from the ignored local `.env.local` file. Never submit a build containing a `test_` key; Test Store is for development QA only.
 
@@ -15,8 +15,8 @@ The Chrome preview is started with `npm run web -- --port 8082`. A sandbox purch
 ## RevenueCat dashboard
 
 1. Create or select the iOS and Android apps for bundle/package `app.form.coach`.
-2. Connect monthly `formie_monthly` at $9.99 and annual `formie_yearly` at $99.99 as auto-renewable products in the same subscription group.
-3. Create entitlement `formie_pro` and attach both products to it. Configure the current Test Store monthly product as `$rc_monthly` and existing Test Store product `yearly` as `$rc_annual`.
+2. Connect monthly `formie_monthly` at $9.99 as the new auto-renewable product. Keep any existing annual `formie_yearly` receipt mapping only for grandfathered subscribers.
+3. Create entitlement `formie_pro` and attach the monthly product to the current offering. Keep the existing Test Store product `yearly` mapped as `$rc_annual` only for historical entitlement reads.
 4. Create the current offering. The default offering is accepted when `EXPO_PUBLIC_REVENUECAT_OFFERING_ID=default`; if a named offering is used, set that identifier in the Expo environment.
 5. Configure sandbox testers and verify both purchase and restore on iOS and Android development builds.
 
@@ -29,7 +29,7 @@ Set the following in the Expo build environment (never commit real values):
 - `EXPO_PUBLIC_REVENUECAT_WEB_PUBLIC_KEY` (web/Test Store preview only)
 - `EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID=formie_pro`
 - `EXPO_PUBLIC_REVENUECAT_MONTHLY_PRODUCT_ID=formie_monthly`
-- `EXPO_PUBLIC_REVENUECAT_YEARLY_PRODUCT_ID=formie_yearly`
+- `EXPO_PUBLIC_REVENUECAT_YEARLY_PRODUCT_ID=formie_yearly` (legacy entitlement-read compatibility; not a new-purchase UI option)
 - `EXPO_PUBLIC_REVENUECAT_PRODUCT_ID=formie_monthly` (temporary monthly fallback)
 - `EXPO_PUBLIC_REVENUECAT_OFFERING_ID=default` (or the named offering)
 
@@ -80,7 +80,7 @@ Both paths normalize the provider result into the same entitlement-ledger snapsh
 
 The Supabase production Auth Site URL must be `https://useformie.com`; retain `form://auth/callback` and the explicitly documented localhost development patterns in the redirect allowlist. The repository `supabase/config.toml` contains that intended configuration, but the hosted project still requires a dashboard/config push and a live OAuth callback check.
 
-In RevenueCat production, create the real App Store and Google Play apps for bundle/package `app.form.coach`, attach both `formie_monthly` and `formie_yearly` to `formie_pro`, place them in the same subscription group, and make `$rc_monthly` and `$rc_annual` available in the default offering before building a store-compatible client.
+In RevenueCat production, create the real App Store and Google Play apps for bundle/package `app.form.coach`, make `formie_monthly` available in the default offering, and retain the legacy `formie_yearly` mapping only for existing receipts. The client must not advertise or start a new annual purchase.
 
 RevenueCat Test Store timing is provider-controlled: a simulated monthly product renews about every five minutes and stops after roughly 25 minutes. It cannot be changed to an exact 20-minute subscription. Test Store also has no end-user subscription management page. With `SUBSCRIPTION_TEST_CONTROLS_ENABLED=true`, the development-only Settings panel can cancel at period end, undo cancellation, renew, expire, start a new period, advance the annual five-minute quota month, or clear the simulation. These controls require an authenticated Test Store/sandbox entitlement and never mutate a receipt or run for production subscriptions. Settings and subscription surfaces show the exact simulated cutoff time in the device/browser local time zone. Undoing cancellation restores automatic renewal only; it does not replenish the current allowance.
 
@@ -97,7 +97,7 @@ Annual production subscriptions bill once per year but receive a fresh 10-analys
 - Cancellation preserves analysis access through the paid-through timestamp. Undo cancellation changes only the next renewal instruction and preserves the current period and used balance; a verified new quota period replenishes the balance to 10.
 - Canceled plus exhausted remains `0/10` through the current period. Record opens the state-aware subscription path; Resume does not grant analyses.
 - Renewal pending keeps the authenticated account available while `refresh-entitlement` verifies the provider. The UI does not promise a charge, renewal, or allowance until verification succeeds.
-- Expiration keeps the completed account signed in with Home, Settings, and saved results available. Record opens the native monthly/annual repurchase paywall, while the website shows the repurchase panel and Open Formie action.
+- Expiration keeps the completed account signed in with Home, Settings, and saved results available. Record opens the native monthly repurchase paywall, while the website shows the repurchase panel and Open Formie action.
 - A successful repurchase must be confirmed as a new paid period before access and the allowance change. Account authentication is never treated as proof of subscription entitlement.
 - Provider/network errors preserve the session and never impersonate expiration.
 - Expired account: refresh and scheduled reconciliation persist `expired` even when RevenueCat still returns the historical entitlement object with an ended expiration date.
@@ -107,7 +107,7 @@ Real purchases require an iOS/Android development or release build containing `r
 
 ## Website account portal
 
-`/manage-subscription` calls the authenticated `account-dashboard` function with the caller session. It returns only the account identity, monthly usage summary, and normalized subscription state. The dashboard uses a horizontal `remaining/limit` gauge and local date, time, and time-zone abbreviation. Renewing subscribers see next billing and quota reset separately. Canceled subscribers retain access through the paid-through timestamp, see no reset claim, and receive Resume as the primary action with store billing as a secondary action when available. Renewal-pending users see verification copy without an assumed refill. Expired and never-subscribed users see monthly/annual repurchase information and must complete purchase through the native Formie paywall.
+`/manage-subscription` calls the authenticated `account-dashboard` function with the caller session. It returns only the account identity, monthly usage summary, and normalized subscription state. The dashboard uses a horizontal `remaining/limit` gauge and local date, time, and time-zone abbreviation. Renewing subscribers see next billing and quota reset separately. Canceled subscribers retain access through the paid-through timestamp, see no reset claim, and receive Resume as the primary action with store billing as a secondary action when available. Renewal-pending users see verification copy without an assumed refill. Expired and never-subscribed users see monthly repurchase information and must complete purchase through the native Formie paywall.
 
 Account deletion is not exposed through the website portal or an Edge Function. Subscription cancellation never deletes the Formie account or its saved results.
 

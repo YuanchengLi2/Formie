@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Linking } from "react-native";
 import { type Href, useRouter } from "expo-router";
 
@@ -12,6 +12,13 @@ import { useProfile } from "@/features/profile/profile-provider";
 import { useAccess } from "@/features/access/access-provider";
 import { formatBillingTimestamp, formatSubscriptionStateLabel } from "@/features/access/account-access";
 import { runSubscriptionTestControl, setSubscriptionTestRemaining } from "@/features/billing/subscription-test-controls";
+import { SubscriptionIntentModal } from "@/components/subscription-intent-modal";
+import {
+  executeSubscriptionIntent,
+  recordSubscriptionIntent,
+  type CancellationReason,
+  type SubscriptionIntentAction,
+} from "@/features/billing/subscription-intent";
 
 export default function ProfileRoute() {
   const auth = useAuth();
@@ -23,6 +30,7 @@ export default function ProfileRoute() {
   const capture = useCapturePreferences((state) => state.preferences);
   const hydrateCapture = useCapturePreferences((state) => state.hydrate);
   const updateCapture = useCapturePreferences((state) => state.update);
+  const [intentAction, setIntentAction] = useState<SubscriptionIntentAction | null>(null);
   const legal = (() => {
     try {
       return getLegalLinks();
@@ -33,8 +41,27 @@ export default function ProfileRoute() {
   useEffect(() => {
     void hydrateCapture();
   }, [hydrateCapture]);
+  const executeIntent = async (reason?: CancellationReason) => {
+    if (!intentAction) return;
+    await executeSubscriptionIntent({
+      action: intentAction,
+      reason: reason ?? null,
+      store: access.access.store,
+      isTestStore: access.access.sandbox && access.access.store === "test_store",
+      managementUrl: billing.subscription?.managementURL ?? null,
+    }, {
+      recordIntent: (input) => recordSubscriptionIntent(input),
+      runTestControl: async (action) => {
+        await runSubscriptionTestControl(action);
+      },
+      openProviderUrl: (url) => Linking.openURL(url),
+      refreshAccess: access.refresh,
+    });
+  };
+
   return (
-    <ProfileScreen
+    <>
+      <ProfileScreen
       displayName={profileState.profile?.displayName ?? "Formie Athlete"}
       email={auth.user?.email ?? null}
       subscription={{
@@ -50,7 +77,13 @@ export default function ProfileRoute() {
       }}
       onSaveCapturePreferences={updateCapture}
       onSendFeedback={() => router.push("/account/send-feedback" as Href)}
-      onManageSubscription={() => router.push("/subscription" as Href)}
+      onManageSubscription={() => {
+        if (access.access.status !== "active") {
+          router.push("/subscription" as Href);
+          return;
+        }
+        setIntentAction(access.access.lifecycleState === "active_cancelled" ? "resume" : "cancel");
+      }}
       showTestControls={access.access.sandbox && access.access.store === "test_store"}
       testRemaining={access.access.remaining}
       onTestControl={async (action) => {
@@ -71,6 +104,13 @@ export default function ProfileRoute() {
         await onboarding.markLoggedOut();
         await auth.logOut("user");
       }}
-    />
+      />
+      <SubscriptionIntentModal
+        visible={Boolean(intentAction)}
+        action={intentAction ?? "cancel"}
+        onClose={() => setIntentAction(null)}
+        onExecute={executeIntent}
+      />
+    </>
   );
 }
