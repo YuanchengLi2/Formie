@@ -23,11 +23,21 @@ describe("CenterTabButton", () => {
     expect(screen.getAllByTestId("center-tab-aperture-blade")).toHaveLength(3);
   });
 
-  it("does not invoke recording while the monthly quota is exhausted", async () => {
+  it("keeps exhausted Record pressable so its parent can explain the billing state", async () => {
     const onPress = jest.fn();
-    const screen = await render(<CenterTabButton disabled label="0 analyses left" accessibilityLabel="0 analyses left" onPress={onPress} />);
-    expect(screen.getByLabelText("0 analyses left").props.accessibilityState).toEqual({ disabled: true });
-    await fireEvent.press(screen.getByLabelText("0 analyses left"));
-    expect(onPress).not.toHaveBeenCalled();
+    const screen = await render(<CenterTabButton variant="quota_exhausted" label="Record" accessibilityLabel="Record. Monthly analysis allowance used" onPress={onPress} />);
+    expect(screen.getByLabelText("Record. Monthly analysis allowance used").props.accessibilityState).toEqual({ disabled: false });
+    expect(screen.getByTestId("center-tab-circle")).not.toHaveStyle({ backgroundColor: "#353535" });
+    expect(screen.getAllByTestId("center-tab-aperture-blade")).toHaveLength(3);
+    await fireEvent.press(screen.getByLabelText("Record. Monthly analysis allowance used"));
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["purchase", "Purchase"],
+    ["analysis_pending", "View analysis"],
+  ] as const)("keeps the %s action gold instead of using the quota-gray style", async (variant, label) => {
+    const screen = await render(<CenterTabButton variant={variant} label={label} onPress={jest.fn()} />);
+    expect(screen.getByTestId("center-tab-circle")).not.toHaveStyle({ backgroundColor: "#353535" });
   });
 });

@@ -16,14 +16,12 @@ export function resolveLaunchRoute({
   onboarding,
   currentStep,
   profileComplete,
-  profileOnboardingVersion,
   accessStatus,
 }: {
   phase: AuthPhase;
   onboarding: OnboardingLaunchState;
   currentStep?: OnboardingStep;
   profileComplete: boolean;
-  profileOnboardingVersion: string | null;
   accessStatus: AccessStatus["status"];
 }): string | null {
   if (phase === "initializing") return null;
@@ -35,12 +33,10 @@ export function resolveLaunchRoute({
     return "/onboarding/welcome";
   }
 
-  const approvedProfileComplete = profileComplete && profileOnboardingVersion === "approved-v1";
-
-  if (!approvedProfileComplete) {
+  if (!profileComplete) {
     if (onboarding === "profile_sync_required" || onboarding === "awaiting_account") return "/onboarding/create-account";
     if (onboarding === "in_progress") return `/onboarding/${currentStep ?? "welcome"}`;
-    return "/onboarding/welcome";
+    return "/subscription";
   }
 
   if (accessStatus === "active" || accessStatus === "expired") {

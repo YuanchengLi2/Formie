@@ -8,12 +8,15 @@ export function CenterTabButton({
   label = "Record",
   accessibilityLabel = label,
   disabled = false,
+  variant = "record",
 }: {
   onPress: (event: GestureResponderEvent) => void;
   label?: string;
   accessibilityLabel?: string;
   disabled?: boolean;
+  variant?: "record" | "quota_exhausted" | "analysis_pending" | "purchase" | "renewal_pending" | "unavailable";
 }) {
+  const exhausted = variant === "quota_exhausted";
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
@@ -40,8 +43,8 @@ export function CenterTabButton({
           borderRadius: 28,
           borderWidth: 3,
           borderColor: "#F7D98B",
-          backgroundColor: disabled ? colors.surfaceRaised : colors.gold,
-          boxShadow: "0 5px 22px rgba(244,181,49,0.48)",
+          backgroundColor: exhausted ? colors.goldSoft : colors.gold,
+          boxShadow: exhausted ? "0 4px 16px rgba(216,166,48,0.2)" : "0 5px 22px rgba(244,181,49,0.48)",
         }}
       >
         <View testID="center-tab-lens" style={{ width: 35, height: 35, borderRadius: 18, borderWidth: 2, borderColor: "#F9E3A7", alignItems: "center", justifyContent: "center", overflow: "hidden", backgroundColor: colors.background }}>
@@ -49,7 +52,7 @@ export function CenterTabButton({
           <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: "#F8E9C3", borderWidth: 1, borderColor: colors.gold }} />
         </View>
       </View>
-      <Text selectable={false} style={{ marginTop: 1, color: disabled ? colors.textMuted : colors.gold, fontSize: 11, lineHeight: 14, fontWeight: "700" }}>
+      <Text selectable={false} style={{ marginTop: 1, color: colors.gold, fontSize: 11, lineHeight: 14, fontWeight: "700" }}>
         {label}
       </Text>
     </Pressable>

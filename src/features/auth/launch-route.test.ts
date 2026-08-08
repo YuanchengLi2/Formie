@@ -6,7 +6,6 @@ describe("launch routing", () => {
       phase: "signed_out",
       onboarding: "not_started",
       profileComplete: false,
-      profileOnboardingVersion: null,
       accessStatus: "unknown",
     } as never)).toBe("/onboarding/welcome");
   });
@@ -16,7 +15,6 @@ describe("launch routing", () => {
       phase: "signed_out",
       onboarding: "logged_out",
       profileComplete: false,
-      profileOnboardingVersion: null,
       accessStatus: "unknown",
     } as never)).toBe("/login");
   });
@@ -27,7 +25,6 @@ describe("launch routing", () => {
       onboarding: "in_progress",
       currentStep: "training-frequency",
       profileComplete: false,
-      profileOnboardingVersion: null,
       accessStatus: "unknown",
     } as never)).toBe("/onboarding/training-frequency");
   });
@@ -38,26 +35,34 @@ describe("launch routing", () => {
       onboarding: "in_progress",
       currentStep: "age",
       profileComplete: false,
-      profileOnboardingVersion: null,
       accessStatus: "unknown",
     } as never)).toBe("/onboarding/age");
   });
 
-  it("requires account creation and profile sync in order", () => {
-    expect(resolveLaunchRoute({ phase: "signed_out", onboarding: "awaiting_account", profileComplete: false, profileOnboardingVersion: null, accessStatus: "unknown" } as never)).toBe("/onboarding/create-account");
-    expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "profile_sync_required", currentStep: "create-account", profileComplete: false, profileOnboardingVersion: null, accessStatus: "unknown" } as never)).toBe("/onboarding/create-account");
-    expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "premium_required", profileComplete: true, profileOnboardingVersion: "approved-v1", accessStatus: "expired" } as never)).toBe("/(tabs)/(home)");
-  });
-
-  it("starts approved onboarding for a restored legacy profile instead of opening Pricing", () => {
+  it("does not restart onboarding for a completed legacy account while access resolves", () => {
     expect(resolveLaunchRoute({
       phase: "authenticated",
       onboarding: "not_started",
       currentStep: "welcome",
       profileComplete: true,
-      profileOnboardingVersion: "legacy-complete-v1",
+      accessStatus: "unknown",
+    })).toBe("/subscription");
+  });
+
+  it("requires account creation and profile sync in order", () => {
+    expect(resolveLaunchRoute({ phase: "signed_out", onboarding: "awaiting_account", profileComplete: false, accessStatus: "unknown" } as never)).toBe("/onboarding/create-account");
+    expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "profile_sync_required", currentStep: "create-account", profileComplete: false, accessStatus: "unknown" } as never)).toBe("/onboarding/create-account");
+    expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "premium_required", profileComplete: true, accessStatus: "expired" } as never)).toBe("/(tabs)/(home)");
+  });
+
+  it("opens a restored completed legacy profile without restarting onboarding", () => {
+    expect(resolveLaunchRoute({
+      phase: "authenticated",
+      onboarding: "not_started",
+      currentStep: "welcome",
+      profileComplete: true,
       accessStatus: "expired",
-    })).toBe("/onboarding/welcome");
+    })).toBe("/(tabs)/(home)");
   });
 
   it("admits only a completed authenticated account", () => {
@@ -65,7 +70,6 @@ describe("launch routing", () => {
       phase: "authenticated",
       onboarding: "complete",
       profileComplete: true,
-      profileOnboardingVersion: "approved-v1",
       accessStatus: "active",
     } as never)).toBe("/(tabs)/(home)");
   });
@@ -75,7 +79,6 @@ describe("launch routing", () => {
       phase: "authenticated",
       onboarding: "complete",
       profileComplete: true,
-      profileOnboardingVersion: "approved-v1",
       accessStatus: "expired",
     } as never)).toBe("/(tabs)/(home)");
   });
@@ -85,20 +88,19 @@ describe("launch routing", () => {
       phase: "authenticated",
       onboarding: "premium_required",
       profileComplete: true,
-      profileOnboardingVersion: "approved-v1",
       accessStatus: "expired",
     })).toBe("/(tabs)/(home)");
   });
 
   it("lets confirmed access override a stale local premium-required flag", () => {
-    expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "premium_required", profileComplete: true, profileOnboardingVersion: "approved-v1", accessStatus: "active" })).toBe("/(tabs)/(home)");
+    expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "premium_required", profileComplete: true, accessStatus: "active" })).toBe("/(tabs)/(home)");
   });
 
   it("keeps a completed account on the subscription verification route while access is unresolved", () => {
-    expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "complete", profileComplete: true, profileOnboardingVersion: "approved-v1", accessStatus: "unknown" })).toBe("/subscription");
+    expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "complete", profileComplete: true, accessStatus: "unknown" })).toBe("/subscription");
   });
 
   it("does not strand a reauthenticated completed user on a stale logout marker", () => {
-    expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "logged_out", profileComplete: true, profileOnboardingVersion: "approved-v1", accessStatus: "expired" })).toBe("/(tabs)/(home)");
+    expect(resolveLaunchRoute({ phase: "authenticated", onboarding: "logged_out", profileComplete: true, accessStatus: "expired" })).toBe("/(tabs)/(home)");
   });
 });

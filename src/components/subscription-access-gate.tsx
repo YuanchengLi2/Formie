@@ -23,8 +23,7 @@ export function SubscriptionAccessGate({ children }: PropsWithChildren) {
   const access = useAccess();
   const billing = useBilling();
   const [signingOut, setSigningOut] = useState(false);
-  const profileComplete = profile.profile?.onboardingCompleted === true
-    && profile.profile?.onboardingVersion === "approved-v1";
+  const profileComplete = profile.profile?.onboardingCompleted === true;
 
   // Account access and paid analysis access are separate. Once verification
   // resolves, completed accounts remain usable even when the paid period ended.

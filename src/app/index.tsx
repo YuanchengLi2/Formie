@@ -31,7 +31,6 @@ export default function IndexRoute() {
     onboarding: onboardingLaunchState,
     currentStep: onboarding.currentStep,
     profileComplete: profile.profile?.onboardingCompleted === true,
-    profileOnboardingVersion: profile.profile?.onboardingVersion ?? null,
     accessStatus: access.access.status,
   });
   return destination ? <Redirect href={destination as Href} /> : <AuthLoadingScreen />;

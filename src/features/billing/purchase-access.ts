@@ -4,6 +4,17 @@ export function customerHasEntitlement(customerInfo: BillingCustomerInfo, entitl
   return customerInfo.activeEntitlementIds.includes(entitlementId);
 }
 
+export type PurchaseCompletion = "active" | "sync_required" | "failed";
+
+export function resolvePurchaseCompletion(
+  customerInfo: BillingCustomerInfo,
+  entitlementId: string,
+  serverActive: boolean,
+): PurchaseCompletion {
+  if (!customerHasEntitlement(customerInfo, entitlementId)) return "failed";
+  return serverActive ? "active" : "sync_required";
+}
+
 type EntitlementLike = {
   identifier: string;
   productIdentifier: string;

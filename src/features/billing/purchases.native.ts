@@ -38,17 +38,25 @@ export const purchasesClient: PurchasesClient = {
       productIdentifier: item.product.identifier,
       priceString: item.product.priceString,
       title: item.product.title,
+      priceAmount: item.product.price,
+      currencyCode: item.product.currencyCode,
+      billingPeriod: item.identifier === "$rc_annual" ? "year" : item.identifier === "$rc_monthly" ? "month" : null,
     }));
     return { identifier: current.identifier, packages } as BillingOffering;
   },
   async getCustomerInfo() {
     return mapCustomerInfo(await Purchases.getCustomerInfo());
   },
-  async purchasePackage(packageIdentifier) {
+  async purchasePackage(packageIdentifier, options = {}) {
     const offerings = await Purchases.getOfferings();
     const item = offerings.current?.availablePackages.find((candidate) => candidate.identifier === packageIdentifier);
     if (!item) throw new Error("The Formie monthly product is unavailable right now.");
-    const result = await Purchases.purchasePackage(item);
+    const productChangeInfo = process.env.EXPO_OS === "android"
+      && options.currentProductIdentifier
+      && options.currentProductIdentifier !== item.product.identifier
+      ? { oldProductIdentifier: options.currentProductIdentifier, replacementMode: Purchases.STORE_REPLACEMENT_MODE.CHARGE_FULL_PRICE }
+      : null;
+    const result = await Purchases.purchasePackage(item, null, productChangeInfo);
     return { customerInfo: mapCustomerInfo(result.customerInfo), productIdentifier: result.productIdentifier };
   },
   async restorePurchases() {

@@ -6,7 +6,13 @@ type CreatedSession = {
   previousSessionId: string | null;
 };
 
-type CreditReservation = { reservationId: string; status: "reserved" | "already_reserved"; remaining: number | null; periodEndsAt: string | null };
+type CreditReservation = {
+  reservationId: string | null;
+  status: "reserved" | "already_reserved" | "analysis_pending";
+  remaining: number | null;
+  periodEndsAt: string | null;
+  blockingSessionId?: string | null;
+};
 
 export type CreateAnalysisDependencies = {
   authenticate: (request: Request) => Promise<string>;
@@ -95,13 +101,16 @@ export async function createAnalysisHandler(request: Request, dependencies: Crea
     let reservation: CreditReservation | null = null;
     try {
       if (dependencies.reserveCredit) reservation = await dependencies.reserveCredit({ userId, clientRequestId: requestKey, kind: "analysis" });
+      if (reservation?.status === "analysis_pending") {
+        return json({ message: "An analysis is already in progress", code: "ANALYSIS_PENDING", sessionId: reservation.blockingSessionId, remaining: reservation.remaining, periodEndsAt: reservation.periodEndsAt }, 409);
+      }
       const session = await dependencies.createSession({
         userId,
         previousSessionId: normalizedPreviousId,
         clientRequestId: typeof clientRequestId === "string" ? clientRequestId.trim() : dependencies.reserveCredit ? requestKey : null,
         declaration,
       });
-      if (reservation && dependencies.attachCredit) await dependencies.attachCredit(reservation.reservationId, session.id);
+      if (reservation?.reservationId && dependencies.attachCredit) await dependencies.attachCredit(reservation.reservationId, session.id);
       const shouldCreateFallback = privacySafeFallback === true
         && supportsUpperBodyPrivacyFallback(declaration.exercise.label);
       if (uploadProfile === "single_analysis_v1") {
@@ -125,7 +134,7 @@ export async function createAnalysisHandler(request: Request, dependencies: Crea
         ...(privacySafeUpload ? { privacySafeUpload } : {}),
       }, 201);
     } catch (error) {
-      if (reservation && dependencies.cancelCredit) await dependencies.cancelCredit(userId, reservation.reservationId).catch(() => undefined);
+      if (reservation?.reservationId && dependencies.cancelCredit) await dependencies.cancelCredit(userId, reservation.reservationId).catch(() => undefined);
       throw error;
     }
   } catch (error) {

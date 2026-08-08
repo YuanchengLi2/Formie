@@ -1,10 +1,10 @@
 import type { BillingPackage } from "./types";
-import { selectMonthlyPackage } from "./billing-package";
+import { selectBillingPlans, selectMonthlyPackage } from "./billing-package";
 
 const annualPackage: BillingPackage = {
   identifier: "$rc_annual",
-  productIdentifier: "formie_annual",
-  priceString: "$89.99",
+  productIdentifier: "formie_yearly",
+  priceString: "$99.99",
   title: "Formie Annual",
 };
 
@@ -22,5 +22,15 @@ describe("monthly RevenueCat package selection", () => {
 
   it("returns null instead of silently selecting another subscription", () => {
     expect(selectMonthlyPackage([annualPackage])).toBeNull();
+  });
+});
+
+describe("monthly and annual RevenueCat plan selection", () => {
+  it("returns both configured packages without depending on offering order", () => {
+    expect(selectBillingPlans([annualPackage, monthlyPackage])).toEqual({ monthly: monthlyPackage, annual: annualPackage });
+  });
+
+  it("accepts the existing Test Store yearly alias", () => {
+    expect(selectBillingPlans([{ ...annualPackage, productIdentifier: "yearly" }, monthlyPackage]).annual?.productIdentifier).toBe("yearly");
   });
 });

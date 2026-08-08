@@ -12,6 +12,19 @@ describe("pre-account purchase access", () => {
   });
 });
 
+describe("post-purchase confirmation", () => {
+  const activeCustomer = { activeEntitlementIds: ["formie_pro"], originalAppUserId: "u1", subscription: null };
+
+  it("exposes sync_required while the server snapshot catches up", () => {
+    expect(purchaseAccess.resolvePurchaseCompletion(activeCustomer, "formie_pro", false)).toBe("sync_required");
+  });
+
+  it("succeeds only after both provider and server confirm access", () => {
+    expect(purchaseAccess.resolvePurchaseCompletion(activeCustomer, "formie_pro", true)).toBe("active");
+    expect(purchaseAccess.resolvePurchaseCompletion({ ...activeCustomer, activeEntitlementIds: [] }, "formie_pro", true)).toBe("failed");
+  });
+});
+
 describe("subscription lifecycle mapping", () => {
   it("keeps a cancelled subscription active through its paid-through date", () => {
     const mapEntitlement = (purchaseAccess as typeof purchaseAccess & {

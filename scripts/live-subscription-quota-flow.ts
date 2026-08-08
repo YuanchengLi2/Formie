@@ -6,147 +6,94 @@ const required = (name: string) => {
   return value;
 };
 
-const supabaseUrl = required("EXPO_PUBLIC_SUPABASE_URL");
-const anonKey = required("EXPO_PUBLIC_SUPABASE_ANON_KEY");
-const admin = createClient(supabaseUrl, required("SUPABASE_SERVICE_ROLE_KEY"), {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
-const userClient = createClient(supabaseUrl, anonKey, {
+const client = createClient(required("EXPO_PUBLIC_SUPABASE_URL"), required("EXPO_PUBLIC_SUPABASE_ANON_KEY"), {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-const declaration = {
-  exercise: { source: "custom", catalogExerciseId: null, label: "Quota flow squat" },
-  amount: { kind: "reps", value: 5, countScope: "total" },
-  load: { kind: "bodyweight" },
-  side: "bilateral",
-  styles: [],
-  focusNote: null,
-};
-
-type AccessSnapshot = {
+type Snapshot = {
   status: string;
-  can_analyze: boolean;
-  quota_used: number;
-  quota_limit: number;
+  lifecycle_state: string;
+  plan_code: string | null;
+  will_renew: boolean;
   remaining: number;
-  period_starts_at: string | null;
-  period_ends_at: string | null;
+  quota_period_start: string | null;
+  quota_period_end: string | null;
+  billing_period_start: string | null;
+  billing_period_end: string | null;
 };
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-async function invokeCreate(accessToken: string, clientRequestId: string) {
-  const response = await fetch(`${supabaseUrl}/functions/v1/create-analysis`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      apikey: anonKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ clientRequestId, declaration, uploadProfile: "single_analysis_v1" }),
-  });
-  const body = await response.json() as Record<string, unknown>;
-  return { status: response.status, body };
-}
-
-async function getAccess(userId: string): Promise<AccessSnapshot> {
-  const result = await admin.rpc("get_access_status_for_user", { p_user_id: userId });
-  if (result.error) throw result.error;
-  const row = (Array.isArray(result.data) ? result.data[0] : result.data) as AccessSnapshot | null;
+async function snapshot(): Promise<Snapshot> {
+  const { data, error } = await client.rpc("get_my_access_status");
+  if (error) throw error;
+  const row = (Array.isArray(data) ? data[0] : data) as Snapshot | null;
   if (!row) throw new Error("Access snapshot is missing");
   return row;
 }
 
-async function setEntitlement(userId: string, input: { status: "active" | "expired"; start: string; end: string; cancelled?: boolean }) {
-  const result = await admin.from("user_access_entitlements").upsert({
-    user_id: userId,
-    status: input.status,
-    entitlement_id: "formie_pro",
-    revenuecat_app_user_id: userId,
-    store_product_id: "formie_monthly",
-    current_period_start: input.start,
-    current_period_end: input.end,
-    last_reconciled_at: new Date().toISOString(),
-    last_customer_info: {
-      appUserId: userId,
-      entitlements: [{ identifier: "formie_pro", productIdentifier: "formie_monthly", purchaseDate: input.start, expirationDate: input.end }],
-      subscriptions: [{ productIdentifier: "formie_monthly", store: "test_store", expirationDate: input.end, unsubscribeDetectedAt: input.cancelled ? new Date().toISOString() : null, sandbox: true }],
-    },
-  });
-  if (result.error) throw result.error;
+async function control(action: "cancel_at_period_end" | "uncancel" | "renew_now" | "expire_now" | "start_new_period" | "advance_annual_quota_month" | "clear" | "set_remaining", remaining?: number): Promise<Snapshot> {
+  const { data, error } = await client.functions.invoke("subscription-test-controls", { body: action === "set_remaining" ? { action, remaining } : { action } });
+  if (error) throw error;
+  return data as Snapshot;
 }
 
-async function consumePeriod(accessToken: string, prefix: string, count = 10, startingRemaining = 10) {
-  for (let index = 0; index < count; index += 1) {
-    const created = await invokeCreate(accessToken, `${prefix}-${String(index + 1).padStart(2, "0")}`);
-    assert(created.status === 201, `Create ${index + 1} failed (${created.status}): ${JSON.stringify(created.body)}`);
-    assert(created.body.remaining === startingRemaining - index - 1, `Create ${index + 1} returned remaining=${String(created.body.remaining)}`);
-    assert(typeof created.body.reservationId === "string", `Create ${index + 1} did not return a reservation ID`);
-  }
+async function reserveOne(): Promise<Snapshot> {
+  const { data, error } = await client.rpc("reserve_analysis_session_v2", { p_client_request_id: `live-${Date.now()}-${Math.random().toString(36).slice(2)}` });
+  if (error) throw error;
+  const reservation = Array.isArray(data) ? data[0] : data;
+  assert(reservation?.status === "reserved", `Expected one analysis reservation, got ${reservation?.status ?? "no result"}`);
+  return snapshot();
 }
 
 async function main() {
-  const nonce = crypto.randomUUID();
-  const email = `quota-flow-${nonce}@example.invalid`;
-  const password = `Quota-${nonce}!`;
-  let userId: string | null = null;
-  try {
-    const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-    if (created.error || !created.data.user) throw created.error ?? new Error("Could not create disposable quota user");
-    userId = created.data.user.id;
-    const signedIn = await userClient.auth.signInWithPassword({ email, password });
-    if (signedIn.error || !signedIn.data.session) throw signedIn.error ?? new Error("Could not sign in disposable quota user");
-    const accessToken = signedIn.data.session.access_token;
+  const email = required("FORMIE_TEST_STORE_EMAIL");
+  const password = required("FORMIE_TEST_STORE_PASSWORD");
+  const signedIn = await client.auth.signInWithPassword({ email, password });
+  if (signedIn.error || !signedIn.data.session) throw signedIn.error ?? new Error("Could not sign in to the disposable Test Store account");
 
-    const now = Date.now();
-    const firstStart = new Date(now - 24 * 60 * 60 * 1_000).toISOString();
-    const firstEnd = new Date(now + 29 * 24 * 60 * 60 * 1_000).toISOString();
-    await setEntitlement(userId, { status: "active", start: firstStart, end: firstEnd });
-    assert((await getAccess(userId)).remaining === 10, "A new active billing period did not start at 10");
+  const initial = await snapshot();
+  assert(initial.status === "active", "Purchase a RevenueCat Test Store subscription on this disposable account before running the flow");
+  const initialQuotaStart = initial.quota_period_start;
+  const initialBillingEnd = initial.billing_period_end;
 
-    const failedCreate = await invokeCreate(accessToken, `failed-${nonce}`);
-    assert(failedCreate.status === 201 && typeof failedCreate.body.sessionId === "string", `Failed-flow reservation could not be created: ${JSON.stringify(failedCreate)}`);
-    const failedTerminal = await admin.from("analysis_sessions").update({ status: "failed" }).eq("id", failedCreate.body.sessionId);
-    if (failedTerminal.error) throw failedTerminal.error;
-    assert((await getAccess(userId)).remaining === 10, "A failed analysis did not refund its reserved credit");
+  const chosen = await control("set_remaining", 1);
+  assert(chosen.remaining === 1, "Chosen remaining balance was not applied");
+  const afterOne = await reserveOne();
+  assert(afterOne.remaining === 0, "A real reservation did not decrement the chosen balance");
+  const { error: blockedError } = await client.rpc("reserve_analysis_session_v2", { p_client_request_id: `live-blocked-${Date.now()}` });
+  assert(Boolean(blockedError), "Zero quota allowed another analysis reservation");
 
-    const completedCreate = await invokeCreate(accessToken, `completed-${nonce}`);
-    assert(completedCreate.status === 201 && typeof completedCreate.body.sessionId === "string", `Completed-flow reservation could not be created: ${JSON.stringify(completedCreate)}`);
-    const completedTerminal = await admin.from("analysis_sessions").update({ status: "complete", completed_at: new Date().toISOString() }).eq("id", completedCreate.body.sessionId);
-    if (completedTerminal.error) throw completedTerminal.error;
-    assert((await getAccess(userId)).remaining === 9, "A completed analysis did not remain committed");
+  const cancelled = await control("cancel_at_period_end");
+  assert(cancelled.lifecycle_state === "active_cancelled" && cancelled.will_renew === false, "Cancellation did not stop the next renewal");
+  assert(cancelled.remaining === 0 && cancelled.billing_period_end === initialBillingEnd, "Cancellation changed the paid period or quota");
 
-    await consumePeriod(accessToken, `period-one-${nonce}`, 9, 9);
-    const exhausted = await getAccess(userId);
-    assert(exhausted.status === "active" && exhausted.remaining === 0 && exhausted.can_analyze === false, `Active zero-quota state is wrong: ${JSON.stringify(exhausted)}`);
-    const denied = await invokeCreate(accessToken, `period-one-over-${nonce}`);
-    assert(denied.status === 402 && denied.body.code === "ANALYSIS_QUOTA_EXCEEDED", `Eleventh analysis was not quota-blocked: ${JSON.stringify(denied)}`);
+  const uncancelled = await control("uncancel");
+  assert(uncancelled.lifecycle_state === "active_renewing" && uncancelled.will_renew === true, "Undo cancellation did not restore renewal");
+  assert(uncancelled.remaining === 0 && uncancelled.quota_period_start === initialQuotaStart && uncancelled.billing_period_end === initialBillingEnd, "Undo cancellation reset the current period or balance");
 
-    const renewedStart = new Date(now - 60_000).toISOString();
-    const renewedEnd = new Date(now + 30 * 24 * 60 * 60 * 1_000).toISOString();
-    await setEntitlement(userId, { status: "active", start: renewedStart, end: renewedEnd, cancelled: true });
-    const renewed = await getAccess(userId);
-    assert(renewed.remaining === 10 && renewed.can_analyze === true, `Renewal did not replenish to 10: ${JSON.stringify(renewed)}`);
+  const renewed = await control("renew_now");
+  assert(renewed.lifecycle_state === "active_renewing" && renewed.remaining === 10, "Renewal did not begin with 10 analyses");
+  assert(Date.parse(renewed.billing_period_end ?? "") - Date.parse(renewed.billing_period_start ?? "") === 20 * 60 * 1000, "Test Store monthly period was not exactly 20 minutes");
+  assert(renewed.billing_period_start !== initial.billing_period_start, "Renewal did not advance the billing period");
 
-    await consumePeriod(accessToken, `period-two-${nonce}`);
-    const cancelledExhausted = await getAccess(userId);
-    assert(cancelledExhausted.status === "active" && cancelledExhausted.remaining === 0 && cancelledExhausted.can_analyze === false, `Cancelled paid-through zero quota is wrong: ${JSON.stringify(cancelledExhausted)}`);
+  const expired = await control("expire_now");
+  assert(expired.lifecycle_state === "expired" && expired.status === "expired" && expired.remaining === 0, "Expiry did not close analysis access");
 
-    const expiredStart = new Date(now - 31 * 24 * 60 * 60 * 1_000).toISOString();
-    const expiredEnd = new Date(now - 60_000).toISOString();
-    await setEntitlement(userId, { status: "expired", start: expiredStart, end: expiredEnd, cancelled: true });
-    const expired = await getAccess(userId);
-    assert(expired.status === "expired" && expired.remaining === 0 && expired.can_analyze === false, `Expired access state is wrong: ${JSON.stringify(expired)}`);
-    const purchaseRequired = await invokeCreate(accessToken, `expired-${nonce}`);
-    assert(purchaseRequired.status === 402 && purchaseRequired.body.code === "ANALYSIS_SUBSCRIPTION_REQUIRED", `Expired user was not purchase-blocked: ${JSON.stringify(purchaseRequired)}`);
+  const repurchased = await control("start_new_period");
+  assert(repurchased.status === "active" && repurchased.remaining === 10, "A fresh paid period did not restore access and quota");
+  assert(repurchased.quota_period_start !== renewed.quota_period_start, "A fresh period carried the previous quota period forward");
 
-    process.stdout.write(`${JSON.stringify({ status: "passed", firstPeriod: exhausted, renewedPeriod: renewed, cancelledExhausted, expired }, null, 2)}\n`);
-  } finally {
-    if (userId) await admin.auth.admin.deleteUser(userId).catch(() => undefined);
+  let annual: Snapshot | null = null;
+  if (repurchased.plan_code === "annual") {
+    annual = await control("advance_annual_quota_month");
+    assert(annual.remaining === 10 && annual.quota_period_start !== repurchased.quota_period_start, "Annual monthly quota did not advance without carryover");
   }
+
+  await control("clear");
+  process.stdout.write(`${JSON.stringify({ status: "passed", initial, cancelled, uncancelled, renewed, expired, repurchased, annual }, null, 2)}\n`);
 }
 
 main().catch((error) => {

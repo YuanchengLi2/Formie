@@ -4,6 +4,12 @@ import { getAccountDashboard, parseAccountDashboard } from "./account-dashboard"
 
 const dashboard = { account: { email: "u@example.com", displayName: "Yuan", profileExists: true }, usage: { status: "active", used: 3, limit: 10, remaining: 7, periodStart: "2026-08-01T00:00:00Z", resetsAt: "2026-09-01T00:00:00Z" }, subscription: { state: "active_renewing", productIdentifier: "monthly", store: "app_store", paidThrough: "2026-09-01T00:00:00Z", cancelUrl: "https://apple.test", renewalUrl: null, sandbox: false } } as const;
 test("validates the account dashboard DTO", () => { assert.equal(parseAccountDashboard(dashboard).usage.remaining, 7); assert.throws(() => parseAccountDashboard({ account: {} })); });
+test("accepts annual and renewal-pending server lifecycle fields", () => {
+  const value = { ...dashboard, subscription: { ...dashboard.subscription, state: "renewal_pending", planCode: "annual", willRenew: true, billingPeriodStart: "2026-08-01T00:00:00Z" } } as const;
+  const parsed = parseAccountDashboard(value);
+  assert.equal(parsed.subscription.planCode, "annual");
+  assert.equal(parsed.subscription.state, "renewal_pending");
+});
 test("accepts an authenticated account that has never subscribed", () => {
   const value = {
     account: { email: "u@example.com", displayName: "Yuan", profileExists: true },

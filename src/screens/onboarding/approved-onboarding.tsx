@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { heightToCm, weightToKg } from "@/features/onboarding/onboarding-schema";
 import { onboardingSteps, type OnboardingAnswers, type OnboardingStep } from "@/features/onboarding/types";
+import type { BillingPlanCode, PurchaseState } from "@/features/billing/types";
 import { AccountAccessScreen } from "@/components/account-access-screen";
 import { onboardingTheme } from "@/theme/onboarding";
 import { PremiumScreen } from "./premium-screen";
@@ -34,15 +35,21 @@ export type ApprovedOnboardingScreenProps = {
   onOAuth: (provider: Provider) => void;
   onEmail: () => void;
   onRestoreAccount: () => void;
+  onSignIn?: () => void;
   onOpenTerms: () => void;
   onOpenPrivacy: () => void;
   onPurchase: () => void;
+  onPurchasePlan?: (plan: BillingPlanCode) => void;
   onLogOut?: () => void;
   price: string;
+  annualPrice?: string;
   purchaseAvailable: boolean;
+  annualPurchaseAvailable?: boolean;
   busy: boolean;
   busyProvider?: Provider | null;
   error?: string | null;
+  purchaseState?: PurchaseState;
+  onRetrySync?: () => void;
   onLoadingComplete?: () => void;
 };
 
@@ -52,7 +59,7 @@ const approvedArtwork = {
   welcome: require("../../../assets/production/onboarding/extracted/01-welcome-illustration.png"),
   "product-value": require("../../../assets/production/onboarding/extracted/03-product-value-illustration.png"),
   "why-formie": require("../../../assets/production/onboarding/extracted/06-why-formie-illustration.png"),
-  "product-demonstration": require("../../../assets/production/onboarding/extracted/09-product-demonstration-illustration.png"),
+  "product-demonstration": require("../../../assets/production/onboarding/extracted/09-product-demonstration-center.png"),
   "long-term-value": require("../../../assets/production/onboarding/extracted/14-long-term-value-illustration.png"),
   loading: require("../../../assets/production/onboarding/extracted/15-loading-illustration.png"),
 } as const;
@@ -121,22 +128,41 @@ function impactThen(action: () => void) {
 
 const artworkClose: Partial<Record<ApprovedArtworkStep, string>> = {
   "why-formie": "Specific evidence. One clear correction.",
-  "product-demonstration": "See what happened. Know what changes.",
   "long-term-value": "Less memory. More evidence.",
 };
 
-function ApprovedIllustration({ step }: { step: ApprovedArtworkStep }) {
-  return <Image testID={`approved-illustration-${step}`} accessibilityLabel={`${copy[step].title} illustration`} source={approvedArtwork[step]} contentFit="contain" contentPosition="center" style={[styles.approvedIllustration, step === "welcome" && styles.welcomeIllustration, step === "loading" && styles.loadingIllustration]} />;
+const artworkLayout: Record<ApprovedArtworkStep, { aspectRatio: number; maxWidth: number; maxHeight: number }> = {
+  welcome: { aspectRatio: 593 / 700, maxWidth: 500, maxHeight: 560 },
+  "product-value": { aspectRatio: 621 / 875, maxWidth: 560, maxHeight: 520 },
+  "why-formie": { aspectRatio: 621 / 720, maxWidth: 500, maxHeight: 400 },
+  "product-demonstration": { aspectRatio: 2 / 3, maxWidth: 560, maxHeight: 530 },
+  "long-term-value": { aspectRatio: 621 / 825, maxWidth: 500, maxHeight: 440 },
+  loading: { aspectRatio: 512 / 502, maxWidth: 150, maxHeight: 150 },
+};
+
+export function getApprovedArtworkSize(step: ApprovedArtworkStep, windowWidth: number, windowHeight: number) {
+  const layout = artworkLayout[step];
+  const horizontalPadding = windowWidth < 390 ? 32 : 40;
+  const heightFraction = step === "welcome" ? 0.58 : step === "loading" ? 0.2 : step === "product-value" || step === "product-demonstration" ? 0.64 : 0.5;
+  const availableWidth = Math.min(layout.maxWidth, Math.max(1, windowWidth - horizontalPadding));
+  const availableHeight = Math.min(layout.maxHeight, Math.max(1, windowHeight * heightFraction));
+  const width = Math.min(availableWidth, availableHeight * layout.aspectRatio);
+  return { width: Math.floor(width), height: Math.floor(width / layout.aspectRatio) };
 }
 
-function NativeArtworkScreen({ step, onNext, onBack }: { step: Exclude<ApprovedArtworkStep, "loading">; onNext: () => void; onBack?: () => void }) {
+function ApprovedIllustration({ step }: { step: ApprovedArtworkStep }) {
+  const { height, width } = useWindowDimensions();
+  const size = getApprovedArtworkSize(step, width, height);
+  return <Image testID={`approved-illustration-${step}`} accessibilityLabel={`${copy[step].title} illustration`} source={approvedArtwork[step]} contentFit="contain" contentPosition="center" style={[styles.approvedIllustration, size]} />;
+}
+
+function NativeArtworkScreen({ step, onNext, onBack, onSignIn }: { step: "welcome" | Exclude<ApprovedArtworkStep, "loading">; onNext: () => void; onBack?: () => void; onSignIn?: () => void }) {
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
   const density = getOnboardingDensity(height, insets.top, insets.bottom, width);
   const isWelcome = step === "welcome";
-  const title = isWelcome ? "FORMIE" : copy[step].title;
-  const subtitle = isWelcome ? "Your personal AI lifting coach." : copy[step].subtitle;
-  return <DensityContext.Provider value={density}><View testID={isWelcome ? "welcome-brand-screen" : "approved-artwork-screen"} style={[styles.approvedScreen, { paddingTop: Math.max(insets.top, 8), paddingBottom: Math.max(insets.bottom, 10) }]}><StatusBar hidden /><ScrollView style={styles.approvedScroll} contentContainerStyle={[styles.approvedScrollContent, density.short && styles.approvedScrollContentShort]} showsVerticalScrollIndicator={false}>{isWelcome ? null : <Header step={step} onBack={onBack} compact={density.compact} />}<View style={[styles.approvedCopy, isWelcome && styles.welcomeCopy]}>{!isWelcome && copy[step].eyebrow ? <Text style={styles.eyebrow}>{copy[step].eyebrow}</Text> : null}<Text style={[styles.approvedTitle, isWelcome && styles.approvedWordmark, density.short && styles.approvedTitleShort]}>{title}</Text><Text style={[styles.approvedSubtitle, density.short && styles.approvedSubtitleShort]}>{subtitle}</Text></View><View style={[styles.approvedIllustrationWrap, isWelcome && styles.welcomeIllustrationWrap, density.short && styles.approvedIllustrationWrapShort]}><ApprovedIllustration step={step} /></View>{artworkClose[step] ? <Text style={styles.artworkClose}>{artworkClose[step]}</Text> : null}</ScrollView><View style={styles.approvedNativeCta}><GoldButton testID="onboarding-bottom-cta" label={isWelcome ? "Get Started" : "Continue"} onPress={onNext} /></View></View></DensityContext.Provider>;
+  const closeCopy = step !== "welcome" ? artworkClose[step] : undefined;
+  return <DensityContext.Provider value={density}><View testID={isWelcome ? "welcome-brand-screen" : "approved-artwork-screen"} style={[styles.approvedScreen, { paddingTop: Math.max(insets.top, 8), paddingBottom: Math.max(insets.bottom, 10) }]}><StatusBar hidden /><ScrollView style={styles.approvedScroll} contentContainerStyle={[styles.approvedScrollContent, density.short && styles.approvedScrollContentShort]} showsVerticalScrollIndicator={false}>{isWelcome ? null : <Header step={step} onBack={onBack} compact={density.compact} />}{isWelcome ? null : <View style={styles.approvedCopy}>{copy[step].eyebrow ? <Text style={styles.eyebrow}>{copy[step].eyebrow}</Text> : null}<Text style={[styles.approvedTitle, density.short && styles.approvedTitleShort]}>{copy[step].title}</Text><Text style={[styles.approvedSubtitle, density.short && styles.approvedSubtitleShort]}>{copy[step].subtitle}</Text></View>}<View style={[styles.approvedIllustrationWrap, isWelcome && styles.welcomeIllustrationWrap, density.short && styles.approvedIllustrationWrapShort]}><ApprovedIllustration step={step} /></View>{closeCopy ? <Text style={styles.artworkClose}>{closeCopy}</Text> : null}</ScrollView><View style={styles.approvedNativeCta}><GoldButton testID="onboarding-bottom-cta" label={isWelcome ? "Get Started" : "Continue"} onPress={onNext} />{isWelcome && onSignIn ? <Pressable testID="onboarding-sign-in" accessibilityRole="button" accessibilityLabel="Sign in" onPress={() => impactThen(onSignIn)} style={({ pressed }) => [styles.signInButton, pressed && styles.pressed]}><Text style={styles.signInButtonText}>Sign in</Text></Pressable> : null}</View></View></DensityContext.Provider>;
 }
 
 function GoldButton({ label, onPress, disabled = false, testID }: { label: string; onPress: () => void; disabled?: boolean; testID?: string }) {
@@ -236,7 +262,7 @@ function AccountScreen(props: ApprovedOnboardingScreenProps) {
   const personalizedMessage = goal
     ? `Save your account so Formie can keep coaching you toward ${goal}.`
     : "Save your account so Formie can keep your goals, analyses, and personalized coaching together.";
-  return <AccountAccessScreen mode="onboarding" personalizedMessage={personalizedMessage} busy={props.busy} busyProvider={props.busyProvider} error={props.error} onOpenTerms={props.onOpenTerms} onOpenPrivacy={props.onOpenPrivacy} onPrivacyConsentChange={(accepted) => props.onAnswerChange("acceptedPrivacy", accepted)} onEmail={() => impactThen(props.onEmail)} onOAuth={(provider) => impactThen(() => props.onOAuth(provider))} />;
+  return <AccountAccessScreen mode="onboarding" personalizedMessage={personalizedMessage} busy={props.busy} busyProvider={props.busyProvider} error={props.error} onBack={props.onBack} onOpenTerms={props.onOpenTerms} onOpenPrivacy={props.onOpenPrivacy} onPrivacyConsentChange={(accepted) => props.onAnswerChange("acceptedPrivacy", accepted)} onMarketingOptInChange={(accepted) => props.onAnswerChange("marketingOptIn", accepted)} onEmail={() => impactThen(props.onEmail)} onOAuth={(provider) => impactThen(() => props.onOAuth(provider))} />;
 }
 
 function LoadingScreen({ onComplete }: { onComplete?: () => void }) {
@@ -257,11 +283,11 @@ function LoadingScreen({ onComplete }: { onComplete?: () => void }) {
 }
 
 export function ApprovedOnboardingScreen(props: ApprovedOnboardingScreenProps) {
-  if (props.step === "welcome") return <NativeArtworkScreen step="welcome" onNext={props.onNext} />;
+  if (props.step === "welcome") return <NativeArtworkScreen step="welcome" onNext={props.onNext} onSignIn={props.onSignIn} />;
   if (props.step === "product-value" || props.step === "why-formie" || props.step === "product-demonstration" || props.step === "long-term-value") return <NativeArtworkScreen step={props.step} onNext={props.onNext} onBack={props.onBack} />;
   if (props.step === "loading") return <LoadingScreen onComplete={props.onLoadingComplete} />;
   if (props.step === "create-account") return <AccountScreen {...props} />;
-  if (props.step === "premium") return <PremiumScreen price={props.price} purchaseAvailable={props.purchaseAvailable} busy={props.busy} error={props.error} onPurchase={() => impactThen(props.onPurchase)} />;
+  if (props.step === "premium") return <PremiumScreen price={props.price} annualPrice={props.annualPrice} purchaseAvailable={props.purchaseAvailable} annualPurchaseAvailable={props.annualPurchaseAvailable} busy={props.busy} state={props.purchaseState} error={props.error} onRetrySync={props.onRetrySync} onBack={props.onBack} onPurchase={() => impactThen(props.onPurchase)} onPurchasePlan={(plan) => impactThen(() => props.onPurchasePlan ? props.onPurchasePlan(plan) : props.onPurchase())} />;
   return <QuestionScreen {...props} />;
 }
 
@@ -269,49 +295,33 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#050505" },
   welcomeScreen: { flex: 1, backgroundColor: "#030303", paddingHorizontal: 20 },
   welcomeScroll: { flexGrow: 1, minHeight: 560, alignItems: "center", justifyContent: "center", paddingVertical: 34 },
-  welcomeArtwork: { width: 290, height: 290, alignItems: "center", justifyContent: "center" },
-  orbit: { position: "absolute", width: 250, height: 132, borderRadius: 125, borderWidth: 1, borderColor: "rgba(229,173,50,0.42)" },
-  orbitOne: { transform: [{ rotate: "24deg" }] },
-  orbitTwo: { transform: [{ rotate: "-34deg" }] },
-  welcomeLogoGlow: { width: 132, height: 132, borderRadius: 31, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(229,173,50,0.05)", shadowColor: "#E5AD32", shadowOpacity: 0.28, shadowRadius: 26, shadowOffset: { width: 0, height: 0 } },
-  welcomeLogo: { width: 122, height: 122 },
   welcomeWordmark: { color: "#F7F6F4", fontSize: 45, lineHeight: 54, fontWeight: "300", letterSpacing: 11, marginLeft: 11 },
   welcomeTagline: { color: "#9E9993", fontSize: 17, lineHeight: 24, marginTop: 10 },
   welcomeCta: { width: "100%", maxWidth: 520, alignSelf: "center", paddingBottom: 4 },
+  signInButton: { width: "100%", minHeight: 52, marginTop: 10, alignItems: "center", justifyContent: "center", borderRadius: 14, borderCurve: "continuous", backgroundColor: "#FFFFFF" },
+  signInButtonText: { color: "#080808", fontSize: 17, lineHeight: 21, fontWeight: "800" },
   approvedScreen: { flex: 1, overflow: "hidden", backgroundColor: "#050505", alignItems: "center", justifyContent: "center" },
-  approvedArtworkFrame: { flex: 1, width: "100%", maxWidth: 620, overflow: "hidden", backgroundColor: "#050505" },
-  approvedScreenImage: { width: "100%", height: "100%" },
   approvedNativeHeader: { width: "100%", maxWidth: 620, paddingHorizontal: 20 },
   approvedNativeCta: { width: "100%", maxWidth: 620, paddingHorizontal: 20, paddingTop: 10 },
   approvedScroll: { flex: 1, width: "100%", maxWidth: 620 },
-  approvedScrollContent: { flexGrow: 1, paddingHorizontal: 22, paddingBottom: 8 },
-  approvedScrollContentShort: { paddingHorizontal: 18 },
-  approvedCopy: { paddingTop: 22, gap: 7 },
-  welcomeCopy: { alignItems: "center", paddingTop: 4, paddingBottom: 4 },
+  approvedScrollContent: { flexGrow: 1, paddingBottom: 8 },
+  approvedScrollContentShort: {},
+  approvedCopy: { paddingTop: 22, paddingHorizontal: 22, gap: 7 },
   approvedTitle: { color: "#F7F6F4", fontSize: 34, lineHeight: 39, fontWeight: "800", letterSpacing: -1 },
   approvedTitleShort: { fontSize: 27, lineHeight: 31 },
-  approvedWordmark: { fontSize: 42, lineHeight: 48, fontWeight: "300", letterSpacing: 10, marginLeft: 10 },
   approvedSubtitle: { color: "#AAA6A2", fontSize: 15, lineHeight: 21 },
   approvedSubtitleShort: { fontSize: 12.5, lineHeight: 17 },
-  approvedIllustrationWrap: { flex: 1, minHeight: 310, maxHeight: 520, alignItems: "center", justifyContent: "center", marginTop: 10 },
-  approvedIllustrationWrapShort: { minHeight: 220, marginTop: 4 },
-  welcomeIllustrationWrap: { minHeight: 330, maxHeight: 440, marginTop: 0 },
-  approvedIllustration: { width: "100%", height: "100%" },
-  welcomeIllustration: { width: "100%", maxWidth: 510 },
-  loadingIllustration: { width: 150, height: 160 },
+  approvedIllustrationWrap: { flex: 1, minHeight: 0, width: "100%", alignItems: "center", justifyContent: "center", marginTop: 10 },
+  approvedIllustrationWrapShort: { marginTop: 4 },
+  welcomeIllustrationWrap: { marginTop: 0, paddingVertical: 6 },
+  approvedIllustration: {},
   artworkClose: { color: "#D7D3CE", fontSize: 13, lineHeight: 18, textAlign: "center", fontWeight: "600", paddingVertical: 4 },
   loadingNativeStatus: { width: "100%", maxWidth: 420, alignItems: "center", gap: 10, paddingHorizontal: 24 },
-  premiumScrollContent: { alignItems: "center", paddingBottom: 18 },
-  premiumPurchaseTarget: { position: "absolute", top: "76.5%", left: "22%", right: "19%", height: "9.5%" },
-  livePriceOverride: { position: "absolute", top: "43%", left: "23%", width: "57%", height: "8.5%", flexDirection: "row", alignItems: "center", backgroundColor: "#0A0A0A", transform: [{ rotate: "-1.2deg" }] },
-  livePrice: { color: "#F7F6F4", fontSize: 46, lineHeight: 52, fontWeight: "800", fontVariant: ["tabular-nums"] },
-  livePriceMonth: { color: "#F7F6F4", fontSize: 14, paddingTop: 18 },
   surface: { flex: 1, width: "100%", maxWidth: 480, alignSelf: "center", paddingHorizontal: 22 },
   nativeSurface: { flexGrow: 1 },
   surfaceCompact: { paddingHorizontal: 18 },
-  surfaceArtwork: { paddingHorizontal: 0 },
   scrollContent: { flexGrow: 1 },
-  topBar: { height: 68, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  topBar: { height: 68, paddingHorizontal: 22, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   topBarCompact: { height: 56 },
   backButton: { width: 48, height: 48, alignItems: "flex-start", justifyContent: "center" },
   backGlyph: { color: "#F6F5F3", fontSize: 42, lineHeight: 44, fontWeight: "200" },
@@ -340,7 +350,6 @@ const styles = StyleSheet.create({
   goldButtonTextShort: { fontSize: 16 }, goldArrowShort: { fontSize: 25, lineHeight: 28 },
   hero: { flex: 1, width: "100%", maxHeight: 420, minHeight: 220, borderRadius: 22, borderCurve: "continuous", opacity: 0.88 }, heroCompact: { minHeight: 150, maxHeight: 270 },
   wideHero: { width: "100%", height: "80%", maxHeight: 330, borderRadius: 22, borderCurve: "continuous", opacity: 0.9 }, wideHeroCompact: { maxHeight: 230 },
-  referenceArtwork: { width: "100%", maxWidth: 680, borderRadius: 18, borderCurve: "continuous" },
   insights: { gap: 12, transform: [{ rotate: "-2deg" }] }, insight: { padding: 18, borderRadius: 12, borderWidth: 1, borderColor: "#3B3936", backgroundColor: "#0B0B0B" }, insightActive: { borderColor: "#F4B531", backgroundColor: "#171106", transform: [{ rotate: "3deg" }] }, insightText: { color: "#ECEAE7", fontSize: 20, fontWeight: "600" },
   demoStack: { gap: 12 }, demoCard: { padding: 19, gap: 8, borderRadius: 18, borderWidth: 1, borderColor: "#47433F", backgroundColor: "#0C0C0C" }, cardLabel: { color: "#F4B531", fontSize: 10, letterSpacing: 1.8, fontWeight: "800" }, demoTitle: { color: "#F7F6F4", fontSize: 22, fontWeight: "800" }, demoBody: { color: "#B0ACA7", fontSize: 15, lineHeight: 21 }, cueCard: { padding: 17, gap: 8, borderRadius: 16, borderWidth: 1, borderColor: "#A77A21", backgroundColor: "#151005" }, cueText: { color: "#F5CF70", fontSize: 17, lineHeight: 22, fontWeight: "700" },
   wheelPanel: { alignItems: "stretch", gap: 8 }, measure: { flex: 1, justifyContent: "center", gap: 10 }, wheelFrame: { height: 270, overflow: "hidden" }, wheelSelection: { position: "absolute", zIndex: 2, left: 12, right: 12, top: 108, height: WHEEL_ROW_HEIGHT, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#D89B18" }, wheelContent: { paddingVertical: 108 }, wheelRow: { height: WHEEL_ROW_HEIGHT, alignItems: "center", justifyContent: "center" }, wheelText: { color: "#6F6B67", fontSize: 24, fontWeight: "300", fontVariant: ["tabular-nums"] }, wheelTextSelected: { color: "#F6F5F3", fontSize: 36, fontWeight: "800" }, wheelTextSelectedShort: { fontSize: 31 }, unit: { color: "#AAA6A2", fontSize: 13, textAlign: "center" },

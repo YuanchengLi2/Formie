@@ -37,6 +37,9 @@ describe("RevenueCat subscription management", () => {
 
     expect(resolveSubscriptionState(subscriber, new Date("2026-08-10T00:00:00Z"))).toEqual({
       state: "not_subscribed",
+      planCode: null,
+      willRenew: false,
+      billingPeriodStart: null,
       productIdentifier: null,
       store: null,
       paidThrough: null,
@@ -57,9 +60,15 @@ describe("RevenueCat subscription management", () => {
   });
 
   it("parses Apple management and cancelled paid-through access", () => {
-    const subscriber = parseRevenueCatSubscriber("u1", { subscriber: { management_url: "https://apps.apple.com/account/subscriptions", entitlements: { formie_pro: { product_identifier: "monthly", purchase_date: "2026-08-01T00:00:00Z", expires_date: "2026-09-01T00:00:00Z" } }, subscriptions: { monthly: { store: "app_store", expires_date: "2026-09-01T00:00:00Z", unsubscribe_detected_at: "2026-08-05T00:00:00Z", is_sandbox: false } } } });
+    const subscriber = parseRevenueCatSubscriber("u1", { subscriber: { management_url: "https://apps.apple.com/account/subscriptions", entitlements: { formie_pro: { product_identifier: "monthly", purchase_date: "2026-08-01T00:00:00Z", expires_date: "2026-09-01T00:00:00Z" } }, subscriptions: { monthly: { store: "app_store", purchase_date: "2026-08-01T00:00:00Z", original_purchase_date: "2026-07-01T00:00:00Z", expires_date: "2026-09-01T00:00:00Z", unsubscribe_detected_at: "2026-08-05T00:00:00Z", is_sandbox: false, ownership_type: "PURCHASED" } } } });
     expect(subscriber.managementUrl).toContain("apple.com");
-    expect(resolveSubscriptionState(subscriber, new Date("2026-08-10T00:00:00Z"))).toMatchObject({ state: "active_cancelled", store: "app_store", paidThrough: "2026-09-01T00:00:00Z", renewalUrl: "https://apps.apple.com/account/subscriptions" });
+    expect(subscriber.subscriptions?.[0]).toMatchObject({ purchaseDate: "2026-08-01T00:00:00Z", originalPurchaseDate: "2026-07-01T00:00:00Z", ownershipType: "PURCHASED" });
+    expect(resolveSubscriptionState(subscriber, new Date("2026-08-10T00:00:00Z"))).toMatchObject({ state: "active_cancelled", planCode: "monthly", willRenew: false, billingPeriodStart: "2026-08-01T00:00:00Z", store: "app_store", paidThrough: "2026-09-01T00:00:00Z", renewalUrl: "https://apps.apple.com/account/subscriptions" });
+  });
+
+  it("maps yearly product aliases to the annual plan", () => {
+    const subscriber = parseRevenueCatSubscriber("u1", { subscriber: { entitlements: { formie_pro: { product_identifier: "yearly", purchase_date: "2026-08-01T00:00:00Z", expires_date: "2027-08-01T00:00:00Z" } }, subscriptions: { yearly: { store: "test_store", purchase_date: "2026-08-01T00:00:00Z", expires_date: "2027-08-01T00:00:00Z", is_sandbox: true } } } });
+    expect(resolveSubscriptionState(subscriber, new Date("2026-08-10T00:00:00Z"))).toMatchObject({ planCode: "annual", willRenew: true });
   });
 
   it("uses a Google renewal fallback after expiration", () => {

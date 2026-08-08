@@ -20,7 +20,7 @@ function RootNavigator() {
   const access = useAccess();
   const onboarding = useOnboarding();
   const authenticated = auth.phase === "authenticated";
-  const profileComplete = profile.profile?.onboardingCompleted === true && profile.profile?.onboardingVersion === "approved-v1";
+  const profileComplete = profile.profile?.onboardingCompleted === true;
   const appUnlocked = canOpenCompletedAccount({ authenticated, profileComplete, onboardingStatus: onboarding.status, accessStatus: access.access.status });
   const subscriptionAvailable = canOpenSubscriptionScreen({ authenticated, profileComplete });
   const onboardingAllowed = auth.phase === "signed_out" || (authenticated && !profileComplete);

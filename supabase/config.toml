@@ -130,3 +130,6 @@ verify_jwt = false
 
 [functions.sync-acquisition-sheet]
 verify_jwt = true
+
+[functions.subscription-test-controls]
+verify_jwt = true

@@ -1,4 +1,4 @@
-import { canOpenCompletedAccount, canOpenSubscriptionScreen, formatAnalysisBalance, resolveAnalysisEntry } from "./account-access";
+import { canOpenCompletedAccount, canOpenSubscriptionScreen, formatAnalysisBalance, formatAnalysisFraction, formatBillingTimestamp, formatSubscriptionDate, formatSubscriptionStateLabel, resolveAnalysisEntry } from "./account-access";
 import type { AccessStatus } from "./types";
 
 const access = (status: AccessStatus["status"], canAnalyze: boolean, remaining: number | null): AccessStatus => ({
@@ -12,6 +12,18 @@ const access = (status: AccessStatus["status"], canAnalyze: boolean, remaining: 
   entitlementId: status === "unknown" ? null : "formie_pro",
   source: status === "unknown" ? "unknown" : "revenuecat",
   refreshedAt: "2026-08-06T00:00:00.000Z",
+  lifecycleState: status === "active" ? "active_renewing" : status === "expired" ? "expired" : "unknown",
+  planCode: "monthly",
+  productIdentifier: "formie_monthly",
+  store: "test_store",
+  sandbox: true,
+  willRenew: status === "active",
+  billingPeriodStartsAt: "2026-08-01T00:00:00.000Z",
+  paidThrough: "2026-09-01T00:00:00.000Z",
+  quotaPeriodStartsAt: "2026-08-01T00:00:00.000Z",
+  quotaResetsAt: "2026-09-01T00:00:00.000Z",
+  pendingAnalysisSessionId: null,
+  stateVersion: 1,
 });
 
 describe("completed account admission", () => {
@@ -58,6 +70,14 @@ describe("analysis entry policy", () => {
     expect(resolveAnalysisEntry("loading", access("unknown", false, null))).toBe("unavailable");
     expect(resolveAnalysisEntry("error", access("active", true, 8))).toBe("unavailable");
   });
+
+  it("routes a pending analysis before allowing another recording", () => {
+    expect(resolveAnalysisEntry("ready", { ...access("active", false, 7), pendingAnalysisSessionId: "session-1" })).toBe("analysis_pending");
+  });
+
+  it("separates renewal synchronization from final expiration", () => {
+    expect(resolveAnalysisEntry("ready", { ...access("unknown", false, 0), lifecycleState: "renewal_pending" })).toBe("renewal_pending");
+  });
 });
 
 describe("Home analysis balance", () => {
@@ -66,5 +86,33 @@ describe("Home analysis balance", () => {
     expect(formatAnalysisBalance(access("active", true, 1))).toBe("1 analysis left");
     expect(formatAnalysisBalance(access("expired", false, null))).toBe("Subscription required");
     expect(formatAnalysisBalance(access("unknown", false, null))).toBe("Checking analyses");
+  });
+
+  it("formats a bounded quota fraction without redundant words", () => {
+    expect(formatAnalysisFraction(9, 10)).toBe("9/10");
+    expect(formatAnalysisFraction(15, 10)).toBe("10/10");
+    expect(formatAnalysisFraction(null, 0)).toBe("—/10");
+  });
+});
+
+describe("subscription calendar dates", () => {
+  it("uses the provider billing date in UTC so app and web do not disagree by one day", () => {
+    expect(formatSubscriptionDate("2026-09-01T00:00:00.000Z")).toBe("Sep 1, 2026");
+  });
+
+  it("does not render invalid provider timestamps", () => {
+    expect(formatSubscriptionDate("not-a-date")).toBe("Not available");
+    expect(formatSubscriptionDate(null)).toBe("Not available");
+  });
+
+  it("labels cancelled, expired, and never-subscribed settings without claiming renewal", () => {
+    expect(formatSubscriptionStateLabel({ lifecycleState: "active_cancelled", paidThrough: "2026-09-01T08:56:00Z" }, "en-US", "UTC")).toBe("Canceled · Access ends Sep 1, 2026 at 8:56 AM UTC");
+    expect(formatSubscriptionStateLabel({ lifecycleState: "expired", paidThrough: "2026-09-01T08:56:00Z" }, "en-US", "UTC")).toBe("Expired · Access ended Sep 1, 2026 at 8:56 AM UTC");
+    expect(formatSubscriptionStateLabel({ lifecycleState: "active_renewing", paidThrough: "2026-09-01T08:56:00Z" }, "en-US", "UTC")).toBe("Active · Next billing Sep 1, 2026 at 8:56 AM UTC");
+    expect(formatSubscriptionStateLabel({ lifecycleState: "not_subscribed", paidThrough: null })).toBe("No active subscription");
+  });
+
+  it("formats an exact billing timestamp with an explicit time zone", () => {
+    expect(formatBillingTimestamp("2026-09-07T08:56:00Z", "en-US", "UTC")).toBe("Sep 7, 2026 at 8:56 AM UTC");
   });
 });

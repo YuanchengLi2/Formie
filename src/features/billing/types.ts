@@ -1,17 +1,24 @@
-export type PurchaseState = "idle" | "loading" | "ready" | "purchasing" | "restoring" | "pending" | "cancelled" | "failed" | "succeeded";
+export type PurchaseState = "idle" | "loading" | "ready" | "purchasing" | "reconciling" | "sync_required" | "restoring" | "cancelled" | "failed" | "succeeded";
+export type PurchaseOutcome = "active" | "sync_required" | "cancelled" | "failed";
 export type EntitlementResolution = "idle" | "checking" | "active" | "expired" | "error";
+export type BillingPlanCode = "monthly" | "annual";
 
 export type BillingPackage = {
   identifier: string;
   productIdentifier: string;
   priceString: string;
   title: string;
+  priceAmount?: number | null;
+  currencyCode?: string | null;
+  billingPeriod?: "month" | "year" | null;
 };
 
 export type BillingOffering = {
   identifier: string;
   packages: BillingPackage[];
 };
+
+export type BillingPlans = Record<BillingPlanCode, BillingPackage | null>;
 
 export type BillingCustomerInfo = {
   activeEntitlementIds: string[];
@@ -40,7 +47,7 @@ export type PurchasesClient = {
   logOut: () => Promise<void>;
   getOfferings: () => Promise<BillingOffering | null>;
   getCustomerInfo: () => Promise<BillingCustomerInfo>;
-  purchasePackage: (packageIdentifier: string) => Promise<PurchaseResult>;
+  purchasePackage: (packageIdentifier: string, options?: { currentProductIdentifier?: string | null }) => Promise<PurchaseResult>;
   restorePurchases: () => Promise<BillingCustomerInfo>;
   subscribeCustomerInfo: (listener: (customerInfo: BillingCustomerInfo) => void) => () => void;
 };

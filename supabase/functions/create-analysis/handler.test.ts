@@ -94,6 +94,20 @@ describe("create analysis handler", () => {
     await expect(response.json()).resolves.toMatchObject({ reservationId: "reservation-1", remaining: 9, periodEndsAt: "2026-09-01T00:00:00Z" });
   });
 
+  it("returns the existing live session without creating or charging a duplicate analysis", async () => {
+    const deps = dependencies({
+      reserveCredit: jest.fn(async () => ({ reservationId: null, status: "analysis_pending", remaining: 8, periodEndsAt: "2026-09-01T00:00:00Z", blockingSessionId: "session-live" })),
+    } as never);
+    const response = await createAnalysisHandler(new Request("https://example.test", {
+      method: "POST",
+      body: JSON.stringify({ declaration, clientRequestId: "request-duplicate" }),
+    }), deps);
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "ANALYSIS_PENDING", sessionId: "session-live", remaining: 8 });
+    expect(deps.createSession).not.toHaveBeenCalled();
+    expect(deps.createSignedUpload).not.toHaveBeenCalled();
+  });
+
   it("does not reserve a privacy-safe artifact when the installed client cannot create one", async () => {
     const deps = dependencies();
     const response = await createAnalysisHandler(

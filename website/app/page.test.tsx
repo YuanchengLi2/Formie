@@ -16,6 +16,9 @@ test("homepage preserves section order and uses the new header and pricing", () 
   assert.match(html, /Why it matters/i);
   assert.match(html, /What to do next/i);
   assert.match(html, /\$9\.99/i);
+  assert.match(html, /\$99\.99/i);
+  assert.match(html, /Save 17%/i);
+  assert.match(html, /10 analyses\/month/i);
   assert.match(html, /\/ month/i);
   assert.match(html, /10 complete analyses each month/i);
   assert.match(html, /Whole-set movement breakdowns/i);
@@ -49,6 +52,7 @@ test("pricing card is upright and proportionate across breakpoints", () => {
   assert.match(rules, /max-width:\s*100%/);
   assert.match(rules, /transform:\s*none/);
   assert.match(css, /@media \(max-width:\s*760px\)[\s\S]*?\.v2-pro-card\s*\{[^}]*width:\s*calc\(100% - 36px\)/);
+  assert.match(css, /@media \(max-width:\s*760px\)[\s\S]*?\.v2-plan-options\s*\{[^}]*grid-template-columns:\s*1fr/);
 });
 
 test("320px header reserves space for brand, portal, and App Store badge", () => {
@@ -67,4 +71,6 @@ test("hero artwork remains inside its own grid track", () => {
   assert.match(heroArt, /max-width:\s*100%/);
   assert.doesNotMatch(heroArt, /vw/);
   assert.match(css, /@media \(max-width:\s*760px\)[\s\S]*?\.v2-hero-art\s*\{[^}]*margin-top:\s*0[^}]*transform:\s*none/);
+  assert.doesNotMatch(css, /\.v2-hero-art::after/);
+  assert.match(css, /\.v2-hero::after\s*\{[^}]*linear-gradient/);
 });

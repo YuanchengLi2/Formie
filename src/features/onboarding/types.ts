@@ -166,6 +166,9 @@ export function resolveOnboardingStateForUser(
   signedOutState: OnboardingState,
   userId: string,
 ): OnboardingState {
+  if (signedOutState.oauthIntent === "login") {
+    return { ...initialOnboardingState, answers: { ...initialOnboardingAnswers }, ownerUserId: userId };
+  }
   if (scopedState?.ownerUserId === userId) return scopedState;
   if (signedOutState.status === "account_required" || signedOutState.oauthIntent === "create_account") {
     return reduceOnboardingState(signedOutState, { type: "auth_succeeded", userId });

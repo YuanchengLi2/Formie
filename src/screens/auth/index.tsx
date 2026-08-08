@@ -9,16 +9,17 @@ export function AuthLoadingScreen({ message = "Loading Formie…" }: { message?:
   return <View style={styles.loading}><StatusBar hidden /><ActivityIndicator color={theme.colors.gold} /><Text style={styles.detail}>{message}</Text></View>;
 }
 
-export function SocialLoginScreen({ onOAuth, onEmail, onCreateAccount, onOpenTerms, onOpenPrivacy, busyProvider, error }: {
+export function SocialLoginScreen({ onOAuth, onEmail, onCreateAccount, onBack, onOpenTerms, onOpenPrivacy, busyProvider, error }: {
   onOAuth: (provider: SocialProvider) => void;
   onEmail: () => void;
   onCreateAccount: () => void;
+  onBack?: () => void;
   onOpenTerms?: () => void;
   onOpenPrivacy?: () => void;
   busyProvider: SocialProvider | null;
   error?: string | null;
 }) {
-  return <AccountAccessScreen mode="login" onOAuth={onOAuth} onEmail={onEmail} onCreateAccount={onCreateAccount} onOpenTerms={onOpenTerms} onOpenPrivacy={onOpenPrivacy} busyProvider={busyProvider} error={error} />;
+  return <AccountAccessScreen mode="login" onOAuth={onOAuth} onEmail={onEmail} onCreateAccount={onCreateAccount} onBack={onBack} onOpenTerms={onOpenTerms} onOpenPrivacy={onOpenPrivacy} busyProvider={busyProvider} error={error} />;
 }
 
 export function AccessRecoveryScreen({ message, onRetry }: { message: string; onRetry: () => void }) {

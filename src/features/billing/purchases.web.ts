@@ -34,6 +34,9 @@ function mapOffering(current: Awaited<ReturnType<Purchases["getOfferings"]>>["cu
     productIdentifier: item.webBillingProduct.identifier,
     priceString: item.webBillingProduct.price.formattedPrice,
     title: item.webBillingProduct.title,
+    priceAmount: typeof item.webBillingProduct.price.amountMicros === "number" ? item.webBillingProduct.price.amountMicros / 1_000_000 : null,
+    currencyCode: item.webBillingProduct.price.currency,
+    billingPeriod: item.identifier === "$rc_annual" ? "year" : item.identifier === "$rc_monthly" ? "month" : null,
   }));
   return { identifier: current.identifier, packages };
 }

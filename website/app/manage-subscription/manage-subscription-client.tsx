@@ -8,8 +8,18 @@ import { parseAccountDashboard, type AccountDashboardResponse } from "@/lib/acco
 import { beginWebsiteOAuth } from "@/lib/oauth-redirect";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 
-function date(value: string | null) {
-  return value ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(value)) : "Not available";
+export function formatDashboardTimestamp(value: string | null, locale = "en-US", timeZone?: string) {
+  if (!value) return "Not available";
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return "Not available";
+  const zoneOptions = timeZone ? { timeZone } : {};
+  const formattedDate = new Intl.DateTimeFormat(locale, {
+    month: "short", day: "numeric", year: "numeric", ...zoneOptions,
+  }).format(parsed);
+  const formattedTime = new Intl.DateTimeFormat(locale, {
+    hour: "numeric", minute: "2-digit", timeZoneName: "short", ...zoneOptions,
+  }).format(parsed);
+  return `${formattedDate} at ${formattedTime}`;
 }
 
 function storeName(store: string | null) {
@@ -19,21 +29,46 @@ function storeName(store: string | null) {
   return "App store";
 }
 
+function planDetails(subscription: AccountDashboardResponse["subscription"]) {
+  const annual = subscription.planCode === "annual" || /year|annual/i.test(subscription.productIdentifier ?? "");
+  return annual
+    ? { name: "Formie Pro", fullName: "Formie Pro Annual", interval: "Annual", price: "$99.99 / year" }
+    : { name: "Formie Pro", fullName: "Formie Pro Monthly", interval: "Monthly", price: "$9.99 / month" };
+}
+
+const MAX_REFRESH_DELAY_MS = 2_147_000_000;
+
+export function nextDashboardRefreshDelay(subscriptionPaidThrough: string | null, quotaResetsAt: string | null, now = Date.now()): number | null {
+  const boundary = [subscriptionPaidThrough, quotaResetsAt]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => new Date(value).getTime())
+    .filter((value) => Number.isFinite(value) && value > now)
+    .sort((left, right) => left - right)[0];
+  if (!Number.isFinite(boundary)) return null;
+  return Math.min(MAX_REFRESH_DELAY_MS, Math.max(5_000, boundary - now + 1_000));
+}
+
 type Props = { initialDashboard: AccountDashboardResponse | null; initialAuthenticated?: boolean; initialError?: string | null };
 
 function PortalPopup({ title, message, detail, actions }: { title: string; message: string; detail?: string; actions: ReactNode }) {
   return <section className="account-portal portal-popup-page"><div className="portal-popup-backdrop"><div className="portal-popup" role="dialog" aria-modal="true" aria-labelledby="portal-popup-title" aria-describedby="portal-popup-message"><span className="portal-kicker">FORMIE ACCOUNT</span><h1 id="portal-popup-title">{title}</h1><p id="portal-popup-message">{message}</p>{detail ? <p className="portal-popup-detail">{detail}</p> : null}<div className="portal-popup-actions">{actions}</div></div></div></section>;
 }
 
-function UsageMeter({ remaining, limit }: { remaining: number; limit: number }) {
-  const percentage = limit > 0 ? Math.max(0, Math.min(100, (remaining / limit) * 100)) : 0;
-  return <div className="quota-meter" role="meter" aria-label={`${remaining} of ${limit} analyses remaining`} aria-valuemin={0} aria-valuemax={limit} aria-valuenow={remaining} style={{ "--quota-progress": `${percentage * 3.6}deg` } as CSSProperties}><span>{remaining}</span><small>left</small></div>;
+function UsageBar({ remaining, limit }: { remaining: number; limit: number }) {
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 0;
+  const safeRemaining = Math.max(0, Math.min(safeLimit, Number.isFinite(remaining) ? Math.floor(remaining) : 0));
+  const percentage = safeLimit > 0 ? (safeRemaining / safeLimit) * 100 : 0;
+  return <div className="usage-bar" role="meter" aria-label={`${safeRemaining} of ${safeLimit} analyses remaining`} aria-valuemin={0} aria-valuemax={safeLimit} aria-valuenow={safeRemaining}>
+    <strong>{safeRemaining}/{safeLimit}</strong>
+    <div className="usage-bar-track" aria-hidden="true"><span style={{ width: `${percentage}%` } as CSSProperties} /></div>
+  </div>;
 }
 
 export function ManageSubscriptionClient({ initialDashboard, initialAuthenticated = false, initialError = null }: Props) {
   const [dashboard, setDashboard] = useState(initialDashboard);
   const [error, setError] = useState(initialError);
-  const [busy, setBusy] = useState<"apple" | "google" | "logout" | "refresh" | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"apple" | "google" | "logout" | "refresh" | "cancel" | "uncancel" | null>(null);
   const hasDashboard = dashboard !== null;
 
   const refreshDashboard = useCallback(async () => {
@@ -50,6 +85,14 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
       setBusy((current) => current === "refresh" ? null : current);
     }
   }, []);
+
+  useEffect(() => {
+    if (!dashboard || (dashboard.subscription.state !== "active_renewing" && dashboard.subscription.state !== "active_cancelled")) return;
+    const delay = nextDashboardRefreshDelay(dashboard.subscription.paidThrough, dashboard.usage.resetsAt);
+    if (delay === null) return;
+    const timer = window.setTimeout(() => { void refreshDashboard(); }, delay);
+    return () => window.clearTimeout(timer);
+  }, [dashboard, refreshDashboard]);
 
   useEffect(() => {
     if (!hasDashboard) return;
@@ -95,6 +138,24 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
     await client.auth.signOut({ scope: "local" });
     window.location.assign("/manage-subscription");
   };
+
+  const updateTestStoreRenewal = async (action: "cancel_at_period_end" | "uncancel") => {
+    if (busy) return;
+    setBusy(action === "cancel_at_period_end" ? "cancel" : "uncancel");
+    setError(null);
+    setMessage(null);
+    try {
+      const client = createBrowserSupabaseClient();
+      const { error: invokeError } = await client.functions.invoke("subscription-test-controls", { body: { action } });
+      if (invokeError) throw invokeError;
+      await refreshDashboard();
+      setMessage(action === "cancel_at_period_end" ? "Cancellation confirmed. You keep access through the current paid period." : "Renewal restored for the next Test Store period.");
+    } catch {
+      setError(action === "cancel_at_period_end" ? "Cancellation could not be completed. Please try again." : "Renewal could not be restored. Please try again.");
+    } finally {
+      setBusy(null);
+    }
+  };
   const logoutButton = <button className="portal-logout" disabled={Boolean(busy)} onClick={() => void logout()}>{busy === "logout" ? "Signing out..." : "Sign Out"}</button>;
 
   if (!dashboard && initialAuthenticated) return <PortalPopup title="Something went wrong" message="You signed in, but Formie could not check your account or subscription." detail={error ?? "Please retry, or sign out and use the same account you use in Formie."} actions={<><button className="portal-primary" onClick={() => void refreshDashboard()}>Try again</button>{logoutButton}</>} />;
@@ -113,6 +174,10 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
         <span className="portal-kicker">FORMIE ACCOUNT</span>
         <h1>{subscribedBefore ? "Your subscription has ended" : "Open Formie to subscribe"}</h1>
         <p>Your account and saved coaching remain available in the Formie app. {subscribedBefore ? "Open Formie to resubscribe and create new analyses." : "Subscribe in Formie when you are ready to create analyses."}</p>
+        <div className="portal-expired-plans" aria-label="Formie Pro plans">
+          <div><span>MONTHLY</span><strong>$9.99 / month</strong><p>10 analyses each month</p></div>
+          <div><span>ANNUAL</span><strong>$99.99 / year</strong><p>10 analyses each month</p></div>
+        </div>
         {error ? <div className="portal-refresh-error" role="alert"><span>{error}</span><button onClick={() => void refreshDashboard()}>Retry</button></div> : null}
         <div className="portal-expired-actions">
           <a className="portal-primary" href="form://subscription">{subscribedBefore ? "Open Formie to resubscribe" : "Open Formie"}</a>
@@ -123,26 +188,50 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
     </section>;
   }
 
-  const active = subscription.state === "active_renewing" || subscription.state === "active_cancelled";
   const renewing = subscription.state === "active_renewing";
   const cancelled = subscription.state === "active_cancelled";
+  const checkingRenewal = subscription.state === "renewal_pending";
+  const testStore = subscription.sandbox && subscription.store === "test_store";
   const managementUrl = renewing ? subscription.cancelUrl : subscription.renewalUrl;
-  const managementLabel = renewing ? "Cancel Subscription" : active ? "Manage or Resubscribe" : "Resubscribe in the App";
   const used = usage.used ?? 0;
   const limit = usage.limit ?? 10;
   const remaining = usage.remaining ?? 0;
+  const plan = planDetails(subscription);
+  const statusLabel = cancelled ? "Canceled" : checkingRenewal ? "Checking renewal" : "Active";
+  const boundaryLabel = cancelled ? "Access until" : checkingRenewal ? "Paid through" : "Next charge";
+  const provider = storeName(subscription.store);
 
   return <AccountPortalShell onSignOut={() => void logout()} signingOut={busy === "logout"}>
     <main className="portal-dashboard">
-      <header><span className="portal-kicker">FORMIE ACCOUNT</span><h1>Subscription</h1><p>Manage your Formie subscription and plan details.</p></header>
+      <header><span className="portal-kicker">FORMIE ACCOUNT</span><h1>Subscription</h1><p>Manage your Formie plan, usage, and billing.</p></header>
+      {message ? <div className="portal-refresh-success" role="status">{message}</div> : null}
       {error ? <div className="portal-refresh-error" role="alert"><span>{error}</span><button onClick={() => void refreshDashboard()}>Retry</button></div> : null}
       <article className="portal-plan-card">
-        <div className="plan-icon">♛</div><div><span>CURRENT PLAN</span><h2>Formie Pro</h2><b className={`plan-pill ${active ? "active" : "expired"}`}>{cancelled ? "Cancelled" : renewing ? "Active" : "Expired"}</b></div>
-        <div className="plan-date"><span>{cancelled ? "ACCESS ENDS ON" : renewing ? "RENEWS ON" : "ACCESS ENDED"}</span><strong>{date(subscription.paidThrough)}</strong><small>{cancelled ? "You keep access through this date." : renewing ? "You’ll be charged automatically." : "Renew in the Formie app."}</small></div>
+        <div className="plan-overview"><span>CURRENT PLAN</span><h2>{plan.name}</h2><p>{plan.interval}</p><strong className="plan-price">{plan.price}</strong><b className={`plan-pill ${cancelled ? "cancelled" : checkingRenewal ? "pending" : "active"}`}>{statusLabel}</b><small>{limit} analyses included every billing period</small></div>
+        <div className="plan-date"><span>{cancelled ? "ACCESS ENDS" : checkingRenewal ? "PAID THROUGH" : "NEXT BILLING DATE"}</span><strong>{formatDashboardTimestamp(subscription.paidThrough)}</strong><small>{cancelled ? "You can continue using Formie Pro until this time. Your subscription will not renew." : checkingRenewal ? "Formie is verifying the next paid period before adding a new allowance." : `${plan.price.split(" / ")[0]} will be billed automatically through ${provider}.`}</small><em>Billing cycle · {plan.interval}</em></div>
       </article>
-      <article className="portal-usage-card"><div><span>ANALYSES REMAINING</span><h2>{remaining} <small>/ {limit}</small></h2><p>{active ? `Resets ${date(usage.resetsAt)} · ${used} used` : "Available after you resubscribe in the app."}</p></div><UsageMeter remaining={remaining} limit={limit} /></article>
-      <article className="portal-management-row"><div className="manage-icon">⚙</div><div><h2>Manage Subscription</h2><p>{managementUrl ? `Open ${storeName(subscription.store)} to ${renewing ? "cancel or update payment" : "manage or resubscribe"}.` : subscription.store === "test_store" ? "Test Store subscriptions do not have an end-user cancellation page." : "Purchase or restore in the Formie app."}</p></div>{managementUrl ? <a className="portal-manage-action" href={managementUrl}>{managementLabel}</a> : <a className="portal-manage-action" href="form://subscription">{managementLabel}</a>}</article>
-      <footer className="portal-support-line">Questions about your subscription? <a href="/support">Contact support</a></footer>
+      <article className="portal-usage-card">
+        <div className="usage-summary"><span>USAGE THIS PERIOD</span><UsageBar remaining={remaining} limit={limit} /><p>{remaining === 0 ? "No analyses remaining" : `${remaining} analyses remaining`}</p><small>{used} analyses used this billing period</small></div>
+        <div className="usage-boundary"><span>{cancelled ? "ACCESS ENDS ON" : checkingRenewal ? "ALLOWANCE STATUS" : "NEXT RESET"}</span><strong>{checkingRenewal ? "Checking renewal" : formatDashboardTimestamp(cancelled ? subscription.paidThrough : usage.resetsAt)}</strong><small>{cancelled ? (remaining === 0 ? "Resuming renewal does not refill the current period." : "Your current balance remains available until access ends.") : checkingRenewal ? "No new allowance is granted until the paid period is verified." : "A new allowance begins after the paid period renews."}</small></div>
+      </article>
+      <section className="portal-billing-card" aria-labelledby="billing-details-title">
+        <div className="portal-section-heading"><div><span className="portal-kicker">ACCOUNT INFRASTRUCTURE</span><h2 id="billing-details-title">Billing details</h2></div><p>Payments are securely processed by {provider}.</p></div>
+        <dl className="billing-list">
+          <div><dt>Plan</dt><dd>{plan.fullName}</dd></div>
+          <div><dt>Price</dt><dd>{plan.price}</dd></div>
+          <div><dt>Subscription status</dt><dd><span className={`billing-status ${cancelled ? "cancelled" : checkingRenewal ? "pending" : "active"}`}>{statusLabel}</span></dd></div>
+          <div><dt>{boundaryLabel}</dt><dd>{formatDashboardTimestamp(subscription.paidThrough)}</dd></div>
+          <div><dt>Billing provider</dt><dd>{provider}</dd></div>
+        </dl>
+      </section>
+      {cancelled ? <article className="portal-management-card portal-resume-card">
+        <div><span className="portal-kicker">KEEP FORMIE PRO</span><h2>Resume your subscription</h2><p>Your plan won’t renew after {formatDashboardTimestamp(subscription.paidThrough)}. Resume now to keep Formie Pro active after your current period ends.{remaining === 0 ? " Resuming renewal does not refill the current period." : " Your current analysis balance and billing period stay unchanged."}</p></div>
+        <div className="portal-resume-actions">{testStore ? <button className="portal-manage-action portal-primary-action" disabled={Boolean(busy)} onClick={() => void updateTestStoreRenewal("uncancel")}>{busy === "uncancel" ? "Restoring..." : "Resume Subscription →"}</button> : managementUrl ? <><a className="portal-manage-action portal-primary-action" href={managementUrl} rel="noopener noreferrer" target="_blank">Resume Subscription →</a><a className="portal-secondary-action" href={managementUrl} rel="noopener noreferrer" target="_blank">Manage billing →</a></> : <a className="portal-manage-action portal-primary-action" href="form://subscription">Resume Subscription →</a>}</div>
+      </article> : checkingRenewal ? <article className="portal-management-card portal-checking-card"><div><span className="portal-kicker">VERIFYING RENEWAL</span><h2>Checking your subscription</h2><p>Formie is confirming the provider’s next paid period. Your allowance will update only after that period is verified.</p></div></article> : <article className="portal-management-card"><div><span className="portal-kicker">SUBSCRIPTION CONTROLS</span><h2>Manage subscription</h2><p>{testStore ? "Cancel at the end of the current paid period. Your remaining access and analyses stay available until then." : managementUrl ? `Your subscription renews automatically on ${formatDashboardTimestamp(subscription.paidThrough)}. Changes and cancellation are completed securely in ${provider}.` : "Manage this subscription in the Formie app."}</p></div>{testStore ? <button className="portal-manage-action" disabled={Boolean(busy)} onClick={() => void updateTestStoreRenewal("cancel_at_period_end")}>{busy === "cancel" ? "Cancelling..." : "Cancel Subscription"}</button> : managementUrl ? <a className="portal-manage-action" href={managementUrl} rel="noopener noreferrer" target="_blank">Manage in {provider} →</a> : <a className="portal-manage-action" href="form://subscription">Open Formie</a>}</article>}
+      <footer className="portal-billing-footer">
+        <div><strong>Billing history</strong><p>View receipts and payment history through {provider}.</p>{managementUrl ? <a href={managementUrl} rel="noopener noreferrer" target="_blank">View billing history →</a> : <span>Billing history is managed by your subscription provider.</span>}</div>
+        <div><strong>Need help with your subscription?</strong><p>Formie does not store your payment details.</p><a href="/support">Contact support →</a></div>
+      </footer>
     </main>
   </AccountPortalShell>;
 }

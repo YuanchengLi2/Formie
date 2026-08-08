@@ -1,71 +1,127 @@
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import type { BillingPlanCode, PurchaseState } from "@/features/billing/types";
 import { onboardingTheme as theme } from "@/theme/onboarding";
 
 export type PremiumScreenProps = {
   price: string;
+  annualPrice?: string;
   purchaseAvailable: boolean;
+  annualPurchaseAvailable?: boolean;
   busy: boolean;
+  state?: PurchaseState;
   error?: string | null;
+  onBack?: () => void;
   onPurchase: () => void;
+  onPurchasePlan?: (plan: BillingPlanCode) => void;
+  onRetrySync?: () => void;
 };
 
 const benefits = [
-  "10 form analyses per month",
-  "First look into new features",
-  "Premium support",
-  "Complete personalized coaching",
-];
+  ["ANALYSES", "10 analyses / month", "▥"],
+  ["COACHING", "Personalized corrections", "◎"],
+  ["PROGRESS", "Progress tracking", "⌁"],
+] as const;
 
-const premiumArtwork = {
-  dumbbell: require("../../../assets/production/onboarding/extracted/premium/dumbbell.png"),
-  ball: require("../../../assets/production/onboarding/extracted/premium/ball.png"),
-  kettlebell: require("../../../assets/production/onboarding/extracted/premium/kettlebell.png"),
-  athlete: require("../../../assets/production/onboarding/extracted/premium/athlete.png"),
-  plate: require("../../../assets/production/onboarding/extracted/premium/plate.png"),
-  bag: require("../../../assets/production/onboarding/extracted/premium/bag.png"),
-} as const;
+const cardBackground = require("../../../assets/production/paywall/pro-card-background.png");
+const socialProofAvatars = require("../../../assets/production/paywall/social-proof-avatars-hd.png");
 
-export function PremiumScreen({ price, purchaseAvailable, busy, error, onPurchase }: PremiumScreenProps) {
-  const { height, width } = useWindowDimensions();
+export function PremiumScreen({ price, purchaseAvailable, busy, state = "idle", error, onBack, onPurchase, onPurchasePlan, onRetrySync }: PremiumScreenProps) {
   const insets = useSafeAreaInsets();
-  const usableHeight = height - insets.top - insets.bottom;
-  const short = usableHeight < 650;
-  const compact = usableHeight < 800 || width < 360;
-  const ctaHeight = short ? theme.layout.short.ctaHeight : compact ? theme.layout.compact.ctaHeight : theme.layout.regular.ctaHeight;
+  const billingState = state as string;
+  const reconciling = busy || billingState === "purchasing" || billingState === "reconciling";
+  const syncRequired = billingState === "sync_required";
+  const ctaLabel = syncRequired
+    ? "Check purchase"
+    : reconciling
+      ? "Starting…"
+      : `Start monthly — ${price}/mo`;
+  const purchase = () => {
+    if (syncRequired) {
+      onRetrySync?.();
+      return;
+    }
+    if (onPurchasePlan) onPurchasePlan("monthly");
+    else onPurchase();
+  };
+  const ctaDisabled = reconciling || (!purchaseAvailable && !syncRequired);
+
   return <View testID="premium-native-screen" style={[styles.screen, { paddingTop: Math.max(insets.top, 8), paddingBottom: Math.max(insets.bottom, 10) }]}>
-    <StatusBar hidden />
-    <View pointerEvents="none" style={styles.artworkLayer}>
-      <Image testID="premium-art-dumbbell" source={premiumArtwork.dumbbell} contentFit="contain" style={[styles.artwork, styles.dumbbell]} />
-      <Image testID="premium-art-ball" source={premiumArtwork.ball} contentFit="contain" style={[styles.artwork, styles.ball]} />
-      <Image testID="premium-art-kettlebell" source={premiumArtwork.kettlebell} contentFit="contain" style={[styles.artwork, styles.kettlebell]} />
-      <Image testID="premium-art-athlete" source={premiumArtwork.athlete} contentFit="contain" style={[styles.artwork, styles.athlete]} />
-      <Image testID="premium-art-plate" source={premiumArtwork.plate} contentFit="contain" style={[styles.artwork, styles.plate]} />
-      <Image testID="premium-art-bag" source={premiumArtwork.bag} contentFit="contain" style={[styles.artwork, styles.bag]} />
+    <StatusBar style="light" />
+    <View style={styles.header}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Back" disabled={!onBack} onPress={onBack} style={({ pressed }) => [styles.back, { opacity: onBack ? pressed ? 0.65 : 1 : 0 }]}><Text selectable={false} style={styles.backText}>‹</Text></Pressable>
+      <Text selectable style={styles.headerTitle}>Formie plans</Text>
+      <View style={styles.headerSpacer} />
     </View>
-    <ScrollView style={styles.scroller} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}><View style={[styles.content, compact && styles.contentCompact, short && styles.contentShort]}>
-      <View style={styles.heading}><Text style={styles.eyebrow}>YOUR FORM, WITHOUT THE GUESSING</Text><Text style={[styles.title, short && styles.titleShort]}>Get the <Text style={styles.titleGold}>answer</Text> after every set.</Text><Text style={[styles.subtitle, short && styles.subtitleShort]}>Your squat is ready for its next clear correction.</Text></View>
-      <View testID="premium-upright-card" style={[styles.card, compact && styles.cardCompact, short && styles.cardShort]}>
-        <View style={styles.priceRow}><Text style={[styles.price, short && styles.priceShort]}>{price}</Text><Text style={styles.perMonth}> / month</Text></View>
-        <Text style={styles.limit}>10 complete analyses each month</Text>
-        <View style={styles.benefits}>{benefits.map((benefit) => <View key={benefit} style={[styles.benefit, short && styles.benefitShort]}><View style={styles.check}><Text style={styles.checkText}>✓</Text></View><Text style={[styles.benefitText, short && styles.benefitTextShort]}>{benefit}</Text></View>)}</View>
-        <Text style={styles.cancel}>Cancel anytime in your Apple or Google subscription settings. Access continues through your paid period.</Text>
+
+    <ScrollView contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <View testID="premium-pro-card" style={styles.planCard}>
+        <Image testID="premium-pro-card-art" source={cardBackground} contentFit="cover" style={StyleSheet.absoluteFillObject} />
+        <View style={styles.planCardShade} />
+        <View style={styles.planCopy}>
+          <View style={styles.badge}><Text selectable style={styles.badgeStar}>★</Text><Text selectable style={styles.badgeText}>Most popular</Text></View>
+          <Text selectable style={styles.planName}>Pro</Text>
+          <View style={styles.priceRow}><Text selectable style={styles.price}>{price}</Text><Text selectable style={styles.period}>/mo</Text></View>
+          <Text selectable style={styles.description}>For lifters who want better form, better feedback, and faster progress.</Text>
+        </View>
       </View>
-      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : <View style={styles.errorSpace} />}
-    </View></ScrollView>
-    <View style={styles.actions}>
-      <Pressable testID="onboarding-bottom-cta" accessibilityRole="button" accessibilityLabel={busy ? "Starting..." : "Go Now"} accessibilityState={{ disabled: busy || !purchaseAvailable }} disabled={busy || !purchaseAvailable} onPress={onPurchase} style={({ pressed }) => [styles.cta, { height: ctaHeight, opacity: busy || !purchaseAvailable ? 0.5 : pressed ? 0.82 : 1 }]}><View style={styles.ctaBusy}>{busy ? <ActivityIndicator color="#080808" /> : null}<Text style={styles.ctaText}>{busy ? "Starting..." : "Go Now"}</Text></View><Text style={styles.arrow}>→</Text></Pressable>
-    </View>
+
+      <View testID="premium-social-proof" style={styles.socialProof}>
+        <Image accessibilityLabel="Formie lifter community" source={socialProofAvatars} contentFit="contain" style={styles.avatars} />
+        <View style={styles.ratingGroup}><Text selectable={false} style={styles.star}>★</Text><Text selectable style={styles.rating}>4.9/5</Text></View>
+      </View>
+
+      <View style={styles.unlock}>
+        <Text selectable style={styles.unlockTitle}>What you unlock</Text>
+        {benefits.map(([eyebrow, copy, glyph]) => <View key={eyebrow} testID={`premium-benefit-${eyebrow.toLowerCase()}`} style={styles.benefit}><View testID={`premium-benefit-icon-${eyebrow.toLowerCase()}`} style={styles.benefitIcon}><Text selectable={false} style={styles.benefitGlyph}>{glyph}</Text></View><View style={styles.benefitCopy}><Text selectable style={styles.benefitEyebrow}>{eyebrow}</Text><Text selectable style={styles.benefitText}>{copy}</Text></View></View>)}
+      </View>
+
+      <Text selectable style={styles.legal}>Cancel anytime in your Apple or Google subscription settings. Access continues through the paid period. Unused analyses do not carry over.</Text>
+      {error ? <Text selectable accessibilityRole="alert" style={styles.error}>{error}</Text> : <View style={styles.errorSpace} />}
+    </ScrollView>
+
+    <Pressable testID="onboarding-bottom-cta" accessibilityRole="button" accessibilityLabel={ctaLabel} accessibilityState={{ disabled: ctaDisabled }} disabled={ctaDisabled} onPress={purchase} style={({ pressed }) => [styles.cta, { opacity: ctaDisabled ? 0.45 : pressed ? 0.82 : 1 }]}>{reconciling ? <ActivityIndicator color="#080808" /> : null}<Text selectable={false} style={styles.ctaText}>{ctaLabel}</Text></Pressable>
   </View>;
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, overflow: "hidden", backgroundColor: theme.colors.background, paddingHorizontal: 20 }, scroller: { zIndex: 2, flex: 1, width: "100%" }, scrollContent: { flexGrow: 1, justifyContent: "center", paddingVertical: 8 }, content: { width: "100%", maxWidth: 520, alignSelf: "center", justifyContent: "center", gap: 14 }, contentCompact: { gap: 9 }, contentShort: { gap: 5 },
-  artworkLayer: { ...StyleSheet.absoluteFillObject, zIndex: 1 }, artwork: { position: "absolute" }, dumbbell: { width: 145, height: 115, left: -28, top: 24 }, ball: { width: 118, height: 160, right: -32, top: 58 }, kettlebell: { width: 84, height: 155, left: -30, top: "54%" }, athlete: { width: 74, height: 162, right: -18, top: "50%" }, plate: { width: 100, height: 155, right: -35, bottom: 36 }, bag: { width: 126, height: 105, left: -18, bottom: 8 },
-  heading: { gap: 6, paddingHorizontal: 14 }, eyebrow: { color: theme.colors.gold, fontSize: 10, fontWeight: "800", letterSpacing: 2, textAlign: "center" }, title: { color: theme.colors.text, fontSize: 34, lineHeight: 38, fontWeight: "800", letterSpacing: -1, textAlign: "center" }, titleGold: { color: theme.colors.gold }, titleShort: { fontSize: 25, lineHeight: 28 }, subtitle: { color: theme.colors.textMuted, fontSize: 14, lineHeight: 19, textAlign: "center" }, subtitleShort: { fontSize: 11, lineHeight: 14 },
-  card: { width: "100%", borderRadius: 24, borderWidth: 1.5, borderColor: theme.colors.goldMuted, backgroundColor: "#0B0B0A", padding: 20, gap: 12 }, cardCompact: { padding: 15, gap: 8 }, cardShort: { padding: 10, gap: 5 }, priceRow: { flexDirection: "row", alignItems: "flex-end" }, price: { color: theme.colors.text, fontSize: 48, lineHeight: 52, fontWeight: "800", fontVariant: ["tabular-nums"] }, priceShort: { fontSize: 34, lineHeight: 37 }, perMonth: { color: theme.colors.textMuted, fontSize: 14, paddingBottom: 6 }, limit: { color: theme.colors.gold, fontSize: 13, fontWeight: "700" }, benefits: { gap: 3 }, benefit: { minHeight: 38, flexDirection: "row", alignItems: "center", gap: 10, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 7 }, benefitShort: { minHeight: 25, paddingTop: 3 }, check: { width: 21, height: 21, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.gold }, checkText: { color: "#080808", fontSize: 12, fontWeight: "900" }, benefitText: { flex: 1, color: theme.colors.text, fontSize: 13, lineHeight: 17 }, benefitTextShort: { fontSize: 10.5, lineHeight: 13 }, cancel: { color: theme.colors.textMuted, fontSize: 10, lineHeight: 14, textAlign: "center" },
-  error: { minHeight: 18, color: "#FF7C7C", fontSize: 12, textAlign: "center" }, errorSpace: { minHeight: 18 }, actions: { zIndex: 3, width: "100%", maxWidth: 520, alignSelf: "center" }, cta: { width: "100%", borderRadius: 15, backgroundColor: theme.colors.gold, paddingHorizontal: 24, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, ctaBusy: { flexDirection: "row", alignItems: "center", gap: 8 }, ctaText: { color: "#080808", fontSize: 19, fontWeight: "800" }, arrow: { color: "#080808", fontSize: 30, lineHeight: 32 },
+  screen: { flex: 1, backgroundColor: "#050505", paddingHorizontal: 10, gap: 10 },
+  header: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  back: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, borderCurve: "continuous", borderWidth: 1, borderColor: "#292929", backgroundColor: "#111111" },
+  backText: { color: "#F3F1EC", fontSize: 30, lineHeight: 32, marginTop: -2 },
+  headerTitle: { color: "#F5F3EF", fontSize: 17, fontWeight: "800" },
+  headerSpacer: { width: 38 },
+  scrollContent: { gap: 12, paddingVertical: 4, paddingBottom: 18 },
+  planCard: { minHeight: 245, overflow: "hidden", borderRadius: 7, borderCurve: "continuous", backgroundColor: "#C99223" },
+  planCardShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(63, 31, 0, 0.12)" },
+  planCopy: { width: "68%", minHeight: 245, padding: 18, gap: 6 },
+  badge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: "rgba(255,248,222,0.82)" },
+  badgeStar: { color: "#302006", fontSize: 12 },
+  badgeText: { color: "#302006", fontSize: 11, fontWeight: "800" },
+  planName: { color: "#080808", fontSize: 34, lineHeight: 37, fontWeight: "900", marginTop: 2 },
+  priceRow: { flexDirection: "row", alignItems: "flex-end" },
+  price: { color: "#080808", fontSize: 38, lineHeight: 42, fontWeight: "900", fontVariant: ["tabular-nums"] },
+  period: { color: "#2D210D", fontSize: 14, fontWeight: "800", paddingBottom: 6, paddingLeft: 4 },
+  description: { color: "#352409", fontSize: 14, lineHeight: 20, fontWeight: "600", marginTop: 2 },
+  socialProof: { minHeight: 74, width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 18, borderRadius: 6, borderCurve: "continuous", borderWidth: 1, borderColor: "#292929", backgroundColor: "#101010", paddingHorizontal: 12, paddingVertical: 8 },
+  avatars: { width: 142, height: 54 },
+  ratingGroup: { flexDirection: "row", alignItems: "center", gap: 4 },
+  star: { color: "#F3C250", fontSize: 16 },
+  rating: { color: "#F3C250", fontSize: 14, fontWeight: "800" },
+  unlock: { gap: 0 },
+  unlockTitle: { color: "#F3F1EC", fontSize: 14, fontWeight: "800", paddingBottom: 3 },
+  benefit: { minHeight: 70, flexDirection: "row", alignItems: "center", gap: 15, borderTopWidth: 1, borderTopColor: "#292929" },
+  benefitIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#D9A536" },
+  benefitGlyph: { color: "#E7B33C", fontSize: 23, lineHeight: 25, fontWeight: "800" },
+  benefitCopy: { flex: 1, gap: 2 },
+  benefitEyebrow: { color: "#B4882F", fontSize: 9, fontWeight: "900", letterSpacing: 1.1 },
+  benefitText: { color: "#E8E4DB", fontSize: 14, lineHeight: 19 },
+  legal: { color: "#85827C", fontSize: 9.5, lineHeight: 14, textAlign: "center", paddingHorizontal: 12 },
+  error: { minHeight: 18, color: "#FF8A82", fontSize: 12, textAlign: "center" },
+  errorSpace: { minHeight: 18 },
+  cta: { minHeight: 53, flexDirection: "row", gap: 9, alignItems: "center", justifyContent: "center", borderRadius: 6, borderCurve: "continuous", backgroundColor: theme.colors.gold, paddingHorizontal: 16 },
+  ctaText: { color: "#080808", fontSize: 14, fontWeight: "900" },
 });

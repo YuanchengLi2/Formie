@@ -4,7 +4,7 @@ import { createContext, use, useCallback, useEffect, useMemo, useRef, useState, 
 import { useAuth } from "@/features/auth/auth-provider";
 import { supabase } from "@/lib/supabase";
 
-import { getAccessStatus, reserveAnalysis, cancelAnalysisReservation } from "./api";
+import { getAccessStatus, reserveAnalysis, cancelAnalysisReservation, refreshProviderAccess } from "./api";
 import { subscribeAccessMutations, type AccessMutation } from "./access-events";
 import { unknownAccess, type AccessStatus, type AnalysisReservation } from "./types";
 
@@ -26,10 +26,22 @@ export function accessExpiryRefreshDelay(periodEndsAt: string, now = Date.now())
   return Math.min(MAX_TIMER_DELAY_MS, Math.max(0, expiresAt - now + 1_000));
 }
 
+export function accessBoundaryRefreshDelays(access: Pick<AccessStatus, "quotaResetsAt" | "paidThrough">, now = Date.now()): number[] {
+  return [...new Set([access.quotaResetsAt, access.paidThrough]
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => Number.isFinite(new Date(value).getTime()) && new Date(value).getTime() > now)
+    .map((value) => accessExpiryRefreshDelay(value, now)))]
+    .sort((left, right) => left - right);
+}
+
+export function renewalReconciliationDelays(): number[] {
+  return [2_000, 5_000, 10_000, 15_000, 30_000, 30_000];
+}
+
 export function mergeAccessMutation(access: AccessStatus, mutation: AccessMutation): AccessStatus {
   if (access.status !== "active" || mutation.remaining === null) return access;
   const quotaUsed = access.quotaLimit === null ? access.quotaUsed : Math.max(0, access.quotaLimit - mutation.remaining);
-  return { ...access, remaining: mutation.remaining, quotaUsed, canAnalyze: mutation.remaining > 0, periodEndsAt: mutation.periodEndsAt ?? access.periodEndsAt, refreshedAt: new Date().toISOString() };
+  return { ...access, remaining: mutation.remaining, quotaUsed, canAnalyze: mutation.remaining > 0, periodEndsAt: mutation.periodEndsAt ?? access.periodEndsAt, quotaResetsAt: mutation.periodEndsAt ?? access.quotaResetsAt, refreshedAt: new Date().toISOString() };
 }
 
 export function shouldCommitAccessRefresh(requestedUserId: string | null, currentUserId: string | null): boolean {
@@ -71,6 +83,26 @@ export function AccessProvider({ children }: PropsWithChildren) {
       throw failure;
     }
   }, [currentUserId]);
+
+  const reconcileProvider = useCallback(async () => {
+    const requestedUserId = currentUserId;
+    const accessToken = auth.session?.access_token ?? null;
+    if (!requestedUserId || !accessToken) return unknownAccess;
+    try {
+      const next = await refreshProviderAccess(accessToken);
+      if (!shouldCommitAccessRefresh(requestedUserId, identityRef.current)) return next;
+      setAccess(next);
+      setAccessOwnerId(requestedUserId);
+      setStatus("ready");
+      setError(null);
+      return next;
+    } catch (failure) {
+      if (shouldCommitAccessRefresh(requestedUserId, identityRef.current)) {
+        setError(failure instanceof Error ? failure.message : "Subscription status could not be refreshed.");
+      }
+      throw failure;
+    }
+  }, [auth.session?.access_token, currentUserId]);
 
   useEffect(() => {
     if (auth.phase !== "authenticated") {
@@ -117,10 +149,38 @@ export function AccessProvider({ children }: PropsWithChildren) {
   }, [currentUserId, refresh]);
 
   useEffect(() => {
-    if (auth.phase !== "authenticated" || access.status !== "active" || !access.periodEndsAt) return;
-    const timer = setTimeout(() => void refresh().catch(() => undefined), accessExpiryRefreshDelay(access.periodEndsAt));
-    return () => clearTimeout(timer);
-  }, [access.periodEndsAt, access.status, auth.phase, refresh]);
+    if (auth.phase !== "authenticated") return;
+    const timers = accessBoundaryRefreshDelays(access).map((delay) => setTimeout(() => void reconcileProvider().catch(() => undefined), delay));
+    return () => timers.forEach(clearTimeout);
+  }, [access, auth.phase, reconcileProvider]);
+
+  useEffect(() => {
+    if (auth.phase !== "authenticated" || access.lifecycleState !== "renewal_pending") return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let index = 0;
+    const poll = () => {
+      const delays = renewalReconciliationDelays();
+      const delay = delays[index] ?? delays[delays.length - 1] ?? 30_000;
+      timer = setTimeout(() => {
+        void reconcileProvider().then((next) => {
+          if (cancelled || next.lifecycleState !== "renewal_pending") return;
+          index += 1;
+          if (index < delays.length) poll();
+        }).catch(() => {
+          if (!cancelled) {
+            index += 1;
+            if (index < delays.length) poll();
+          }
+        });
+      }, delay);
+    };
+    poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [access.lifecycleState, auth.phase, reconcileProvider]);
 
   const reserve = useCallback(async (kind: "analysis" | "reanalysis", clientRequestId: string, sessionId?: string) => {
     const reservation = await reserveAnalysis(kind, clientRequestId, sessionId);

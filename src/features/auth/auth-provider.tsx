@@ -1,4 +1,4 @@
-import { AppState } from "react-native";
+import { AppState, Platform } from "react-native";
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 import * as Linking from "expo-linking";
 import * as WebBrowser from "expo-web-browser";
@@ -11,6 +11,7 @@ import { parseAuthCallbackUrl } from "./auth-callback";
 import { createAuthService, type AuthClient, type SocialProvider } from "./auth-service";
 import { authSnapshotFromSession, classifyRemoteUserValidationError, withRemoteValidationDeadline } from "./auth-session";
 import { deriveAuthPhase, type AuthPhase } from "./auth-state";
+import { launchOAuth } from "./oauth-launch";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -180,8 +181,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setError(null);
       try {
         const url = await service.createOAuthUrl(provider);
-        const result = await WebBrowser.openAuthSessionAsync(url, redirectUrl);
-        if (result.type !== "success") {
+        const result = await launchOAuth({
+          platform: Platform.OS,
+          providerUrl: url,
+          redirectUrl,
+          navigate: (target) => {
+            if (typeof window === "undefined") throw new Error("The browser sign-in page is unavailable.");
+            window.location.assign(target);
+          },
+          openAuthSession: WebBrowser.openAuthSessionAsync,
+        });
+        if (result.kind === "redirected") return true;
+        if (result.kind === "cancelled") {
           setError(`${provider === "google" ? "Google" : "Apple"} sign-in was closed before it finished. Please try again.`);
           return false;
         }

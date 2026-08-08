@@ -8,6 +8,12 @@ type WebhookEvent = {
   transferred_from?: string[];
   transferred_to?: string[];
   environment?: "PRODUCTION" | "SANDBOX";
+  product_identifier?: string | null;
+  purchased_at?: string | null;
+  expiration_at?: string | null;
+  event_timestamp?: string | null;
+  entitlement_ids?: string[];
+  cancel_reason?: string | null;
 };
 
 const lifecycleEventTypes = new Set(["INITIAL_PURCHASE", "RENEWAL", "CANCELLATION", "UNCANCELLATION", "BILLING_ISSUE", "PRODUCT_CHANGE", "TRANSFER", "EXPIRATION", "TEST"]);
@@ -15,6 +21,7 @@ const lifecycleEventTypes = new Set(["INITIAL_PURCHASE", "RENEWAL", "CANCELLATIO
 export type RevenueCatWebhookDependencies = {
   claimEvent: (event: WebhookEvent) => Promise<"claimed" | "completed">;
   resolveUserId: (appUserId: string, aliases: string[]) => Promise<string | null>;
+  applyEvent: (userId: string, event: WebhookEvent) => Promise<void>;
   loadSubscriber: (userId: string) => Promise<RevenueCatSubscriber>;
   saveSubscriber: (userId: string, subscriber: RevenueCatSubscriber) => Promise<void>;
   completeEvent: (eventId: string) => Promise<void>;
@@ -36,6 +43,12 @@ function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())) : [];
 }
 
+function timestamp(value: unknown): string | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
 export async function revenueCatWebhookHandler(request: Request, dependencies: RevenueCatWebhookDependencies, secret: string): Promise<Response> {
   if (request.method !== "POST") return json({ code: "METHOD_NOT_ALLOWED" }, 405);
   const authorization = request.headers.get("authorization") ?? "";
@@ -51,13 +64,27 @@ export async function revenueCatWebhookHandler(request: Request, dependencies: R
       ...stringArray(candidate.transferred_from),
       ...stringArray(candidate.transferred_to),
     ])];
-    event = { id: candidate.id, type: candidate.type, app_user_id: candidate.app_user_id, aliases, environment: candidate.environment };
+    const raw = candidate as Partial<WebhookEvent> & { product_id?: unknown; purchased_at_ms?: unknown; expiration_at_ms?: unknown; event_timestamp_ms?: unknown; entitlement_ids?: unknown; cancel_reason?: unknown };
+    event = {
+      id: candidate.id,
+      type: candidate.type,
+      app_user_id: candidate.app_user_id,
+      aliases,
+      environment: candidate.environment,
+      product_identifier: typeof raw.product_id === "string" ? raw.product_id : null,
+      purchased_at: timestamp(raw.purchased_at_ms),
+      expiration_at: timestamp(raw.expiration_at_ms),
+      event_timestamp: timestamp(raw.event_timestamp_ms),
+      entitlement_ids: stringArray(raw.entitlement_ids),
+      cancel_reason: typeof raw.cancel_reason === "string" ? raw.cancel_reason : null,
+    };
     if (await dependencies.claimEvent(event) === "completed") return json({ received: true, duplicate: true }, 200);
     const userId = await dependencies.resolveUserId(event.app_user_id, event.aliases ?? []);
     if (!userId) {
       await dependencies.completeEvent(event.id);
       return json({ received: true, mapped: false }, 200);
     }
+    await dependencies.applyEvent(userId, event);
     const subscriber = await dependencies.loadSubscriber(userId);
     await dependencies.saveSubscriber(userId, subscriber);
     await dependencies.completeEvent(event.id);

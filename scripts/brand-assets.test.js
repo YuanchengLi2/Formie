@@ -55,4 +55,23 @@ describe("Formie brand assets", () => {
     expect(config.android.package).toBe("app.form.coach");
     expect(config.ios.infoPlist.NSCameraUsageDescription).toContain("Formie");
   });
+
+  it("exports approved onboarding art from the phone-free reference artwork", () => {
+    const script = fs.readFileSync(path.join(root, "scripts", "extract-approved-onboarding-art.py"), "utf8");
+    expect(script).toContain("reference-artwork");
+    expect(script).not.toContain("APPROVED_ORIGINAL");
+    expect(script).toContain("UnsharpMask");
+    expect(script).toContain('"01-welcome.png": ("01-welcome-illustration.png"');
+    expect(pngSize(path.join(root, "assets", "production", "onboarding", "extracted", "01-welcome-illustration.png")).width).toBeGreaterThanOrEqual(800);
+    expect(pngSize(path.join(root, "assets", "production", "onboarding", "extracted", "03-product-value-illustration.png")).width).toBeGreaterThanOrEqual(800);
+  });
+
+  it("keeps the paywall reference and extracted artwork as separate native assets", () => {
+    const paywall = path.join(root, "assets", "production", "paywall");
+    expect(pngSize(path.join(paywall, "reference", "paywall-reference.png")).width).toBeGreaterThan(300);
+    expect(pngSize(path.join(paywall, "pro-card-background.png")).width).toBeGreaterThan(300);
+    expect(pngSize(path.join(paywall, "social-proof-avatars.png")).width).toBeGreaterThan(100);
+    const extractor = fs.readFileSync(path.join(root, "scripts", "extract-paywall-art.py"), "utf8");
+    expect(extractor).toContain("social-proof-avatars.png");
+  });
 });

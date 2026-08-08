@@ -237,6 +237,7 @@ export class AnalysisApiError extends Error {
     message: string,
     readonly status: number,
     readonly code = "REQUEST_FAILED",
+    readonly sessionId: string | null = null,
   ) {
     super(message);
     this.name = "AnalysisApiError";
@@ -289,6 +290,7 @@ async function requestJson<T>(
       typeof payload.message === "string" ? payload.message : "Request failed",
       response.status,
       typeof payload.code === "string" ? payload.code : "REQUEST_FAILED",
+      typeof payload.sessionId === "string" ? payload.sessionId : null,
     );
   }
 

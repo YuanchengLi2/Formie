@@ -48,4 +48,19 @@ describe("account-scoped approved onboarding", () => {
       answers: { customMilestone: "" },
     });
   });
+
+  it("does not revive a stale account-scoped onboarding flow during ordinary login", () => {
+    const staleScoped = {
+      ...reduceOnboardingState(initialOnboardingState, { type: "step_viewed", step: "age" }),
+      ownerUserId: "user-a",
+    };
+    const login = reduceOnboardingState(initialOnboardingState, { type: "oauth_started", intent: "login" });
+
+    expect(resolveOnboardingStateForUser(staleScoped, login, "user-a")).toMatchObject({
+      ownerUserId: "user-a",
+      currentStep: "welcome",
+      status: "collecting",
+      oauthIntent: null,
+    });
+  });
 });

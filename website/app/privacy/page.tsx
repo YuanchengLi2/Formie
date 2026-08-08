@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <h2>AI and service providers</h2>
       <p>Formie sends the content needed to process your request to contracted infrastructure and AI providers, including hosting, database, analytics, and email-delivery services. These providers process information on our behalf to operate Formie. Automated analysis can be incomplete or wrong and is not medical advice.</p>
       <h2>Retention and account access</h2>
-      <p>Canceling a subscription does not delete your Formie account, recordings, or saved results. After the paid period ends, your account remains available but new analyses require an active subscription. Contact support with questions about retention or account data.</p>
+      <p>Canceling or undoing cancellation does not delete your Formie account, recordings, or saved results. Access continues through the confirmed paid-through date. After that date, native account history remains available, the website subscription dashboard closes, and new analyses require an active subscription. Contact support with questions about retention or account data.</p>
       <h2>Security and your choices</h2>
       <p>We use authentication, access controls, and encryption in transit. No system is perfectly secure. You may review retention settings, delete eligible analyses, change account information, or contact support about account data.</p>
       <h2>Contact</h2>

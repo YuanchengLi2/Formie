@@ -25,7 +25,7 @@
 **Files:**
 - Modify `scripts/extract-approved-onboarding-art.py`
 - Replace assets in `assets/production/onboarding/extracted/`
-- Add paywall cutouts under `assets/production/onboarding/extracted/premium/`
+- Build the paywall with native type and geometric decoration instead of generated cutout artwork.
 
 - [ ] Define explicit source crop rectangles for welcome, product value, why Formie, product demonstration, long-term value, loading, and six premium objects.
 - [ ] Convert only near-black compositing pixels to alpha; retain every visible approved gold, white, gray, green, red, image, border, and texture pixel.

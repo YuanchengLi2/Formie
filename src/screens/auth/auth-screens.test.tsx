@@ -11,50 +11,49 @@ function withSafeArea(node: React.ReactNode) {
 }
 
 describe("account access screens", () => {
-  it("renders a distinct logged-out screen with a gold bar, email login, and Create New Account", async () => {
+  it("matches the approved white account-access reference on login", async () => {
     const onOAuth = jest.fn();
     const onEmail = jest.fn();
     const onCreateAccount = jest.fn();
     const screen = await render(withSafeArea(<SocialLoginScreen onOAuth={onOAuth} onEmail={onEmail} onCreateAccount={onCreateAccount} busyProvider={null} />));
 
-    expect(screen.getByTestId("account-access-gold-bar")).toBeTruthy();
-    expect(screen.getByTestId("account-access-gold-bar")).toHaveStyle({ height: 4 });
+    expect(screen.getByTestId("account-access-top-row")).toBeTruthy();
+    expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#FFFFFF" });
+    expect(screen.getByTestId("account-access-gold-bar")).toHaveStyle({ height: 3, backgroundColor: "#17171B" });
     expect(screen.queryByLabelText("Formie")).toBeNull();
-    expect(screen.getByText("Welcome back. Your coaching history is ready when you are.")).toBeTruthy();
+    expect(screen.queryByText("Welcome back. Your coaching history is ready when you are.")).toBeNull();
     expect(screen.queryByText(/Create or restore|profile stays private/i)).toBeNull();
     expect(screen.getByText("Sign in with Apple")).toBeTruthy();
     expect(screen.getByText("Sign in with Google")).toBeTruthy();
     expect(screen.getByText("Sign in with Email")).toBeTruthy();
     expect(screen.getByText("Create New Account")).toBeTruthy();
     expect(screen.getByTestId("account-access-scroll")).toBeTruthy();
+    expect(screen.getByTestId("provider-apple")).toHaveStyle({ minHeight: 58, backgroundColor: "#000000" });
+    expect(screen.getByTestId("provider-google")).toHaveStyle({ minHeight: 58, backgroundColor: "#FFFFFF" });
+    expect(screen.getByTestId("provider-email")).toHaveStyle({ minHeight: 58, backgroundColor: "#FFFFFF" });
 
     await fireEvent.press(screen.getByText("Create New Account"));
     expect(onCreateAccount).toHaveBeenCalledTimes(1);
   });
 
-  it("requires both real consent checkboxes before any provider can continue", async () => {
+  it("does not require onboarding consent again for returning login", async () => {
     const onOAuth = jest.fn();
     const onEmail = jest.fn();
     const screen = await render(withSafeArea(<SocialLoginScreen onOAuth={onOAuth} onEmail={onEmail} onCreateAccount={jest.fn()} busyProvider={null} />));
 
     const apple = screen.getByLabelText("Sign in with Apple");
-    expect(apple.props.accessibilityState.disabled).toBe(true);
+    expect(apple.props.accessibilityState.disabled).toBe(false);
     await fireEvent.press(apple);
-    expect(onOAuth).not.toHaveBeenCalled();
-
-    await fireEvent.press(screen.getByLabelText("Agree to the Terms of Use"));
-    expect(screen.getByLabelText("Agree to the Terms of Use").props.accessibilityState.checked).toBe(true);
-    expect(screen.getByLabelText("Sign in with Google").props.accessibilityState.disabled).toBe(true);
-
-    await fireEvent.press(screen.getByLabelText("Acknowledge the Privacy Policy"));
-    expect(screen.getByLabelText("Acknowledge the Privacy Policy").props.accessibilityState.checked).toBe(true);
+    expect(onOAuth).toHaveBeenCalledWith("apple");
+    expect(screen.queryByLabelText("Agree to the Terms of Use")).toBeNull();
+    expect(screen.queryByLabelText("Acknowledge the Privacy Policy")).toBeNull();
     await fireEvent.press(screen.getByText("Sign in with Google"));
     await fireEvent.press(screen.getByText("Sign in with Email"));
     expect(onOAuth).toHaveBeenCalledWith("google");
     expect(onEmail).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the thin accent, compact controls, and safe touch targets on the save-account screen", async () => {
+  it("matches the approved white save-progress reference", async () => {
     const screen = await render(withSafeArea(
       <AccountAccessScreen
         mode="onboarding"
@@ -65,16 +64,25 @@ describe("account access screens", () => {
       />,
     ));
 
-    expect(screen.getByText("Save your account")).toBeTruthy();
-    expect(screen.getByText(/225 lb bench/)).toBeTruthy();
-    expect(screen.getByText("Save your account with Apple")).toBeTruthy();
-    expect(screen.getByText("Save your account with Google")).toBeTruthy();
-    expect(screen.getByText("Save your account with Email")).toBeTruthy();
+    expect(screen.getByText("Save your progress")).toBeTruthy();
+    expect(screen.queryByText(/225 lb bench/)).toBeNull();
+    expect(screen.getByText("Sign in with Apple")).toBeTruthy();
+    expect(screen.getByText("Sign in with Google")).toBeTruthy();
+    expect(screen.getByText("Continue with email")).toBeTruthy();
     expect(screen.queryByText("Create New Account")).toBeNull();
-    expect(screen.getByTestId("account-access-gold-bar")).toHaveStyle({ height: 4 });
-    expect(screen.getByTestId("provider-apple")).toHaveStyle({ minHeight: 50 });
-    expect(screen.getByTestId("social-provider-buttons")).toHaveStyle({ gap: 15 });
-    expect(screen.getAllByTestId("account-access-checkbox")[0]).toHaveStyle({ width: 22, height: 22 });
-    expect(screen.getByLabelText("Formie")).toHaveStyle({ width: 82, height: 82 });
+    expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#FFFFFF" });
+    expect(screen.getByTestId("account-access-gold-bar")).toHaveStyle({ height: 3, backgroundColor: "#17171B" });
+    expect(screen.getByTestId("provider-apple")).toHaveStyle({ backgroundColor: "#000000" });
+    expect(screen.getByTestId("account-access-top-row")).toHaveStyle({ flexDirection: "row", gap: 14 });
+    expect(screen.getByTestId("account-access-actions")).toHaveStyle({ width: "100%", maxWidth: 296, alignSelf: "center", marginTop: 116 });
+    expect(screen.getByTestId("provider-apple")).toHaveStyle({ minHeight: 58 });
+    expect(screen.getByTestId("social-provider-buttons")).toHaveStyle({ gap: 22 });
+    const legalCheckbox = screen.getByLabelText("Agree to the Terms of Use and Privacy Policy");
+    expect(legalCheckbox).toHaveStyle({ width: 18, height: 18, backgroundColor: "#FFFFFF" });
+    await fireEvent.press(legalCheckbox);
+    expect(legalCheckbox).toHaveStyle({ width: 18, height: 18, backgroundColor: "#1B1B20" });
+    expect(screen.getByText(/I agree to Formie's Terms of Use and Privacy Policy/)).toBeTruthy();
+    expect(screen.getByText(/Send me tips, new features/)).toBeTruthy();
+    expect(screen.queryByLabelText("Formie")).toBeNull();
   });
 });

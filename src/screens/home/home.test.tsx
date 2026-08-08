@@ -10,15 +10,17 @@ const metrics = {
 };
 
 describe("HomeScreen", () => {
-  it.each(["8 analyses left", "0 analyses left", "Unlimited", "Checking analyses"])("shows %s in the Home header", async (analysisBalanceLabel) => {
-    const screen = await render(<HomeScreen analysisBalanceLabel={analysisBalanceLabel} />);
-    expect(screen.getByText(analysisBalanceLabel)).toBeTruthy();
-    expect(screen.getByLabelText(`Analysis balance: ${analysisBalanceLabel}`)).toBeTruthy();
-  });
-
-  it("shows the live billing reset date beside the remaining balance", async () => {
-    const screen = await render(<HomeScreen analysisBalanceLabel="8 analyses left" analysisResetLabel="Resets Sep 1" />);
-    expect(screen.getByText("Resets Sep 1")).toBeTruthy();
+  it.each([
+    [9, 10, "ready", "9/10", "9 of 10 analyses remaining"],
+    [0, 10, "ready", "0/10", "0 of 10 analyses remaining"],
+    [null, 10, "checking", "—/10", "Analysis balance is being checked"],
+    [0, 10, "expired", "0/10", "Subscription required. 0 of 10 analyses available"],
+    [0, 10, "purchase", "Purchase a subscription to use the app", "Purchase a subscription to use the app"],
+  ] as const)("shows a compact quota bar for %s/%s %s", async (remaining, limit, status, fraction, label) => {
+    const screen = await render(<HomeScreen analysisRemaining={remaining} analysisLimit={limit} analysisStatus={status} />);
+    expect(screen.getByText(fraction)).toBeTruthy();
+    expect(screen.getByLabelText(label)).toBeTruthy();
+    expect(screen.queryByText(/analyses left|resets sep/i)).toBeNull();
   });
 
   it("leaves recording exclusively to the permanent center tab", async () => {

@@ -16,6 +16,9 @@ export default function OnboardingStepRoute() {
     if (step === "create-account" && auth.phase === "authenticated" && onboarding.status === "premium_required") {
       router.replace("/subscription" as Href);
     }
+    if (step === "premium" && onboarding.status === "complete") {
+      router.replace("/(tabs)/(home)" as Href);
+    }
   }, [auth.phase, onboarding.status, router, step]);
   if (!isOnboardingStep(step)) return <Redirect href={"/onboarding/welcome" as Href} />;
   const legal = (() => { try { return getLegalLinks(); } catch { return null; } })();
@@ -31,9 +34,12 @@ export default function OnboardingStepRoute() {
     onAnswerChange={(field, value) => void onboarding.updateAnswer(field, value)} onNext={nextAction} onBack={() => { if (previous) void go(previous); }}
     onLoadingComplete={() => void finishLoading()}
     onOAuth={(provider) => void onboarding.startOAuth("create_account").then(() => auth.signInWithProvider(provider))}
-    onEmail={() => void onboarding.startOAuth("create_account").then(() => router.push("/(auth)/email?intent=onboarding" as Href))}
+    onEmail={() => void onboarding.startOAuth("create_account").then(() => router.push("/email?intent=onboarding" as Href))}
     onRestoreAccount={() => void onboarding.markLoggedOut().then(() => router.replace("/login" as Href))}
+    onSignIn={() => router.replace("/login" as Href)}
     onOpenTerms={() => { if (legal) void Linking.openURL(legal.termsUrl); }} onOpenPrivacy={() => { if (legal) void Linking.openURL(legal.privacyUrl); }}
-    onPurchase={() => void billing.purchase().then((active) => active ? onboarding.completeAccess() : undefined)}
-    price={billing.priceString ?? "—"} purchaseAvailable={Boolean(billing.offering?.packages[0])} busyProvider={auth.signingIn} busy={auth.signingIn !== null || (step === "create-account" && onboarding.status === "profile_sync_required" && profile.status === "loading") || billing.state === "loading" || billing.state === "purchasing" || billing.state === "restoring"} error={profile.error ?? auth.error ?? billing.error} />;
+    onPurchase={() => void billing.purchase("monthly").then((outcome) => outcome === "active" ? onboarding.completeAccess() : undefined)}
+    onPurchasePlan={(plan) => void billing.purchase(plan).then((outcome) => outcome === "active" ? onboarding.completeAccess() : undefined)}
+    price={billing.plans.monthly?.priceString ?? "—"} annualPrice={billing.plans.annual?.priceString ?? "$99.99"}
+    purchaseAvailable={Boolean(billing.plans.monthly)} annualPurchaseAvailable={Boolean(billing.plans.annual)} purchaseState={billing.state} onRetrySync={() => void billing.retryPurchaseSync().then((active) => active ? onboarding.completeAccess() : undefined)} busyProvider={auth.signingIn} busy={auth.signingIn !== null || (step === "create-account" && onboarding.status === "profile_sync_required" && profile.status === "loading") || billing.state === "loading" || billing.state === "purchasing" || billing.state === "reconciling" || billing.state === "restoring"} error={profile.error ?? auth.error ?? billing.error} />;
 }

@@ -1,8 +1,8 @@
 export type RevenueCatEntitlement = { identifier: string; productIdentifier: string | null; purchaseDate: string | null; expirationDate: string | null };
-export type RevenueCatSubscription = { productIdentifier: string; store: string | null; expirationDate: string | null; unsubscribeDetectedAt: string | null; sandbox: boolean };
+export type RevenueCatSubscription = { productIdentifier: string; store: string | null; purchaseDate?: string | null; originalPurchaseDate?: string | null; expirationDate: string | null; unsubscribeDetectedAt: string | null; ownershipType?: string | null; sandbox: boolean };
 export type RevenueCatSubscriber = { appUserId: string; entitlements: RevenueCatEntitlement[]; subscriptions?: RevenueCatSubscription[]; managementUrl?: string | null };
 
-type RevenueCatPayload = { subscriber?: { management_url?: unknown; entitlements?: Record<string, { product_identifier?: unknown; purchase_date?: unknown; expires_date?: unknown }>; subscriptions?: Record<string, { store?: unknown; expires_date?: unknown; unsubscribe_detected_at?: unknown; is_sandbox?: unknown }> } };
+type RevenueCatPayload = { subscriber?: { management_url?: unknown; entitlements?: Record<string, { product_identifier?: unknown; purchase_date?: unknown; expires_date?: unknown }>; subscriptions?: Record<string, { store?: unknown; purchase_date?: unknown; original_purchase_date?: unknown; expires_date?: unknown; unsubscribe_detected_at?: unknown; ownership_type?: unknown; is_sandbox?: unknown }> } };
 const text = (value: unknown) => typeof value === "string" && value.length > 0 ? value : null;
 
 export function parseRevenueCatSubscriber(appUserId: string, payload: RevenueCatPayload): RevenueCatSubscriber {
@@ -11,7 +11,7 @@ export function parseRevenueCatSubscriber(appUserId: string, payload: RevenueCat
     appUserId,
     managementUrl: text(raw?.management_url),
     entitlements: Object.entries(raw?.entitlements ?? {}).map(([identifier, item]) => ({ identifier, productIdentifier: text(item.product_identifier), purchaseDate: text(item.purchase_date), expirationDate: text(item.expires_date) })),
-    subscriptions: Object.entries(raw?.subscriptions ?? {}).map(([productIdentifier, item]) => ({ productIdentifier, store: text(item.store), expirationDate: text(item.expires_date), unsubscribeDetectedAt: text(item.unsubscribe_detected_at), sandbox: item.is_sandbox === true })),
+    subscriptions: Object.entries(raw?.subscriptions ?? {}).map(([productIdentifier, item]) => ({ productIdentifier, store: text(item.store), purchaseDate: text(item.purchase_date), originalPurchaseDate: text(item.original_purchase_date), expirationDate: text(item.expires_date), unsubscribeDetectedAt: text(item.unsubscribe_detected_at), ownershipType: text(item.ownership_type), sandbox: item.is_sandbox === true })),
   };
 }
 
@@ -29,7 +29,11 @@ export function resolveRevenueCatEntitlement(subscriber: RevenueCatSubscriber, e
   return { status: active ? "active" : "expired", entitlementId: candidate?.identifier ?? entitlementId, productIdentifier: candidate?.productIdentifier ?? null, purchaseDate: candidate?.purchaseDate ?? null, expirationDate: candidate?.expirationDate ?? null };
 }
 
-export type SubscriptionState = { state: "active_renewing" | "active_cancelled" | "expired" | "not_subscribed"; productIdentifier: string | null; store: string | null; paidThrough: string | null; cancelUrl: string | null; renewalUrl: string | null; sandbox: boolean };
+export type SubscriptionState = { state: "active_renewing" | "active_cancelled" | "renewal_pending" | "expired" | "not_subscribed"; planCode: "monthly" | "annual" | null; willRenew: boolean; billingPeriodStart: string | null; productIdentifier: string | null; store: string | null; paidThrough: string | null; cancelUrl: string | null; renewalUrl: string | null; sandbox: boolean };
+export function planCodeForProduct(productIdentifier: string | null): "monthly" | "annual" | null {
+  if (!productIdentifier) return null;
+  return /year|annual/i.test(productIdentifier) ? "annual" : "monthly";
+}
 function storeFallback(store: string | null): string | null {
   if (store === "app_store" || store === "mac_app_store") return "https://apps.apple.com/account/subscriptions";
   if (store === "play_store") return "https://play.google.com/store/account/subscriptions";
@@ -48,6 +52,9 @@ export function resolveSubscriptionState(subscriber: RevenueCatSubscriber, now =
     const entitlementActive = Boolean(historicalEntitlement) && (!Number.isFinite(entitlementEnd) || entitlementEnd > now.getTime());
     return {
       state: historicalEntitlement ? (entitlementActive ? "active_renewing" : "expired") : "not_subscribed",
+      planCode: planCodeForProduct(historicalEntitlement?.productIdentifier ?? null),
+      willRenew: Boolean(historicalEntitlement && entitlementActive),
+      billingPeriodStart: historicalEntitlement?.purchaseDate ?? null,
       productIdentifier: historicalEntitlement?.productIdentifier ?? null,
       store: null,
       paidThrough: historicalEntitlement?.expirationDate ?? null,
@@ -59,7 +66,7 @@ export function resolveSubscriptionState(subscriber: RevenueCatSubscriber, now =
   const end = selected.expirationDate ? new Date(selected.expirationDate).getTime() : Number.NaN;
   const active = !Number.isFinite(end) || end > now.getTime();
   const state = active ? (selected.unsubscribeDetectedAt ? "active_cancelled" : "active_renewing") : "expired";
-  return { state, productIdentifier: selected.productIdentifier, store: selected.store, paidThrough: selected.expirationDate, cancelUrl: state === "active_renewing" ? subscriber.managementUrl ?? storeFallback(selected.store) : null, renewalUrl: state === "expired" || state === "active_cancelled" ? subscriber.managementUrl ?? storeFallback(selected.store) : null, sandbox: selected.sandbox };
+  return { state, planCode: planCodeForProduct(selected.productIdentifier), willRenew: state === "active_renewing", billingPeriodStart: selected.purchaseDate ?? subscriber.entitlements.find((item) => item.productIdentifier === selected.productIdentifier)?.purchaseDate ?? null, productIdentifier: selected.productIdentifier, store: selected.store, paidThrough: selected.expirationDate, cancelUrl: state === "active_renewing" ? subscriber.managementUrl ?? storeFallback(selected.store) : null, renewalUrl: state === "expired" || state === "active_cancelled" ? subscriber.managementUrl ?? storeFallback(selected.store) : null, sandbox: selected.sandbox };
 }
 
 export async function fetchRevenueCatSubscriber(appUserId: string, secretApiKey = Deno.env.get("REVENUECAT_SECRET_API_KEY") ?? ""): Promise<RevenueCatSubscriber> {

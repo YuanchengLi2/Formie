@@ -1,7 +1,13 @@
 import { friendlyPurchaseError } from "./billing-errors";
 import { resolveEntitlement } from "./entitlement-resolution";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { isCurrentPurchaseOperation, resolvePurchaseOutcome } from "./purchase-reconciliation";
+import type { BillingCustomerInfo } from "./types";
+
+const activeCustomer: BillingCustomerInfo = {
+  activeEntitlementIds: ["formie_pro"],
+  originalAppUserId: "user-1",
+  subscription: null,
+};
 
 describe("billing provider purchase messaging", () => {
   it("treats a store cancellation as a silent idle return", () => {
@@ -27,10 +33,15 @@ describe("entitlement resolution", () => {
   });
 });
 
-describe("billing synchronization wiring", () => {
-  it("reconciles RevenueCat customer-info listener updates and guards identity changes", () => {
-    const source = readFileSync(resolve(__dirname, "billing-provider.tsx"), "utf8");
-    expect(source).toContain("purchasesClient.subscribeCustomerInfo");
-    expect(source).toContain("reconciliationGeneration");
+describe("purchase lifecycle reconciliation", () => {
+  it("activates only after both CustomerInfo and the server snapshot are active", () => {
+    expect(resolvePurchaseOutcome(activeCustomer, "formie_pro", true)).toBe("active");
+    expect(resolvePurchaseOutcome(activeCustomer, "formie_pro", false)).toBe("sync_required");
+    expect(resolvePurchaseOutcome({ ...activeCustomer, activeEntitlementIds: [] }, "formie_pro", true)).toBe("failed");
+  });
+
+  it("keeps late SDK results tied to their original operation", () => {
+    expect(isCurrentPurchaseOperation("purchase-2", "purchase-1")).toBe(false);
+    expect(isCurrentPurchaseOperation("purchase-2", "purchase-2")).toBe(true);
   });
 });

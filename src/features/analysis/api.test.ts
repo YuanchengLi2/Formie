@@ -255,6 +255,11 @@ describe("analysis API", () => {
     expect(uploadRequest.headers.Authorization).toBeUndefined();
   });
 
+  it("preserves the existing session ID from an analysis-pending conflict", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ code: "ANALYSIS_PENDING", message: "An analysis is already in progress", sessionId: "session-live" }), { status: 409, headers: { "Content-Type": "application/json" } }));
+    await expect(createAnalysisSession({ accessToken: "jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, declaration })).rejects.toMatchObject({ code: "ANALYSIS_PENDING", status: 409, sessionId: "session-live" });
+  });
+
   it("passes the native File directly as the streaming upload body", async () => {
     const fetcher = jest.fn().mockResolvedValue(new Response(null, { status: 200 }));
 

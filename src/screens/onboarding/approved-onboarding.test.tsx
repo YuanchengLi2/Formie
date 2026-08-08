@@ -1,9 +1,9 @@
-import { act, fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render, within } from "@testing-library/react-native";
 import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 
 import { initialOnboardingAnswers, type OnboardingStep } from "@/features/onboarding/types";
 
-import { ApprovedOnboardingScreen, getOnboardingDensity, type ApprovedOnboardingScreenProps } from "./approved-onboarding";
+import { ApprovedOnboardingScreen, getApprovedArtworkSize, getOnboardingDensity, type ApprovedOnboardingScreenProps } from "./approved-onboarding";
 
 const mockSelectionAsync = jest.fn().mockResolvedValue(undefined);
 const mockImpactAsync = jest.fn().mockResolvedValue(undefined);
@@ -27,8 +27,11 @@ async function renderStep(step: OnboardingStep, overrides: Partial<ApprovedOnboa
     onOpenTerms: jest.fn(),
     onOpenPrivacy: jest.fn(),
     onPurchase: jest.fn(),
+    onPurchasePlan: jest.fn(),
     price: "$9.99",
+    annualPrice: "$99.99",
     purchaseAvailable: true,
+    annualPurchaseAvailable: true,
     busy: false,
     ...overrides,
   };
@@ -63,8 +66,8 @@ describe("approved onboarding screen", () => {
     ["training-frequency", "How often do you train?"],
     ["custom-milestone", "What goal are you working toward?"],
     ["acquisition-source", "Where did you hear about Formie?"],
-    ["create-account", "Save your account"],
-    ["premium", "Get the answer after every set."],
+    ["create-account", "Save your progress"],
+    ["premium", "Formie plans"],
   ] as const)("renders the approved %s content without a pictured phone frame", async (step, copy) => {
     const { screen } = await renderStep(step);
 
@@ -72,7 +75,12 @@ describe("approved onboarding screen", () => {
     expect(screen.queryByTestId("phone-frame")).toBeNull();
   });
 
-  it.each(["welcome", "product-value", "why-formie", "product-demonstration", "long-term-value", "loading"] as const)("renders native copy around the exact illustration-only %s artwork", async (step) => {
+  it("removes the redundant product-demonstration close copy", async () => {
+    const { screen } = await renderStep("product-demonstration");
+    expect(screen.queryByText("See what happened. Know what changes.")).toBeNull();
+  });
+
+  it.each(["product-value", "why-formie", "product-demonstration", "long-term-value", "loading"] as const)("renders native copy around the phone-free %s artwork", async (step) => {
     const { screen } = await renderStep(step);
     const image = screen.getByTestId(`approved-illustration-${step}`);
     expect(image.props.contentFit).toBe("contain");
@@ -94,12 +102,47 @@ describe("approved onboarding screen", () => {
     expect(age.props.onBack).toHaveBeenCalledTimes(1);
   });
 
-  it("renders Welcome from native copy and the approved illustration cutout", async () => {
+  it("renders Welcome from the exact approved frame-free composition", async () => {
     const { screen } = await renderStep("welcome");
 
     const image = screen.getByTestId("approved-illustration-welcome");
     expect(image.props.contentFit).toBe("contain");
+    expect(screen.queryByTestId("welcome-native-artwork")).toBeNull();
     expect(screen.queryByLabelText("Welcome lifting artwork")).toBeNull();
+  });
+
+  it("shows a white Sign in button on the welcome homepage", async () => {
+    const onSignIn = jest.fn();
+    const { screen } = await renderStep("welcome", { onSignIn });
+    const button = screen.getByRole("button", { name: "Sign in" });
+    expect(button).toHaveStyle({ backgroundColor: "#FFFFFF" });
+    await fireEvent.press(button);
+    expect(onSignIn).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [375, 667],
+    [390, 844],
+    [430, 932],
+  ])("bounds every approved illustration inside a %sx%s phone", (width, height) => {
+    for (const step of ["welcome", "product-value", "why-formie", "product-demonstration", "long-term-value"] as const) {
+      const size = getApprovedArtworkSize(step, width, height);
+      expect(size.width).toBeLessThanOrEqual(width - 32);
+      const heightLimit = step === "product-value" || step === "product-demonstration" ? 0.64 : 0.58;
+      expect(size.height).toBeLessThanOrEqual(height * heightLimit);
+      expect(size.width).toBeGreaterThan(0);
+      expect(size.height).toBeGreaterThan(0);
+    }
+  });
+
+  it("renders the second-page and decoded-lift artwork prominently on a standard phone", () => {
+    const productValue = getApprovedArtworkSize("product-value", 390, 844);
+    const decodedLift = getApprovedArtworkSize("product-demonstration", 390, 844);
+
+    expect(productValue.width).toBeGreaterThanOrEqual(340);
+    expect(productValue.height).toBeGreaterThanOrEqual(470);
+    expect(decodedLift.width).toBeGreaterThanOrEqual(335);
+    expect(decodedLift.height).toBeGreaterThanOrEqual(500);
   });
 
   it.each([
@@ -208,15 +251,21 @@ describe("approved onboarding screen", () => {
     expect(screen.getByTestId("onboarding-scroll-body")).toBeTruthy();
   });
 
-  it("requires both legal consent checkboxes before saving with a provider", async () => {
+  it("requires legal consent but keeps marketing optional before saving with a provider", async () => {
     const { screen, props } = await renderStep("create-account");
     expect(screen.queryAllByRole("checkbox")).toHaveLength(2);
-    expect(screen.getByRole("button", { name: "Save your account with Apple" }).props.accessibilityState.disabled).toBe(true);
-    await fireEvent.press(screen.getByLabelText("Agree to the Terms of Use"));
-    await fireEvent.press(screen.getByLabelText("Acknowledge the Privacy Policy"));
-    await fireEvent.press(screen.getByRole("button", { name: "Save your account with Apple" }));
+    expect(screen.getByRole("button", { name: "Sign in with Apple" }).props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(screen.getByLabelText("Agree to the Terms of Use and Privacy Policy"));
+    await fireEvent.press(screen.getByRole("button", { name: "Sign in with Apple" }));
     expect(props.onAnswerChange).toHaveBeenCalledWith("acceptedPrivacy", true);
+    expect(props.onAnswerChange).not.toHaveBeenCalledWith("marketingOptIn", true);
     expect(props.onOAuth).toHaveBeenCalledWith("apple");
+  });
+
+  it("keeps legal links outside the consent checkbox targets", async () => {
+    const { screen } = await renderStep("create-account");
+    expect(within(screen.getByLabelText("Agree to the Terms of Use and Privacy Policy")).queryByRole("link")).toBeNull();
+    expect(within(screen.getByLabelText("Receive Formie tips and offers")).queryByRole("link")).toBeNull();
   });
 
   it("provides haptics for navigation, options, and wheel selections", async () => {
@@ -270,7 +319,7 @@ describe("approved onboarding screen", () => {
     await account.screen.unmount();
 
     const premium = await renderStep("premium", { busy: true, error: "The purchase could not be completed." });
-    expect(premium.screen.getByText("Starting...")).toBeTruthy();
+    expect(premium.screen.getByText("Starting…")).toBeTruthy();
     expect(premium.screen.getByRole("alert")).toHaveTextContent("The purchase could not be completed.");
   });
 
@@ -316,18 +365,17 @@ describe("approved onboarding screen", () => {
   it("offers Apple, Google, and Email on the shared account screen", async () => {
     const { screen, props } = await renderStep("create-account", { answers: { ...initialOnboardingAnswers, acceptedPrivacy: true } });
 
-    await fireEvent.press(screen.getByLabelText("Agree to the Terms of Use"));
-    await fireEvent.press(screen.getByLabelText("Acknowledge the Privacy Policy"));
-    await fireEvent.press(screen.getByText("Save your account with Apple"));
-    await fireEvent.press(screen.getByText("Save your account with Google"));
-    await fireEvent.press(screen.getByText("Save your account with Email"));
+    await fireEvent.press(screen.getByLabelText("Agree to the Terms of Use and Privacy Policy"));
+    await fireEvent.press(screen.getByText("Sign in with Apple"));
+    await fireEvent.press(screen.getByText("Sign in with Google"));
+    await fireEvent.press(screen.getByText("Continue with email"));
 
     expect(props.onOAuth).toHaveBeenNthCalledWith(1, "apple");
     expect(props.onOAuth).toHaveBeenNthCalledWith(2, "google");
     expect(props.onEmail).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("Restore account")).toBeNull();
     expect(screen.queryByLabelText("Password")).toBeNull();
-    expect(screen.getByText("Save your account with Email")).toBeTruthy();
+    expect(screen.getByText("Continue with email")).toBeTruthy();
   });
 
   it("uses the live premium price and purchase action without a skip", async () => {
@@ -336,29 +384,55 @@ describe("approved onboarding screen", () => {
     expect(screen.getByText("$12.49")).toBeTruthy();
     expect(screen.queryByText("Skip")).toBeNull();
     expect(screen.queryByText("Restore Purchase")).toBeNull();
-    await fireEvent.press(screen.getByRole("button", { name: "Go Now" }));
-    expect(props.onPurchase).toHaveBeenCalledTimes(1);
+    await fireEvent.press(screen.getByRole("button", { name: "Start monthly — $12.49/mo" }));
+    expect(props.onPurchasePlan).toHaveBeenCalledWith("monthly");
   });
 
   it("disables purchase when RevenueCat has no live monthly package", async () => {
     const { screen, props } = await renderStep("premium", { price: "Unavailable", purchaseAvailable: false });
-    const purchaseButton = screen.getByRole("button", { name: "Go Now" });
+    const purchaseButton = screen.getByRole("button", { name: "Start monthly — Unavailable/mo" });
 
     expect(purchaseButton.props.accessibilityState.disabled).toBe(true);
     await fireEvent.press(purchaseButton);
-    expect(props.onPurchase).not.toHaveBeenCalled();
+    expect(props.onPurchasePlan).not.toHaveBeenCalled();
   });
 
-  it("uses an upright native premium card at the approved sandbox price", async () => {
+  it("uses the supplied monthly-only paywall composition", async () => {
     const { screen } = await renderStep("premium", { price: "$9.99" });
 
     expect(screen.queryByLabelText("Approved Formie premium design")).toBeNull();
-    expect(screen.getByTestId("premium-upright-card")).not.toHaveStyle({ transform: expect.anything() });
+    expect(screen.getByTestId("premium-pro-card")).toBeTruthy();
+    expect(screen.getByTestId("premium-social-proof")).toBeTruthy();
     expect(screen.getByText("$9.99")).toBeTruthy();
-    for (const decoration of ["dumbbell", "ball", "kettlebell", "athlete", "plate", "bag"]) {
-      expect(screen.getByTestId(`premium-art-${decoration}`)).toBeTruthy();
-    }
+    expect(screen.getByText("4.9/5")).toBeTruthy();
+    expect(screen.queryByText("Trusted by 1,000+ lifters")).toBeNull();
+    expect(screen.getByTestId("premium-pro-card-art")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Monthly" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Yearly" })).toBeNull();
+    expect(screen.queryByText("$99.99")).toBeNull();
+    expect(screen.queryByText("/year")).toBeNull();
     expect(screen.queryByTestId("approved-premium-screenshot")).toBeNull();
+  });
+
+  it("keeps the review strip and benefit rows large and readable", async () => {
+    const { screen } = await renderStep("premium");
+
+    expect(screen.getByTestId("premium-social-proof").props.style).toEqual(expect.objectContaining({ minHeight: 74 }));
+    expect(screen.getByTestId("premium-benefit-analyses").props.style).toEqual(expect.objectContaining({ minHeight: 70 }));
+    expect(screen.getByTestId("premium-benefit-icon-analyses").props.style).toEqual(expect.objectContaining({ width: 42, height: 42 }));
+  });
+
+  it("uses the removed trust copy space for a larger gold plan card", async () => {
+    const { screen } = await renderStep("premium");
+
+    expect(screen.getByTestId("premium-pro-card").props.style).toEqual(expect.objectContaining({ minHeight: 245 }));
+    expect(screen.queryByText("Trusted by 1,000+ lifters")).toBeNull();
+  });
+
+  it("always purchases the monthly package", async () => {
+    const { screen, props } = await renderStep("premium");
+    await fireEvent.press(screen.getByRole("button", { name: "Start monthly — $9.99/mo" }));
+    expect(props.onPurchasePlan).toHaveBeenCalledWith("monthly");
   });
 });
 

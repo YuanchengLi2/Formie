@@ -1,43 +1,30 @@
-"""Extract exact approved raster art for native onboarding screens.
+"""Export the approved phone-free onboarding artwork for native screens.
 
-The source captures are the visual source of truth. This script only crops and
-makes their dark page background transparent; it never redraws, regenerates,
-resizes, sharpens, or paraphrases the approved artwork.
+The reference-artwork PNGs are already isolated from the phone screenshot
+chrome. This script only applies deterministic tight crops, background cleanup,
+density resizing, and light sharpening; it never redraws the artwork.
 """
 
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 
 ROOT = Path(__file__).resolve().parents[1]
-FRAME_FREE = ROOT / "assets" / "production" / "onboarding" / "approved-frame-free"
-APPROVED = ROOT / "assets" / "production" / "onboarding" / "approved"
+REFERENCE_ARTWORK = ROOT / "assets" / "production" / "onboarding" / "reference-artwork"
+LEGACY_ARTWORK = ROOT / "assets" / "production" / "onboarding" / "approved-original"
 OUTPUT = ROOT / "assets" / "production" / "onboarding" / "extracted"
-PREMIUM_OUTPUT = OUTPUT / "premium"
 
-# Coordinates are measured against the approved source rasters. They isolate
-# only the illustration and exclude device chrome, page copy, and screenshot CTA.
+# Coordinates are measured against the phone-free reference rasters. They
+# remove only stray reference-page copy or empty margins around the artwork.
 ILLUSTRATION_CROPS = {
-    "01-welcome.png": ("01-welcome-illustration.png", (55, 205, 566, 655)),
-    "03-product-value.png": ("03-product-value-illustration.png", (0, 445, 621, 1355)),
-    "06-why-formie.png": ("06-why-formie-illustration.png", (0, 535, 621, 1245)),
-    "09-product-demonstration.png": ("09-product-demonstration-illustration.png", (0, 480, 621, 1365)),
-    "14-long-term-value.png": ("14-long-term-value-illustration.png", (0, 480, 621, 1295)),
-    "15-loading.png": ("15-loading-illustration.png", (200, 425, 421, 660)),
+    "01-welcome.png": ("01-welcome-illustration.png", (130, 300, 723, 1000), 1024),
+    "product-value.png": ("03-product-value-illustration.png", (0, 0, 621, 875), 1024),
+    "personalized-coaching.png": ("06-why-formie-illustration.png", (0, 0, 621, 720), 1024),
+    "analysis-demonstration.png": ("09-product-demonstration-illustration.png", (0, 55, 621, 925), 1024),
+    "progress-history.png": ("14-long-term-value-illustration.png", (0, 0, 621, 825), 1024),
+    "15-loading.png": ("15-loading-illustration.png", (274, 539, 578, 837), 512),
 }
-
-# The premium page uses the exact approved objects as independent decorative
-# layers so the price and purchase controls remain native and live.
-PREMIUM_CROPS = {
-    "dumbbell.png": (0, 110, 335, 370),
-    "ball.png": (645, 175, 853, 445),
-    "kettlebell.png": (0, 990, 145, 1275),
-    "athlete.png": (708, 895, 853, 1210),
-    "plate.png": (670, 1360, 853, 1645),
-    "bag.png": (490, 1638, 790, 1844),
-}
-
 
 def remove_page_background(image: Image.Image) -> Image.Image:
     """Remove only near-black page pixels with a soft edge transition."""
@@ -54,22 +41,20 @@ def remove_page_background(image: Image.Image) -> Image.Image:
     return result
 
 
-def export_crop(source_path: Path, bounds: tuple[int, int, int, int], output_path: Path) -> None:
+def export_crop(source_path: Path, bounds: tuple[int, int, int, int], output_path: Path, target_width: int) -> None:
     source = Image.open(source_path).convert("RGBA")
-    cropped = source.crop(bounds)
-    remove_page_background(cropped).save(output_path, optimize=True)
+    cropped = remove_page_background(source.crop(bounds))
+    target_height = round(cropped.height * target_width / cropped.width)
+    density_ready = cropped.resize((target_width, target_height), Image.Resampling.LANCZOS)
+    density_ready = density_ready.filter(ImageFilter.UnsharpMask(radius=0.8, percent=115, threshold=3))
+    density_ready.save(output_path, optimize=True)
 
 
 def extract() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    PREMIUM_OUTPUT.mkdir(parents=True, exist_ok=True)
-
-    for source_name, (output_name, bounds) in ILLUSTRATION_CROPS.items():
-        export_crop(FRAME_FREE / source_name, bounds, OUTPUT / output_name)
-
-    premium_source = APPROVED / "17-premium.png"
-    for output_name, bounds in PREMIUM_CROPS.items():
-        export_crop(premium_source, bounds, PREMIUM_OUTPUT / output_name)
+    for source_name, (output_name, bounds, target_width) in ILLUSTRATION_CROPS.items():
+        source_root = LEGACY_ARTWORK if source_name in {"01-welcome.png", "15-loading.png"} else REFERENCE_ARTWORK
+        export_crop(source_root / source_name, bounds, OUTPUT / output_name, target_width)
 
 
 if __name__ == "__main__":

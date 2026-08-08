@@ -1,7 +1,8 @@
 import { ensureAnalysisAccess } from "./ensure-analysis-access";
-import type { AccessStatus } from "./types";
+import { unknownAccess, type AccessStatus } from "./types";
 
 const active: AccessStatus = {
+  ...unknownAccess,
   status: "active",
   canAnalyze: true,
   quotaUsed: 1,
@@ -24,5 +25,10 @@ describe("analysis access resolution", () => {
   it("rejects only a confirmed access denial", async () => {
     const expired = { ...active, status: "expired" as const, canAnalyze: false };
     await expect(ensureAnalysisAccess({ status: "ready", access: expired, refresh: jest.fn() })).rejects.toThrow("active Formie subscription");
+  });
+
+  it("explains that a canceled account ends instead of implying a normal reset", async () => {
+    const canceled = { ...active, lifecycleState: "active_cancelled" as const, canAnalyze: false, remaining: 0, paidThrough: "2026-09-01T08:56:00Z", quotaResetsAt: "2026-09-01T08:56:00Z" };
+    await expect(ensureAnalysisAccess({ status: "ready", access: canceled, refresh: jest.fn() })).rejects.toThrow(/access ends|does not refill/i);
   });
 });

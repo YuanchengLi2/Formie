@@ -18,6 +18,7 @@ describe("revenueCatWebhookHandler", () => {
     const dependencies = {
       claimEvent: jest.fn().mockResolvedValue("claimed"),
       resolveUserId: jest.fn().mockResolvedValue("8e6dbfc0-23c9-4a8a-a232-273c4f48c161"),
+      applyEvent: jest.fn().mockResolvedValue(undefined),
       loadSubscriber: jest.fn().mockResolvedValue({ appUserId: "8e6dbfc0-23c9-4a8a-a232-273c4f48c161", entitlements: [] }),
       saveSubscriber: jest.fn().mockResolvedValue(undefined),
       completeEvent: jest.fn().mockResolvedValue(undefined),
@@ -26,8 +27,28 @@ describe("revenueCatWebhookHandler", () => {
     const response = await revenueCatWebhookHandler(request(event), dependencies, "secret");
     expect(response.status).toBe(200);
     expect(dependencies.loadSubscriber).toHaveBeenCalledWith("8e6dbfc0-23c9-4a8a-a232-273c4f48c161");
+    expect(dependencies.applyEvent).toHaveBeenCalledWith("8e6dbfc0-23c9-4a8a-a232-273c4f48c161", expect.objectContaining({ id: "evt-1", type: "RENEWAL" }));
+    expect(dependencies.applyEvent.mock.invocationCallOrder[0]).toBeLessThan(dependencies.loadSubscriber.mock.invocationCallOrder[0]);
     expect(dependencies.saveSubscriber).toHaveBeenCalledTimes(1);
     expect(dependencies.completeEvent).toHaveBeenCalledWith("evt-1");
+  });
+
+  it("parses cancellation and uncancellation transaction fields before subscriber reconciliation", async () => {
+    const dependencies = {
+      claimEvent: jest.fn().mockResolvedValue("claimed"), resolveUserId: jest.fn().mockResolvedValue("8e6dbfc0-23c9-4a8a-a232-273c4f48c161"),
+      applyEvent: jest.fn().mockResolvedValue(undefined), loadSubscriber: jest.fn().mockResolvedValue({ appUserId: "u1", entitlements: [] }), saveSubscriber: jest.fn(), completeEvent: jest.fn(), failEvent: jest.fn(),
+    };
+    const response = await revenueCatWebhookHandler(request({ event: { ...event.event, id: "uncancel", type: "UNCANCELLATION", product_id: "formie_monthly", purchased_at_ms: 1786058836000, expiration_at_ms: 1786059136000, event_timestamp_ms: 1786058896000, entitlement_ids: ["formie_pro"], environment: "SANDBOX" } }), dependencies as never, "secret");
+    expect(response.status).toBe(200);
+    expect(dependencies.applyEvent).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      type: "UNCANCELLATION",
+      product_identifier: "formie_monthly",
+      environment: "SANDBOX",
+      entitlement_ids: ["formie_pro"],
+      purchased_at: new Date(1786058836000).toISOString(),
+      expiration_at: new Date(1786059136000).toISOString(),
+      event_timestamp: new Date(1786058896000).toISOString(),
+    }));
   });
 
   it("returns success without reprocessing a completed duplicate", async () => {
