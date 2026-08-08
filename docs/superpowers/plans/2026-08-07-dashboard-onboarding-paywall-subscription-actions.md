@@ -201,11 +201,11 @@
 - [x] Run `npx tsc --noEmit` and `npm run lint`.
 - [x] Run relevant Supabase analytics/subscription handler and migration tests.
 - [x] Run `npm --prefix website test`, `npm --prefix website run lint`, and `npm --prefix website run build`.
-- [ ] Restart Expo with the repository’s dev-client LAN command and clear Metro cache. Verify the listener belongs to this Formie checkout, `/status` is running, the phone-facing iOS manifest and launch bundle return HTTP 200, and bundle markers contain the new quota, paywall, and dialog copy.
+- [x] Restart Expo with the repository’s dev-client LAN command and clear Metro cache. Verify the listener belongs to this Formie checkout, `/status` is running, the phone-facing iOS manifest and launch bundle return HTTP 200, and bundle markers contain the new quota, paywall, and dialog copy.
 - [ ] Validate on a physical phone at minimum: 320/375-ish narrow width if available and the connected target phone. Capture the Home header at `0/10` and a nonzero balance, Welcome, Welcome back, continue-onboarding account access, paywall, cancel confirm, reason step, and resume confirm. Compilation/manifest checks do not count as device-visible proof.
 - [ ] Run the website locally at desktop and phone widths. Verify no horizontal overflow, no authenticated gold kickers, compact red cancel card, keyboard/focus behavior, cancel two-step dialog, and resume confirmation.
 - [ ] Deploy the website to production, verify the useformie.com alias and live bundle, and test production provider-link behavior without completing a real cancellation or charge. Blocked until the expired Vercel session is re-authenticated.
-- [ ] Review `git diff --check`, `git status --short`, and the exact staged diff. Commit only intended files, push the current branch, and report the commit SHA, remote branch, deployment URL, Metro process/manifest evidence, and physical-device evidence separately.
+- [x] Review `git diff --check`, `git status --short`, and the exact staged diff. Commit only intended files, push the current branch, and report the commit SHA, remote branch, deployment URL, Metro process/manifest evidence, and physical-device evidence separately.
 
 ## Final acceptance checklist
 
