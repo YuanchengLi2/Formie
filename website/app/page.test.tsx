@@ -4,7 +4,7 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import HomePage from "./page";
 
-test("homepage preserves section order and uses the new header and pricing", () => {
+test("homepage preserves section order and shows monthly pricing", () => {
   const html = renderToStaticMarkup(<HomePage />);
   const ids = ["hero", "how-it-works", "coaching", "pricing"];
   ids.forEach((id) => assert.match(html, new RegExp(`id="${id}"`)));
@@ -16,8 +16,7 @@ test("homepage preserves section order and uses the new header and pricing", () 
   assert.match(html, /Why it matters/i);
   assert.match(html, /What to do next/i);
   assert.match(html, /\$9\.99/i);
-  assert.match(html, /\$99\.99/i);
-  assert.match(html, /Save 17%/i);
+  assert.doesNotMatch(html, /Annual|Save 17%|\$99\.99|\/ year/i);
   assert.match(html, /10 analyses\/month/i);
   assert.match(html, /\/ month/i);
   assert.match(html, /10 complete analyses each month/i);

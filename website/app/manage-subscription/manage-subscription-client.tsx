@@ -173,14 +173,13 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
       <div className="portal-expired-panel">
         <span className="portal-kicker">FORMIE ACCOUNT</span>
         <h1>{subscribedBefore ? "Your subscription has ended" : "Open Formie to subscribe"}</h1>
-        <p>Your account and saved coaching remain available in the Formie app. {subscribedBefore ? "Open Formie to resubscribe and create new analyses." : "Subscribe in Formie when you are ready to create analyses."}</p>
-        <div className="portal-expired-plans" aria-label="Formie Pro plans">
+        <p>Your account and saved coaching remain available in the Formie app. {subscribedBefore ? "Contact support if you need help with your account." : "Subscribe in Formie when you are ready to create analyses."}</p>
+        <div className="portal-expired-plans" aria-label="Formie Pro monthly plan">
           <div><span>MONTHLY</span><strong>$9.99 / month</strong><p>10 analyses each month</p></div>
-          <div><span>ANNUAL</span><strong>$99.99 / year</strong><p>10 analyses each month</p></div>
         </div>
         {error ? <div className="portal-refresh-error" role="alert"><span>{error}</span><button onClick={() => void refreshDashboard()}>Retry</button></div> : null}
         <div className="portal-expired-actions">
-          <a className="portal-primary" href="form://subscription">{subscribedBefore ? "Open Formie to resubscribe" : "Open Formie"}</a>
+          {subscribedBefore ? null : <a className="portal-primary" href="form://subscription">Open Formie</a>}
           <a className="portal-secondary-link" href="/support">Contact support</a>
           {logoutButton}
         </div>

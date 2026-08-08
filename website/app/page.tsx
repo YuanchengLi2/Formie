@@ -92,9 +92,8 @@ export default function HomePage() {
             <span className="v2-kicker">Formie Pro</span>
             <div className="v2-plan-options">
               <div><span>Monthly</span><h2>$9.99 <small>/ month</small></h2><p>10 analyses/month</p></div>
-              <div><span>Annual · Save 17%</span><h2>$99.99 <small>/ year</small></h2><p>10 analyses/month</p></div>
             </div>
-            <p>Choose your plan in the Formie app. Both include 10 complete analyses each month, resetting without carryover.</p>
+            <p>Choose the monthly plan in the Formie app. It includes 10 complete analyses each month, resetting without carryover.</p>
           </header>
           <div className="v2-plan-meter" aria-label="Ten analyses included">
             {Array.from({ length: 10 }, (_, index) => <i key={index} />)}

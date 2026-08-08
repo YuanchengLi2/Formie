@@ -63,15 +63,17 @@ test("expired account is directed to repurchase in the Formie app", () => {
 
   assert.match(html, /Your subscription has ended/i);
   assert.match(html, /\$9\.99.*month/i);
-  assert.match(html, /\$99\.99.*year/i);
-  assert.match(html, /Open Formie to resubscribe/i);
-  assert.match(html, /form:\/\/subscription/);
+  assert.doesNotMatch(html, /Annual|\$99\.99|\/ year/i);
+  assert.doesNotMatch(html, /Open Formie to resubscribe/i);
+  assert.doesNotMatch(html, /form:\/\/subscription/);
+  assert.match(html, /Contact support/i);
   assert.doesNotMatch(html, />Expired<|ANALYSES REMAINING|Manage Subscription|Account navigation/i);
 });
 test("expired account without a store URL is still directed to the app", () => {
   const html = renderToStaticMarkup(<ManageSubscriptionClient initialDashboard={{ account: { email: "u@example.com", displayName: "Yuan", profileExists: true }, usage: { status: "expired", used: 0, limit: 10, remaining: 0, periodStart: null, resetsAt: null }, subscription: { state: "expired", productIdentifier: "monthly", store: "test_store", paidThrough: "2026-08-01T00:00:00Z", cancelUrl: null, renewalUrl: null, sandbox: true } }} />);
 
-  assert.match(html, /Open Formie to resubscribe/i);
   assert.match(html, /Contact support/i);
+  assert.doesNotMatch(html, /Annual|\$99\.99|\/ year/i);
+  assert.doesNotMatch(html, /Open Formie to resubscribe|form:\/\/subscription/i);
   assert.doesNotMatch(html, /Test Store subscriptions do not have an end-user cancellation page|Resubscribe in the App|Account navigation/i);
 });
