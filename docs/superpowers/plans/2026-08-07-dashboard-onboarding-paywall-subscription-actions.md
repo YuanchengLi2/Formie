@@ -110,6 +110,7 @@
 - [x] Add style assertions for the reference proportions: 20 px-plus header, 254 px gold hero, 64 px benefit rows with 36 px icons, 17 px benefit copy, and a 17 px monthly CTA.
 - [x] Run the focused test first and confirm it fails on the previous `Upgrade to Formie Pro` composition, trust strip, smaller benefit copy, and `Continue with Pro` CTA.
 - [x] Recompose `PremiumScreen` to match the supplied reference’s black page, gold pyramid hero, `Formie plans` header, `Most popular` badge, `Pro` price card, `What you unlock` rows, and bottom monthly CTA.
+- [x] Use native geometric benefit icons matching the reference’s equalizer, target, and rising-chart artwork; do not use font-dependent Unicode glyph approximations.
 - [ ] Remove the `socialProofAvatars` import and social-proof JSX/styles entirely. Do not remove the repository image file unless a final reference search proves it is unused and the user separately approves asset cleanup.
 - [x] Keep the live RevenueCat monthly price and existing `sync_required` recovery behavior. `Start monthly - <price>/mo` starts only the monthly package; busy and unavailable states remain accessible and truthful.
 - [x] Ensure content scrolls on a 667 px-tall phone while the CTA remains reachable above the safe-area inset, with no clipped price, hero, or benefit copy.
