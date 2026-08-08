@@ -8,16 +8,27 @@ import {
   type SubscriptionIntentAction,
 } from "@/lib/subscription-intent";
 
+function formatPaidThrough(value: string | null | undefined): string {
+  if (!value) return "the end of your paid period";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "the end of your paid period";
+  const formattedDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
+  const formattedTime = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(date);
+  return `${formattedDate} at ${formattedTime}`;
+}
+
 export function SubscriptionIntentDialog({
   visible,
   action,
   provider,
+  paidThrough,
   onClose,
   onExecute,
 }: {
   visible: boolean;
   action: SubscriptionIntentAction;
   provider?: string;
+  paidThrough?: string | null;
   onClose: () => void;
   onExecute: (reason?: CancellationReason) => Promise<void>;
 }) {
@@ -61,7 +72,7 @@ export function SubscriptionIntentDialog({
         <h2 id="subscription-intent-title">{title}</h2>
         {stage === "reason" ? (
           <>
-            <p id="subscription-intent-detail">Your feedback helps us improve Formie. You keep your current access through the paid period.</p>
+            <p id="subscription-intent-detail">Your feedback helps us improve Formie. Canceling turns automatic renewal off, but you keep your current access through the paid period.</p>
             <div className="subscription-intent-reasons" role="group" aria-label="Cancellation reason">
               {cancellationReasons.map((item) => (
                 <button
@@ -95,10 +106,10 @@ export function SubscriptionIntentDialog({
           <>
             <p id="subscription-intent-detail">
               {action === "cancel"
-                ? "You keep Formie Pro and your current analysis balance until the end of your paid period. Cancellation stops the next renewal."
+                ? `Canceling turns automatic renewal off. You keep Formie Pro through ${formatPaidThrough(paidThrough)}. It does not reset or remove your current analysis balance.`
                 : provider
-                  ? "Your current paid period and analysis balance stay the same. This opens " + provider + " subscription settings so you can restore renewal after this paid period ends."
-                  : "Your current paid period and analysis balance stay the same. Resubscribing enables renewal after this paid period ends."}
+                  ? `Resuming turns automatic renewal back on. It does not reset or refill your current analysis balance or start a new paid period today. This opens ${provider} subscription settings so you can restore renewal after your current paid period ends.`
+                  : `Resuming turns automatic renewal back on. It does not reset or refill your current analysis balance or start a new paid period today. Your current paid period remains through ${formatPaidThrough(paidThrough)}.`}
             </p>
             <div className="subscription-intent-actions">
               <button type="button" className="subscription-intent-secondary" onClick={onClose}>{action === "cancel" ? "No, keep subscription" : "Not now"}</button>

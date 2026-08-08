@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { AccountPortalShell } from "@/components/account-portal-shell";
-import { parseAccountDashboard, type AccountDashboardResponse } from "@/lib/account-dashboard";
+import { getAccountDashboard, type AccountDashboardResponse } from "@/lib/account-dashboard";
 import { beginWebsiteOAuth } from "@/lib/oauth-redirect";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
 import { SubscriptionIntentDialog } from "./subscription-intent-dialog";
@@ -40,7 +40,8 @@ function planDetails(subscription: AccountDashboardResponse["subscription"]) {
 
 const MAX_REFRESH_DELAY_MS = 2_147_000_000;
 
-export function nextDashboardRefreshDelay(subscriptionPaidThrough: string | null, quotaResetsAt: string | null, now = Date.now()): number | null {
+export function nextDashboardRefreshDelay(subscriptionPaidThrough: string | null, quotaResetsAt: string | null, now = Date.now(), subscriptionState?: AccountDashboardResponse["subscription"]["state"]): number | null {
+  if (subscriptionState === "renewal_pending") return 5_000;
   const boundary = [subscriptionPaidThrough, quotaResetsAt]
     .filter((value): value is string => Boolean(value))
     .map((value) => new Date(value).getTime())
@@ -78,9 +79,7 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
     setBusy((current) => current ?? "refresh");
     try {
       const client = createBrowserSupabaseClient();
-      const { data, error: invokeError } = await client.functions.invoke("account-dashboard", { method: "GET" });
-      if (invokeError) throw invokeError;
-      setDashboard(parseAccountDashboard(data));
+      setDashboard(await getAccountDashboard(client));
       setError(null);
     } catch {
       setError("Your subscription could not be refreshed. Your last confirmed balance is still shown.");
@@ -90,8 +89,8 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
   }, []);
 
   useEffect(() => {
-    if (!dashboard || (dashboard.subscription.state !== "active_renewing" && dashboard.subscription.state !== "active_cancelled")) return;
-    const delay = nextDashboardRefreshDelay(dashboard.subscription.paidThrough, dashboard.usage.resetsAt);
+    if (!dashboard || !["active_renewing", "active_cancelled", "renewal_pending"].includes(dashboard.subscription.state)) return;
+    const delay = nextDashboardRefreshDelay(dashboard.subscription.paidThrough, dashboard.usage.resetsAt, Date.now(), dashboard.subscription.state);
     if (delay === null) return;
     const timer = window.setTimeout(() => { void refreshDashboard(); }, delay);
     return () => window.clearTimeout(timer);
@@ -109,6 +108,7 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
       channel = client.channel(`website-access:${userId}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "user_access_entitlements", filter: `user_id=eq.${userId}` }, invalidate)
         .on("postgres_changes", { event: "*", schema: "public", table: "analysis_credit_reservations", filter: `user_id=eq.${userId}` }, invalidate)
+        .on("postgres_changes", { event: "*", schema: "public", table: "subscription_test_scenarios", filter: `user_id=eq.${userId}` }, invalidate)
         .subscribe();
     });
     const focused = () => { if (document.visibilityState === "visible") void refreshDashboard(); };
@@ -221,6 +221,7 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
   const remaining = usage.remaining ?? 0;
   const plan = planDetails(subscription);
   const statusLabel = cancelled ? "Canceled" : checkingRenewal ? "Checking renewal" : "Active";
+  const automaticRenewalLabel = renewing ? "On" : cancelled ? "Off" : "Checking";
   const boundaryLabel = cancelled ? "Access until" : checkingRenewal ? "Paid through" : "Next charge";
   const provider = storeName(subscription.store);
 
@@ -231,7 +232,7 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
       {error ? <div className="portal-refresh-error" role="alert"><span>{error}</span><button onClick={() => void refreshDashboard()}>Retry</button></div> : null}
       <article className="portal-plan-card">
         <div className="plan-overview"><span>CURRENT PLAN</span><h2>{plan.name}</h2><p>{plan.interval}</p><strong className="plan-price">{plan.price}</strong><b className={`plan-pill ${cancelled ? "cancelled" : checkingRenewal ? "pending" : "active"}`}>{statusLabel}</b><small>{limit} analyses included every billing period</small></div>
-        <div className="plan-date"><span>{cancelled ? "ACCESS ENDS" : checkingRenewal ? "PAID THROUGH" : "NEXT BILLING DATE"}</span><strong>{formatDashboardTimestamp(subscription.paidThrough)}</strong><small>{cancelled ? "You can continue using Formie Pro until this time. Your subscription will not renew." : checkingRenewal ? "Formie is verifying the next paid period before adding a new allowance." : `${plan.price.split(" / ")[0]} will be billed automatically through ${provider}.`}</small><em>Billing cycle · {plan.interval}</em></div>
+        <div className="plan-date"><span>{cancelled ? "ACCESS ENDS" : checkingRenewal ? "PAID THROUGH" : "NEXT BILLING DATE"}</span><strong>{formatDashboardTimestamp(subscription.paidThrough)}</strong><small>{cancelled ? "Automatic renewal is off. You can continue using Formie Pro until this time." : checkingRenewal ? "Formie is verifying the next paid period before adding a new allowance." : `Automatic renewal is on by default. ${plan.price.split(" / ")[0]} will be billed automatically through ${provider}.`}</small><em>Billing cycle · {plan.interval}</em></div>
       </article>
       <article className="portal-usage-card">
         <div className="usage-summary"><span>USAGE THIS PERIOD</span><UsageBar remaining={remaining} limit={limit} /><p>{remaining === 0 ? "No analyses remaining" : `${remaining} analyses remaining`}</p><small>{used} analyses used this billing period</small></div>
@@ -243,19 +244,20 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
           <div><dt>Plan</dt><dd>{plan.fullName}</dd></div>
           <div><dt>Price</dt><dd>{plan.price}</dd></div>
           <div><dt>Subscription status</dt><dd><span className={`billing-status ${cancelled ? "cancelled" : checkingRenewal ? "pending" : "active"}`}>{statusLabel}</span></dd></div>
+          <div><dt>Automatic renewal</dt><dd><span className={`billing-status ${cancelled ? "cancelled" : checkingRenewal ? "pending" : "active"}`}>{automaticRenewalLabel}</span></dd></div>
           <div><dt>{boundaryLabel}</dt><dd>{formatDashboardTimestamp(subscription.paidThrough)}</dd></div>
           <div><dt>Billing provider</dt><dd>{provider}</dd></div>
         </dl>
       </section>
       {cancelled ? <article className="portal-management-card portal-resume-card">
-        <div><h2>Resume your subscription</h2><p>Your plan won’t renew after {formatDashboardTimestamp(subscription.paidThrough)}. Resume now to keep Formie Pro active after your current period ends.{remaining === 0 ? " Resuming renewal does not refill the current period." : " Your current analysis balance and billing period stay unchanged."}</p></div>
+        <div><h2>Resume your subscription</h2><p>Automatic renewal is off, so your plan won’t renew after {formatDashboardTimestamp(subscription.paidThrough)}. Resume to turn automatic renewal back on. This does not reset or refill your current analysis balance; your current paid period stays unchanged.</p></div>
         <div className="portal-resume-actions">{testStore ? <button className="portal-manage-action portal-resume-action portal-primary-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("resume")}>Resume Subscription</button> : managementUrl ? <><button className="portal-manage-action portal-resume-action portal-primary-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("resume")}>Resume Subscription</button><a className="portal-secondary-action portal-resume-action" href={managementUrl} rel="noopener noreferrer" target="_blank">Manage billing</a></> : <button className="portal-manage-action portal-resume-action portal-primary-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("resume")}>Resume Subscription</button>}</div>
-      </article> : checkingRenewal ? <article className="portal-management-card portal-checking-card"><div><h2>Checking your subscription</h2><p>Formie is confirming the provider’s next paid period. Your allowance will update only after that period is verified.</p></div></article> : <article className="portal-management-card portal-cancel-card"><div><h2>Manage subscription</h2><p>{testStore ? "Cancel at the end of the current paid period. Your remaining access and analyses stay available until then." : managementUrl ? "Your subscription renews automatically on " + formatDashboardTimestamp(subscription.paidThrough) + ". Select Cancel Subscription to manage your next renewal in " + provider + "." : "Manage this subscription in the Formie app."}</p></div><button className="portal-manage-action portal-cancel-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("cancel")}>Cancel Subscription</button></article>}
+      </article> : checkingRenewal ? <article className="portal-management-card portal-checking-card"><div><h2>Checking your subscription</h2><p>Formie is confirming the provider’s next paid period. Your allowance will update only after that period is verified.</p></div></article> : <article className="portal-management-card portal-cancel-card"><div><h2>Manage subscription</h2><p>{testStore ? "Automatic renewal is on. Canceling turns it off at the end of the current paid period; your remaining access and analyses stay available until then." : managementUrl ? "Automatic renewal is on by default and your subscription renews automatically on " + formatDashboardTimestamp(subscription.paidThrough) + ". Canceling turns automatic renewal off at period end; select Cancel Subscription to manage it in " + provider + "." : "Manage this subscription in the Formie app."}</p></div><button className="portal-manage-action portal-cancel-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("cancel")}>Cancel Subscription</button></article>}
       <footer className="portal-billing-footer">
         <div><strong>Billing history</strong><p>View receipts and payment history through {provider}.</p>{managementUrl ? <a href={managementUrl} rel="noopener noreferrer" target="_blank">View billing history →</a> : <span>Billing history is managed by your subscription provider.</span>}</div>
         <div><strong>Need help with your subscription?</strong><p>Formie does not store your payment details.</p><a href="/support">Contact support →</a></div>
       </footer>
-      <SubscriptionIntentDialog key={intentAction ?? "closed"} visible={Boolean(intentAction)} action={intentAction ?? "cancel"} provider={provider} onClose={() => setIntentAction(null)} onExecute={executeSubscriptionChange} />
+      <SubscriptionIntentDialog key={intentAction ?? "closed"} visible={Boolean(intentAction)} action={intentAction ?? "cancel"} provider={provider} paidThrough={subscription.paidThrough} onClose={() => setIntentAction(null)} onExecute={executeSubscriptionChange} />
     </main>
   </AccountPortalShell>;
 }

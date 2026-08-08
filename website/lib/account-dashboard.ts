@@ -4,6 +4,9 @@ export type AccountDashboardResponse = {
   subscription: { state: "active_renewing" | "active_cancelled" | "renewal_pending" | "expired" | "not_subscribed"; planCode?: "monthly" | "annual" | null; willRenew?: boolean; billingPeriodStart?: string | null; productIdentifier: string | null; store: string | null; paidThrough: string | null; cancelUrl: string | null; renewalUrl: string | null; sandbox: boolean };
 };
 
+const defaultDashboardRetryDelays = [0, 2_000, 5_000];
+type DashboardWait = (milliseconds: number) => Promise<void>;
+
 export function parseAccountDashboard(value: unknown): AccountDashboardResponse {
   const candidate = value as AccountDashboardResponse | null;
   const validState = ["active_renewing", "active_cancelled", "renewal_pending", "expired", "not_subscribed"].includes(candidate?.subscription?.state ?? "");
@@ -27,9 +30,19 @@ export function parseAccountDashboard(value: unknown): AccountDashboardResponse 
   return candidate;
 }
 
-export async function getAccountDashboard(client: Pick<SupabaseClient, "functions">): Promise<AccountDashboardResponse> {
-  const { data, error } = await client.functions.invoke("account-dashboard", { method: "GET" });
-  if (error) throw new Error("Your account details could not be loaded.");
-  return parseAccountDashboard(data);
+export async function getAccountDashboard(client: Pick<SupabaseClient, "functions">, retryDelays = defaultDashboardRetryDelays, wait: DashboardWait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))): Promise<AccountDashboardResponse> {
+  let lastError: unknown = null;
+  const delays = retryDelays.length > 0 ? retryDelays : [0];
+  for (const delay of delays) {
+    if (delay > 0) await wait(delay);
+    try {
+      const { data, error } = await client.functions.invoke("account-dashboard", { method: "GET" });
+      if (error) throw error;
+      return parseAccountDashboard(data);
+    } catch (failure) {
+      lastError = failure;
+    }
+  }
+  throw new Error("Your account details could not be loaded.", { cause: lastError });
 }
 import type { SupabaseClient } from "@supabase/supabase-js";

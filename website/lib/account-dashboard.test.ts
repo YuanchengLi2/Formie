@@ -19,9 +19,23 @@ test("accepts an authenticated account that has never subscribed", () => {
 
   assert.equal(parseAccountDashboard(value).subscription.state, "not_subscribed");
 });
+test("retries a transient dashboard lookup before returning the renewed snapshot", async () => {
+  let attempts = 0;
+  const waits: number[] = [];
+  const client = { functions: { invoke: async () => {
+    attempts += 1;
+    return attempts === 1 ? { data: null, error: new Error("provider propagation") } : { data: dashboard, error: null };
+  } } };
+
+  const result = await getAccountDashboard(client as never, [0, 10], async (milliseconds) => { waits.push(milliseconds); });
+
+  assert.equal(result.subscription.state, "active_renewing");
+  assert.equal(attempts, 2);
+  assert.deepEqual(waits, [10]);
+});
 test("rejects contradictory or incomplete active periods instead of showing zero", () => {
   assert.throws(() => parseAccountDashboard({ ...dashboard, usage: { ...dashboard.usage, periodStart: null } }), /invalid response/i);
   assert.throws(() => parseAccountDashboard({ ...dashboard, usage: { ...dashboard.usage, used: 11, remaining: 0 } }), /invalid response/i);
   assert.throws(() => parseAccountDashboard({ ...dashboard, subscription: { ...dashboard.subscription, state: "expired" } }), /invalid response/i);
 });
-test("normalizes Edge Function errors", async () => { await assert.rejects(() => getAccountDashboard({ functions: { invoke: async () => ({ data: null, error: new Error("secret provider error") }) } } as never), /could not be loaded/i); });
+test("normalizes Edge Function errors", async () => { await assert.rejects(() => getAccountDashboard({ functions: { invoke: async () => ({ data: null, error: new Error("secret provider error") }) } } as never, [0]), /could not be loaded/i); });
