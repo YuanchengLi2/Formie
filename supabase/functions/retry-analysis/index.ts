@@ -1,6 +1,6 @@
 import { createAdminClient } from "../_shared/auth.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
-import { retryAnalysisHandler, SINGLE_CALL_PIPELINE_VERSION } from "./handler.ts";
+import { canAutomaticallyRetry, retryAnalysisHandler } from "./handler.ts";
 import { isV49PrimaryRolloutEnabled } from "../_shared/v49-primary-rollout.ts";
 
 function requireScheduledRequest(request: Request): Promise<void> {
@@ -38,7 +38,7 @@ Deno.serve(async (request) => {
         id: session.id,
         userId: session.user_id,
         pipelineVersion: session.pipeline_version ?? null,
-      })).filter((session) => session.pipelineVersion !== SINGLE_CALL_PIPELINE_VERSION);
+      })).filter(canAutomaticallyRetry);
     },
     invokeAnalysis: async (session) => {
       const endpoint = primaryV49Enabled ? "analyze-video-v49" : "analyze-video";

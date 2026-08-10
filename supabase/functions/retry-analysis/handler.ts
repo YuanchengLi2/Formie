@@ -4,10 +4,11 @@ export type RetryAnalysisSession = {
   pipelineVersion: string | null;
 };
 
-export const SINGLE_CALL_PIPELINE_VERSION = "gemini-whole-video-v56-single-call-rep-audit";
+const FIRST_NON_RETRYABLE_WHOLE_VIDEO_VERSION = 56;
 
 export function canAutomaticallyRetry(session: RetryAnalysisSession): boolean {
-  return session.pipelineVersion !== SINGLE_CALL_PIPELINE_VERSION;
+  const match = session.pipelineVersion?.match(/^gemini-whole-video-v(\d+)(?:-|$)/);
+  return !match || Number(match[1]) < FIRST_NON_RETRYABLE_WHOLE_VIDEO_VERSION;
 }
 
 export type RetryAnalysisDependencies = {

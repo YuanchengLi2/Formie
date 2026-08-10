@@ -343,6 +343,35 @@ function parseEvidenceSelections(value: unknown, durationMs: number, findingIds:
   return selections;
 }
 
+function spreadPrimaryEvidenceAcrossSet(items: BoundaryFreeCoachingItem[]): BoundaryFreeCoachingItem[] {
+  const momentUse = new Map<number, number>();
+  const repUse = new Map<number, number>();
+  return items.map((item) => {
+    const requested = Math.max(0, Math.min(item.primaryEvidenceIndex ?? 0, item.evidence.length - 1));
+    const candidates = item.evidence.map((moment, index) => ({
+      index,
+      moment,
+      momentUse: momentUse.get(moment.peakMs) ?? 0,
+      repUse: moment.repNumber === null ? 0 : repUse.get(moment.repNumber) ?? 0,
+      requestedPenalty: index === requested ? 0 : 1,
+    }));
+    candidates.sort((left, right) => (
+      left.momentUse - right.momentUse
+      || left.repUse - right.repUse
+      || left.requestedPenalty - right.requestedPenalty
+      || right.moment.confidence - left.moment.confidence
+      || left.moment.peakMs - right.moment.peakMs
+    ));
+    const selected = candidates[0] ?? null;
+    if (!selected) return item;
+    momentUse.set(selected.moment.peakMs, selected.momentUse + 1);
+    if (selected.moment.repNumber !== null) {
+      repUse.set(selected.moment.repNumber, selected.repUse + 1);
+    }
+    return { ...item, primaryEvidenceIndex: selected.index };
+  });
+}
+
 function parseMuscleFocus(value: unknown): MuscleFocus {
   const focus = record(value, "muscleFocus");
   const parseTargets = (raw: unknown, name: "primary" | "secondary") => {
@@ -601,7 +630,7 @@ export function parseBoundaryFreeAnalysis(value: unknown, durationMs: number): B
     return [{ ...item, evidence: selection?.evidence ?? [], primaryEvidenceIndex: selection?.primary ?? 0 }];
   });
   const repAuditByNumber = new Map(repAudit.map((rep) => [rep.repNumber, rep]));
-  const coachingItems = itemDrafts.map((item) => {
+  const coachingItems = spreadPrimaryEvidenceAcrossSet(itemDrafts.map((item) => {
     const selection = selections.get(item.id);
     const fallbackEvidence: BoundaryFreeEvidence[] = item.affectedRepNumbers.flatMap((repNumber) => {
       const rep = repAuditByNumber.get(repNumber);
@@ -626,7 +655,7 @@ export function parseBoundaryFreeAnalysis(value: unknown, durationMs: number): B
       evidence,
       primaryEvidenceIndex: selection?.primary ?? 0,
     };
-  }).filter((item) => item.evidence.length > 0 && item.affectedRepNumbers.length > 0) as BoundaryFreeCoachingItem[];
+  }).filter((item) => item.evidence.length > 0 && item.affectedRepNumbers.length > 0) as BoundaryFreeCoachingItem[]);
   const strengths = attach(strengthDrafts) as BoundaryFreeStrength[];
   if (coachingItems.length < 4) {
     throw new Error("coachingItems must contain at least four distinct evidence-backed coaching items");
@@ -910,6 +939,8 @@ whyItMatters must be exactly one complete sentence shown as bold white coaching 
 
 whatToDo must be exactly one complete actionable sentence. This sentence is shown as the bold white coaching line, so it must name the declared exercise or its unmistakable equipment and movement action, give the corrective direction, and state when in the repetition to apply it. successCheck must be one separate sentence shown as normal text that describes what the user should visibly compare on the next set.
 
+Keep each sentence under 18 words. Prefer one direct clause, concrete exercise language, and no repeated setup phrases.
+
 Write direct, supportive coaching for this exact recorded set. Never write generic advice that could be pasted onto another person's result. Tie each whatToDo and successCheck to that finding's visible body position, path, range, tempo, equipment contact, or beginning-to-end change. Use the declared exercise, load, equipment, side, or set amount when it genuinely makes the instruction more personal. The overallAssessment and coachNote must name concrete details unique to this set.
 
 Keep every observation visual: do not claim muscle activation, recruitment, growth, internal forces, joint stress or protection, strain, injury risk, pain, tissue effects, or medical safety. Explain visible consistency, control, path, range, balance, or stability instead. Keep scores generous but honest: 90-100 is excellent with only tiny refinements; 80-89 is strong; 70-79 is generally good with fixable issues; 60-69 means several clear problems; below 60 is reserved for major or repeated problems. Recognize visible strengths and do not punish camera uncertainty. Return exactly four distinct, exercise-specific scores. Do not return general guidance or view notes.`;
@@ -980,11 +1011,11 @@ Rest between completed repetitions is not a technique error. Do not create a fin
 
 Every coaching item must stay semantically aligned: topic, observation, observationDetails, whyItMatters, whyDetails, correctionDirection, affectedRepNumbers, and evidence must all describe the same visible relationship. Do not split one issue into duplicate topics or merge separate visible problems into one. Explain importance only through visible path, range, control, steadiness, position, balance, or repeatability. Never claim hidden muscle activation, involvement, recruitment, effort, or tension; internal forces; joint stress or mobility; work output; pain; injury; tissue effects; or exact joint angles. Do not label knees traveling past the toes, looking up or down, or stopping above parallel as an error by itself. Those relationships are findings only when the recording also shows a specific visible consequence such as heel lift, lost balance, a changed equipment path, an inconsistent endpoint, or a declared range constraint.
 
-Finish the user-facing coaching inside this same whole-video response. For every coaching item, observation must be exactly one complete sentence naming the exact visible issue in this declared exercise. observationDetails must contain two to three normal supporting sentences naming the affected repetitions, phases, and comparison across the audited set. whyItMatters must be exactly one complete sentence describing the direct visible consequence. whyDetails must contain one to three normal supporting sentences tied specifically to visible path, range, control, position, balance, tempo, or repeatability. correctionDirection must be exactly one complete actionable sentence naming what to change and when in the repetition to apply it. Use plain text only with no Markdown, asterisks, headings, bullets, numbered labels, or backticks.
+Finish the user-facing coaching inside this same whole-video response. For every coaching item, observation must be exactly one complete sentence naming the exact visible issue in this declared exercise. observationDetails must contain two to three normal supporting sentences naming the affected repetitions, phases, and comparison across the audited set. whyItMatters must be exactly one complete sentence describing the direct visible consequence. whyDetails must contain one to three normal supporting sentences tied specifically to visible path, range, control, position, balance, tempo, or repeatability. correctionDirection must be exactly one complete actionable sentence naming what to change and when in the repetition to apply it. Keep each coaching sentence under 18 words, with one direct clause whenever possible. Use plain text only with no Markdown, asterisks, headings, bullets, numbered labels, or backticks.
 
 Return four to six distinct evidence-backed coaching issues. Rank the complete inventory, always return at least four, and include a fifth or sixth whenever another independent visible relationship is genuinely supported. When fewer than four major faults exist, use a small but real visible optimization as severity note; never invent hidden physiology, duplicate another topic, use camera uncertainty, or use actions outside real repetitions. Every issue must carry its own matching evidence and affectedRepNumbers.
 
-Choose evidence only after completing the inventory. peakMs must be the clearest exact frame where the described relationship is visible, not a generic phase marker or the start or end by default. startMs and endMs provide short neighboring context, with startMs < peakMs < endMs. For tempo, control, or set changes, describe what the neighboring frames establish while still selecting the clearest single peak frame. Use repNumber only when the full sequence makes that rep number reliable; otherwise use null and describe beginning, middle, end, or the visible phase.
+Choose evidence only after completing the inventory. peakMs must be the clearest exact frame where the described relationship is visible, not a generic phase marker or the start or end by default. startMs and endMs provide short neighboring context, with startMs < peakMs < endMs. For tempo, control, or set changes, describe what the neighboring frames establish while still selecting the clearest single peak frame. Use repNumber only when the full sequence makes that rep number reliable; otherwise use null and describe beginning, middle, end, or the visible phase. Spread primaryEvidenceIndex choices across different valid repetitions and timepoints. Treat the primary choices as one set-level display sequence, not independent defaults. Reuse a primary peak only when that finding has no other matching evidence moment.
 
 Return muscleFocus for the declared exercise and visible variation. muscleFocus represents normal target anatomy and is separate from the visible coaching issues.
 

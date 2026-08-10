@@ -30,7 +30,7 @@ import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 import { runNonBlockingWriter } from "./nonblocking-writer.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v57-nonblocking-writer";
+const PIPELINE_VERSION = "gemini-whole-video-v58-diverse-moments-concise-coaching";
 const ANALYST_MODEL = "gemini-3.6-flash";
 const WRITER_MODEL = "gemini-3.6-flash";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";

@@ -274,6 +274,27 @@ describe("v57 full-video rep-audited coaching contract", () => {
     expect(parsed.coachingItems).toHaveLength(4);
   });
 
+  it("spreads displayed primary evidence across the valid moments in the set", () => {
+    const raw = v56RawAnalysis();
+    const sharedMoments = [
+      { startMs: 1_400, peakMs: 1_800, endMs: 2_200, visualEvidence: "The issue is visible on rep 1.", visibleBodyAreas: ["knees"], confidence: 0.94, repNumber: 1, phase: "bottom" },
+      { startMs: 3_600, peakMs: 4_000, endMs: 4_400, visualEvidence: "The issue is visible on rep 2.", visibleBodyAreas: ["knees"], confidence: 0.92, repNumber: 2, phase: "bottom" },
+      { startMs: 5_800, peakMs: 6_200, endMs: 6_600, visualEvidence: "The issue is visible on rep 3.", visibleBodyAreas: ["knees"], confidence: 0.9, repNumber: 3, phase: "bottom" },
+    ];
+    raw.coachingItems = raw.coachingItems.map((item) => ({ ...item, affectedRepNumbers: [1, 2, 3] }));
+    raw.evidenceSelections = raw.evidenceSelections.map((selection) => ({
+      ...selection,
+      primaryEvidenceIndex: 0,
+      moments: sharedMoments.map((moment) => ({ ...moment })),
+    }));
+
+    const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
+    const displayedPeaks = parsed.coachingItems.map((item) => item.evidence[item.primaryEvidenceIndex ?? 0].peakMs);
+
+    expect(displayedPeaks).toEqual([1_800, 4_000, 6_200, 1_800]);
+    expect(new Set(displayedPeaks.slice(0, 3)).size).toBe(3);
+  });
+
   it("rejects a result with fewer than four real coaching findings", () => {
     expect(() => parseBoundaryFreeAnalysis(rawAnalysis(3), 9_000)).toThrow(/at least four distinct evidence-backed/i);
   });
@@ -324,6 +345,8 @@ describe("v57 full-video rep-audited coaching contract", () => {
     expect(prompt).toContain("whyItMatters must be exactly one complete sentence");
     expect(prompt).toContain("whyDetails must contain one to three normal supporting sentences");
     expect(prompt).toContain("correctionDirection must be exactly one complete actionable sentence");
+    expect(prompt).toContain("Spread primaryEvidenceIndex choices across different valid repetitions and timepoints");
+    expect(prompt).toContain("Keep each coaching sentence under 18 words");
     expect(prompt).toContain("Always set recheckRequest to null");
     expect(prompt).not.toContain("request a recheck only when");
     expect(prompt).not.toMatch(/bench angle|pull toward|spinal rounding|knee cave/i);
@@ -372,6 +395,7 @@ describe("v57 full-video rep-audited coaching contract", () => {
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMatters must be exactly one complete sentence");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMattersDetail must contain one to three normal supporting sentences");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatToDo must be exactly one complete actionable sentence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Keep each sentence under 18 words");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Name the declared exercise");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("reference every numbered repetition supported by the supplied evidence");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("Mention a numbered repetition at most once");
