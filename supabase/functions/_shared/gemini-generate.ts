@@ -41,14 +41,25 @@ type GenerateConfig = {
 };
 
 const GEMINI_VALIDATION_ONLY_SCHEMA_KEYS = new Set(["minimum", "maximum", "minItems", "maxItems"]);
+const GEMINI_SUPPORTED_SCHEMA_KEYS = new Set([
+  "$id", "$defs", "$ref", "$anchor",
+  "type", "format", "title", "description", "enum",
+  "items", "prefixItems", "minItems", "maxItems", "minimum", "maximum",
+  "anyOf", "oneOf", "properties", "additionalProperties", "required",
+  "propertyOrdering",
+]);
 
-function geminiResponseSchema(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(geminiResponseSchema);
+function geminiResponseSchema(value: unknown, preserveBounds: boolean, parentKey?: string): unknown {
+  if (Array.isArray(value)) return value.map((item) => geminiResponseSchema(item, preserveBounds));
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
-      .filter(([key]) => !GEMINI_VALIDATION_ONLY_SCHEMA_KEYS.has(key))
-      .map(([key, nested]) => [key, geminiResponseSchema(nested)]),
+      .filter(([key]) => (
+        parentKey === "properties"
+        || parentKey === "$defs"
+        || (GEMINI_SUPPORTED_SCHEMA_KEYS.has(key) && (preserveBounds || !GEMINI_VALIDATION_ONLY_SCHEMA_KEYS.has(key)))
+      ))
+      .map(([key, nested]) => [key, geminiResponseSchema(nested, preserveBounds, key)]),
   );
 }
 
@@ -92,7 +103,7 @@ function generationConfig(schema: JsonSchema, thinkingLevel: ThinkingLevel, temp
   return {
     thinkingConfig: { thinkingLevel },
     responseMimeType: "application/json",
-    responseJsonSchema: (preserveSchemaBounds ? schema : geminiResponseSchema(schema)) as JsonSchema,
+    responseJsonSchema: geminiResponseSchema(schema, preserveSchemaBounds) as JsonSchema,
     ...(temperature === undefined ? {} : { temperature }),
   };
 }

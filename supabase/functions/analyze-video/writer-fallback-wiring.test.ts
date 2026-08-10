@@ -13,4 +13,8 @@ describe("single-pass whole-video wiring", () => {
     expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v56-single-call-rep-audit"');
     expect(source.indexOf("return raw as JsonRecord")).toBeLessThan(source.indexOf("parseBoundaryFreeAnalysis(rawAnalysis, durationMs)"));
   });
+
+  it("persists the complete per-repetition audit in the atomic result payload", () => {
+    expect(source).toContain("rep_timeline: candidate.repTimeline");
+  });
 });

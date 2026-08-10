@@ -506,6 +506,7 @@ Deno.serve(async (request) => {
                 did_well: candidate.didWell,
                 priority_corrections: candidate.priorityCorrections,
                 coaching_cues: candidate.coachingCues,
+                rep_timeline: candidate.repTimeline,
                 set_context: candidate.setContext,
                 set_summary: candidate.setSummary,
                 next_set_plan: candidate.nextSetPlan,

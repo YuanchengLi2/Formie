@@ -3,6 +3,7 @@ import {
   buildBoundaryFreeAnalysisPrompt,
   buildBoundaryFreeRecheckPrompt,
   buildWholeVideoWritingPrompt,
+  BOUNDARY_FREE_ANALYSIS_SCHEMA,
   parseBoundaryFreeAnalysis,
   parseRecheckRequest,
   parseWholeVideoWriting,
@@ -171,6 +172,42 @@ describe("v56 single-call rep-audited coaching contract", () => {
     });
   });
 
+  it("derives redundant presentation fields from the compact provider response", () => {
+    const raw = v56RawAnalysis() as any;
+    delete raw.videoUnderstanding.beginning;
+    delete raw.videoUnderstanding.middle;
+    delete raw.videoUnderstanding.end;
+    delete raw.strengths;
+    delete raw.recheckRequest;
+    raw.coachingItems.forEach((item: any) => delete item.observedIssueRegions);
+
+    const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
+
+    expect(parsed.videoUnderstanding.beginning).toBe(raw.videoUnderstanding.repAudit[0].visualSummary);
+    expect(parsed.videoUnderstanding.middle).toBe(raw.videoUnderstanding.repAudit[1].visualSummary);
+    expect(parsed.videoUnderstanding.end).toBe(raw.videoUnderstanding.repAudit[2].visualSummary);
+    expect(parsed.strengths).toEqual([]);
+    expect(parsed.recheckRequest).toBeNull();
+    expect(parsed.coachingItems.every((item) => item.observedIssueRegions.length === 0)).toBe(true);
+  });
+
+  it("keeps the provider schema compact while retaining the rep audit and split coaching", () => {
+    const schema = BOUNDARY_FREE_ANALYSIS_SCHEMA as any;
+
+    expect(schema.properties.videoUnderstanding.properties.repAudit).toBeDefined();
+    expect(schema.properties.coachingItems.properties ?? schema.properties.coachingItems.items.properties).toEqual(expect.objectContaining({
+      observationDetails: { type: "string" },
+      whyDetails: { type: "string" },
+      affectedRepNumbers: expect.objectContaining({ type: "array" }),
+    }));
+    expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("beginning");
+    expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("middle");
+    expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("end");
+    expect(schema.properties).not.toHaveProperty("strengths");
+    expect(schema.properties).not.toHaveProperty("recheckRequest");
+    expect(schema.properties.coachingItems.items.properties).not.toHaveProperty("observedIssueRegions");
+  });
+
   it("rejects a claimed repetition that has no matching evidence moment", () => {
     const raw = v56RawAnalysis();
     raw.coachingItems[0].affectedRepNumbers = [1, 3];
@@ -180,6 +217,34 @@ describe("v56 single-call rep-audited coaching contract", () => {
 
   it("requires exactly four issues instead of accepting additional padded findings", () => {
     expect(() => parseBoundaryFreeAnalysis(rawAnalysis(5), 9_000)).toThrow(/exactly four/i);
+  });
+
+  it("replaces unsupported physiology in explanations without discarding visible issues", () => {
+    const raw = v56RawAnalysis();
+    raw.coachingItems[0].whyItMatters = "Partial depth limits full lower-body muscle activation.";
+    raw.coachingItems[0].whyDetails = "Greater depth optimizes quadriceps and glute development.";
+    raw.coachingItems[1].whyItMatters = "This position increases joint stress.";
+    raw.coachingItems[1].whyDetails = "The change reduces muscular tension and power production.";
+
+    const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
+
+    expect(parsed.coachingItems).toHaveLength(4);
+    expect(parsed.coachingItems[0].whyItMatters).not.toMatch(/activation|development/i);
+    expect(parsed.coachingItems[0].whyDetails).not.toMatch(/activation|development/i);
+    expect(parsed.coachingItems[1].whyItMatters).not.toMatch(/joint stress|tension|power production/i);
+    expect(parsed.coachingItems[1].whyDetails).not.toMatch(/joint stress|tension|power production/i);
+    expect(parsed.coachingItems[0].observation).toBe(raw.coachingItems[0].observation);
+  });
+
+  it("replaces muscular tension wording even when no other unsupported phrase is present", () => {
+    const raw = v56RawAnalysis();
+    raw.coachingItems[3].whyItMatters = "Rapid turnaround reduces muscular tension at the deep position.";
+
+    const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
+
+    expect(parsed.coachingItems).toHaveLength(4);
+    expect(parsed.coachingItems[3].whyItMatters).not.toMatch(/muscular tension/i);
+    expect(parsed.coachingItems[3].whyItMatters).toMatch(/visible|timing|controlled|repeatable/i);
   });
 
   it("accepts four distinct evidence-backed coaching findings", () => {

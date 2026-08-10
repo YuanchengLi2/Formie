@@ -192,4 +192,66 @@ describe("whole-video Gemini request construction", () => {
 
     expect((request.generationConfig.responseJsonSchema as any).properties.findings.minItems).toBe(4);
   });
+
+  it("removes unsupported JSON Schema keywords before sending a bounded schema to Gemini", () => {
+    const request = buildVideoGenerateContentRequest({
+      file,
+      prompt: "Return four findings with distinct affected repetitions",
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["findings"],
+        properties: {
+          findings: {
+            type: "array",
+            minItems: 4,
+            maxItems: 4,
+            uniqueItems: true,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["affectedRepNumbers"],
+              properties: {
+                affectedRepNumbers: {
+                  type: "array",
+                  minItems: 1,
+                  uniqueItems: true,
+                  items: { type: "integer", minimum: 1 },
+                },
+              },
+            },
+          },
+        },
+      },
+      fps: 8,
+      thinkingLevel: "high",
+      mediaResolution: "MEDIA_RESOLUTION_HIGH",
+      preserveSchemaBounds: true,
+    });
+
+    expect(request.generationConfig.responseJsonSchema).toEqual({
+      type: "object",
+      additionalProperties: false,
+      required: ["findings"],
+      properties: {
+        findings: {
+          type: "array",
+          minItems: 4,
+          maxItems: 4,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["affectedRepNumbers"],
+            properties: {
+              affectedRepNumbers: {
+                type: "array",
+                minItems: 1,
+                items: { type: "integer", minimum: 1 },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
 });
