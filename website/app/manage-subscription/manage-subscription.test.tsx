@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { applyTestStoreSubscriptionResult, formatDashboardTimestamp, isAppleSandboxSubscription, ManageSubscriptionClient, nextDashboardRefreshDelay, subscriptionManagementDestination } from "./manage-subscription-client";
+import { applyTestStoreSubscriptionResult, formatDashboardTimestamp, isAppleSandboxSubscription, ManageSubscriptionClient, nextDashboardRefreshDelay, shouldOpenFormieNativeApp, subscriptionManagementDestination } from "./manage-subscription-client";
 
 const styles = readFileSync(resolve(__dirname, "../globals.css"), "utf8");
 const clientSource = readFileSync(resolve(__dirname, "manage-subscription-client.tsx"), "utf8");
@@ -21,6 +21,19 @@ test("renewal-pending dashboards poll again instead of stopping at the old perio
 test("dashboard listens for both canonical entitlement and Test Store lifecycle changes", () => {
   assert.match(clientSource, /table:\s*"user_access_entitlements"/);
   assert.match(clientSource, /table:\s*"subscription_test_scenarios"/);
+});
+
+test("passive dashboard refresh state is independent from interactive subscription actions", () => {
+  assert.match(clientSource, /const \[refreshing, setRefreshing\] = useState\(false\)/);
+  assert.doesNotMatch(clientSource, /setBusy\([^\n]*"refresh"/);
+  assert.doesNotMatch(clientSource, /"refresh"\s*\|/);
+});
+
+test("native Formie handoff is attempted only on iPhone and iPad-class devices", () => {
+  assert.equal(shouldOpenFormieNativeApp({ userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X)", platform: "iPhone", maxTouchPoints: 5 }), true);
+  assert.equal(shouldOpenFormieNativeApp({ userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", platform: "MacIntel", maxTouchPoints: 5 }), true);
+  assert.equal(shouldOpenFormieNativeApp({ userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", platform: "Win32", maxTouchPoints: 0 }), false);
+  assert.equal(shouldOpenFormieNativeApp({ userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", platform: "MacIntel", maxTouchPoints: 0 }), false);
 });
 
 test("billing timestamps include exact time and an explicit zone", () => {

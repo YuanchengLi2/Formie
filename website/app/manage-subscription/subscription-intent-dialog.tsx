@@ -8,6 +8,8 @@ import {
   type SubscriptionIntentAction,
 } from "@/lib/subscription-intent";
 
+export type SubscriptionExecutionResult = "completed" | "native_app_opened" | "continue_on_iphone";
+
 function formatPaidThrough(value: string | null | undefined): string {
   if (!value) return "the end of your paid period";
   const date = new Date(value);
@@ -15,6 +17,37 @@ function formatPaidThrough(value: string | null | undefined): string {
   const formattedDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(date);
   const formattedTime = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZoneName: "short", timeZone: "UTC" }).format(date);
   return `${formattedDate} at ${formattedTime}`;
+}
+
+export function NativeSubscriptionHandoff({
+  outcome,
+  action = "cancel",
+  onClose,
+}: {
+  outcome: "native_app_opened" | "continue_on_iphone";
+  action?: SubscriptionIntentAction;
+  onClose: () => void;
+}) {
+  const change = action === "cancel" ? "cancellation" : "resubscription";
+
+  if (outcome === "continue_on_iphone") {
+    return <>
+      <h2 id="subscription-intent-title">Continue on your iPhone</h2>
+      <p id="subscription-intent-detail">Apple sandbox subscriptions can only be changed on an iPhone or iPad using the Sandbox Apple Account that made the purchase. Open this page in Safari on that device, sign in to Formie, and repeat the {change} flow. Formie will then open Apple&apos;s native subscription sheet.</p>
+      <div className="subscription-intent-actions subscription-intent-single-action">
+        <button type="button" className="subscription-intent-secondary" onClick={onClose}>Close</button>
+      </div>
+    </>;
+  }
+
+  return <>
+    <h2 id="subscription-intent-title">Formie should be opening</h2>
+    <p id="subscription-intent-detail">Complete the {change} in Apple&apos;s native subscription sheet. Formie will update only after Apple confirms the change.</p>
+    <div className="subscription-intent-actions">
+      <button type="button" className="subscription-intent-secondary" onClick={onClose}>Close</button>
+      <a className="subscription-intent-primary" href="form://account/manage-subscription">Open Formie again</a>
+    </div>
+  </>;
 }
 
 export function SubscriptionIntentDialog({
@@ -32,9 +65,9 @@ export function SubscriptionIntentDialog({
   paidThrough?: string | null;
   opensNativeApp?: boolean;
   onClose: () => void;
-  onExecute: (reason?: CancellationReason) => Promise<void>;
+  onExecute: (reason?: CancellationReason) => Promise<SubscriptionExecutionResult | void>;
 }) {
-  const [stage, setStage] = useState<"confirm" | "reason" | "executing" | "error">("confirm");
+  const [stage, setStage] = useState<"confirm" | "reason" | "executing" | "error" | "native_app_opened" | "continue_on_iphone">("confirm");
   const [reason, setReason] = useState<CancellationReason | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,7 +77,11 @@ export function SubscriptionIntentDialog({
     setStage("executing");
     setError(null);
     try {
-      await onExecute(selectedReason);
+      const outcome = await onExecute(selectedReason);
+      if (outcome === "native_app_opened" || outcome === "continue_on_iphone") {
+        setStage(outcome);
+        return;
+      }
       onClose();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "The subscription change could not be completed.");
@@ -71,6 +108,9 @@ export function SubscriptionIntentDialog({
     <div className="subscription-intent-backdrop" role="presentation" tabIndex={-1} onKeyDown={(event) => { if (event.key === "Escape" && stage !== "executing") onClose(); }}>
       <section className="subscription-intent-dialog" role="dialog" aria-modal="true" aria-labelledby="subscription-intent-title" aria-describedby="subscription-intent-detail">
         <span className="portal-kicker">SUBSCRIPTION</span>
+        {stage === "native_app_opened" || stage === "continue_on_iphone" ? (
+          <NativeSubscriptionHandoff outcome={stage} action={action} onClose={onClose} />
+        ) : <>
         <h2 id="subscription-intent-title">{title}</h2>
         {stage === "reason" ? (
           <>
@@ -121,6 +161,7 @@ export function SubscriptionIntentDialog({
             </div>
           </>
         )}
+        </>}
       </section>
     </div>
   );

@@ -7,7 +7,7 @@ import { AccountPortalShell } from "@/components/account-portal-shell";
 import { getAccountDashboard, type AccountDashboardResponse } from "@/lib/account-dashboard";
 import { beginWebsiteOAuth } from "@/lib/oauth-redirect";
 import { createBrowserSupabaseClient } from "@/lib/supabase/browser";
-import { SubscriptionIntentDialog } from "./subscription-intent-dialog";
+import { SubscriptionIntentDialog, type SubscriptionExecutionResult } from "./subscription-intent-dialog";
 import { recordWebsiteSubscriptionIntent, type CancellationReason, type SubscriptionIntentAction } from "@/lib/subscription-intent";
 
 export function formatDashboardTimestamp(value: string | null, locale = "en-US", timeZone?: string) {
@@ -86,6 +86,11 @@ export function subscriptionManagementDestination(subscription: AccountDashboard
   return action === "cancel" ? subscription.cancelUrl : subscription.renewalUrl;
 }
 
+export function shouldOpenFormieNativeApp(device: Pick<Navigator, "userAgent" | "platform" | "maxTouchPoints">): boolean {
+  if (/iPhone|iPad|iPod/i.test(device.userAgent)) return true;
+  return device.platform === "MacIntel" && device.maxTouchPoints > 1;
+}
+
 function planDetails(subscription: AccountDashboardResponse["subscription"]) {
   const annual = subscription.planCode === "annual" || /year|annual/i.test(subscription.productIdentifier ?? "");
   return annual
@@ -126,12 +131,13 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
   const [dashboard, setDashboard] = useState(initialDashboard);
   const [error, setError] = useState(initialError);
   const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"apple" | "google" | "logout" | "refresh" | "intent" | null>(null);
+  const [busy, setBusy] = useState<"apple" | "google" | "logout" | "intent" | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [intentAction, setIntentAction] = useState<SubscriptionIntentAction | null>(null);
   const hasDashboard = dashboard !== null;
 
   const refreshDashboard = useCallback(async () => {
-    setBusy((current) => current ?? "refresh");
+    setRefreshing(true);
     try {
       const client = createBrowserSupabaseClient();
       setDashboard(await getAccountDashboard(client));
@@ -139,7 +145,7 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
     } catch {
       setError("Your subscription could not be refreshed. Your last confirmed balance is still shown.");
     } finally {
-      setBusy((current) => current === "refresh" ? null : current);
+      setRefreshing(false);
     }
   }, []);
 
@@ -197,8 +203,8 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
     window.location.assign("/manage-subscription");
   };
 
-  const executeSubscriptionChange = async (reason?: CancellationReason) => {
-    if (busy || !intentAction || !dashboard) return;
+  const executeSubscriptionChange = async (reason?: CancellationReason): Promise<SubscriptionExecutionResult> => {
+    if (busy || !intentAction || !dashboard) throw new Error("Another subscription action is already underway.");
     const action = intentAction;
     setBusy("intent");
     setError(null);
@@ -218,11 +224,15 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
         if (invokeError) throw invokeError;
         setDashboard((current) => current ? applyTestStoreSubscriptionResult(current, changeResult as TestStoreSubscriptionResult) : current);
         setMessage(action === "cancel" ? "Cancellation confirmed. You keep access through the current paid period." : "Renewal restored for the next Test Store period.");
-        return;
+        return "completed";
       }
       const providerUrl = subscriptionManagementDestination(dashboard.subscription, action);
       if (!providerUrl) throw new Error("Subscription management is unavailable right now.");
+      if (isAppleSandboxSubscription(dashboard.subscription) && !shouldOpenFormieNativeApp(window.navigator)) {
+        return "continue_on_iphone";
+      }
       window.location.assign(providerUrl);
+      return isAppleSandboxSubscription(dashboard.subscription) ? "native_app_opened" : "completed";
     } catch {
       throw new Error(action === "cancel" ? "Cancellation could not be completed. Please try again." : "Resubscription could not be started. Please try again.");
     } finally {
@@ -237,7 +247,7 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
   };
   const logoutButton = <button className="portal-logout" disabled={Boolean(busy)} onClick={() => void logout()}>{busy === "logout" ? "Signing out..." : "Sign Out"}</button>;
 
-  if (!dashboard && initialAuthenticated) return <PortalPopup title="Something went wrong" message="You signed in, but Formie could not check your account or subscription." detail={error ?? "Please retry, or sign out and use the same account you use in Formie."} actions={<><button className="portal-primary" onClick={() => void refreshDashboard()}>Try again</button>{logoutButton}</>} />;
+  if (!dashboard && initialAuthenticated) return <PortalPopup title="Something went wrong" message="You signed in, but Formie could not check your account or subscription." detail={error ?? "Please retry, or sign out and use the same account you use in Formie."} actions={<><button className="portal-primary" disabled={refreshing} onClick={() => void refreshDashboard()}>{refreshing ? "Refreshing..." : "Try again"}</button>{logoutButton}</>} />;
   if (!dashboard) return <section className="account-portal signed-out"><div className="portal-intro"><span className="portal-kicker">FORMIE ACCOUNT</span><h1>Manage subscription</h1><p>Sign in with the same Apple or Google account you use in Formie.</p>{error ? <p className="portal-error" role="alert">{error}</p> : null}</div><div className="social-login"><button disabled={Boolean(busy)} onClick={() => void login("apple")}><Image className="provider-icon" src="/assets/apple-provider.png" width={44} height={44} alt="Apple" /><span>{busy === "apple" ? "Connecting..." : "Continue with Apple"}</span><i aria-hidden="true" /></button><button disabled={Boolean(busy)} onClick={() => void login("google")}><Image className="provider-icon" src="/assets/google-provider.png" width={44} height={44} alt="Google" /><span>{busy === "google" ? "Connecting..." : "Continue with Google"}</span><i aria-hidden="true" /></button></div></section>;
 
   if (!dashboard.account.profileExists) return <AccountPortalShell onSignOut={() => void logout()} signingOut={busy === "logout"}><PortalPopup title="No Formie account found" message="This sign-in is valid, but it is not connected to a completed Formie app account." detail="Open Formie and finish creating your account, or sign out and use the same account already used in the app." actions={<><a className="portal-primary" href="form://">Open Formie</a>{logoutButton}</>} /></AccountPortalShell>;
@@ -285,7 +295,7 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
     <main className="portal-dashboard">
       <header><h1>Subscription</h1><p>Manage your Formie plan, usage, and billing.</p></header>
       {message ? <div className="portal-refresh-success" role="status">{message}</div> : null}
-      {error ? <div className="portal-refresh-error" role="alert"><span>{error}</span><button onClick={() => void refreshDashboard()}>Retry</button></div> : null}
+      {error ? <div className="portal-refresh-error" role="alert"><span>{error}</span><button disabled={refreshing} onClick={() => void refreshDashboard()}>{refreshing ? "Refreshing..." : "Retry"}</button></div> : null}
       <article className="portal-plan-card">
         <div className="plan-overview"><span>CURRENT PLAN</span><h2>{plan.name}</h2><p>{plan.interval}</p><strong className="plan-price">{plan.price}</strong><b className={`plan-pill ${cancelled ? "cancelled" : checkingRenewal ? "pending" : "active"}`}>{statusLabel}</b><small>{limit} analyses included every billing period</small></div>
         <div className="plan-date"><span>{cancelled ? "ACCESS ENDS" : checkingRenewal ? "PAID THROUGH" : "NEXT BILLING DATE"}</span><strong>{formatDashboardTimestamp(subscription.paidThrough)}</strong><small>{cancelled ? "Automatic renewal is off. You can continue using Formie Pro until this time." : checkingRenewal ? "Formie is verifying the next paid period before adding a new allowance." : `Automatic renewal is on by default. ${plan.price.split(" / ")[0]} will be billed automatically through ${provider}.`}</small><em>Billing cycle · {plan.interval}</em></div>

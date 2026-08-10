@@ -1142,7 +1142,9 @@ p { max-width: 600px; color: var(--muted); font-size: clamp(1rem, 1.45vw, 1.25re
 .subscription-intent-reason { min-height: 52px; padding: 0 16px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 10px; background: #151513; color: var(--portal-text); font: inherit; font-weight: 650; text-align: left; cursor: pointer; }
 .subscription-intent-reason.selected { border-color: var(--portal-gold); background: rgba(230, 185, 63, .12); color: var(--portal-gold); }
 .subscription-intent-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.subscription-intent-actions button { min-height: 56px; padding: 0 16px; border-radius: 10px; font: inherit; font-weight: 750; cursor: pointer; }
+.subscription-intent-actions button,
+.subscription-intent-actions a { min-height: 56px; padding: 0 16px; border-radius: 10px; display: grid; place-items: center; font: inherit; font-weight: 750; text-align: center; text-decoration: none; cursor: pointer; }
+.subscription-intent-single-action { grid-template-columns: 1fr; }
 .subscription-intent-primary { border: 1px solid var(--portal-gold); background: var(--portal-gold); color: #0a0a08; }
 .subscription-intent-cancel { border-color: #d45e57; background: #7d302d; color: #fff; }
 .subscription-intent-secondary { border: 1px solid rgba(230, 185, 63, .44); background: transparent; color: var(--portal-gold); }

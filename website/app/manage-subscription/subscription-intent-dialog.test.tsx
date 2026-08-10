@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { SubscriptionIntentDialog } from "./subscription-intent-dialog";
+import { NativeSubscriptionHandoff, SubscriptionIntentDialog } from "./subscription-intent-dialog";
 
 test("renders the cancellation warning and reason-flow entry point", () => {
   const html = renderToStaticMarkup(<SubscriptionIntentDialog visible action="cancel" onClose={() => undefined} onExecute={async () => undefined} />);
@@ -31,4 +31,21 @@ test("Apple sandbox handoff opens Formie and does not claim cancellation is comp
   assert.match(html, /only after Apple confirms/i);
   assert.match(html, /opens Formie/i);
   assert.doesNotMatch(html, /cancellation confirmed/i);
+});
+
+test("desktop Apple sandbox handoff explicitly tells the tester to continue on iPhone", () => {
+  const html = renderToStaticMarkup(<NativeSubscriptionHandoff outcome="continue_on_iphone" onClose={() => undefined} />);
+  assert.match(html, /Continue on your iPhone/i);
+  assert.match(html, /open this page in Safari/i);
+  assert.match(html, /Sandbox Apple Account/i);
+  assert.doesNotMatch(html, /Cancellation confirmed/i);
+});
+
+test("iPhone Apple sandbox handoff explains the native sheet and offers a retry", () => {
+  const html = renderToStaticMarkup(<NativeSubscriptionHandoff outcome="native_app_opened" onClose={() => undefined} />);
+  assert.match(html, /Formie should be opening/i);
+  assert.match(html, /Apple.*native subscription sheet/i);
+  assert.match(html, /href="form:\/\/account\/manage-subscription"/i);
+  assert.match(html, /Open Formie again/i);
+  assert.doesNotMatch(html, /Cancellation confirmed/i);
 });
