@@ -155,7 +155,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
   const summaryFocusAreas = presentation.priorityCorrections.map((finding) => ({ id: finding.id, text: finding.title }));
   const summaryNextActions = nextSetActions.slice(0, 3).map((item) => ({ id: item.id, text: item.action }));
   const coachNote = result.coachNote?.trim() || null;
-  const conciseWholeSetSummary = wholeSetSummary ? conciseCopy(wholeSetSummary, 2, 45) : null;
+  const conciseWholeSetSummary = wholeSetSummary ? conciseCopy(wholeSetSummary, 4, 85) : null;
   const movePoint = (direction: -1 | 1) => {
     if (points.length === 0) return;
     setPointIndex((selectedIndex + direction + points.length) % points.length);

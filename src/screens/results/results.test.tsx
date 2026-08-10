@@ -161,7 +161,7 @@ describe("ResultsScreen", () => {
     expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
     await fireEvent.press(screen.getByLabelText("What happened"));
     expect(screen.getByText("WHOLE SET SUMMARY")).toBeTruthy();
-    expect(screen.getByText("The set keeps a stable base while the shoulder position changes late. The opening movement is controlled and the handle path stays repeatable.")).toBeTruthy();
+    expect(screen.getByText("The set keeps a stable base while the shoulder position changes late. The opening movement is controlled and the handle path stays repeatable. The main weakness is the late shoulder rise, so keep both shoulders level on the next set.")).toBeTruthy();
     expect(screen.getByText("concentric · 00:00.8")).toBeTruthy();
     expect(screen.queryByText("WHOLE-SET READ")).toBeNull();
     expect(screen.queryByText("Eight complete repetitions were visible from setup through the final reset.")).toBeNull();
@@ -399,6 +399,15 @@ describe("ResultsScreen", () => {
     expect(StyleSheet.flatten(screen.getByTestId("whole-set-summary-text").props.style)).toMatchObject({ fontSize: 16, lineHeight: 23, fontWeight: "400" });
     expect(StyleSheet.flatten(screen.getByTestId("summary-next-plan-1").props.style)).toMatchObject({ fontSize: 16, lineHeight: 23 });
     expect(StyleSheet.flatten(screen.getByTestId("summary-next-plan-1-card").props.style)).toMatchObject({ minHeight: 56 });
+  });
+
+  it("shows the longer three-sentence whole-set summary", async () => {
+    const value = result();
+    value.overallAssessment = "The opening repetitions use a steady pulling path. The right shoulder rises during the later pulls. The final repetitions also return faster than the first.";
+
+    const screen = await renderResults(jest.fn(), value);
+
+    expect(screen.getByTestId("whole-set-summary-text").props.children).toContain("The final repetitions also return faster than the first.");
   });
 
   it("navigates every returned issue without rendering the redundant issue belt", async () => {
