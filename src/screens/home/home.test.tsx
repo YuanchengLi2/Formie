@@ -16,10 +16,11 @@ describe("HomeScreen", () => {
     [null, 10, "checking", "—/10", "Analysis balance is being checked"],
     [0, 10, "expired", "0/10", "0 of 10 analyses available"],
     [0, 10, "purchase", "0/10", "0 of 10 analyses available"],
-  ] as const)("shows a compact quota bar for %s/%s %s", async (remaining, limit, status, fraction, label) => {
+  ] as const)("shows a long quota bar with the live fraction for %s/%s %s", async (remaining, limit, status, fraction, label) => {
     const screen = await render(<HomeScreen analysisRemaining={remaining} analysisLimit={limit} analysisStatus={status} />);
     expect(screen.getByText(fraction)).toBeTruthy();
     expect(screen.getByLabelText(label)).toBeTruthy();
+    expect(screen.getByTestId("analysis-quota-track")).toBeTruthy();
     expect(screen.queryByText(/analyses left|resets sep/i)).toBeNull();
     expect(screen.queryByText(/Subscription required|Purchase a subscription to use the app/i)).toBeNull();
   });
@@ -98,6 +99,13 @@ describe("HomeScreen", () => {
     expect(screen.getByText("View Progress")).toHaveStyle({ fontSize: 18 });
     expect(screen.getByLabelText("Formie Coach icon")).toHaveStyle({ width: 32, height: 32 });
     expect(screen.getByLabelText("View progress icon")).toHaveStyle({ width: 32, height: 32 });
+  });
+
+  it("keeps the quota meter shorter and right-aligned in the header", async () => {
+    const screen = await render(<HomeScreen analysisRemaining={9} analysisLimit={10} analysisStatus="ready" />);
+
+    expect(screen.getByTestId("home-header-actions")).toHaveStyle({ maxWidth: 250, justifyContent: "flex-end" });
+    expect(screen.getByText("9/10")).toHaveStyle({ fontSize: 14 });
   });
 
   it("surfaces an interrupted analysis so it can resume", async () => {

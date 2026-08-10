@@ -49,5 +49,6 @@ export type PurchasesClient = {
   getCustomerInfo: () => Promise<BillingCustomerInfo>;
   purchasePackage: (packageIdentifier: string, options?: { currentProductIdentifier?: string | null }) => Promise<PurchaseResult>;
   restorePurchases: () => Promise<BillingCustomerInfo>;
+  showManageSubscriptions: () => Promise<void>;
   subscribeCustomerInfo: (listener: (customerInfo: BillingCustomerInfo) => void) => () => void;
 };

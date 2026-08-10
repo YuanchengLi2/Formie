@@ -16,19 +16,19 @@ export function CenterTabButton({
   disabled?: boolean;
   variant?: "record" | "quota_exhausted" | "analysis_pending" | "purchase" | "renewal_pending" | "unavailable";
 }) {
-  const exhausted = variant === "quota_exhausted";
+  const actionDisabled = disabled || variant === "quota_exhausted";
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      accessibilityState={{ disabled }}
-      disabled={disabled}
+      accessibilityState={{ disabled: actionDisabled }}
+      disabled={actionDisabled}
       onPress={onPress}
       style={({ pressed }) => ({
         flex: 1,
         alignItems: "center",
         justifyContent: "flex-start",
-        opacity: disabled ? 0.48 : pressed ? 0.78 : 1,
+        opacity: actionDisabled ? 0.72 : pressed ? 0.78 : 1,
         transform: [{ scale: pressed ? 0.94 : 1 }],
       })}
     >
@@ -42,17 +42,17 @@ export function CenterTabButton({
           justifyContent: "center",
           borderRadius: 28,
           borderWidth: 3,
-          borderColor: "#F7D98B",
-          backgroundColor: exhausted ? colors.goldSoft : colors.gold,
-          boxShadow: exhausted ? "0 4px 16px rgba(216,166,48,0.2)" : "0 5px 22px rgba(244,181,49,0.48)",
+          borderColor: actionDisabled ? "#626262" : "#F7D98B",
+          backgroundColor: actionDisabled ? "#353535" : colors.gold,
+          boxShadow: actionDisabled ? "0 4px 16px rgba(0,0,0,0.18)" : "0 5px 22px rgba(244,181,49,0.48)",
         }}
       >
-        <View testID="center-tab-lens" style={{ width: 35, height: 35, borderRadius: 18, borderWidth: 2, borderColor: "#F9E3A7", alignItems: "center", justifyContent: "center", overflow: "hidden", backgroundColor: colors.background }}>
-          {[0, 60, 120].map((rotation) => <View key={rotation} testID="center-tab-aperture-blade" style={{ position: "absolute", width: 24, height: 5, borderRadius: 3, backgroundColor: colors.gold, transform: [{ rotate: `${rotation}deg` }, { translateX: 5 }] }} />)}
-          <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: "#F8E9C3", borderWidth: 1, borderColor: colors.gold }} />
+        <View testID="center-tab-lens" style={{ width: 35, height: 35, borderRadius: 18, borderWidth: 2, borderColor: actionDisabled ? "#777777" : "#F9E3A7", alignItems: "center", justifyContent: "center", overflow: "hidden", backgroundColor: colors.background }}>
+          {[0, 60, 120].map((rotation) => <View key={rotation} testID="center-tab-aperture-blade" style={{ position: "absolute", width: 24, height: 5, borderRadius: 3, backgroundColor: actionDisabled ? "#777777" : colors.gold, transform: [{ rotate: `${rotation}deg` }, { translateX: 5 }] }} />)}
+          <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: actionDisabled ? "#999999" : "#F8E9C3", borderWidth: 1, borderColor: actionDisabled ? "#777777" : colors.gold }} />
         </View>
       </View>
-      <Text selectable={false} style={{ marginTop: 1, color: colors.gold, fontSize: 11, lineHeight: 14, fontWeight: "700" }}>
+      <Text selectable={false} style={{ marginTop: 1, color: actionDisabled ? "#888888" : colors.gold, fontSize: 11, lineHeight: 14, fontWeight: "700" }}>
         {label}
       </Text>
     </Pressable>

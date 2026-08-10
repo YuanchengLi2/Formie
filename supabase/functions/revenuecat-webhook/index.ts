@@ -35,7 +35,7 @@ Deno.serve(async (request) => {
     applyEvent: (userId, event) => applyRevenueCatLifecycleEvent(admin, userId, event),
     loadSubscriber: (userId) => fetchRevenueCatSubscriber(userId),
     saveSubscriber: async (userId, subscriber) => {
-      await persistEntitlementLedger(admin, userId, subscriber, Deno.env.get("REVENUECAT_ENTITLEMENT_ID") ?? "formie_pro");
+      await persistEntitlementLedger(admin, userId, subscriber, Deno.env.get("REVENUECAT_ENTITLEMENT_ID") ?? "formie_pro", new Date(), true);
     },
     completeEvent: async (eventId) => {
       const { error } = await admin.from("revenuecat_webhook_events").update({ status: "completed", completed_at: new Date().toISOString(), last_error: null }).eq("event_id", eventId);

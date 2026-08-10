@@ -14,7 +14,7 @@ export function formatDashboardTimestamp(value: string | null, locale = "en-US",
   if (!value) return "Not available";
   const parsed = new Date(value);
   if (!Number.isFinite(parsed.getTime())) return "Not available";
-  const zoneOptions = timeZone ? { timeZone } : {};
+  const zoneOptions = { timeZone: timeZone ?? "UTC" };
   const formattedDate = new Intl.DateTimeFormat(locale, {
     month: "short", day: "numeric", year: "numeric", ...zoneOptions,
   }).format(parsed);
@@ -24,11 +24,66 @@ export function formatDashboardTimestamp(value: string | null, locale = "en-US",
   return `${formattedDate} at ${formattedTime}`;
 }
 
+type TestStoreSubscriptionResult = {
+  status?: unknown;
+  lifecycle_state?: unknown;
+  will_renew?: unknown;
+  billing_period_start?: unknown;
+  billing_period_end?: unknown;
+  quota_used?: unknown;
+  quota_limit?: unknown;
+  remaining?: unknown;
+  quota_period_start?: unknown;
+  quota_period_end?: unknown;
+};
+
+export function applyTestStoreSubscriptionResult(dashboard: AccountDashboardResponse, result: TestStoreSubscriptionResult): AccountDashboardResponse {
+  const lifecycleState = result.lifecycle_state;
+  if (lifecycleState !== "active_renewing" && lifecycleState !== "active_cancelled") {
+    throw new Error("The Test Store returned an invalid subscription state.");
+  }
+  const billingPeriodStart = typeof result.billing_period_start === "string" ? result.billing_period_start : dashboard.subscription.billingPeriodStart ?? null;
+  const billingPeriodEnd = typeof result.billing_period_end === "string" ? result.billing_period_end : dashboard.subscription.paidThrough;
+  const quotaPeriodStart = typeof result.quota_period_start === "string" ? result.quota_period_start : dashboard.usage.periodStart;
+  const quotaPeriodEnd = typeof result.quota_period_end === "string" ? result.quota_period_end : dashboard.usage.resetsAt;
+  const numberOrCurrent = (value: unknown, current: number | null) => Number.isInteger(value) && (value as number) >= 0 ? value as number : current;
+  return {
+    ...dashboard,
+    subscription: {
+      ...dashboard.subscription,
+      state: lifecycleState,
+      willRenew: typeof result.will_renew === "boolean" ? result.will_renew : lifecycleState === "active_renewing",
+      billingPeriodStart,
+      paidThrough: billingPeriodEnd,
+      cancelUrl: lifecycleState === "active_renewing" ? dashboard.subscription.cancelUrl : null,
+      renewalUrl: lifecycleState === "active_cancelled" ? dashboard.subscription.renewalUrl : null,
+    },
+    usage: {
+      ...dashboard.usage,
+      status: result.status === "active" ? "active" : dashboard.usage.status,
+      used: numberOrCurrent(result.quota_used, dashboard.usage.used),
+      limit: numberOrCurrent(result.quota_limit, dashboard.usage.limit),
+      remaining: numberOrCurrent(result.remaining, dashboard.usage.remaining),
+      periodStart: quotaPeriodStart,
+      resetsAt: quotaPeriodEnd,
+    },
+  };
+}
+
 function storeName(store: string | null) {
   if (store === "app_store" || store === "mac_app_store") return "Apple App Store";
   if (store === "play_store") return "Google Play";
   if (store === "test_store") return "RevenueCat Test Store";
   return "App store";
+}
+
+export function isAppleSandboxSubscription(subscription: AccountDashboardResponse["subscription"]): boolean {
+  return subscription.sandbox === true && (subscription.store === "app_store" || subscription.store === "mac_app_store");
+}
+
+export function subscriptionManagementDestination(subscription: AccountDashboardResponse["subscription"], action: SubscriptionIntentAction): string | null {
+  if (isAppleSandboxSubscription(subscription)) return "form://account/manage-subscription";
+  return action === "cancel" ? subscription.cancelUrl : subscription.renewalUrl;
 }
 
 function planDetails(subscription: AccountDashboardResponse["subscription"]) {
@@ -157,15 +212,15 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
       }).catch(() => undefined);
       const testStore = dashboard.subscription.sandbox && dashboard.subscription.store === "test_store";
       if (testStore) {
-        const { error: invokeError } = await client.functions.invoke("subscription-test-controls", {
+        const { data: changeResult, error: invokeError } = await client.functions.invoke("subscription-test-controls", {
           body: { action: action === "cancel" ? "cancel_at_period_end" : "uncancel" },
         });
         if (invokeError) throw invokeError;
-        await refreshDashboard();
+        setDashboard((current) => current ? applyTestStoreSubscriptionResult(current, changeResult as TestStoreSubscriptionResult) : current);
         setMessage(action === "cancel" ? "Cancellation confirmed. You keep access through the current paid period." : "Renewal restored for the next Test Store period.");
         return;
       }
-      const providerUrl = action === "cancel" ? dashboard.subscription.cancelUrl : dashboard.subscription.renewalUrl;
+      const providerUrl = subscriptionManagementDestination(dashboard.subscription, action);
       if (!providerUrl) throw new Error("Subscription management is unavailable right now.");
       window.location.assign(providerUrl);
     } catch {
@@ -203,7 +258,7 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
         </div>
         {error ? <div className="portal-refresh-error" role="alert"><span>{error}</span><button onClick={() => void refreshDashboard()}>Retry</button></div> : null}
         <div className="portal-expired-actions">
-          {subscribedBefore ? null : <a className="portal-primary" href="form://subscription">Open Formie</a>}
+          <a className="portal-primary" href="form://subscription">Resubscribe in Formie</a>
           <a className="portal-secondary-link" href="/support">Contact support</a>
           {logoutButton}
         </div>
@@ -215,7 +270,8 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
   const cancelled = subscription.state === "active_cancelled";
   const checkingRenewal = subscription.state === "renewal_pending";
   const testStore = subscription.sandbox && subscription.store === "test_store";
-  const managementUrl = renewing ? subscription.cancelUrl : subscription.renewalUrl;
+  const appleSandbox = isAppleSandboxSubscription(subscription);
+  const managementUrl = appleSandbox ? "form://account/manage-subscription" : renewing ? subscription.cancelUrl : subscription.renewalUrl;
   const used = usage.used ?? 0;
   const limit = usage.limit ?? 10;
   const remaining = usage.remaining ?? 0;
@@ -251,13 +307,13 @@ export function ManageSubscriptionClient({ initialDashboard, initialAuthenticate
       </section>
       {cancelled ? <article className="portal-management-card portal-resume-card">
         <div><h2>Resume your subscription</h2><p>Automatic renewal is off, so your plan won’t renew after {formatDashboardTimestamp(subscription.paidThrough)}. Resume to turn automatic renewal back on. This does not reset or refill your current analysis balance; your current paid period stays unchanged.</p></div>
-        <div className="portal-resume-actions">{testStore ? <button className="portal-manage-action portal-resume-action portal-primary-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("resume")}>Resume Subscription</button> : managementUrl ? <><button className="portal-manage-action portal-resume-action portal-primary-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("resume")}>Resume Subscription</button><a className="portal-secondary-action portal-resume-action" href={managementUrl} rel="noopener noreferrer" target="_blank">Manage billing</a></> : <button className="portal-manage-action portal-resume-action portal-primary-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("resume")}>Resume Subscription</button>}</div>
-      </article> : checkingRenewal ? <article className="portal-management-card portal-checking-card"><div><h2>Checking your subscription</h2><p>Formie is confirming the provider’s next paid period. Your allowance will update only after that period is verified.</p></div></article> : <article className="portal-management-card portal-cancel-card"><div><h2>Manage subscription</h2><p>{testStore ? "Automatic renewal is on. Canceling turns it off at the end of the current paid period; your remaining access and analyses stay available until then." : managementUrl ? "Automatic renewal is on by default and your subscription renews automatically on " + formatDashboardTimestamp(subscription.paidThrough) + ". Canceling turns automatic renewal off at period end; select Cancel Subscription to manage it in " + provider + "." : "Manage this subscription in the Formie app."}</p></div><button className="portal-manage-action portal-cancel-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("cancel")}>Cancel Subscription</button></article>}
+        <div className="portal-resume-actions">{testStore || appleSandbox ? <button className="portal-manage-action portal-resume-action portal-primary-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("resume")}>Resume Subscription</button> : managementUrl ? <><button className="portal-manage-action portal-resume-action portal-primary-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("resume")}>Resume Subscription</button><a className="portal-secondary-action portal-resume-action" href={managementUrl} rel="noopener noreferrer" target="_blank">Manage billing</a></> : <button className="portal-manage-action portal-resume-action portal-primary-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("resume")}>Resume Subscription</button>}</div>
+      </article> : checkingRenewal ? <article className="portal-management-card portal-checking-card"><div><h2>Checking your subscription</h2><p>Formie is confirming the provider’s next paid period. Your allowance will update only after that period is verified.</p></div></article> : <article className="portal-management-card portal-cancel-card"><div><h2>Manage subscription</h2><p>{testStore ? "Automatic renewal is on. Canceling turns it off at the end of the current paid period; your remaining access and analyses stay available until then." : appleSandbox ? "This Apple sandbox subscription must be managed in Formie so iOS uses the Sandbox Apple Account that made the purchase. Apple remains the cancellation authority." : managementUrl ? "Automatic renewal is on by default and your subscription renews automatically on " + formatDashboardTimestamp(subscription.paidThrough) + ". Canceling turns automatic renewal off at period end; select Cancel Subscription to manage it in " + provider + "." : "Manage this subscription in the Formie app."}</p></div><button className="portal-manage-action portal-cancel-action" disabled={Boolean(busy)} onClick={() => openSubscriptionIntent("cancel")}>Cancel Subscription</button></article>}
       <footer className="portal-billing-footer">
-        <div><strong>Billing history</strong><p>View receipts and payment history through {provider}.</p>{managementUrl ? <a href={managementUrl} rel="noopener noreferrer" target="_blank">View billing history →</a> : <span>Billing history is managed by your subscription provider.</span>}</div>
+        <div><strong>Billing history</strong><p>View receipts and payment history through {provider}.</p>{managementUrl ? <a href={managementUrl} rel="noopener noreferrer" target={appleSandbox ? undefined : "_blank"}>{appleSandbox ? "Manage Apple sandbox subscription →" : "View billing history →"}</a> : <span>Billing history is managed by your subscription provider.</span>}</div>
         <div><strong>Need help with your subscription?</strong><p>Formie does not store your payment details.</p><a href="/support">Contact support →</a></div>
       </footer>
-      <SubscriptionIntentDialog key={intentAction ?? "closed"} visible={Boolean(intentAction)} action={intentAction ?? "cancel"} provider={provider} paidThrough={subscription.paidThrough} onClose={() => setIntentAction(null)} onExecute={executeSubscriptionChange} />
+      <SubscriptionIntentDialog key={intentAction ?? "closed"} visible={Boolean(intentAction)} action={intentAction ?? "cancel"} provider={provider} paidThrough={subscription.paidThrough} opensNativeApp={appleSandbox} onClose={() => setIntentAction(null)} onExecute={executeSubscriptionChange} />
     </main>
   </AccountPortalShell>;
 }

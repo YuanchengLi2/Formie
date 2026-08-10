@@ -61,6 +61,7 @@ const approvedArtwork = {
   "long-term-value": require("../../../assets/production/onboarding/extracted/14-long-term-value-illustration.png"),
   loading: require("../../../assets/production/onboarding/extracted/15-loading-illustration.png"),
 } as const;
+const productDemonstrationCoachingOverlay = require("../../../assets/production/onboarding/generated/product-demonstration-coaching-overlay.png");
 
 type ApprovedArtworkStep = keyof typeof approvedArtwork;
 
@@ -151,7 +152,10 @@ export function getApprovedArtworkSize(step: ApprovedArtworkStep, windowWidth: n
 function ApprovedIllustration({ step }: { step: ApprovedArtworkStep }) {
   const { height, width } = useWindowDimensions();
   const size = getApprovedArtworkSize(step, width, height);
-  return <Image testID={`approved-illustration-${step}`} accessibilityLabel={`${copy[step].title} illustration`} source={approvedArtwork[step]} contentFit="contain" contentPosition="center" style={[styles.approvedIllustration, size]} />;
+  return <View style={[styles.approvedIllustrationCanvas, size]}>
+    <Image testID={`approved-illustration-${step}`} accessibilityLabel={`${copy[step].title} illustration`} source={approvedArtwork[step]} contentFit="contain" contentPosition="center" style={styles.approvedIllustration} />
+    {step === "product-demonstration" ? <Image testID="product-demonstration-coaching-overlay" accessibilityElementsHidden pointerEvents="none" source={productDemonstrationCoachingOverlay} contentFit="contain" contentPosition="center" style={styles.productDemonstrationCoachingOverlay} /> : null}
+  </View>;
 }
 
 function NativeArtworkScreen({ step, onNext, onBack, onSignIn }: { step: "welcome" | Exclude<ApprovedArtworkStep, "loading">; onNext: () => void; onBack?: () => void; onSignIn?: () => void }) {
@@ -334,7 +338,9 @@ const styles = StyleSheet.create({
   approvedIllustrationWrap: { flex: 1, minHeight: 0, width: "100%", alignItems: "center", justifyContent: "center", marginTop: 10 },
   approvedIllustrationWrapShort: { marginTop: 4 },
   welcomeIllustrationWrap: { marginTop: 0, paddingVertical: 6 },
-  approvedIllustration: {},
+  approvedIllustrationCanvas: { position: "relative", overflow: "visible" },
+  approvedIllustration: { width: "100%", height: "100%" },
+  productDemonstrationCoachingOverlay: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%", opacity: 0.94, transform: [{ scale: 1.07 }] },
   artworkClose: { color: "#D7D3CE", fontSize: 13, lineHeight: 18, textAlign: "center", fontWeight: "600", paddingVertical: 4 },
   loadingNativeStatus: { width: "100%", maxWidth: 420, alignItems: "center", gap: 10, paddingHorizontal: 24 },
   surface: { flex: 1, width: "100%", maxWidth: 480, alignSelf: "center", paddingHorizontal: 22 },

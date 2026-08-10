@@ -11,11 +11,12 @@ const mockBillingLogOut = jest.fn().mockResolvedValue(undefined);
 const mockAuthLogOut = jest.fn().mockResolvedValue(undefined);
 let mockProviderStatus: "loading" | "ready" | "error" = "ready";
 let mockAccessStatus: "active" | "expired" | "unknown" = "active";
+let mockLifecycleState = "active_renewing";
 
 jest.mock("expo-linking", () => ({ openURL: jest.fn().mockResolvedValue(undefined) }));
 jest.mock("@/features/auth/auth-provider", () => ({ useAuth: () => ({ phase: "authenticated", user: { id: "user-1" }, logOut: mockAuthLogOut }) }));
 jest.mock("@/features/profile/profile-provider", () => ({ useProfile: () => ({ profile: { onboardingCompleted: true, onboardingVersion: "approved-v1" } }) }));
-jest.mock("@/features/access/access-provider", () => ({ useAccess: () => ({ status: mockProviderStatus, access: { status: mockAccessStatus }, error: mockProviderStatus === "error" ? "offline" : null, refresh: mockRefresh }) }));
+jest.mock("@/features/access/access-provider", () => ({ useAccess: () => ({ status: mockProviderStatus, access: { status: mockAccessStatus, lifecycleState: mockLifecycleState }, error: mockProviderStatus === "error" ? "offline" : null, refresh: mockRefresh }) }));
 jest.mock("@/features/billing/billing-provider", () => ({ useBilling: () => ({ state: "ready", priceString: "$9.99", purchase: mockPurchase, restore: mockRestore, logOut: mockBillingLogOut, error: null, restoreMessage: null }) }));
 
 describe("SubscriptionAccessGate", () => {
@@ -24,6 +25,7 @@ describe("SubscriptionAccessGate", () => {
     jest.clearAllMocks();
     mockProviderStatus = "ready";
     mockAccessStatus = "active";
+    mockLifecycleState = "active_renewing";
   });
 
   it("renders protected application content only for active completed accounts", async () => {
@@ -51,5 +53,15 @@ describe("SubscriptionAccessGate", () => {
     expect(mockRefresh).toHaveBeenCalled();
     expect(mockBillingLogOut).toHaveBeenCalledTimes(1);
     expect(mockAuthLogOut).toHaveBeenCalledWith("user");
+  });
+
+  it("keeps application content visible during the renewal boundary", async () => {
+    mockAccessStatus = "unknown";
+    mockLifecycleState = "renewal_pending";
+    const screen = await render(gated());
+
+    expect(screen.getByText("Protected history")).toBeTruthy();
+    expect(screen.queryByText("Checking your subscription")).toBeNull();
+    expect(screen.queryByText("We couldnâ€™t verify your subscription")).toBeNull();
   });
 });

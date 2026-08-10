@@ -15,11 +15,13 @@ describe("ProfileScreen", () => {
     expect(screen.queryByRole("button", { name: /delete account/i })).toBeNull();
   });
 
-  it("opens the subscription management callback from Settings", async () => {
+  it("opens the authoritative native management flow without exposing client-side cancel mutations", async () => {
     const onManageSubscription = jest.fn();
-    const screen = await render(<ProfileScreen onManageSubscription={onManageSubscription} />);
+    const screen = await render(<ProfileScreen subscription={{ plan: "Formie Monthly", stateLabel: "Canceled · Automatic renewal off" }} onManageSubscription={onManageSubscription} />);
+    expect(screen.getByText("Canceled · Automatic renewal off")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Manage subscription" }));
     expect(onManageSubscription).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Cancel Subscription|Resume Subscription|Resubscribe/i)).toBeNull();
   });
 
   it("stages athlete and capture edits until Apply Settings", async () => {
@@ -59,12 +61,12 @@ describe("ProfileScreen", () => {
 
   it("shows grouped identity, subscription, and development Test Store lifecycle controls", async () => {
     const onTestControl = jest.fn().mockResolvedValue(undefined);
-    const screen = await render(<ProfileScreen displayName="Yuan" email="yuan@example.com" subscription={{ plan: "Formie Annual", stateLabel: "Active · Next billing Sep 1, 2026 at 8:56 AM UTC", periodEndsLabel: "Test period ends Sep 1, 2026 at 8:56 AM UTC" }} showTestControls onTestControl={onTestControl} />);
+    const screen = await render(<ProfileScreen displayName="Yuan" email="yuan@example.com" subscription={{ plan: "Formie Annual", stateLabel: "Active · Automatic renewal on · Next billing Sep 1, 2026 at 8:56 AM UTC" }} showTestControls onTestControl={onTestControl} />);
     expect(screen.getByText("yuan@example.com")).toBeTruthy();
     expect(screen.getByText("Formie Annual")).toBeTruthy();
     expect(screen.queryByText(/analyses left/i)).toBeNull();
-    expect(screen.getByText("Active · Next billing Sep 1, 2026 at 8:56 AM UTC")).toBeTruthy();
-    expect(screen.getByText("Test period ends Sep 1, 2026 at 8:56 AM UTC")).toBeTruthy();
+    expect(screen.getByText("Active · Automatic renewal on · Next billing Sep 1, 2026 at 8:56 AM UTC")).toBeTruthy();
+    expect(screen.queryByText(/Test period ends/i)).toBeNull();
     expect(screen.getByText("Test Store lifecycle")).toBeTruthy();
     expect(screen.queryByText("Undo Cancellation")).toBeNull();
     await fireEvent.press(screen.getByText("Start 20-minute Period"));
@@ -72,14 +74,14 @@ describe("ProfileScreen", () => {
   });
 
   it("shows the canceled access-end timestamp in Settings", async () => {
-    const screen = await render(<ProfileScreen subscription={{ plan: "Formie Monthly", stateLabel: "Canceled · Access ends Sep 1, 2026 at 8:56 AM UTC" }} />);
-    expect(screen.getByText("Canceled · Access ends Sep 1, 2026 at 8:56 AM UTC")).toBeTruthy();
+    const screen = await render(<ProfileScreen subscription={{ plan: "Formie Monthly", stateLabel: "Canceled · Automatic renewal off · Access ends Sep 1, 2026 at 8:56 AM UTC" }} />);
+    expect(screen.getByText("Canceled · Automatic renewal off · Access ends Sep 1, 2026 at 8:56 AM UTC")).toBeTruthy();
     expect(screen.queryByText(/Next billing/i)).toBeNull();
   });
 
   it("applies a chosen remaining balance and exposes the simulated period action", async () => {
     const onSetTestRemaining = jest.fn().mockResolvedValue(undefined);
-    const screen = await render(<ProfileScreen subscription={{ plan: "Formie Monthly", stateLabel: "Active", periodEndsLabel: "Test period ends soon" }} testRemaining={6} showTestControls onSetTestRemaining={onSetTestRemaining} />);
+    const screen = await render(<ProfileScreen subscription={{ plan: "Formie Monthly", stateLabel: "Active" }} testRemaining={6} showTestControls onSetTestRemaining={onSetTestRemaining} />);
     await fireEvent.press(screen.getByLabelText("Decrease analyses remaining"));
     expect(screen.getByText("Analyses remaining: 5")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Apply remaining analyses"));

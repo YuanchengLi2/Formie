@@ -1,9 +1,11 @@
 import { act, fireEvent, render, within } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 
 import { initialOnboardingAnswers, type OnboardingStep } from "@/features/onboarding/types";
 
 import { ApprovedOnboardingScreen, getApprovedArtworkSize, getOnboardingDensity, type ApprovedOnboardingScreenProps } from "./approved-onboarding";
+import { getPremiumArtworkLayout } from "./premium-screen";
 
 const mockSelectionAsync = jest.fn().mockResolvedValue(undefined);
 const mockImpactAsync = jest.fn().mockResolvedValue(undefined);
@@ -76,6 +78,19 @@ describe("approved onboarding screen", () => {
   it("removes the redundant product-demonstration close copy", async () => {
     const { screen } = await renderStep("product-demonstration");
     expect(screen.queryByText("See what happened. Know what changes.")).toBeNull();
+  });
+
+  it("frames the decoded squat with a separate decorative coaching overlay", async () => {
+    const { screen } = await renderStep("product-demonstration");
+
+    expect(screen.getByTestId("approved-illustration-product-demonstration")).toBeTruthy();
+    expect(screen.getByTestId("product-demonstration-coaching-overlay", { includeHiddenElements: true })).toHaveProp("accessibilityElementsHidden", true);
+  });
+
+  it("does not place squat coaching telemetry on unrelated artwork screens", async () => {
+    const { screen } = await renderStep("why-formie");
+
+    expect(screen.queryByTestId("product-demonstration-coaching-overlay")).toBeNull();
   });
 
   it.each(["product-value", "why-formie", "product-demonstration", "long-term-value", "loading"] as const)("renders native copy around the phone-free %s artwork", async (step) => {
@@ -390,9 +405,12 @@ describe("approved onboarding screen", () => {
     const { screen, props } = await renderStep("premium", { price: "$12.49" });
 
     expect(screen.getByLabelText(/Formie plans paywall/)).toBeTruthy();
+    expect(screen.getByText("Continue with Pro")).toBeTruthy();
     expect(screen.queryByText("Skip")).toBeNull();
     expect(screen.queryByText("Restore Purchase")).toBeNull();
-    await fireEvent.press(screen.getByRole("button", { name: "Start monthly - $12.49/mo" }));
+    const purchaseButton = screen.getByRole("button", { name: "Start monthly - $12.49/mo" });
+    expect(purchaseButton).toHaveStyle({ minHeight: 56 });
+    await fireEvent.press(purchaseButton);
     expect(props.onPurchasePlan).toHaveBeenCalledWith("monthly");
   });
 
@@ -408,11 +426,24 @@ describe("approved onboarding screen", () => {
   it("uses the latest supplied reference paywall composition", async () => {
     const { screen } = await renderStep("premium", { price: "$9.99" });
 
+    const scroll = screen.getByTestId("premium-scroll");
+    expect(scroll.props.contentInsetAdjustmentBehavior).toBe("never");
+    expect(scroll.props.bounces).toBe(true);
+    expect(scroll.props.alwaysBounceVertical).toBe(true);
     expect(screen.getByTestId("premium-reference-image")).toBeTruthy();
+    expect(screen.getByTestId("premium-status-mask")).toBeTruthy();
     expect(screen.getByLabelText(/Formie plans paywall/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Monthly" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Yearly" })).toBeNull();
     expect(screen.queryByTestId("approved-premium-screenshot")).toBeNull();
+  });
+
+  it("allows a small amount of paywall scrolling and keeps the live CTA compact", async () => {
+    const { screen } = await renderStep("premium", { price: "$9.99" });
+    const layout = getPremiumArtworkLayout(390, 844);
+
+    expect(layout.contentMinHeight).toBeGreaterThan(layout.cropHeight);
+    expect(screen.getByRole("button", { name: "Start monthly - $9.99/mo" })).toHaveStyle({ minHeight: 56 });
   });
 
   it("exposes the reference paywall content to accessibility", async () => {
@@ -428,8 +459,34 @@ describe("approved onboarding screen", () => {
     expect(summary).toContain("Formie Coach");
     expect(summary).toContain("Continue with Pro");
     expect(summary).toContain("Secure payment");
-    expect(screen.getByLabelText(/Formie plans paywall/).props.accessibilityLabel).toContain("Trusted by 1,000+ lifters");
-    expect(summary).toContain("Real progress. Real results.");
+    expect(summary).not.toContain("Trusted by 1,000+ lifters");
+    expect(summary).not.toContain("Real progress. Real results.");
+  });
+
+  it("preserves the supplied paywall aspect ratio and source coordinates", () => {
+    const layout = getPremiumArtworkLayout(390, 844);
+
+    expect(layout.imageWidth).toBe(layout.contentWidth);
+    expect(layout.imageLeft).toBe(0);
+    expect(layout.imageTop).toBe(0);
+    expect(layout.topCropSourceY).toBe(0);
+    expect(layout.statusMaskHeight).toBeGreaterThan(0);
+    expect(layout.cropSourceEndY).toBe(1846);
+    expect(layout.imageHeight / layout.imageWidth).toBeCloseTo(1846 / 852, 5);
+    expect(layout.statusMaskHeight / layout.imageWidth).toBeCloseTo(76 / 852, 5);
+    expect(layout.cta.top / layout.imageWidth).toBeCloseTo(1640 / 852, 5);
+    expect(layout.contentMinHeight).toBeGreaterThanOrEqual(844);
+    expect(layout.cta.top + layout.cta.height).toBeLessThan(layout.cropHeight);
+    expect(layout.cta.height).toBe(56);
+
+    const shortPhoneLayout = getPremiumArtworkLayout(390, 667);
+    expect(shortPhoneLayout.contentMinHeight).toBeGreaterThan(667);
+    expect(shortPhoneLayout.imageHeight / shortPhoneLayout.imageWidth).toBeCloseTo(1846 / 852, 5);
+  });
+
+  it("keeps the live purchase surface opaque while it is reconciling", async () => {
+    const reconciling = await renderStep("premium", { purchaseState: "reconciling", busy: true });
+    expect(StyleSheet.flatten(reconciling.screen.getByTestId("onboarding-bottom-cta").props.style).opacity).toBe(1);
   });
 
   it("renders the supplied reference image as the full paywall surface", async () => {

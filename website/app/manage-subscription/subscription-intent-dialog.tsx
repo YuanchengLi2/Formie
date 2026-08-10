@@ -12,8 +12,8 @@ function formatPaidThrough(value: string | null | undefined): string {
   if (!value) return "the end of your paid period";
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "the end of your paid period";
-  const formattedDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
-  const formattedTime = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZoneName: "short" }).format(date);
+  const formattedDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(date);
+  const formattedTime = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZoneName: "short", timeZone: "UTC" }).format(date);
   return `${formattedDate} at ${formattedTime}`;
 }
 
@@ -22,6 +22,7 @@ export function SubscriptionIntentDialog({
   action,
   provider,
   paidThrough,
+  opensNativeApp = false,
   onClose,
   onExecute,
 }: {
@@ -29,6 +30,7 @@ export function SubscriptionIntentDialog({
   action: SubscriptionIntentAction;
   provider?: string;
   paidThrough?: string | null;
+  opensNativeApp?: boolean;
   onClose: () => void;
   onExecute: (reason?: CancellationReason) => Promise<void>;
 }) {
@@ -88,7 +90,7 @@ export function SubscriptionIntentDialog({
             </div>
             <div className="subscription-intent-actions">
               <button type="button" className="subscription-intent-secondary" onClick={() => setStage("confirm")}>Back</button>
-              <button type="button" className="subscription-intent-primary subscription-intent-cancel" disabled={!reason} onClick={confirm}>Continue</button>
+              <button type="button" className="subscription-intent-primary subscription-intent-cancel" disabled={!reason} onClick={confirm}>{opensNativeApp ? "Open Formie" : `Continue to ${provider ?? "provider"}`}</button>
             </div>
           </>
         ) : stage === "error" ? (
@@ -101,19 +103,21 @@ export function SubscriptionIntentDialog({
             </div>
           </>
         ) : stage === "executing" ? (
-          <p id="subscription-intent-detail" className="subscription-intent-progress">Updating your subscription...</p>
+          <p id="subscription-intent-detail" className="subscription-intent-progress">{opensNativeApp ? "Opening Formie..." : `Opening ${provider ?? "subscription settings"}...`}</p>
         ) : (
           <>
             <p id="subscription-intent-detail">
-              {action === "cancel"
-                ? `Canceling turns automatic renewal off. You keep Formie Pro through ${formatPaidThrough(paidThrough)}. It does not reset or remove your current analysis balance.`
+              {opensNativeApp
+                ? `This opens Formie, where Apple's native subscription sheet can use the Sandbox Apple Account that made the purchase. Formie changes the subscription state only after Apple confirms it. Your current balance remains unchanged through ${formatPaidThrough(paidThrough)}.`
+                : action === "cancel"
+                ? `Canceling in ${provider ?? "your subscription provider"} turns automatic renewal off. You keep Formie Pro through ${formatPaidThrough(paidThrough)}. It does not reset or remove your current analysis balance. Formie updates only after the provider confirms the change.`
                 : provider
                   ? `Resuming turns automatic renewal back on. It does not reset or refill your current analysis balance or start a new paid period today. This opens ${provider} subscription settings so you can restore renewal after your current paid period ends.`
                   : `Resuming turns automatic renewal back on. It does not reset or refill your current analysis balance or start a new paid period today. Your current paid period remains through ${formatPaidThrough(paidThrough)}.`}
             </p>
             <div className="subscription-intent-actions">
               <button type="button" className="subscription-intent-secondary" onClick={onClose}>{action === "cancel" ? "No, keep subscription" : "Not now"}</button>
-              <button type="button" className="subscription-intent-primary subscription-intent-cancel" onClick={confirm}>{action === "cancel" ? "Yes, cancel subscription" : "Yes, resubscribe"}</button>
+              <button type="button" className="subscription-intent-primary subscription-intent-cancel" onClick={confirm}>{action === "cancel" ? "Continue" : opensNativeApp ? "Open Formie" : `Continue to ${provider ?? "provider"}`}</button>
             </div>
           </>
         )}

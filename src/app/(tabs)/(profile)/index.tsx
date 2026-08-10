@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Linking } from "react-native";
 import { type Href, useRouter } from "expo-router";
 
@@ -10,15 +10,8 @@ import { useOnboarding } from "@/features/onboarding/onboarding-store";
 import { useCapturePreferences } from "@/features/capture/capture-preferences";
 import { useProfile } from "@/features/profile/profile-provider";
 import { useAccess } from "@/features/access/access-provider";
-import { formatBillingTimestamp, formatSubscriptionStateLabel } from "@/features/access/account-access";
+import { formatSubscriptionStateLabel } from "@/features/access/account-access";
 import { runSubscriptionTestControl, setSubscriptionTestRemaining } from "@/features/billing/subscription-test-controls";
-import { SubscriptionIntentModal } from "@/components/subscription-intent-modal";
-import {
-  executeSubscriptionIntent,
-  recordSubscriptionIntent,
-  type CancellationReason,
-  type SubscriptionIntentAction,
-} from "@/features/billing/subscription-intent";
 
 export default function ProfileRoute() {
   const auth = useAuth();
@@ -30,7 +23,6 @@ export default function ProfileRoute() {
   const capture = useCapturePreferences((state) => state.preferences);
   const hydrateCapture = useCapturePreferences((state) => state.hydrate);
   const updateCapture = useCapturePreferences((state) => state.update);
-  const [intentAction, setIntentAction] = useState<SubscriptionIntentAction | null>(null);
   const legal = (() => {
     try {
       return getLegalLinks();
@@ -41,24 +33,6 @@ export default function ProfileRoute() {
   useEffect(() => {
     void hydrateCapture();
   }, [hydrateCapture]);
-  const executeIntent = async (reason?: CancellationReason) => {
-    if (!intentAction) return;
-    await executeSubscriptionIntent({
-      action: intentAction,
-      reason: reason ?? null,
-      store: access.access.store,
-      isTestStore: access.access.sandbox && access.access.store === "test_store",
-      managementUrl: billing.subscription?.managementURL ?? null,
-    }, {
-      recordIntent: (input) => recordSubscriptionIntent(input),
-      runTestControl: async (action) => {
-        await runSubscriptionTestControl(action);
-      },
-      openProviderUrl: (url) => Linking.openURL(url),
-      refreshAccess: access.refresh,
-    });
-  };
-
   return (
     <>
       <ProfileScreen
@@ -67,9 +41,6 @@ export default function ProfileRoute() {
       subscription={{
         plan: access.access.planCode === "annual" ? "Formie Annual" : "Formie Monthly",
         stateLabel: formatSubscriptionStateLabel(access.access),
-        periodEndsLabel: access.access.sandbox && access.access.store === "test_store" && access.access.paidThrough
-          ? `Test period ends ${formatBillingTimestamp(access.access.paidThrough)}`
-          : null,
       }}
       capturePreferences={capture}
       onSaveProfile={async (nextProfile) => {
@@ -78,11 +49,11 @@ export default function ProfileRoute() {
       onSaveCapturePreferences={updateCapture}
       onSendFeedback={() => router.push("/account/send-feedback" as Href)}
       onManageSubscription={() => {
-        if (access.access.status !== "active") {
+        if (access.access.status === "expired") {
           router.push("/subscription" as Href);
           return;
         }
-        setIntentAction(access.access.lifecycleState === "active_cancelled" ? "resume" : "cancel");
+        router.push("/account/manage-subscription" as Href);
       }}
       showTestControls={access.access.sandbox && access.access.store === "test_store"}
       testRemaining={access.access.remaining}
@@ -104,12 +75,6 @@ export default function ProfileRoute() {
         await onboarding.markLoggedOut();
         await auth.logOut("user");
       }}
-      />
-      <SubscriptionIntentModal
-        visible={Boolean(intentAction)}
-        action={intentAction ?? "cancel"}
-        onClose={() => setIntentAction(null)}
-        onExecute={executeIntent}
       />
     </>
   );

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { formatDashboardTimestamp, ManageSubscriptionClient, nextDashboardRefreshDelay } from "./manage-subscription-client";
+import { applyTestStoreSubscriptionResult, formatDashboardTimestamp, isAppleSandboxSubscription, ManageSubscriptionClient, nextDashboardRefreshDelay, subscriptionManagementDestination } from "./manage-subscription-client";
 
 const styles = readFileSync(resolve(__dirname, "../globals.css"), "utf8");
 const clientSource = readFileSync(resolve(__dirname, "manage-subscription-client.tsx"), "utf8");
@@ -25,6 +25,50 @@ test("dashboard listens for both canonical entitlement and Test Store lifecycle 
 
 test("billing timestamps include exact time and an explicit zone", () => {
   assert.equal(formatDashboardTimestamp("2026-09-07T08:56:00Z", "en-US", "UTC"), "Sep 7, 2026 at 8:56 AM UTC");
+  assert.equal(formatDashboardTimestamp("2026-09-07T08:56:00Z"), "Sep 7, 2026 at 8:56 AM UTC");
+});
+
+test("Test Store cancellation uses the mutation result instead of waiting for a second dashboard refresh", () => {
+  const current = { account: { email: "u@example.com", displayName: "Yuan", profileExists: true }, usage: { status: "active" as const, used: 2, limit: 10, remaining: 8, periodStart: "2026-08-01T00:00:00Z", resetsAt: "2026-09-01T00:00:00Z" }, subscription: { state: "active_renewing" as const, planCode: "monthly" as const, willRenew: true, billingPeriodStart: "2026-08-01T00:00:00Z", productIdentifier: "formie_monthly", store: "test_store", paidThrough: "2026-09-01T00:00:00Z", cancelUrl: null, renewalUrl: null, sandbox: true } };
+
+  const updated = applyTestStoreSubscriptionResult(current, {
+    status: "active",
+    lifecycle_state: "active_cancelled",
+    will_renew: false,
+    billing_period_start: "2026-08-01T00:00:00Z",
+    billing_period_end: "2026-09-01T00:00:00Z",
+    quota_used: 2,
+    quota_limit: 10,
+    remaining: 8,
+    quota_period_start: "2026-08-01T00:00:00Z",
+    quota_period_end: "2026-09-01T00:00:00Z",
+  });
+
+  assert.equal(updated.subscription.state, "active_cancelled");
+  assert.equal(updated.subscription.willRenew, false);
+  assert.equal(updated.subscription.cancelUrl, null);
+  assert.equal(updated.usage.remaining, 8);
+  assert.equal(updated.account, current.account);
+});
+
+test("Apple sandbox management is handed to Formie's native StoreKit screen", () => {
+  const subscription = { state: "active_renewing" as const, planCode: "monthly" as const, willRenew: true, billingPeriodStart: "2026-08-10T02:34:50Z", productIdentifier: "formie_monthly", store: "app_store", paidThrough: "2026-08-11T02:34:50Z", cancelUrl: "https://apps.apple.com/account/subscriptions", renewalUrl: null, sandbox: true };
+  assert.equal(isAppleSandboxSubscription(subscription), true);
+  assert.equal(subscriptionManagementDestination(subscription, "cancel"), "form://account/manage-subscription");
+});
+
+test("production Apple management keeps the provider URL", () => {
+  const subscription = { state: "active_renewing" as const, planCode: "monthly" as const, willRenew: true, billingPeriodStart: "2026-08-10T02:34:50Z", productIdentifier: "formie_monthly", store: "app_store", paidThrough: "2026-09-10T02:34:50Z", cancelUrl: "https://apps.apple.com/account/subscriptions", renewalUrl: null, sandbox: false };
+  assert.equal(isAppleSandboxSubscription(subscription), false);
+  assert.equal(subscriptionManagementDestination(subscription, "cancel"), subscription.cancelUrl);
+});
+
+test("Apple sandbox dashboard points management back to the native Formie route", () => {
+  const html = renderToStaticMarkup(<ManageSubscriptionClient initialDashboard={{ account: { email: "u@example.com", displayName: "Yuan", profileExists: true }, usage: { status: "active", used: 1, limit: 10, remaining: 9, periodStart: "2026-08-10T02:34:50Z", resetsAt: "2026-08-11T02:34:50Z" }, subscription: { state: "active_renewing", planCode: "monthly", willRenew: true, billingPeriodStart: "2026-08-10T02:34:50Z", productIdentifier: "formie_monthly", store: "app_store", paidThrough: "2026-08-11T02:34:50Z", cancelUrl: "https://apps.apple.com/account/subscriptions", renewalUrl: null, sandbox: true } }} />);
+  assert.match(html, /Sandbox Apple Account/);
+  assert.match(html, /href="form:\/\/account\/manage-subscription"/);
+  assert.match(html, /Manage Apple sandbox subscription/);
+  assert.doesNotMatch(html, /href="https:\/\/apps\.apple\.com\/account\/subscriptions"/);
 });
 
 test("signed-out portal offers Apple and Google with visibly larger icons and buttons", () => { const html = renderToStaticMarkup(<ManageSubscriptionClient initialDashboard={null} />); assert.match(html, /Continue with Apple/); assert.match(html, /Continue with Google/); assert.match(html, /apple-provider\.png/); assert.match(html, /google-provider\.png/); assert.match(html, /width="44" height="44"/); assert.match(styles, /\.social-login button\s*\{[^}]*min-height:\s*68px/); assert.match(styles, /grid-template-columns:\s*44px 1fr 44px/); assert.match(styles, /\.provider-icon\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/); assert.doesNotMatch(html, /email.*input|password/i); });
@@ -87,8 +131,8 @@ test("expired account is directed to repurchase in the Formie app", () => {
   assert.match(html, /Your subscription has ended/i);
   assert.match(html, /\$9\.99.*month/i);
   assert.doesNotMatch(html, /Annual|\$99\.99|\/ year/i);
-  assert.doesNotMatch(html, /Open Formie to resubscribe/i);
-  assert.doesNotMatch(html, /form:\/\/subscription/);
+  assert.match(html, /Resubscribe in Formie/i);
+  assert.match(html, /form:\/\/subscription/);
   assert.match(html, /Contact support/i);
   assert.doesNotMatch(html, />Expired<|ANALYSES REMAINING|Manage Subscription|Account navigation/i);
 });
@@ -97,6 +141,7 @@ test("expired account without a store URL is still directed to the app", () => {
 
   assert.match(html, /Contact support/i);
   assert.doesNotMatch(html, /Annual|\$99\.99|\/ year/i);
-  assert.doesNotMatch(html, /Open Formie to resubscribe|form:\/\/subscription/i);
+  assert.match(html, /Resubscribe in Formie/i);
+  assert.match(html, /form:\/\/subscription/i);
   assert.doesNotMatch(html, /Test Store subscriptions do not have an end-user cancellation page|Resubscribe in the App|Account navigation/i);
 });

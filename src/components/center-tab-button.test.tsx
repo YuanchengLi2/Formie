@@ -23,14 +23,14 @@ describe("CenterTabButton", () => {
     expect(screen.getAllByTestId("center-tab-aperture-blade")).toHaveLength(3);
   });
 
-  it("keeps exhausted Record pressable so its parent can explain the billing state", async () => {
+  it("grays out and disables exhausted Record instead of opening a recording", async () => {
     const onPress = jest.fn();
     const screen = await render(<CenterTabButton variant="quota_exhausted" label="Record" accessibilityLabel="Record. Monthly analysis allowance used" onPress={onPress} />);
-    expect(screen.getByLabelText("Record. Monthly analysis allowance used").props.accessibilityState).toEqual({ disabled: false });
-    expect(screen.getByTestId("center-tab-circle")).not.toHaveStyle({ backgroundColor: "#353535" });
+    expect(screen.getByLabelText("Record. Monthly analysis allowance used").props.accessibilityState).toEqual({ disabled: true });
+    expect(screen.getByTestId("center-tab-circle")).toHaveStyle({ backgroundColor: "#353535" });
     expect(screen.getAllByTestId("center-tab-aperture-blade")).toHaveLength(3);
     await fireEvent.press(screen.getByLabelText("Record. Monthly analysis allowance used"));
-    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(onPress).not.toHaveBeenCalled();
   });
 
   it.each([

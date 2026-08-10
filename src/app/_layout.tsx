@@ -39,6 +39,7 @@ function RootNavigator() {
       <Stack.Protected guard={appUnlocked}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="account/send-feedback" options={{ headerShown: true, title: "Send Feedback", headerBackButtonDisplayMode: "minimal" }} />
+        <Stack.Screen name="account/manage-subscription" options={{ headerShown: true, title: "Subscription", headerBackButtonDisplayMode: "minimal" }} />
         <Stack.Screen name="exercise-selection" options={{ headerShown: true, title: "Choose Exercise", headerBackButtonDisplayMode: "minimal" }} />
         <Stack.Screen name="exercise-guide" options={{ headerShown: true, title: "Exercise Guide", headerBackButtonDisplayMode: "minimal" }} />
         <Stack.Screen name="recording-tips" options={{ headerShown: true, title: "Recording Tips", headerBackButtonDisplayMode: "minimal" }} />

@@ -1,4 +1,4 @@
-import { canOpenCompletedAccount, canOpenSubscriptionScreen, formatAnalysisBalance, formatAnalysisFraction, formatBillingTimestamp, formatSubscriptionDate, formatSubscriptionStateLabel, resolveAnalysisEntry } from "./account-access";
+import { canOpenCompletedAccount, canOpenSubscriptionScreen, formatAnalysisBalance, formatAnalysisEntryLabel, formatAnalysisFraction, formatBillingTimestamp, formatSubscriptionDate, formatSubscriptionStateLabel, resolveAnalysisEntry } from "./account-access";
 import type { AccessStatus } from "./types";
 
 const access = (status: AccessStatus["status"], canAnalyze: boolean, remaining: number | null): AccessStatus => ({
@@ -66,6 +66,11 @@ describe("analysis entry policy", () => {
     expect(resolveAnalysisEntry("ready", access("expired", false, 0))).toBe("purchase");
   });
 
+  it("keeps an exhausted or canceled account on a gray Record action", () => {
+    expect(formatAnalysisEntryLabel("quota_exhausted", "active_cancelled", 0)).toBe("Record");
+    expect(formatAnalysisEntryLabel("quota_exhausted", "active_renewing", 0)).toBe("Record");
+  });
+
   it("does not start recording while access is unresolved", () => {
     expect(resolveAnalysisEntry("loading", access("unknown", false, null))).toBe("unavailable");
     expect(resolveAnalysisEntry("error", access("active", true, 8))).toBe("unavailable");
@@ -106,10 +111,11 @@ describe("subscription calendar dates", () => {
   });
 
   it("labels cancelled, expired, and never-subscribed settings without claiming renewal", () => {
-    expect(formatSubscriptionStateLabel({ lifecycleState: "active_cancelled", paidThrough: "2026-09-01T08:56:00Z" }, "en-US", "UTC")).toBe("Canceled · Access ends Sep 1, 2026 at 8:56 AM UTC");
-    expect(formatSubscriptionStateLabel({ lifecycleState: "expired", paidThrough: "2026-09-01T08:56:00Z" }, "en-US", "UTC")).toBe("Expired · Access ended Sep 1, 2026 at 8:56 AM UTC");
-    expect(formatSubscriptionStateLabel({ lifecycleState: "active_renewing", paidThrough: "2026-09-01T08:56:00Z" }, "en-US", "UTC")).toBe("Active · Next billing Sep 1, 2026 at 8:56 AM UTC");
-    expect(formatSubscriptionStateLabel({ lifecycleState: "not_subscribed", paidThrough: null })).toBe("No active subscription");
+    expect(formatSubscriptionStateLabel({ lifecycleState: "active_cancelled", paidThrough: "2026-09-01T08:56:00Z" }, "en-US", "UTC")).toBe("Canceled · Automatic renewal off · Access ends Sep 1, 2026 at 8:56 AM UTC");
+    expect(formatSubscriptionStateLabel({ lifecycleState: "expired", paidThrough: "2026-09-01T08:56:00Z" }, "en-US", "UTC")).toBe("Expired · Automatic renewal off · Access ended Sep 1, 2026 at 8:56 AM UTC");
+    expect(formatSubscriptionStateLabel({ lifecycleState: "active_renewing", paidThrough: "2026-09-01T08:56:00Z" }, "en-US", "UTC")).toBe("Active · Automatic renewal on · Next billing Sep 1, 2026 at 8:56 AM UTC");
+    expect(formatSubscriptionStateLabel({ lifecycleState: "renewal_pending", paidThrough: "2026-09-01T08:56:00Z" })).toBe("Checking renewal · Automatic renewal pending");
+    expect(formatSubscriptionStateLabel({ lifecycleState: "not_subscribed", paidThrough: null })).toBe("No active subscription · Automatic renewal off");
   });
 
   it("formats an exact billing timestamp with an explicit time zone", () => {

@@ -1,4 +1,4 @@
-import { planCodeForProduct, resolveRevenueCatEntitlement, resolveSubscriptionState, type RevenueCatSubscriber } from "./revenuecat.ts";
+import { planCodeForProduct, resolveRevenueCatEntitlement, resolveSubscriptionState, type RevenueCatSubscriber, type SubscriptionState } from "./revenuecat.ts";
 import { reduceSubscriptionState, type SubscriptionLedgerState } from "./subscription-state.ts";
 
 type AccessRow = { status: "active" | "expired"; entitlement_id: string | null; current_period_start: string | null; current_period_end: string | null; store_product_id: string | null; lifecycle_state?: string | null; plan_code?: string | null; store?: string | null; sandbox?: boolean; will_renew?: boolean; billing_period_start?: string | null; billing_period_end?: string | null; latest_event_at?: string | null; latest_revenuecat_event_id?: string | null; state_version?: number };
@@ -90,10 +90,14 @@ export async function applyRevenueCatLifecycleEvent(admin: any, userId: string, 
     event_timestamp: event.event_timestamp ?? null,
   }).eq("event_id", event.id);
   if (eventError) throw eventError;
-  if (["INITIAL_PURCHASE", "PRODUCT_CHANGE", "TRANSFER"].includes(event.type)) await clearSubscriptionTestScenario(admin, userId);
+  if (event.type === "RENEWAL") {
+    await clearSupersededTestScenario(admin, userId, event.expiration_at);
+  } else if (["INITIAL_PURCHASE", "PRODUCT_CHANGE", "TRANSFER", "UNCANCELLATION"].includes(event.type)) {
+    await clearSubscriptionTestScenario(admin, userId);
+  }
 }
 
-export async function persistEntitlementLedger(admin: any, userId: string, subscriber: RevenueCatSubscriber, entitlementId = "formie_pro", now = new Date()): Promise<AccessRow> {
+export async function persistEntitlementLedger(admin: any, userId: string, subscriber: RevenueCatSubscriber, entitlementId = "formie_pro", now = new Date(), preserveLatestEvent = false): Promise<AccessRow> {
   const entitlement = resolveRevenueCatEntitlement(subscriber, entitlementId, now);
   const subscriptionState = resolveSubscriptionState(subscriber, now, entitlementId);
   if (entitlement.status === "active") {
@@ -114,7 +118,7 @@ export async function persistEntitlementLedger(admin: any, userId: string, subsc
   const subscription = (subscriber.subscriptions ?? []).find((item) => item.productIdentifier === entitlement.productIdentifier) ?? null;
   const billingStart = subscription?.purchaseDate ?? entitlement.purchaseDate;
   const billingEnd = subscription?.expirationDate ?? entitlement.expirationDate;
-  const preserveEventState = existing?.latest_event_at && existing.billing_period_end === billingEnd;
+  const preserveEventState = Boolean(preserveLatestEvent && existing?.latest_event_at && sameTimestamp(existing.billing_period_end, billingEnd));
   const nextState: AccessRow = {
     status: entitlement.status,
     entitlement_id: entitlement.entitlementId,
@@ -132,6 +136,9 @@ export async function persistEntitlementLedger(admin: any, userId: string, subsc
     latest_revenuecat_event_id: existing?.latest_revenuecat_event_id ?? null,
     state_version: Number(existing?.state_version ?? 0),
   };
+  if (entitlement.status === "active" && subscriptionState.store === "test_store" && subscriptionState.sandbox) {
+    await clearSupersededTestScenario(admin, userId, billingEnd);
+  }
   if (existing && sameLedgerState(existing as AccessRow, nextState)) return existing as AccessRow;
   const { data, error } = await admin.from("user_access_entitlements").upsert({
     user_id: userId,
@@ -172,6 +179,30 @@ async function clearSubscriptionTestScenario(admin: any, userId: string): Promis
   if (!query || typeof query.delete !== "function") return;
   const { error } = await query.delete().eq("user_id", userId);
   if (error) throw error;
+}
+
+async function clearSupersededTestScenario(admin: any, userId: string, providerPeriodEnd: string | null | undefined): Promise<void> {
+  const providerEnd = providerPeriodEnd ? new Date(providerPeriodEnd).getTime() : Number.NaN;
+  if (!Number.isFinite(providerEnd)) return;
+
+  const query = admin.from("subscription_test_scenarios");
+  if (!query || typeof query.select !== "function") return;
+  const { data: scenario, error } = await query
+    .select("lifecycle_state,billing_period_end")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!scenario || scenario.lifecycle_state === "active_cancelled") return;
+
+  const scenarioEnd = typeof scenario.billing_period_end === "string"
+    ? new Date(scenario.billing_period_end).getTime()
+    : Number.NaN;
+  if (!Number.isFinite(scenarioEnd) || providerEnd <= scenarioEnd) return;
+
+  const { error: deleteError } = await admin.from("subscription_test_scenarios")
+    .delete()
+    .eq("user_id", userId);
+  if (deleteError) throw deleteError;
 }
 
 function activeAt(expiration: string | null, now: Date): boolean { return expiration === null || new Date(expiration).getTime() > now.getTime(); }

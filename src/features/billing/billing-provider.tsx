@@ -30,6 +30,7 @@ export type BillingContextValue = {
   purchase: (planCode?: BillingPlanCode) => Promise<PurchaseOutcome>;
   retryPurchaseSync: () => Promise<boolean>;
   restore: () => Promise<boolean>;
+  manageSubscription: () => Promise<void>;
   logOut: () => Promise<void>;
 };
 
@@ -322,6 +323,22 @@ export function BillingProvider({ children }: PropsWithChildren) {
     }
   }, [auth.phase, configure, finishReconciliation, state, syncAccess]);
 
+  const manageSubscription = useCallback(async () => {
+    if (state === "purchasing" || state === "reconciling" || state === "restoring") return;
+    setEntitlementResolution("checking");
+    setError(null);
+    try {
+      await configure();
+      await purchasesClient.showManageSubscriptions();
+      const reconciliation = await syncAccess();
+      finishPassiveReconciliation(reconciliation.value, Boolean(offering));
+    } catch (failure) {
+      setEntitlementResolution("error");
+      setError(friendlyPurchaseError(failure) || "Subscription management could not be opened. Try again from Settings.");
+      throw failure;
+    }
+  }, [configure, finishPassiveReconciliation, offering, state, syncAccess]);
+
   const logOut = useCallback(async () => {
     reconciliationGeneration.current += 1;
     purchaseOperation.current = null;
@@ -406,8 +423,9 @@ export function BillingProvider({ children }: PropsWithChildren) {
     purchase,
     retryPurchaseSync,
     restore,
+    manageSubscription,
     logOut,
-  }), [entitlementResolution, error, load, logOut, offering, plans, purchase, restore, restoreMessage, retryPurchaseSync, state, subscription]);
+  }), [entitlementResolution, error, load, logOut, manageSubscription, offering, plans, purchase, restore, restoreMessage, retryPurchaseSync, state, subscription]);
 
   return <BillingContext value={value}>{children}</BillingContext>;
 }

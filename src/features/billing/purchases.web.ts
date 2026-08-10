@@ -115,6 +115,9 @@ export const purchasesClient: PurchasesClient = {
     // for the current RevenueCat user, so fetching it restores an existing sandbox purchase.
     return mapCustomerInfo(await (await getPurchases()).getCustomerInfo());
   },
+  async showManageSubscriptions() {
+    throw new Error("Native subscription management is unavailable in the browser.");
+  },
   subscribeCustomerInfo() {
     return () => undefined;
   },

@@ -50,8 +50,8 @@ function HomeHeader({ onOpenProfile, analysisRemaining, analysisLimit, analysisS
   return (
     <View testID="home-top-bar" style={{ minHeight: 68, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
       <FormWordmark size={56} />
-      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-        <AnalysisQuotaBar variant="badge" remaining={analysisRemaining} limit={analysisLimit} status={analysisStatus} />
+      <View testID="home-header-actions" style={{ flex: 1, minWidth: 0, maxWidth: 250, marginLeft: spacing.md, flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: spacing.sm }}>
+        <AnalysisQuotaBar remaining={analysisRemaining} limit={analysisLimit} status={analysisStatus} />
         <Pressable accessibilityLabel="Open settings" accessibilityRole="button" onPress={onOpenProfile} style={{ width: 46, height: 46, alignItems: "center", justifyContent: "center", borderRadius: radii.pill, borderWidth: 1, borderColor: colors.gold }}>
           <View style={{ width: 9, height: 9, borderRadius: 5, borderWidth: 1, borderColor: colors.gold }} />
           <View style={{ width: 17, height: 8, marginTop: 3, borderTopLeftRadius: 9, borderTopRightRadius: 9, borderWidth: 1, borderBottomWidth: 0, borderColor: colors.gold }} />

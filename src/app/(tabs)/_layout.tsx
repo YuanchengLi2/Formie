@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CenterTabButton } from "@/components/center-tab-button";
 import { useAccess } from "@/features/access/access-provider";
-import { resolveAnalysisEntry } from "@/features/access/account-access";
+import { formatAnalysisEntryLabel, resolveAnalysisEntry } from "@/features/access/account-access";
 import { formatQuotaMessage, formatQuotaTitle } from "@/features/access/quota-message";
 import { CoachTabIcon } from "@/components/coach-tab-icon";
 import { ProductionIcon } from "@/components/production-icon";
@@ -16,6 +16,16 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const bottomPadding = Math.max(insets.bottom, 10);
   const analysisEntry = resolveAnalysisEntry(access.status, access.access);
+  const centerLabel = formatAnalysisEntryLabel(analysisEntry, access.access.lifecycleState, access.access.remaining);
+  const centerAccessibilityLabel = centerLabel === "Purchase"
+    ? "Purchase subscription"
+    : centerLabel === "View analysis"
+      ? "View analysis in progress"
+      : centerLabel === "Checking"
+        ? "Check subscription renewal"
+        : analysisEntry === "quota_exhausted"
+          ? "Record. Monthly analysis allowance used"
+          : "Record";
   return (
     <Tabs
       screenOptions={{
@@ -44,7 +54,7 @@ export default function TabsLayout() {
         name="(record)"
         options={{
           title: "Record",
-          tabBarButton: () => <CenterTabButton variant={analysisEntry} label={analysisEntry === "purchase" ? "Purchase" : analysisEntry === "analysis_pending" ? "View analysis" : analysisEntry === "renewal_pending" ? "Checking" : "Record"} accessibilityLabel={analysisEntry === "purchase" ? "Purchase subscription" : analysisEntry === "quota_exhausted" ? "Record. Monthly analysis allowance used" : analysisEntry === "analysis_pending" ? "View analysis in progress" : analysisEntry === "renewal_pending" ? "Check subscription renewal" : "Record"} onPress={() => {
+          tabBarButton: () => <CenterTabButton variant={analysisEntry} label={centerLabel} accessibilityLabel={centerAccessibilityLabel} disabled={analysisEntry === "quota_exhausted"} onPress={() => {
             if (analysisEntry === "purchase") {
               router.push("/subscription" as Href);
               return;

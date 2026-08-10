@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
-import { asAccess, refreshProviderAccess } from "./api";
+import { asAccess, refreshProviderAccess, refreshProviderAccessUntilChanged } from "./api";
+import type { AccessStatus } from "./types";
 
 const mockInvoke = jest.fn();
 
@@ -57,5 +58,18 @@ describe("provider access refresh", () => {
 
   it("contains no client invocation of the cron-only reconciliation function", () => {
     expect(readFileSync(__filename.replace(/api\.test\.ts$/, "api.ts"), "utf8")).not.toMatch(/invoke\(["']reconcile-entitlements["']/);
+  });
+
+  it("retries a provider refresh so an external cancellation can reach the app after provider propagation", async () => {
+    const unchanged = asAccess({ status: "active", lifecycleState: "active_renewing", remaining: 4, stateVersion: 8, willRenew: true, source: "revenuecat" });
+    const cancelled = asAccess({ status: "active", lifecycleState: "active_cancelled", remaining: 4, stateVersion: 9, willRenew: false, source: "revenuecat" });
+    const refresh = jest.fn<Promise<AccessStatus>, [string]>()
+      .mockResolvedValueOnce(unchanged)
+      .mockResolvedValueOnce(cancelled);
+    const wait = jest.fn().mockResolvedValue(undefined);
+
+    await expect(refreshProviderAccessUntilChanged("jwt", unchanged, refresh, [0, 1], wait)).resolves.toMatchObject({ lifecycleState: "active_cancelled" });
+    expect(refresh).toHaveBeenCalledTimes(2);
+    expect(wait).toHaveBeenCalledWith(1);
   });
 });

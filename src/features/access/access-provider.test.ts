@@ -1,4 +1,4 @@
-import { accessBoundaryRefreshDelays, accessExpiryRefreshDelay, mergeAccessMutation, renewalReconciliationDelays, shouldCommitAccessRefresh } from "./access-provider";
+import { accessBoundaryRefreshDelays, accessExpiryRefreshDelay, mergeAccessMutation, preserveConfirmedAccessDuringRenewal, renewalReconciliationDelays, shouldCommitAccessRefresh, shouldReconcileProviderOnResume } from "./access-provider";
 import { unknownAccess } from "./types";
 
 describe("access status", () => {
@@ -30,6 +30,30 @@ describe("access status", () => {
 
   it("uses bounded renewal reconciliation polling", () => {
     expect(renewalReconciliationDelays()).toEqual([2_000, 5_000, 10_000, 15_000, 30_000, 30_000]);
+  });
+
+  it("keeps the last confirmed quota while renewal is propagating", () => {
+    const confirmed = {
+      ...unknownAccess,
+      status: "active" as const,
+      lifecycleState: "active_renewing" as const,
+      canAnalyze: false,
+      quotaUsed: 10,
+      quotaLimit: 10,
+      remaining: 0,
+      periodEndsAt: "2026-09-01T00:00:00.000Z",
+      quotaResetsAt: "2026-09-01T00:00:00.000Z",
+      paidThrough: "2026-09-01T00:00:00.000Z",
+    };
+    const pending = { ...confirmed, status: "unknown" as const, lifecycleState: "renewal_pending" as const };
+
+    expect(preserveConfirmedAccessDuringRenewal(confirmed, pending)).toBe(confirmed);
+  });
+
+  it("keeps Test Store scenarios on the server snapshot while reconciling real stores on resume", () => {
+    expect(shouldReconcileProviderOnResume({ sandbox: true, store: "test_store" })).toBe(false);
+    expect(shouldReconcileProviderOnResume({ sandbox: false, store: "app_store" })).toBe(true);
+    expect(shouldReconcileProviderOnResume({ sandbox: true, store: "play_store" })).toBe(true);
   });
 
   it("applies an authoritative reservation balance immediately", () => {

@@ -1,4 +1,5 @@
 import Purchases from "react-native-purchases";
+import { Linking, Platform } from "react-native";
 
 import { assertRevenueCatPublicKey, REVENUECAT_ANDROID_PUBLIC_KEY, REVENUECAT_ENTITLEMENT_ID, REVENUECAT_IOS_PUBLIC_KEY } from "./constants";
 import { subscriptionFromEntitlement } from "./purchase-access";
@@ -14,6 +15,17 @@ function mapCustomerInfo(info: Awaited<ReturnType<typeof Purchases.getCustomerIn
 }
 
 let configuredUserId: string | null = null;
+
+export async function showNativeSubscriptionManagement(): Promise<void> {
+  if (Platform.OS === "ios") {
+    await Purchases.showManageSubscriptions();
+    return;
+  }
+  const info = mapCustomerInfo(await Purchases.getCustomerInfo());
+  const managementUrl = info.subscription?.managementURL ?? null;
+  if (!managementUrl) throw new Error("Subscription management is unavailable right now.");
+  await Linking.openURL(managementUrl);
+}
 
 export const purchasesClient: PurchasesClient = {
   async configure(appUserId = null) {
@@ -62,6 +74,7 @@ export const purchasesClient: PurchasesClient = {
   async restorePurchases() {
     return mapCustomerInfo(await Purchases.restorePurchases());
   },
+  showManageSubscriptions: showNativeSubscriptionManagement,
   subscribeCustomerInfo(listener) {
     const nativeListener = (info: Awaited<ReturnType<typeof Purchases.getCustomerInfo>>) => listener(mapCustomerInfo(info));
     Purchases.addCustomerInfoUpdateListener(nativeListener);

@@ -36,4 +36,13 @@ describe("reconcileWithDeadline", () => {
     const result = await reconcileWithDeadline(operation, (value) => value === "active", [0, 10], async () => undefined);
     expect(result).toEqual({ value: "checking", satisfied: false, attempts: 2 });
   });
+
+  it("keeps purchase confirmation open long enough for provider propagation", async () => {
+    const operation = jest.fn().mockResolvedValue("checking");
+    const wait = jest.fn().mockResolvedValue(undefined);
+    const result = await reconcileWithDeadline(operation, (value) => value === "active", undefined, wait);
+
+    expect(result.attempts).toBe(6);
+    expect(wait).toHaveBeenCalledTimes(5);
+  });
 });

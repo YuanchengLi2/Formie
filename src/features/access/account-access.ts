@@ -2,6 +2,13 @@ import type { AccessStatus } from "./types";
 
 export type AnalysisEntry = "record" | "analysis_pending" | "quota_exhausted" | "purchase" | "renewal_pending" | "unavailable";
 
+export function formatAnalysisEntryLabel(entry: AnalysisEntry, lifecycleState: AccessStatus["lifecycleState"], remaining: number | null): string {
+  if (entry === "purchase") return "Purchase";
+  if (entry === "analysis_pending") return "View analysis";
+  if (entry === "renewal_pending") return "Checking";
+  return "Record";
+}
+
 export function canOpenCompletedAccount({
   authenticated,
   profileComplete,
@@ -76,10 +83,10 @@ export function formatBillingTimestamp(value: string | null, locale?: string, ti
 
 export function formatSubscriptionStateLabel(access: Pick<AccessStatus, "lifecycleState" | "paidThrough">, locale?: string, timeZone?: string): string {
   const boundary = access.paidThrough ? formatBillingTimestamp(access.paidThrough, locale, timeZone) : "billing date";
-  if (access.lifecycleState === "active_cancelled") return `Canceled · Access ends ${boundary}`;
-  if (access.lifecycleState === "renewal_pending") return "Checking renewal";
-  if (access.lifecycleState === "expired") return `Expired · Access ended ${access.paidThrough ? boundary : "on the last billing date"}`;
-  if (access.lifecycleState === "not_subscribed") return "No active subscription";
+  if (access.lifecycleState === "active_cancelled") return `Canceled · Automatic renewal off · Access ends ${boundary}`;
+  if (access.lifecycleState === "renewal_pending") return "Checking renewal · Automatic renewal pending";
+  if (access.lifecycleState === "expired") return `Expired · Automatic renewal off · Access ended ${access.paidThrough ? boundary : "on the last billing date"}`;
+  if (access.lifecycleState === "not_subscribed") return "No active subscription · Automatic renewal off";
   if (access.lifecycleState === "unknown") return "Checking subscription";
-  return `Active · Next billing ${boundary}`;
+  return `Active · Automatic renewal on · Next billing ${boundary}`;
 }

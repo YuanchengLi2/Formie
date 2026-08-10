@@ -4,7 +4,7 @@ import { createContext, use, useCallback, useEffect, useMemo, useRef, useState, 
 import { useAuth } from "@/features/auth/auth-provider";
 import { supabase } from "@/lib/supabase";
 
-import { getAccessStatus, reserveAnalysis, cancelAnalysisReservation, refreshProviderAccess } from "./api";
+import { getAccessStatus, reserveAnalysis, cancelAnalysisReservation, refreshProviderAccess, refreshProviderAccessUntilChanged } from "./api";
 import { subscribeAccessMutations, type AccessMutation } from "./access-events";
 import { unknownAccess, type AccessStatus, type AnalysisReservation } from "./types";
 
@@ -48,20 +48,34 @@ export function shouldCommitAccessRefresh(requestedUserId: string | null, curren
   return requestedUserId !== null && requestedUserId === currentUserId;
 }
 
+export function preserveConfirmedAccessDuringRenewal(current: AccessStatus, next: AccessStatus): AccessStatus {
+  return current.status === "active" && next.lifecycleState === "renewal_pending" ? current : next;
+}
+
+export function shouldReconcileProviderOnResume(access: Pick<AccessStatus, "sandbox" | "store">): boolean {
+  return !(access.sandbox && access.store === "test_store");
+}
+
 export function AccessProvider({ children }: PropsWithChildren) {
   const auth = useAuth();
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [access, setAccess] = useState<AccessStatus>(unknownAccess);
   const [accessOwnerId, setAccessOwnerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [renewalPending, setRenewalPending] = useState(false);
   const refreshDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentUserId = auth.phase === "authenticated" ? auth.user?.id ?? null : null;
   const identityRef = useRef<string | null>(currentUserId);
+  const accessRef = useRef(access);
+  const accessOwnerRef = useRef<string | null>(accessOwnerId);
   identityRef.current = currentUserId;
+  accessRef.current = access;
+  accessOwnerRef.current = accessOwnerId;
 
   const refresh = useCallback(async () => {
     const requestedUserId = currentUserId;
     if (!requestedUserId) {
+      setRenewalPending(false);
       setAccess(unknownAccess);
       setAccessOwnerId(null);
       setStatus("ready");
@@ -71,7 +85,9 @@ export function AccessProvider({ children }: PropsWithChildren) {
     try {
       const next = await getAccessStatus();
       if (!shouldCommitAccessRefresh(requestedUserId, identityRef.current)) return next;
-      setAccess(next);
+      setRenewalPending(next.lifecycleState === "renewal_pending");
+      const confirmedAccess = accessOwnerRef.current === requestedUserId ? accessRef.current : unknownAccess;
+      setAccess(preserveConfirmedAccessDuringRenewal(confirmedAccess, next));
       setAccessOwnerId(requestedUserId);
       setStatus("ready");
       setError(null);
@@ -84,14 +100,16 @@ export function AccessProvider({ children }: PropsWithChildren) {
     }
   }, [currentUserId]);
 
-  const reconcileProvider = useCallback(async () => {
+  const reconcileProvider = useCallback(async (providerRefresh: (token: string) => Promise<AccessStatus> = refreshProviderAccess) => {
     const requestedUserId = currentUserId;
     const accessToken = auth.session?.access_token ?? null;
     if (!requestedUserId || !accessToken) return unknownAccess;
     try {
-      const next = await refreshProviderAccess(accessToken);
+      const next = await providerRefresh(accessToken);
       if (!shouldCommitAccessRefresh(requestedUserId, identityRef.current)) return next;
-      setAccess(next);
+      setRenewalPending(next.lifecycleState === "renewal_pending");
+      const confirmedAccess = accessOwnerRef.current === requestedUserId ? accessRef.current : unknownAccess;
+      setAccess(preserveConfirmedAccessDuringRenewal(confirmedAccess, next));
       setAccessOwnerId(requestedUserId);
       setStatus("ready");
       setError(null);
@@ -104,21 +122,39 @@ export function AccessProvider({ children }: PropsWithChildren) {
     }
   }, [auth.session?.access_token, currentUserId]);
 
+  const reconcileProviderUntilChanged = useCallback(async () => {
+    const baseline = access;
+    return reconcileProvider((accessToken) => refreshProviderAccessUntilChanged(accessToken, baseline));
+  }, [access, reconcileProvider]);
+
+  const refreshOnResume = useCallback(async () => {
+    if (!shouldReconcileProviderOnResume(access)) return refresh();
+    try {
+      return await reconcileProviderUntilChanged();
+    } catch {
+      return refresh();
+    }
+  }, [access, reconcileProviderUntilChanged, refresh]);
+  const refreshOnResumeRef = useRef(refreshOnResume);
+  refreshOnResumeRef.current = refreshOnResume;
+
   useEffect(() => {
     if (auth.phase !== "authenticated") {
+      setRenewalPending(false);
       setAccess(unknownAccess);
       setAccessOwnerId(null);
       setStatus("ready");
       return;
     }
+    setRenewalPending(false);
     setAccess(unknownAccess);
     setAccessOwnerId(null);
     setStatus("loading");
     void refresh().catch(() => undefined);
     const listener = AppState.addEventListener("change", (next) => {
-      if (next === "active") void refresh().catch(() => undefined);
+      if (next === "active") void refreshOnResumeRef.current().catch(() => undefined);
     });
-    const timer = setInterval(() => void refresh().catch(() => undefined), 15 * 60 * 1000);
+    const timer = setInterval(() => void refreshOnResumeRef.current().catch(() => undefined), 15 * 60 * 1000);
     return () => {
       listener.remove();
       clearInterval(timer);
@@ -141,6 +177,7 @@ export function AccessProvider({ children }: PropsWithChildren) {
     const channel = supabase.channel(`access:${currentUserId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "user_access_entitlements", filter: `user_id=eq.${currentUserId}` }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "analysis_credit_reservations", filter: `user_id=eq.${currentUserId}` }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "subscription_test_scenarios", filter: `user_id=eq.${currentUserId}` }, scheduleRefresh)
       .subscribe();
     return () => {
       if (refreshDebounce.current) clearTimeout(refreshDebounce.current);
@@ -150,12 +187,13 @@ export function AccessProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (auth.phase !== "authenticated") return;
-    const timers = accessBoundaryRefreshDelays(access).map((delay) => setTimeout(() => void reconcileProvider().catch(() => undefined), delay));
+    const refreshAtBoundary = shouldReconcileProviderOnResume(access) ? reconcileProviderUntilChanged : refresh;
+    const timers = accessBoundaryRefreshDelays(access).map((delay) => setTimeout(() => void refreshAtBoundary().catch(() => undefined), delay));
     return () => timers.forEach(clearTimeout);
-  }, [access, auth.phase, reconcileProvider]);
+  }, [access, auth.phase, reconcileProviderUntilChanged, refresh]);
 
   useEffect(() => {
-    if (auth.phase !== "authenticated" || access.lifecycleState !== "renewal_pending") return;
+    if (auth.phase !== "authenticated" || !renewalPending) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let index = 0;
@@ -180,7 +218,7 @@ export function AccessProvider({ children }: PropsWithChildren) {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [access.lifecycleState, auth.phase, reconcileProvider]);
+  }, [auth.phase, reconcileProvider, renewalPending]);
 
   const reserve = useCallback(async (kind: "analysis" | "reanalysis", clientRequestId: string, sessionId?: string) => {
     const reservation = await reserveAnalysis(kind, clientRequestId, sessionId);

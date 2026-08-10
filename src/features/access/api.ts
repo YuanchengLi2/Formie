@@ -54,6 +54,34 @@ export async function refreshProviderAccess(accessToken: string): Promise<Access
   return asAccess(access);
 }
 
+export type AccessRefreshBaseline = Pick<AccessStatus, "status" | "lifecycleState" | "remaining" | "stateVersion" | "willRenew" | "paidThrough">;
+
+export function accessSnapshotChanged(previous: AccessRefreshBaseline, next: AccessStatus): boolean {
+  return previous.status !== next.status
+    || previous.lifecycleState !== next.lifecycleState
+    || previous.remaining !== next.remaining
+    || previous.stateVersion !== next.stateVersion
+    || previous.willRenew !== next.willRenew
+    || previous.paidThrough !== next.paidThrough;
+}
+
+export async function refreshProviderAccessUntilChanged(
+  accessToken: string,
+  previous: AccessRefreshBaseline,
+  refresh: (token: string) => Promise<AccessStatus> = refreshProviderAccess,
+  delays = [0, 1_000, 3_000, 7_000],
+  wait: (milliseconds: number) => Promise<void> = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
+): Promise<AccessStatus> {
+  let next = await refresh(accessToken);
+  if (accessSnapshotChanged(previous, next)) return next;
+  for (const delay of delays.slice(1)) {
+    await wait(delay);
+    next = await refresh(accessToken);
+    if (accessSnapshotChanged(previous, next)) return next;
+  }
+  return next;
+}
+
 export async function reserveAnalysis(kind: "analysis" | "reanalysis", clientRequestId: string, sessionId?: string): Promise<AnalysisReservation> {
   const { data, error } = await supabase.rpc(kind === "analysis" ? "reserve_analysis_session_v2" : "reserve_reanalysis_v2", {
     p_client_request_id: clientRequestId,

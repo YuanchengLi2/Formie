@@ -27,7 +27,7 @@ export function SubscriptionAccessGate({ children }: PropsWithChildren) {
 
   // Account access and paid analysis access are separate. Once verification
   // resolves, completed accounts remain usable even when the paid period ended.
-  if (auth.phase !== "authenticated" || !profileComplete || access.access.status !== "unknown") {
+  if (auth.phase !== "authenticated" || !profileComplete || access.access.status !== "unknown" || access.access.lifecycleState === "renewal_pending") {
     return children;
   }
 
