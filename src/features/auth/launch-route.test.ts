@@ -39,6 +39,26 @@ describe("launch routing", () => {
     } as never)).toBe("/onboarding/age");
   });
 
+  it("starts onboarding for an authenticated identity whose profile does not exist yet", () => {
+    expect(resolveLaunchRoute({
+      phase: "authenticated",
+      onboarding: "not_started",
+      currentStep: "welcome",
+      profileComplete: false,
+      accessStatus: "unknown",
+    })).toBe("/onboarding/welcome");
+  });
+
+  it("starts onboarding after reauthentication when the account profile is incomplete", () => {
+    expect(resolveLaunchRoute({
+      phase: "authenticated",
+      onboarding: "logged_out",
+      currentStep: "welcome",
+      profileComplete: false,
+      accessStatus: "unknown",
+    })).toBe("/onboarding/welcome");
+  });
+
   it("does not restart onboarding for a completed legacy account while access resolves", () => {
     expect(resolveLaunchRoute({
       phase: "authenticated",

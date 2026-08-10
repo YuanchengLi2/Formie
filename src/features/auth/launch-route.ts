@@ -36,7 +36,7 @@ export function resolveLaunchRoute({
   if (!profileComplete) {
     if (onboarding === "profile_sync_required" || onboarding === "awaiting_account") return "/onboarding/create-account";
     if (onboarding === "in_progress") return `/onboarding/${currentStep ?? "welcome"}`;
-    return "/subscription";
+    return "/onboarding/welcome";
   }
 
   if (accessStatus === "active" || accessStatus === "expired") {
