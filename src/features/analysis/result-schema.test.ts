@@ -18,8 +18,10 @@ function validFinding(id = "elbow-drift"): CoachingFinding {
     },
     expandedCoaching: {
       summary: "Your elbows move forward on the third repetition, making this the clearest issue to address next.",
-      whatHappened: "The first repetitions keep the elbows beside the torso. During rep 3, both elbows travel forward as the dumbbells pass the middle of the curl, and they finish farther in front than they started.",
-      whyItMatters: "That changing elbow position makes the path less repeatable. It also makes the final part of the curl visibly different from the earlier repetitions.",
+      whatHappened: "Both elbows travel forward during the third repetition.",
+      whatHappenedDetail: "The first repetitions keep the elbows beside the torso. During rep 3, they finish farther in front than they started.",
+      whyItMatters: "The changing elbow position alters the visible dumbbell path.",
+      whyItMattersDetail: "The final part of rep 3 differs from the earlier repetitions. That makes the curl path less repeatable.",
       whatToDo: "Start with both upper arms beside your torso. Keep them over the same spot while the forearms and dumbbells move, and reduce the load if the elbows still move forward.",
       successCheck: "Compare the first and final repetition. The elbows should remain beside the torso through both curls.",
     },
@@ -156,7 +158,12 @@ describe("analysisResultSchema", () => {
     expect(parsed.nextSetPlan?.[0]).toMatchObject({ relatedFindingId: "elbow-drift" });
     expect(parsed.priorityCorrections[0].evidence[0].focusRegion).toMatchObject({ label: "right elbow", centerX: 0.58 });
     expect(parsed.priorityCorrections[0].evidence[0].coachingNote).toContain("both elbows move forward");
-    expect(parsed.priorityCorrections[0].expandedCoaching?.whatHappened).toContain("During rep 3");
+    expect(parsed.priorityCorrections[0].expandedCoaching).toMatchObject({
+      whatHappened: "Both elbows travel forward during the third repetition.",
+      whatHappenedDetail: expect.stringContaining("During rep 3"),
+      whyItMatters: "The changing elbow position alters the visible dumbbell path.",
+      whyItMattersDetail: expect.stringContaining("less repeatable"),
+    });
     expect(parsed.equipmentObservations?.[0].load?.certainty).toBe("unknown");
     expect(parsed.muscleFocus.primary[0]).toEqual({ name: "Biceps", region: "biceps" });
     expect(parsed.movementScores?.[0]).toMatchObject({ label: "Dumbbell Path", score: 76 });

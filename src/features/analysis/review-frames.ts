@@ -7,6 +7,7 @@ export type ReviewFrame = {
   purpose: ReviewPurpose;
   title: string;
   body?: string;
+  detail?: string;
   findingId: string;
   finding: CoachingFinding;
   evidence: EvidenceMoment;
@@ -44,6 +45,7 @@ function frameFor(
   evidenceIndex: number,
   title: string,
   body: string | undefined,
+  detail: string | undefined,
   sourceId = finding.id,
 ): ReviewFrame {
   return {
@@ -51,6 +53,7 @@ function frameFor(
     purpose,
     title,
     body,
+    detail,
     findingId: finding.id,
     finding,
     evidence,
@@ -89,6 +92,7 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       evidenceIndex,
       finding.title,
       expanded?.whatHappened?.trim() || compactParagraph([finding.detail], 4),
+      expanded?.whatHappenedDetail?.trim(),
       finding.id,
     );
     const why = frameFor(
@@ -98,6 +102,7 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       evidenceIndex,
       finding.title,
       expanded?.whyItMatters?.trim() || compactParagraph([finding.whyItMatters], 3),
+      expanded?.whyItMattersDetail?.trim(),
       finding.id,
     );
     const next = frameFor(
@@ -107,6 +112,7 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       evidenceIndex,
       expanded?.whatToDo ?? action?.instruction ?? finding.correction ?? finding.cue ?? finding.title,
       compactParagraph([expanded?.successCheck ?? action?.successCheck], 1),
+      undefined,
     );
     const paragraph = [
       observed.body,

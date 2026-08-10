@@ -52,7 +52,9 @@ export type CoachingFinding = {
   expandedCoaching?: {
     summary: string;
     whatHappened: string;
+    whatHappenedDetail?: string;
     whyItMatters: string;
+    whyItMattersDetail?: string;
     whatToDo: string;
     successCheck: string | null;
   };

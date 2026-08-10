@@ -1,7 +1,14 @@
 export type RetryAnalysisSession = {
   id: string;
   userId: string;
+  pipelineVersion: string | null;
 };
+
+export const SINGLE_CALL_PIPELINE_VERSION = "gemini-whole-video-v56-single-call-rep-audit";
+
+export function canAutomaticallyRetry(session: RetryAnalysisSession): boolean {
+  return session.pipelineVersion !== SINGLE_CALL_PIPELINE_VERSION;
+}
 
 export type RetryAnalysisDependencies = {
   primaryV49Enabled: boolean;
@@ -25,7 +32,8 @@ export async function retryAnalysisHandler(
   if (request.method !== "POST") return json({ message: "Method not allowed", code: "METHOD_NOT_ALLOWED" }, 405);
   try {
     await dependencies.authenticate(request);
-    const sessions = await dependencies.findDueSessions(dependencies.now?.() ?? new Date(), 25);
+    const sessions = (await dependencies.findDueSessions(dependencies.now?.() ?? new Date(), 25))
+      .filter(canAutomaticallyRetry);
     let succeeded = 0;
     let failed = 0;
     for (const session of sessions) {

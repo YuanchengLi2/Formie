@@ -38,30 +38,13 @@ export function conciseCopy(value: string, maxSentences: number, maxWords: numbe
   return `${words.slice(0, maxWords).join(" ").replace(/[.!?]+$/, "")}…`;
 }
 
-function splitOpeningSentence(value: string): { headline: string; supporting: string } {
-  const trimmed = value.trim();
-  const match = trimmed.match(/^(.+?[.!?])(?:\s+|$)([\s\S]*)$/);
-  return match
-    ? { headline: match[1].trim(), supporting: match[2].trim() }
-    : { headline: trimmed, supporting: "" };
-}
-
-function combineCoachingCopy(headline: string | null | undefined, body: string | null | undefined): string {
-  const first = headline?.trim() ?? "";
-  const second = body?.trim() ?? "";
-  if (!first) return second;
-  if (!second) return first;
-  return `${first}${/[.!?]$/.test(first) ? "" : "."} ${second}`;
-}
-
-function CoachingCopy({ value, testID }: { value: string; testID: string }) {
-  const copy = splitOpeningSentence(value);
-  return (
-    <View testID={testID} style={{ gap: 4 }}>
-      <Text selectable testID="coaching-topic-sentence" style={{ color: colors.text, fontSize: 15, lineHeight: 21, fontWeight: "700" }}>{copy.headline}</Text>
-      {copy.supporting ? <Text selectable testID="coaching-supporting-copy" style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 21, fontWeight: "400" }}>{copy.supporting}</Text> : null}
-    </View>
-  );
+export function plainCoachingText(value: string): string {
+  return value
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^\s*(?:[-+*]|\d+[.)])\s+/gm, "")
+    .replace(/[*_`~#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function SummaryList({ title, items, testPrefix }: { title: string; items: { id: string; text: string }[]; testPrefix: string }) {
@@ -224,14 +207,20 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
         </View>
         <View style={{ width: "100%", minWidth: 0, gap: spacing.xs, padding: spacing.lg }}>
           <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>{purpose === "observed" ? "WHAT HAPPENED" : purpose === "why" ? "WHY IT MATTERS" : "WHAT TO DO NEXT"}</Text>
-          <CoachingCopy
-            testID={purpose === "observed" ? "coaching-what-happened" : purpose === "why" ? "coaching-why-it-matters" : "coaching-what-to-do-next"}
-            value={(purpose === "observed"
-              ? point.observed.body ?? point.observed.finding.detail
-              : purpose === "why"
-                ? point.why.body ?? point.observed.finding.whyItMatters
-                : combineCoachingCopy(point.next.title, point.next.body)).trim()}
-          />
+          <Text
+            selectable
+            testID={purpose === "observed" ? "coaching-what-happened-copy" : purpose === "why" ? "coaching-why-it-matters-copy" : "coaching-what-to-do-next"}
+            style={{ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: "700" }}
+          >
+            {plainCoachingText(purpose === "observed" ? point.observed.body ?? point.observed.finding.detail : purpose === "why" ? point.why.body ?? point.observed.finding.whyItMatters : point.next.title ?? point.next.body ?? "")}
+          </Text>
+          {purpose !== "next" && activeFrame.detail ? <Text
+            selectable
+            testID={purpose === "observed" ? "coaching-what-happened-detail" : "coaching-why-it-matters-detail"}
+            style={{ color: colors.textSecondary, fontSize: 15, lineHeight: 22, fontWeight: "400" }}
+          >
+            {plainCoachingText(activeFrame.detail)}
+          </Text> : null}
         </View>
       </View>
     </View>

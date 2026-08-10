@@ -22,6 +22,12 @@ const analysis: BoundaryFreeAnalysis = {
     changesAcrossVideo: "The lowering becomes faster on reps 3 and 4.",
     setupEquipmentAndSurroundings: "The chest stays on an incline bench with two dumbbells.",
     observedRepCount: 4,
+    repAudit: [
+      { repNumber: 1, startMs: 500, peakMs: 1_200, endMs: 2_000, visualSummary: "The first row begins with both arms extended below the bench." },
+      { repNumber: 2, startMs: 2_100, peakMs: 3_000, endMs: 3_900, visualSummary: "The second row reaches the ribs with the chest supported." },
+      { repNumber: 3, startMs: 4_000, peakMs: 5_300, endMs: 5_900, visualSummary: "The third row returns both dumbbells quickly below the bench." },
+      { repNumber: 4, startMs: 6_000, peakMs: 7_000, endMs: 8_000, visualSummary: "The final row repeats the faster dumbbell return." },
+    ],
     viewNotes: [],
   },
   movementScores: ["path", "range", "tempo", "position"].map((id, index) => ({
@@ -35,14 +41,20 @@ const analysis: BoundaryFreeAnalysis = {
   coachingItems: [{
     id: "fast-lowering",
     topic: "Fast dumbbell lowering",
-    observation: "During reps 3 and 4 of the chest-supported row, both dumbbells drop faster from the ribs to the bottom.",
-    whyItMatters: "The faster return changes the row tempo and bottom position compared with the first two reps.",
+    observation: "Both dumbbells return faster during the final chest-supported rows.",
+    observationDetails: "Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase while the opening two repetitions lower more slowly.",
+    whyItMatters: "The faster return changes the visible row tempo and bottom position.",
+    whyDetails: "The late repetitions no longer match the opening pull-and-return rhythm. That makes their path less repeatable.",
     correctionDirection: "Lower both dumbbells for two seconds while keeping the chest supported on the bench.",
+    affectedRepNumbers: [3, 4],
     severity: "important",
     confidence: 0.93,
     observedIssueRegions: ["upper_back"],
     primaryEvidenceIndex: 0,
-    evidence: [{ startMs: 5_000, peakMs: 5_300, endMs: 5_700, visualEvidence: "Both dumbbells drop quickly after reaching the ribs on rep 3.", visibleBodyAreas: ["upper back", "arms", "dumbbells"], confidence: 0.93, repNumber: 3, phase: "lowering" }],
+    evidence: [
+      { startMs: 5_000, peakMs: 5_300, endMs: 5_700, visualEvidence: "Both dumbbells drop quickly after reaching the ribs on rep 3.", visibleBodyAreas: ["upper back", "arms", "dumbbells"], confidence: 0.93, repNumber: 3, phase: "lowering" },
+      { startMs: 6_600, peakMs: 7_000, endMs: 7_500, visualEvidence: "Both dumbbells repeat the faster return on rep 4.", visibleBodyAreas: ["upper back", "arms", "dumbbells"], confidence: 0.91, repNumber: 4, phase: "lowering" },
+    ],
   }],
   strengths: [],
   generalGuidance: [],
@@ -56,17 +68,32 @@ const writing: WholeVideoWriting = {
   coachingItems: [{
     id: "fast-lowering",
     title: "Slow the late-row return",
-    whatHappened: "On rep 3 of the chest-supported dumbbell row, both dumbbells drop quickly after reaching your ribs. Rep 4 shows the same faster lowering phase compared with the first two rows.",
-    whyItMatters: "That speed change makes the bottom position of the chest-supported row less repeatable. It also removes the clear two-part pull-and-return rhythm visible in the opening reps.",
+    whatHappened: "Both dumbbells return faster during the final chest-supported rows.",
+    whatHappenedDetail: "Rep 3 drops quickly after reaching your ribs. Rep 4 repeats the faster lowering phase compared with the first two rows.",
+    whyItMatters: "That speed change makes the bottom position less repeatable.",
+    whyItMattersDetail: "The final repetitions no longer match the clear pull-and-return rhythm visible in the opening rows.",
     whatToDo: "Keep your chest on the incline bench and lower both dumbbells for two seconds after each pull.",
     successCheck: "Reps 3 and 4 should match the lowering speed and bottom position of reps 1 and 2.",
   }],
   strengths: [],
 };
 
-describe("v53 coaching writer contract", () => {
-  it("accepts a usable analysis with no evidence-backed corrections", () => {
-    const parsed = parseBoundaryFreeAnalysis({
+describe("v56 single-call rep-audited coaching contract", () => {
+  const rawAnalysis = (count: number) => {
+    const coachingItems = Array.from({ length: count }, (_, index) => ({
+      id: `finding-${index + 1}`,
+      topic: `Visible squat issue ${index + 1}`,
+      observation: `A distinct visible squat relationship changes for issue ${index + 1}.`,
+      observationDetails: `The cited frame shows where issue ${index + 1} appears. The comparison uses the matching phase from the audited repetitions.`,
+      whyItMatters: `Issue ${index + 1} changes the squat path at the cited phase.`,
+      whyDetails: `That visible difference makes the position less repeatable across the recorded set.`,
+      correctionDirection: `Keep the cited body or equipment landmark aligned during the bottom phase of the next squat.`,
+      affectedRepNumbers: [index % 3 + 1],
+      severity: "important",
+      confidence: 0.9,
+      observedIssueRegions: ["knees"],
+    }));
+    return {
       videoUnderstanding: {
         recordingSummary: "A controlled bodyweight squat set is visible.",
         exerciseSummary: "The athlete performs bodyweight squats.",
@@ -77,6 +104,11 @@ describe("v53 coaching writer contract", () => {
         changesAcrossVideo: "No meaningful technique breakdown becomes visible.",
         setupEquipmentAndSurroundings: "The athlete uses open floor space without equipment.",
         observedRepCount: 3,
+        repAudit: [
+          { repNumber: 1, startMs: 800, peakMs: 1_200, endMs: 1_700, visualSummary: "The first squat descends and returns to standing." },
+          { repNumber: 2, startMs: 2_400, peakMs: 3_200, endMs: 4_000, visualSummary: "The second squat reaches its visible bottom position." },
+          { repNumber: 3, startMs: 4_800, peakMs: 5_800, endMs: 6_800, visualSummary: "The final squat returns to standing." },
+        ],
       },
       movementScores: ["path", "range", "tempo", "position"].map((id) => ({
         id,
@@ -86,33 +118,121 @@ describe("v53 coaching writer contract", () => {
         evidenceIds: [],
       })),
       muscleFocus: { primary: [], secondary: [], unclassified: [] },
-      coachingItems: [],
+      coachingItems,
       strengths: [],
-      evidenceSelections: [],
+      evidenceSelections: coachingItems.map((item, index) => ({
+        findingId: item.id,
+        primaryEvidenceIndex: 0,
+        moments: [{ startMs: 1_000 + index * 1_000, peakMs: 1_200 + index * 1_000, endMs: 1_400 + index * 1_000, visualEvidence: `The distinct relationship for ${item.id} is visible.`, visibleBodyAreas: ["knees"], confidence: 0.9, repNumber: index % 3 + 1, phase: "bottom" }],
+      })),
       recheckRequest: null,
-    }, 9_000);
+    };
+  };
 
-    expect(parsed.coachingItems).toHaveLength(0);
+  const v56RawAnalysis = () => {
+    const raw = rawAnalysis(4) as ReturnType<typeof rawAnalysis> & {
+      videoUnderstanding: ReturnType<typeof rawAnalysis>["videoUnderstanding"] & {
+        repAudit?: Array<{ repNumber: number; startMs: number; peakMs: number; endMs: number; visualSummary: string }>;
+      };
+    };
+    delete (raw.videoUnderstanding as { coverageCheckpoints?: unknown }).coverageCheckpoints;
+    raw.videoUnderstanding.repAudit = [
+      { repNumber: 1, startMs: 900, peakMs: 1_800, endMs: 2_500, visualSummary: "Rep 1 descends and returns to standing with the feet planted." },
+      { repNumber: 2, startMs: 3_000, peakMs: 4_000, endMs: 4_800, visualSummary: "Rep 2 repeats the squat while the torso shifts farther forward." },
+      { repNumber: 3, startMs: 5_200, peakMs: 6_200, endMs: 7_100, visualSummary: "Rep 3 returns to standing after the same forward torso shift." },
+    ];
+    raw.coachingItems = raw.coachingItems.map((item, index) => ({
+      ...item,
+      observation: `The visible relationship for issue ${index + 1} changes during the cited squat repetition.`,
+      observationDetails: `The supporting frame shows where issue ${index + 1} appears. The comparison with the other audited repetitions shows whether it repeats.`,
+      whyItMatters: `Issue ${index + 1} changes the visible squat path at the cited phase.`,
+      whyDetails: "That difference makes the position less repeatable across the recorded set.",
+      affectedRepNumbers: [index < 3 ? index + 1 : 1],
+    }));
+    raw.evidenceSelections = raw.evidenceSelections.map((selection, index) => ({
+      ...selection,
+      moments: selection.moments.map((moment) => ({ ...moment, repNumber: index < 3 ? index + 1 : 1 })),
+    }));
+    return raw;
+  };
+
+  it("accepts exactly four split-copy issues after auditing every visible repetition", () => {
+    const parsed = parseBoundaryFreeAnalysis(v56RawAnalysis(), 9_000);
+
+    expect(parsed.videoUnderstanding.repAudit).toHaveLength(3);
+    expect(parsed.videoUnderstanding.repAudit.map((rep) => rep.repNumber)).toEqual([1, 2, 3]);
+    expect(parsed.coachingItems).toHaveLength(4);
+    expect(parsed.coachingItems[0]).toMatchObject({
+      observation: "The visible relationship for issue 1 changes during the cited squat repetition.",
+      observationDetails: expect.stringContaining("supporting frame"),
+      whyItMatters: "Issue 1 changes the visible squat path at the cited phase.",
+      whyDetails: expect.stringContaining("less repeatable"),
+      affectedRepNumbers: [1],
+    });
   });
 
-  it("preserves exhaustive whole-set checks without requiring padded corrections", () => {
+  it("rejects a claimed repetition that has no matching evidence moment", () => {
+    const raw = v56RawAnalysis();
+    raw.coachingItems[0].affectedRepNumbers = [1, 3];
+
+    expect(() => parseBoundaryFreeAnalysis(raw, 9_000)).toThrow(/rep 3.*evidence/i);
+  });
+
+  it("requires exactly four issues instead of accepting additional padded findings", () => {
+    expect(() => parseBoundaryFreeAnalysis(rawAnalysis(5), 9_000)).toThrow(/exactly four/i);
+  });
+
+  it("accepts four distinct evidence-backed coaching findings", () => {
+    const parsed = parseBoundaryFreeAnalysis(rawAnalysis(4), 9_000);
+
+    expect(parsed.coachingItems).toHaveLength(4);
+  });
+
+  it("rejects a result with fewer than four real coaching findings", () => {
+    expect(() => parseBoundaryFreeAnalysis(rawAnalysis(3), 9_000)).toThrow(/exactly four distinct evidence-backed/i);
+  });
+
+  it("rejects the whole result when malformed entries leave fewer than four valid findings", () => {
+    const raw = rawAnalysis(4);
+    raw.coachingItems[3].observation = "One. Two. Three. Four.";
+
+    expect(() => parseBoundaryFreeAnalysis(raw, 9_000)).toThrow(/exactly four distinct evidence-backed/i);
+  });
+
+  it("preserves exhaustive whole-set checks while requiring four genuine findings without padding", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(9_000);
 
     expect(prompt).toContain("stored pixel dimensions rely on rotation metadata");
     expect(prompt).toContain("continuous active-set interval");
     expect(prompt).toContain("equivalent phases near the beginning, middle, and end");
+    expect(prompt).toContain("repAudit");
+    expect(prompt).toContain("every observed repetition");
     expect(prompt).toContain("universal path decision gate");
-    expect(prompt).toContain("every additional distinct timestamp-backed issue the recording supports");
-    expect(prompt).not.toContain("at least four distinct evidence-backed coaching items");
-    expect(prompt).not.toContain("Four is a minimum, not a maximum");
+    expect(prompt).toContain("exactly four distinct evidence-backed coaching issues");
+    expect(prompt).toContain("small but real visible optimization");
     expect(prompt).not.toContain("auditCoverage");
   });
 
-  it("offers sparse optional rechecks without suggesting a movement-specific answer", () => {
+  it("rejects an analysis that does not audit every observed repetition", () => {
+    const missing = rawAnalysis(4);
+    delete (missing.videoUnderstanding as { repAudit?: unknown }).repAudit;
+    expect(() => parseBoundaryFreeAnalysis(missing, 9_000)).toThrow(/repAudit/i);
+
+    const concentrated = rawAnalysis(4);
+    concentrated.videoUnderstanding.repAudit = concentrated.videoUnderstanding.repAudit.slice(0, 2);
+    expect(() => parseBoundaryFreeAnalysis(concentrated, 9_000)).toThrow(/every observed repetition/i);
+  });
+
+  it("finishes readable coaching in the one whole-video pass without requesting a rewatch", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(10_000);
 
-    expect(prompt).toContain("request a recheck only when you genuinely need to see one short moment again");
-    expect(prompt).toContain("Do not request a recheck when the full recording already supports a confident decision");
+    expect(prompt).toContain("observation must be exactly one complete sentence");
+    expect(prompt).toContain("observationDetails must contain one to three normal supporting sentences");
+    expect(prompt).toContain("whyItMatters must be exactly one complete sentence");
+    expect(prompt).toContain("whyDetails must contain one to three normal supporting sentences");
+    expect(prompt).toContain("correctionDirection must be exactly one complete actionable sentence");
+    expect(prompt).toContain("Always set recheckRequest to null");
+    expect(prompt).not.toContain("request a recheck only when");
     expect(prompt).not.toMatch(/bench angle|pull toward|spinal rounding|knee cave/i);
   });
 
@@ -152,9 +272,10 @@ describe("v53 coaching writer contract", () => {
       focusNote: null,
     });
 
-    expect(prompt).toContain("whatHappened must contain two or three sentences");
-    expect(prompt).toContain("Its first sentence is shown as the bold white coaching line");
-    expect(prompt).toContain("whyItMatters must contain two or three sentences");
+    expect(prompt).toContain("whatHappened must be exactly one complete sentence");
+    expect(prompt).toContain("whatHappenedDetail must contain one to three normal supporting sentences");
+    expect(prompt).toContain("whyItMatters must be exactly one complete sentence");
+    expect(prompt).toContain("whyItMattersDetail must contain one to three normal supporting sentences");
     expect(prompt).toContain("whatToDo must be exactly one complete actionable sentence");
     expect(prompt).toContain("Name the declared exercise");
     expect(prompt).toContain("reference every numbered repetition supported by the supplied evidence");
@@ -188,7 +309,9 @@ describe("v53 coaching writer contract", () => {
 
     expect(finding.expandedCoaching).toMatchObject({
       whatHappened: writing.coachingItems[0].whatHappened,
+      whatHappenedDetail: writing.coachingItems[0].whatHappenedDetail,
       whyItMatters: writing.coachingItems[0].whyItMatters,
+      whyItMattersDetail: writing.coachingItems[0].whyItMattersDetail,
       whatToDo: writing.coachingItems[0].whatToDo,
       successCheck: writing.coachingItems[0].successCheck,
     });
@@ -198,13 +321,13 @@ describe("v53 coaching writer contract", () => {
   it("falls back per field when writer coaching is awkward or malformed", () => {
     const raw = {
       ...writing,
-      coachingItems: [{ ...writing.coachingItems[0], whatHappened: "Only one sentence about the row." }],
+      coachingItems: [{ ...writing.coachingItems[0], whatHappened: "One. Two. Three. Four." }],
     };
 
     expect(parseWholeVideoWriting(raw, analysis).coachingItems[0].whatHappened).toBe(analysis.coachingItems[0].observation);
     expect(parseWholeVideoWriting({
       ...writing,
-      coachingItems: [{ ...writing.coachingItems[0], whyItMatters: "Only one sentence explains why the row changes." }],
+      coachingItems: [{ ...writing.coachingItems[0], whyItMatters: "The row changes. The visible path changes again." }],
     }, analysis).coachingItems[0].whyItMatters).toBe(analysis.coachingItems[0].whyItMatters);
     expect(parseWholeVideoWriting({
       ...writing,
@@ -219,7 +342,9 @@ describe("v53 coaching writer contract", () => {
       id: analysis.coachingItems[0].id,
       title: analysis.coachingItems[0].topic,
       whatHappened: analysis.coachingItems[0].observation,
+      whatHappenedDetail: analysis.coachingItems[0].observationDetails,
       whyItMatters: analysis.coachingItems[0].whyItMatters,
+      whyItMattersDetail: analysis.coachingItems[0].whyDetails,
       whatToDo: analysis.coachingItems[0].correctionDirection,
     });
   });

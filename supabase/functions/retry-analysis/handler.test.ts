@@ -4,7 +4,7 @@ function dependencies(overrides: Partial<RetryAnalysisDependencies> = {}): Retry
   return {
     primaryV49Enabled: true,
     authenticate: jest.fn(async () => undefined),
-    findDueSessions: jest.fn(async () => [{ id: "session-1", userId: "user-1" }]),
+    findDueSessions: jest.fn(async () => [{ id: "session-1", userId: "user-1", pipelineVersion: "legacy-retryable" }]),
     invokeAnalysis: jest.fn(async () => 202),
     now: () => new Date("2026-08-02T16:00:00.000Z"),
     ...overrides,
@@ -17,14 +17,14 @@ describe("retry-analysis worker", () => {
     const response = await retryAnalysisHandler(new Request("https://example/retry-analysis", { method: "POST" }), deps);
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ processed: 1, succeeded: 1, failed: 0 });
-    expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "session-1", userId: "user-1" });
+    expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "session-1", userId: "user-1", pipelineVersion: "legacy-retryable" });
   });
 
   it("continues through individual invocation failures", async () => {
     const deps = dependencies({
       findDueSessions: jest.fn(async () => [
-        { id: "session-1", userId: "user-1" },
-        { id: "session-2", userId: "user-2" },
+        { id: "session-1", userId: "user-1", pipelineVersion: "legacy-retryable" },
+        { id: "session-2", userId: "user-2", pipelineVersion: "legacy-retryable" },
       ]),
       invokeAnalysis: jest.fn()
         .mockResolvedValueOnce(503)
@@ -49,6 +49,22 @@ describe("retry-analysis worker", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ processed: 1, succeeded: 1, failed: 0 });
     expect(deps.findDueSessions).toHaveBeenCalled();
-    expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "session-1", userId: "user-1" });
+    expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "session-1", userId: "user-1", pipelineVersion: "legacy-retryable" });
+  });
+
+  it("never automatically invokes a v56 single-call session", async () => {
+    const deps = dependencies({
+      findDueSessions: jest.fn(async () => [
+        { id: "single-call", userId: "user-1", pipelineVersion: "gemini-whole-video-v56-single-call-rep-audit" },
+        { id: "legacy", userId: "user-2", pipelineVersion: "gemini-whole-video-v55-single-pass-coaching" },
+      ]),
+    });
+
+    const response = await retryAnalysisHandler(new Request("https://example/retry-analysis", { method: "POST" }), deps);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ processed: 1, succeeded: 1, failed: 0 });
+    expect(deps.invokeAnalysis).toHaveBeenCalledTimes(1);
+    expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "legacy", userId: "user-2", pipelineVersion: "gemini-whole-video-v55-single-pass-coaching" });
   });
 });

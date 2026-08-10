@@ -237,7 +237,9 @@ export const coachingFindingSchema = z.object({
   expandedCoaching: z.object({
     summary: z.string().min(1),
     whatHappened: z.string().min(1),
+    whatHappenedDetail: z.string().min(1).optional(),
     whyItMatters: z.string().min(1),
+    whyItMattersDetail: z.string().min(1).optional(),
     whatToDo: z.string().min(1),
     successCheck: z.string().min(1).nullable(),
   }).optional(),

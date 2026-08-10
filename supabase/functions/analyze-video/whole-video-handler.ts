@@ -24,7 +24,7 @@ export type WholeVideoHandlerDependencies = {
   authenticate: (request: Request) => Promise<string>;
   loadSession: (sessionId: string, userId: string) => Promise<WholeVideoSession | null>;
   advancePipeline: (session: WholeVideoSession) => Promise<WholeVideoPipelineResult>;
-  markFailed: (sessionId: string, code: string) => Promise<void>;
+  markFailed: (sessionId: string, code: string) => Promise<WholeVideoPipelineResult>;
   now?: () => Date;
 };
 
@@ -108,7 +108,16 @@ export async function analyzeWholeVideoHandler(request: Request, dependencies: W
     }
     if (session) {
       try {
-        await dependencies.markFailed(session.id, code);
+        const failedState = await dependencies.markFailed(session.id, code);
+        const failedSession = {
+          ...session,
+          status: failedState.status,
+          stage: failedState.stage,
+          failureCode: failedState.status === "failed" ? code : null,
+          analysisNextRetryAt: null,
+          result: failedState.result ?? null,
+        };
+        return json(payload(failedSession, failedState), terminalStatuses.has(failedState.status) ? 200 : 202);
       } catch (markError) {
         console.error(JSON.stringify({
           sessionId: session.id,
@@ -117,9 +126,9 @@ export async function analyzeWholeVideoHandler(request: Request, dependencies: W
         }));
       }
     }
-    const retryingSession = session
-      ? { ...session, status: "processing", stage: "retry_wait", failureCode: code, result: null }
-      : { id: sessionId, status: "processing", stage: "retry_wait", failureCode: code, durationMs: null, result: null } as WholeVideoSession;
-    return json(payload(retryingSession, { status: "processing", stage: "retry_wait" }), 202);
+    const failedSession = session
+      ? { ...session, status: "failed", stage: "failed", failureCode: code, analysisNextRetryAt: null, result: null }
+      : { id: sessionId, status: "failed", stage: "failed", failureCode: code, analysisNextRetryAt: null, durationMs: null, result: null } as WholeVideoSession;
+    return json(payload(failedSession, { status: "failed", stage: "failed" }), 200);
   }
 }

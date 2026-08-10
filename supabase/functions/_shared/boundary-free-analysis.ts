@@ -26,8 +26,11 @@ export type BoundaryFreeCoachingItem = {
   id: string;
   topic: string;
   observation: string;
+  observationDetails: string;
   whyItMatters: string;
+  whyDetails: string;
   correctionDirection: string;
+  affectedRepNumbers: number[];
   severity: "high" | "important" | "note";
   confidence: number;
   observedIssueRegions: AnatomyRegion[];
@@ -60,6 +63,13 @@ export type BoundaryFreeAnalysis = {
     changesAcrossVideo: string;
     setupEquipmentAndSurroundings: string;
     observedRepCount: number | null;
+    repAudit: Array<{
+      repNumber: number;
+      startMs: number;
+      peakMs: number;
+      endMs: number;
+      visualSummary: string;
+    }>;
     viewNotes: string[];
   };
   movementScores: MovementScore[];
@@ -83,7 +93,9 @@ export type WholeVideoWriting = {
     id: string;
     title: string;
     whatHappened: string;
+    whatHappenedDetail?: string;
     whyItMatters: string;
+    whyItMattersDetail?: string;
     whatToDo: string;
     successCheck: string;
   }>;
@@ -93,7 +105,7 @@ export type WholeVideoWriting = {
 const ANATOMY_REGIONS = ["chest", "shoulders", "upper_back", "lats", "upper_arms", "elbows", "forearms", "wrists", "torso", "lower_back", "hips", "glutes", "quads", "hamstrings", "adductors", "knees", "calves", "ankles"] as const satisfies readonly AnatomyRegion[];
 const MUSCLE_REGIONS = ["chest", "front_shoulders", "rear_shoulders", "upper_back", "lats", "biceps", "triceps", "forearms", "abs", "obliques", "lower_back", "glutes", "quads", "hamstrings", "adductors", "calves"] as const;
 const TOPIC_NORMALIZATION = /[^a-z0-9]+/g;
-const UNSUPPORTED_WRITER_CLAIM = /\b(?:activat(?:e|es|ed|ing|ion)|injur(?:y|ies)|internal forces?|joint (?:stress|protection)|mind-muscle|muscle (?:engagement|growth|recruitment|tension)|spine (?:safety|strain)|strain|tissue)\b/i;
+const UNSUPPORTED_WRITER_CLAIM = /\b(?:activat(?:e|es|ed|ing|ion)|injur(?:y|ies)|internal forces?|joint (?:stress|protection|mobility)|mind-muscle|muscle (?:engagement|growth|involvement|recruitment|tension|effort)|spine (?:safety|strain)|strain|tissue|glute involvement|work output)\b/i;
 const PERSONALIZATION_STOP_WORDS = new Set(["advice", "better", "controlled", "exercise", "focus", "form", "good", "keep", "movement", "next", "proper", "rep", "repetition", "set", "steady", "technique", "use", "your"]);
 
 function personalizationTerms(value: string): Set<string> {
@@ -121,6 +133,12 @@ function coachingParagraph(value: unknown, name: string, minimum: number, maximu
   if (count < minimum || count > maximum) {
     throw new Error(`${name} must contain ${minimum} to ${maximum} sentences`);
   }
+  return paragraph;
+}
+
+function observableCoachingParagraph(value: unknown, name: string, minimum: number, maximum: number): string {
+  const paragraph = coachingParagraph(value, name, minimum, maximum);
+  if (UNSUPPORTED_WRITER_CLAIM.test(paragraph)) throw new Error(`${name} contains an unsupported hidden or physiological claim`);
   return paragraph;
 }
 
@@ -191,6 +209,30 @@ export function parseRecheckRequest(value: unknown, durationMs: number): Boundar
 function stringArray(value: unknown, name: string, minimum = 0): string[] {
   if (!Array.isArray(value) || value.length < minimum || value.some((item) => typeof item !== "string" || !item.trim())) throw new Error(`${name} must contain non-empty strings`);
   return value.map((item) => String(item).trim());
+}
+
+function parseRepAudit(value: unknown, durationMs: number, observedRepCount: number | null): BoundaryFreeAnalysis["videoUnderstanding"]["repAudit"] {
+  if (!Array.isArray(value)) throw new Error("videoUnderstanding.repAudit must be an array");
+  if (observedRepCount === null) throw new Error("videoUnderstanding.observedRepCount is required when repAudit is returned");
+  if (value.length !== observedRepCount) throw new Error("videoUnderstanding.repAudit must contain every observed repetition");
+  return value.map((raw, index) => {
+    const name = `videoUnderstanding.repAudit[${index}]`;
+    const item = record(raw, name);
+    const repNumber = integer(item.repNumber, `${name}.repNumber`, 1, 10_000);
+    if (repNumber !== index + 1) throw new Error(`${name}.repNumber must be sequential`);
+    const startMs = integer(item.startMs, `${name}.startMs`, 0, Math.max(0, durationMs - 2));
+    const endMs = integer(item.endMs, `${name}.endMs`, Math.min(durationMs, startMs + 2), durationMs);
+    const peakMs = integer(item.peakMs, `${name}.peakMs`, startMs + 1, Math.max(startMs + 1, endMs - 1));
+    if (!(startMs < peakMs && peakMs < endMs)) throw new Error(`${name} must have startMs < peakMs < endMs`);
+    return { repNumber, startMs, peakMs, endMs, visualSummary: text(item.visualSummary, `${name}.visualSummary`) };
+  });
+}
+
+function uniquePositiveIntegers(value: unknown, name: string, maximum: number): number[] {
+  if (!Array.isArray(value) || value.length === 0) throw new Error(`${name} must contain at least one repetition`);
+  const parsed = value.map((item, index) => integer(item, `${name}[${index}]`, 1, maximum));
+  if (new Set(parsed).size !== parsed.length) throw new Error(`${name} must contain unique repetitions`);
+  return parsed;
 }
 
 function evidence(value: unknown, durationMs: number, name: string): BoundaryFreeEvidence {
@@ -326,15 +368,25 @@ export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
   const rawCoachingById = byId(result.coachingItems, findingIds);
   const coachingItems = analysis.coachingItems.map((source) => {
     const item = rawCoachingById.get(source.id);
-    const sourceContext = [source.topic, source.observation, source.whyItMatters, source.correctionDirection, ...source.evidence.map((moment) => moment.visualEvidence)].join(" ");
+    const sourceContext = [source.topic, source.observation, source.observationDetails, source.whyItMatters, source.whyDetails, source.correctionDirection, ...source.evidence.map((moment) => moment.visualEvidence)].join(" ");
     const whatHappened = safeCopy(
-      safeParagraph(item?.whatHappened, 2, 3),
+      safeParagraph(item?.whatHappened, 1, 1),
       source.observation,
       sourceContext,
     );
+    const whatHappenedDetail = safeCopy(
+      safeParagraph(item?.whatHappenedDetail, 1, 3),
+      source.observationDetails,
+      sourceContext,
+    );
     const whyItMatters = safeCopy(
-      safeParagraph(item?.whyItMatters, 2, 3),
+      safeParagraph(item?.whyItMatters, 1, 1),
       source.whyItMatters,
+      sourceContext,
+    );
+    const whyItMattersDetail = safeCopy(
+      safeParagraph(item?.whyItMattersDetail, 1, 3),
+      source.whyDetails,
       sourceContext,
     );
     const whatToDo = safeCopy(
@@ -351,7 +403,9 @@ export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
       id: source.id,
       title: safeHeadline(item?.title) ?? source.topic,
       whatHappened,
+      whatHappenedDetail,
       whyItMatters,
+      whyItMattersDetail,
       whatToDo,
       successCheck,
     };
@@ -368,7 +422,7 @@ export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
   const fullSetContext = [
     analysis.videoUnderstanding.exerciseSummary,
     analysis.videoUnderstanding.changesAcrossVideo,
-    ...analysis.coachingItems.flatMap((item) => [item.topic, item.observation, item.correctionDirection]),
+    ...analysis.coachingItems.flatMap((item) => [item.topic, item.observation, item.observationDetails, item.correctionDirection]),
   ].join(" ");
   const validOverallAssessment = typeof result.overallAssessment === "string" && result.overallAssessment.trim()
     ? result.overallAssessment.trim()
@@ -404,6 +458,7 @@ export function parseBoundaryFreeAnalysis(value: unknown, durationMs: number): B
   const result = record(value, "boundary-free analysis");
   const analysisBasis = "observed" as const;
   const understanding = record(result.videoUnderstanding, "videoUnderstanding");
+  const observedRepCount = understanding.observedRepCount === null || understanding.observedRepCount === undefined ? null : integer(understanding.observedRepCount, "videoUnderstanding.observedRepCount", 0, 10_000);
   const videoUnderstanding = {
     recordingSummary: text(understanding.recordingSummary, "videoUnderstanding.recordingSummary"),
     exerciseSummary: text(understanding.exerciseSummary, "videoUnderstanding.exerciseSummary"),
@@ -413,7 +468,8 @@ export function parseBoundaryFreeAnalysis(value: unknown, durationMs: number): B
     end: text(understanding.end, "videoUnderstanding.end"),
     changesAcrossVideo: text(understanding.changesAcrossVideo, "videoUnderstanding.changesAcrossVideo"),
     setupEquipmentAndSurroundings: text(understanding.setupEquipmentAndSurroundings, "videoUnderstanding.setupEquipmentAndSurroundings"),
-    observedRepCount: understanding.observedRepCount === null || understanding.observedRepCount === undefined ? null : integer(understanding.observedRepCount, "videoUnderstanding.observedRepCount", 0, 10_000),
+    observedRepCount,
+    repAudit: parseRepAudit(understanding.repAudit, durationMs, observedRepCount),
     viewNotes: understanding.viewNotes === undefined ? [] : stringArray(understanding.viewNotes, "videoUnderstanding.viewNotes"),
   };
   if (!Array.isArray(result.coachingItems)) throw new Error("coachingItems must be an array");
@@ -437,7 +493,20 @@ export function parseBoundaryFreeAnalysis(value: unknown, durationMs: number): B
       if (severity !== "high" && severity !== "important" && severity !== "note") return;
       ids.add(id);
       topics.add(normalized);
-      itemDrafts.push({ id, topic, observation: text(item.observation, `coachingItems[${index}].observation`), whyItMatters: text(item.whyItMatters, `coachingItems[${index}].whyItMatters`), correctionDirection: text(item.correctionDirection, `coachingItems[${index}].correctionDirection`), severity, confidence: boundedNumber(item.confidence, `coachingItems[${index}].confidence`, 0, 1), observedIssueRegions: regions, evidence: [] });
+      itemDrafts.push({
+        id,
+        topic,
+        observation: observableCoachingParagraph(item.observation, `coachingItems[${index}].observation`, 1, 1),
+        observationDetails: observableCoachingParagraph(item.observationDetails, `coachingItems[${index}].observationDetails`, 1, 3),
+        whyItMatters: observableCoachingParagraph(item.whyItMatters, `coachingItems[${index}].whyItMatters`, 1, 1),
+        whyDetails: observableCoachingParagraph(item.whyDetails, `coachingItems[${index}].whyDetails`, 1, 3),
+        correctionDirection: observableCoachingParagraph(item.correctionDirection, `coachingItems[${index}].correctionDirection`, 1, 1),
+        affectedRepNumbers: uniquePositiveIntegers(item.affectedRepNumbers, `coachingItems[${index}].affectedRepNumbers`, Math.max(1, observedRepCount ?? 1)),
+        severity,
+        confidence: boundedNumber(item.confidence, `coachingItems[${index}].confidence`, 0, 1),
+        observedIssueRegions: regions,
+        evidence: [],
+      });
     } catch (error) {
       // Omit only the malformed finding.
       if (error instanceof Error && error.message === "DUPLICATE_FINDING_ID") throw error;
@@ -464,6 +533,15 @@ export function parseBoundaryFreeAnalysis(value: unknown, durationMs: number): B
   });
   const coachingItems = attach(itemDrafts) as BoundaryFreeCoachingItem[];
   const strengths = attach(strengthDrafts) as BoundaryFreeStrength[];
+  if (coachingItems.length !== 4) {
+    throw new Error("coachingItems must contain exactly four distinct evidence-backed coaching items");
+  }
+  coachingItems.forEach((item) => {
+    const evidenceReps = new Set(item.evidence.flatMap((moment) => moment.repNumber === null ? [] : [moment.repNumber]));
+    item.affectedRepNumbers.forEach((repNumber) => {
+      if (!evidenceReps.has(repNumber)) throw new Error(`${item.id} claims rep ${repNumber} without matching evidence`);
+    });
+  });
   const parsedGuidance = result.generalGuidance === undefined ? [] : stringArray(result.generalGuidance, "generalGuidance");
   const generalGuidance = parsedGuidance;
   const attachedFindingIds = new Set([...coachingItems, ...strengths].map((item) => item.id));
@@ -504,6 +582,7 @@ export function declarationOnlyAnalysis(
       changesAcrossVideo: "No beginning-to-end visual change is asserted.",
       setupEquipmentAndSurroundings: "No setup, equipment, or surroundings claim is asserted.",
       observedRepCount: null,
+      repAudit: [],
       viewNotes: [viewNote],
     },
     movementScores: [],
@@ -582,7 +661,7 @@ function publicFinding(
     id: item.id,
     coachingArea: kind === "correction" ? coachingArea(item.topic) : "form",
     title: correctionWriting?.title ?? strengthWriting?.title ?? item.topic,
-    detail: strengthWriting?.detail ?? item.observation,
+    detail: strengthWriting?.detail ?? (correction ? `${correction.observation} ${correction.observationDetails}` : item.observation),
     whyItMatters: correctionWriting?.whyItMatters ?? correction?.whyItMatters ?? "This visible pattern supported the set.",
     correction: correctionWriting?.whatToDo ?? correction?.correctionDirection ?? null,
     cue: correctionWriting?.whatToDo ?? correction?.correctionDirection ?? null,
@@ -590,7 +669,9 @@ function publicFinding(
     expandedCoaching: correction ? {
       summary: correctionWriting?.title ?? correction.topic,
       whatHappened: correctionWriting?.whatHappened ?? correction.observation,
+      whatHappenedDetail: correctionWriting?.whatHappenedDetail ?? correction.observationDetails,
       whyItMatters: correctionWriting?.whyItMatters ?? correction.whyItMatters,
+      whyItMattersDetail: correctionWriting?.whyItMattersDetail ?? correction.whyDetails,
       whatToDo: correctionWriting?.whatToDo ?? correction.correctionDirection,
       successCheck: correctionWriting?.successCheck ?? null,
     } : undefined,
@@ -627,6 +708,7 @@ export function boundaryFreeToCandidate(
   const executionSteps = analysis.generalGuidance.slice(2, 5);
   if (executionSteps.length === 0 && analysis.generalGuidance.length > 0) executionSteps.push(analysis.generalGuidance.at(-1)!);
   const setSummary = { totalReps: declaration?.amount.kind === "reps" ? declaration.amount.value : null, consistentReps: null, verdict: analysis.videoUnderstanding.changesAcrossVideo };
+  const affectedReps = new Set(analysis.coachingItems.flatMap((item) => item.affectedRepNumbers));
   return {
     status: "complete",
     analysisBasis,
@@ -659,6 +741,14 @@ export function boundaryFreeToCandidate(
     coachingCues: [],
     setContext: { cameraView: null, visibleReferences: [...new Set(priorityCorrections.flatMap((item) => item.evidence.flatMap((moment) => moment.visibleBodyAreas)))].slice(0, 8), sequenceSummary: analysis.videoUnderstanding.visibleSequence, changeAcrossSet: analysis.videoUnderstanding.changesAcrossVideo, coachingBasis: analysis.videoUnderstanding.setupEquipmentAndSurroundings },
     setSummary,
+    repTimeline: analysis.videoUnderstanding.repAudit.map((rep) => ({
+      repNumber: rep.repNumber,
+      startMs: rep.startMs,
+      peakMs: rep.peakMs,
+      endMs: rep.endMs,
+      assessment: affectedReps.has(rep.repNumber) ? "breakdown" as const : "consistent" as const,
+      note: rep.visualSummary,
+    })),
     nextSetPlan: priorityCorrections.map((finding) => ({ id: `next-${finding.id}`, action: finding.actionableCorrection?.instruction ?? finding.title, rationale: finding.whyItMatters, successCheck: finding.actionableCorrection?.successCheck ?? undefined, relatedFindingId: finding.id })),
     precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
     comparison: null,
@@ -698,10 +788,10 @@ export const WHOLE_VIDEO_WRITING_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "title", "whatHappened", "whyItMatters", "whatToDo", "successCheck"],
+        required: ["id", "title", "whatHappened", "whatHappenedDetail", "whyItMatters", "whyItMattersDetail", "whatToDo", "successCheck"],
         properties: {
           id: { type: "string" }, title: { type: "string" }, whatHappened: { type: "string" },
-          whyItMatters: { type: "string" }, whatToDo: { type: "string" }, successCheck: { type: "string" },
+          whatHappenedDetail: { type: "string" }, whyItMatters: { type: "string" }, whyItMattersDetail: { type: "string" }, whatToDo: { type: "string" }, successCheck: { type: "string" },
         },
       },
     },
@@ -732,9 +822,9 @@ Do not add, remove, merge, or rename finding IDs or strength IDs. Do not invent 
 
 For each coaching item, title is only the concise issue label used for navigation; it is not the white coaching sentence. Make the title specific, normally four to ten words, without generic labels or numbering.
 
-For every finding, whatHappened must contain two or three sentences. Its first sentence is shown as the bold white coaching line. Name the declared exercise and describe the exact visible body, equipment, path, range, position, or tempo change in that sentence. In the remaining sentences, reference every numbered repetition supported by the supplied evidence and identify the relevant phase or moment. Do not replace supported repetition numbers with vague phrases such as "that moment." Do not reuse the same sentence template across findings.
+For every finding, whatHappened must be exactly one complete sentence shown as bold white coaching text. whatHappenedDetail must contain one to three normal supporting sentences. Name the declared exercise and describe the exact visible body, equipment, path, range, position, or tempo change; reference every numbered repetition supported by the supplied evidence, identify the relevant phase or moment, and explain how the visible relationship changes or repeats across the recording. Do not replace supported repetition numbers with vague phrases such as "that moment." Do not reuse the same sentence template across findings.
 
-whyItMatters must contain two or three sentences. Its first sentence must directly explain why this exact visible pattern matters for the declared exercise; this first sentence is shown as the bold white coaching line. Use the remaining sentence or sentences for the specific consequence to path, range, control, position, balance, tempo, or repeatability. Do not repeat whatHappened and do not use generic wording that could apply to any exercise.
+whyItMatters must be exactly one complete sentence shown as bold white coaching text. whyItMattersDetail must contain one to three normal supporting sentences. Directly explain why this exact visible pattern matters for the declared exercise and its specific consequence to path, range, control, position, balance, tempo, or repeatability. Do not repeat whatHappened and do not use generic wording that could apply to any exercise.
 
 whatToDo must be exactly one complete actionable sentence. This sentence is shown as the bold white coaching line, so it must name the declared exercise or its unmistakable equipment and movement action, give the corrective direction, and state when in the repetition to apply it. successCheck must be one separate sentence shown as normal text that describes what the user should visibly compare on the next set.
 
@@ -750,10 +840,10 @@ export const BOUNDARY_FREE_ANALYSIS_SCHEMA = {
   type: "object", additionalProperties: false,
   required: ["videoUnderstanding", "movementScores", "muscleFocus", "coachingItems", "strengths", "evidenceSelections", "recheckRequest"],
   properties: {
-    videoUnderstanding: { type: "object", additionalProperties: false, required: ["recordingSummary", "exerciseSummary", "visibleSequence", "beginning", "middle", "end", "changesAcrossVideo", "setupEquipmentAndSurroundings", "observedRepCount"], properties: { recordingSummary: { type: "string" }, exerciseSummary: { type: "string" }, visibleSequence: { type: "string" }, beginning: { type: "string" }, middle: { type: "string" }, end: { type: "string" }, changesAcrossVideo: { type: "string" }, setupEquipmentAndSurroundings: { type: "string" }, observedRepCount: { type: ["integer", "null"], minimum: 0 } } },
+    videoUnderstanding: { type: "object", additionalProperties: false, required: ["recordingSummary", "exerciseSummary", "visibleSequence", "beginning", "middle", "end", "changesAcrossVideo", "setupEquipmentAndSurroundings", "observedRepCount", "repAudit"], properties: { recordingSummary: { type: "string" }, exerciseSummary: { type: "string" }, visibleSequence: { type: "string" }, beginning: { type: "string" }, middle: { type: "string" }, end: { type: "string" }, changesAcrossVideo: { type: "string" }, setupEquipmentAndSurroundings: { type: "string" }, observedRepCount: { type: "integer", minimum: 1 }, repAudit: { type: "array", minItems: 1, maxItems: 30, items: { type: "object", additionalProperties: false, required: ["repNumber", "startMs", "peakMs", "endMs", "visualSummary"], properties: { repNumber: { type: "integer", minimum: 1 }, startMs: { type: "integer", minimum: 0 }, peakMs: { type: "integer", minimum: 0 }, endMs: { type: "integer", minimum: 0 }, visualSummary: { type: "string" } } } } } },
     movementScores: { type: "array", minItems: 4, maxItems: 4, items: { type: "object", additionalProperties: false, required: ["id", "label", "score", "observed", "evidenceIds"], properties: { id: { type: "string" }, label: { type: "string" }, score: { type: "number", minimum: 0, maximum: 100 }, observed: { type: "string" }, evidenceIds: { type: "array", items: { type: "string" } } } } },
     muscleFocus: { type: "object", additionalProperties: false, required: ["primary", "secondary", "unclassified"], properties: { primary: { type: "array", items: { type: "object", additionalProperties: false, required: ["name", "region"], properties: { name: { type: "string" }, region: { type: "string", enum: MUSCLE_REGIONS } } } }, secondary: { type: "array", items: { type: "object", additionalProperties: false, required: ["name", "region"], properties: { name: { type: "string" }, region: { type: "string", enum: MUSCLE_REGIONS } } } }, unclassified: { type: "array", items: { type: "string" } } } },
-     coachingItems: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "topic", "observation", "whyItMatters", "correctionDirection", "severity", "confidence", "observedIssueRegions"], properties: { id: { type: "string" }, topic: { type: "string" }, observation: { type: "string" }, whyItMatters: { type: "string" }, correctionDirection: { type: "string" }, severity: { type: "string", enum: ["high", "important", "note"] }, confidence: { type: "number", minimum: 0, maximum: 1 }, observedIssueRegions: { type: "array", items: { type: "string", enum: ANATOMY_REGIONS } } } } },
+     coachingItems: { type: "array", minItems: 4, maxItems: 4, items: { type: "object", additionalProperties: false, required: ["id", "topic", "observation", "observationDetails", "whyItMatters", "whyDetails", "correctionDirection", "affectedRepNumbers", "severity", "confidence", "observedIssueRegions"], properties: { id: { type: "string" }, topic: { type: "string" }, observation: { type: "string" }, observationDetails: { type: "string" }, whyItMatters: { type: "string" }, whyDetails: { type: "string" }, correctionDirection: { type: "string" }, affectedRepNumbers: { type: "array", minItems: 1, uniqueItems: true, items: { type: "integer", minimum: 1 } }, severity: { type: "string", enum: ["high", "important", "note"] }, confidence: { type: "number", minimum: 0, maximum: 1 }, observedIssueRegions: { type: "array", items: { type: "string", enum: ANATOMY_REGIONS } } } } },
     strengths: { type: "array", items: { type: "object", additionalProperties: false, required: ["id", "topic", "observation"], properties: { id: { type: "string" }, topic: { type: "string" }, observation: { type: "string" } } } },
     evidenceSelections: { type: "array", items: { type: "object", additionalProperties: false, required: ["findingId", "moments"], properties: { findingId: { type: "string" }, primaryEvidenceIndex: { type: "integer", minimum: 0 }, moments: { type: "array", minItems: 1, items: evidenceSchema } } } },
     recheckRequest: { type: ["object", "null"], additionalProperties: false, required: ["centerMs", "reason"], properties: { centerMs: { type: "integer", minimum: 0 }, reason: { type: "string" } } },
@@ -777,10 +867,10 @@ This may be a mobile recording whose stored pixel dimensions rely on rotation me
 First identify the continuous active-set interval from the start of the first real repetition through the end of the last real repetition. Setup, walking, camera interaction, picking up or setting down equipment, repositioning, sitting or lying back, and leaving the exercise position are not technique findings. Analyze only exercise movement inside that interval. A transition counts only when it is visibly part of moving between real repetitions and materially affects the next repetition.
 
 Before writing corrections, complete this whole-movement evidence sequence in order:
-1. Identify the first real repetition and the final real repetition.
-2. Track the body, equipment, contact points, and stable references through equivalent phases near the beginning, middle, and end.
-3. Record the observed path, endpoints, range, tempo, stability, control, symmetry, and changes across the set.
-4. Fill videoUnderstanding.beginning, middle, end, visibleSequence, and changesAcrossVideo from that chronological review.
+1. Identify every complete visible repetition from the first real repetition through the final real repetition.
+2. Return repAudit with exactly one sequential item for every observed repetition. Each item must bound that complete repetition with startMs < peakMs < endMs and summarize the visible path, endpoints, range, tempo, stability, and control for that specific repetition.
+3. Compare the same body, equipment, contact points, and stable references at equivalent phases on every audited repetition, including the first, middle, and final repetitions.
+4. Set observedRepCount equal to repAudit.length, then fill videoUnderstanding.beginning, middle, end, visibleSequence, and changesAcrossVideo from that complete repetition-by-repetition review.
 5. Only after the chronological record is complete, create coaching items, strengths, muscle focus, and scores.
 Do not let an obvious early issue stop the whole-video review.
 
@@ -796,13 +886,15 @@ A smooth or consistent path can still be a useful correction when its endpoint r
 
 Build one complete ranked inventory from every independently visible issue or optimization inside real repetitions. Inspect exercise-specific setup and support, stance, posture, torso and pelvis position, grip and equipment contact, equipment motion, lifting path, lowering path, reversal points, range and endpoints, joint alignment, left-right symmetry, balance, stability, tempo, momentum, control, and repetition-to-repetition consistency. Also inspect any other visible exercise-specific relationship not named here. These are inspection directions, not a fixed output taxonomy.
 
-For each likely item, compare the same visible feature at equivalent phases across at least three repetitions when available. A planted hand, foot, or knee does not by itself prove the torso stayed steady. If a deviation appears in separated repetitions, include separated evidence moments and describe it as recurring. One evidence moment supports only that cited occurrence; do not write throughout, consistently, repeatedly, every rep, or across the set unless at least two separated moments support that scope. Do not attribute a problem to fatigue or only the final rep when earlier equivalent phases also show it.
+For each likely item, compare the same visible feature at equivalent phases across every audited repetition. Return affectedRepNumbers as the exact repetition numbers where the issue is visible, and include at least one matching evidence moment for every affected repetition. A planted hand, foot, or knee does not by itself prove the torso stayed steady. If a deviation appears in separated repetitions, include separated evidence moments and describe it as recurring. Never claim a repetition, throughout, consistently, repeatedly, every rep, or across the set without matching evidence for that scope. Do not attribute a problem to fatigue or only the final rep when earlier equivalent phases also show it.
 
 Rest between completed repetitions is not a technique error. Do not create a finding whose main subject is pause duration or between-rep cadence. Report only the visible position, path, range, stability, or control change that occurs during a repetition. Do not turn normal mechanics, clothing motion, camera perspective, occlusion, or pre-set and post-set actions into findings.
 
-Every coaching item must stay semantically aligned: topic, observation, whyItMatters, correctionDirection, body regions, and evidence must all describe the same visible relationship. Do not split one issue into duplicate topics or merge separate visible problems into one. Explain importance only through visible path, range, control, steadiness, position, balance, or repeatability. Never claim hidden muscle activation, internal forces, pain, injury, tissue effects, or exact joint angles.
+Every coaching item must stay semantically aligned: topic, observation, observationDetails, whyItMatters, whyDetails, correctionDirection, affectedRepNumbers, body regions, and evidence must all describe the same visible relationship. Do not split one issue into duplicate topics or merge separate visible problems into one. Explain importance only through visible path, range, control, steadiness, position, balance, or repeatability. Never claim hidden muscle activation, involvement, recruitment, effort, or tension; internal forces; joint stress or mobility; work output; pain; injury; tissue effects; or exact joint angles. Do not label knees traveling past the toes, looking up or down, or stopping above parallel as an error by itself. Those relationships are findings only when the recording also shows a specific visible consequence such as heel lift, lost balance, a changed equipment path, an inconsistent endpoint, or a declared range constraint.
 
-Return every distinct evidence-backed coaching item the real exercise movement supports, including small but real visible optimizations as severity note when appropriate. Return zero items when the complete recording supports no correction; never pad the list with strengths, generic advice, hidden possibilities, duplicate topics, or actions outside real repetitions. After the full inventory, include every additional distinct timestamp-backed issue the recording supports.
+Finish the user-facing coaching inside this same whole-video response. For every coaching item, observation must be exactly one complete sentence naming the exact visible issue in this declared exercise. observationDetails must contain one to three normal supporting sentences naming the affected repetitions, phases, and comparison across the audited set. whyItMatters must be exactly one complete sentence describing the direct visible consequence. whyDetails must contain one to three normal supporting sentences tied specifically to visible path, range, control, position, balance, tempo, or repeatability. correctionDirection must be exactly one complete actionable sentence naming what to change and when in the repetition to apply it. Use plain text only with no Markdown, asterisks, headings, bullets, numbered labels, or backticks.
+
+Return exactly four distinct evidence-backed coaching issues. Rank the complete inventory and keep the four most useful visible relationships. When fewer than four major faults exist, use a small but real visible optimization as severity note; never invent hidden physiology, duplicate another topic, use camera uncertainty, or use actions outside real repetitions. Every issue must carry its own matching evidence and affectedRepNumbers.
 
 Choose evidence only after completing the inventory. peakMs must be the clearest exact frame where the described relationship is visible, not a generic phase marker or the start or end by default. startMs and endMs provide short neighboring context, with startMs < peakMs < endMs. For tempo, control, or set changes, describe what the neighboring frames establish while still selecting the clearest single peak frame. Use repNumber only when the full sequence makes that rep number reliable; otherwise use null and describe beginning, middle, end, or the visible phase.
 
@@ -812,9 +904,9 @@ Return muscleFocus for the declared exercise and visible variation. muscleFocus 
 
 Return exactly four distinct exercise-specific movement scores. Choose categories that match the visible demands of this exercise rather than generic labels. Scores must agree with the final findings, their severity, recurrence, and confidence. Do not lower scores for camera uncertainty, occlusion, or because many minor notes were returned. Use 90-100 for exceptional repeatable execution with only tiny refinements, 80-89 for strong execution with minor opportunities, 70-79 for multiple important recurring problems, 60-69 only for several major repeated breakdowns, and below 60 only for severe persistent breakdowns. Note-level items should have little effect on the score.
 
-After the full analysis, request a recheck only when you genuinely need to see one short moment again to resolve meaningful visual uncertainty; otherwise set recheckRequest to null. Do not request a recheck when the full recording already supports a confident decision, and do not request one merely to repeat the complete audit.
+This is the only video-analysis pass. Resolve uncertainty through the complete chronological review, lower confidence when needed, and Always set recheckRequest to null. Never request or imply a second watch.
 
-Before returning, verify that every retained coaching item has its own valid original-video evidence and that every additional supported issue from the complete recording is included. It is valid for the list to be empty when no correction is supported. Perform a final contradiction check across the chronological account, rep count, scores, findings, strengths, muscle focus, and timestamps. Return one complete JSON object matching the schema.`;
+Before returning, verify that exactly four real coaching items remain after removing duplicates and unsupported claims, that repAudit contains every observed repetition, and that every affectedRepNumbers value has matching original-video evidence. Perform a final contradiction check across the chronological account, rep count, scores, findings, strengths, muscle focus, and timestamps. Return one complete JSON object matching the schema.`;
 }
 
 export function buildBoundaryFreeRecheckPrompt(input: {

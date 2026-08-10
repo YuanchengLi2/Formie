@@ -1,6 +1,6 @@
 import { createAdminClient } from "../_shared/auth.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
-import { retryAnalysisHandler } from "./handler.ts";
+import { retryAnalysisHandler, SINGLE_CALL_PIPELINE_VERSION } from "./handler.ts";
 import { isV49PrimaryRolloutEnabled } from "../_shared/v49-primary-rollout.ts";
 
 function requireScheduledRequest(request: Request): Promise<void> {
@@ -20,7 +20,7 @@ Deno.serve(async (request) => {
     findDueSessions: async (now, limit) => {
       let query = admin
         .from("analysis_sessions")
-        .select("id,user_id,active_v49_run_id")
+        .select("id,user_id,active_v49_run_id,pipeline_version")
         .eq("status", "processing");
       query = primaryV49Enabled
         ? query.not("active_v49_run_id", "is", null)
@@ -34,7 +34,11 @@ Deno.serve(async (request) => {
         .order("analysis_next_retry_at", { ascending: true })
         .limit(limit);
       if (error) throw error;
-      return (data ?? []).map((session) => ({ id: session.id, userId: session.user_id }));
+      return (data ?? []).map((session) => ({
+        id: session.id,
+        userId: session.user_id,
+        pipelineVersion: session.pipeline_version ?? null,
+      })).filter((session) => session.pipelineVersion !== SINGLE_CALL_PIPELINE_VERSION);
     },
     invokeAnalysis: async (session) => {
       const endpoint = primaryV49Enabled ? "analyze-video-v49" : "analyze-video";

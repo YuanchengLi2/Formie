@@ -6,21 +6,14 @@ import {
 } from "../_shared/analysis-settings.ts";
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
-import { buildTextGenerateContentRequest, buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
+import { buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
 import { createGeminiFilesClient, reuseOrUploadGeminiFile, type GeminiFile } from "../_shared/gemini-files.ts";
 import {
   buildBoundaryFreeAnalysisPrompt,
-  buildBoundaryFreeRecheckPrompt,
-  buildWholeVideoWritingPrompt,
-  buildDeclarationGuidancePrompt,
   parseBoundaryFreeAnalysis,
   parseWholeVideoWriting,
-  parseDeclarationGuidance,
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
-  WHOLE_VIDEO_WRITING_SCHEMA,
-  DECLARATION_GUIDANCE_SCHEMA,
   boundaryFreeToCandidate,
-  declarationOnlyAnalysis,
 } from "../_shared/boundary-free-analysis.ts";
 import type { ExerciseFamily } from "../_shared/analysis-contract.ts";
 import { resultPayload } from "../_shared/result-payload.ts";
@@ -31,11 +24,9 @@ import { advanceWholeVideoPipeline } from "./whole-video-runner.ts";
 import { analyzeWholeVideoHandler, type WholeVideoSession } from "./whole-video-handler.ts";
 import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
-import { runShortClipRechecks } from "./short-clip-recheck.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v53-readable-coaching";
+const PIPELINE_VERSION = "gemini-whole-video-v56-single-call-rep-audit";
 const ANALYST_MODEL = "gemini-3.6-flash";
-const WRITER_MODEL = "gemini-3.1-flash-lite";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
 const files = createGeminiFilesClient({ apiKey });
 const generation = createGenerateContentClient({ apiKey });
@@ -43,7 +34,7 @@ const generation = createGenerateContentClient({ apiKey });
 type JsonRecord = Record<string, unknown>;
 type WholeVideoInput = { uri: string; mimeType: string } | { kind: "inline"; data: string; mimeType: string };
 type StageName = "analyzing" | "finalizing";
-type ModelCallStage = StageName | `analysis_recheck_${1 | 2 | 3}`;
+type ModelCallStage = StageName;
 type StageClaim = { resultStatus: string; stageRunId: string; leaseToken: string; output: unknown };
 
 function withCors(response: Response): Response {
@@ -292,87 +283,6 @@ Deno.serve(async (request) => {
     return { input: { uri: file.uri, mimeType: file.mimeType || "video/mp4" }, byteLength, file };
   }
 
-  async function persistDeclarationFallback(sessionId: string, declaration: ReturnType<typeof parseSetDeclaration>, reason: string): Promise<void> {
-    const declarationResponse = await generate({
-      sessionId,
-      stage: "analyzing",
-      modelName: ANALYST_MODEL,
-      request: buildTextGenerateContentRequest({
-        prompt: buildDeclarationGuidancePrompt(declaration),
-        schema: DECLARATION_GUIDANCE_SCHEMA,
-        thinkingLevel: ANALYST_THINKING_LEVEL,
-      }),
-      timeoutMs: 45_000,
-    });
-    const guidance = parseDeclarationGuidance(declarationResponse);
-    const analysis = declarationOnlyAnalysis(
-      declaration,
-      `The stored video was not readable after repeated preparation attempts (${reason}).`,
-      guidance,
-    );
-    const candidate = boundaryFreeToCandidate(analysis, declaration) as AnalysisCandidate & {
-      analysisBasis: "declared_only";
-      viewNotes: string[];
-      generalGuidance: string[];
-    };
-    const { error } = await admin.rpc("commit_analysis_result_v2", {
-      p_session_id: sessionId,
-      p_session: {
-        pipeline_version: PIPELINE_VERSION,
-        exercise_family: candidate.recognition.exerciseFamily,
-        exercise_variant_v2_id: candidate.recognition.catalogExerciseId,
-        detected_label: candidate.recognition.label,
-        detected_variation: candidate.recognition.variation,
-        detected_equipment: candidate.recognition.equipment,
-        recognition_confidence: candidate.recognition.confidence,
-        recognition_alternatives: candidate.recognition.alternatives,
-        model_name: null,
-      },
-      p_result: {
-        status: "complete",
-        analysis_basis: "declared_only",
-        view_notes: candidate.viewNotes,
-        general_guidance: candidate.generalGuidance,
-        overall_assessment: candidate.overallAssessment,
-        muscle_focus: candidate.muscleFocus,
-        coach_note: candidate.coachNote,
-        score: null,
-        score_rationale: [],
-        movement_scores: [],
-        equipment_observations: [],
-        exercise_guide: candidate.exerciseGuide ?? null,
-        did_well: [],
-        priority_corrections: [],
-        coaching_cues: [],
-        set_context: candidate.setContext,
-        set_summary: candidate.setSummary,
-        next_set_plan: [],
-        empty_correction_message: null,
-        rubric_coverage: null,
-        pipeline_version: PIPELINE_VERSION,
-        comparison: null,
-        analysis_version: PIPELINE_VERSION,
-      },
-    });
-    if (error) throw databaseError("ANALYSIS_RESULT_SAVE_FAILED", error);
-    const { count } = await admin.from("model_call_telemetry").select("id", { count: "exact", head: true }).eq("session_id", sessionId);
-    const { error: sessionError } = await admin.from("analysis_sessions").update({
-      status: "complete",
-      stage: "complete",
-      pipeline_version: PIPELINE_VERSION,
-      analysis_draft: analysis,
-      analysis_model_call_count: count ?? 0,
-      analysis_correction_count: 0,
-      analysis_retry_count: 0,
-      analysis_total_duration_ms: 0,
-      analysis_next_retry_at: null,
-      analysis_last_error_code: null,
-      failure_code: null,
-      updated_at: new Date().toISOString(),
-    }).eq("id", sessionId);
-    if (sessionError) throw databaseError("ANALYSIS_STATE_SAVE_FAILED", sessionError);
-  }
-
   const response = await analyzeWholeVideoHandler(request, {
     authenticate: async (incoming) => {
       const retrySecret = Deno.env.get("ANALYSIS_RETRY_SECRET") ?? Deno.env.get("RETENTION_CLEANUP_SECRET");
@@ -442,8 +352,8 @@ Deno.serve(async (request) => {
       const durationMs = rawSession.durationMs!;
       const declaration = rawSession.setDeclaration ? parseSetDeclaration(rawSession.setDeclaration) : undefined;
       const rawDecision = rawSession.analysisDecision && typeof rawSession.analysisDecision === "object" ? rawSession.analysisDecision as JsonRecord : null;
-      // The only pixel stage is the single full-video analysis call. Finalization
-      // gives its validated facts to a text-only writer and never re-reads pixels.
+      // One full-video call produces both validated evidence and user-facing
+      // coaching. Finalization below is local mapping and persistence only.
       let analysisVideo: WholeVideoInput | null = null;
       let geminiFileName: string | null = typeof rawSession.geminiFileName === "string" ? rawSession.geminiFileName : null;
       let geminiFile: GeminiFile | null = null;
@@ -519,7 +429,7 @@ Deno.serve(async (request) => {
       }, {
         analyzeWholeVideo: async ({ sessionId }) => {
           await saveSessionStage("analyzing");
-          const analysis = await runStage(sessionId, "analyzing", { kind: "video", durationMs, transport: "file", fps: REQUESTED_ANALYSIS_FPS }, async () => {
+          const rawAnalysis = await runStage(sessionId, "analyzing", { kind: "video", durationMs, transport: "file", fps: REQUESTED_ANALYSIS_FPS }, async () => {
             const analysisVideo = await getGeminiVideo();
             await saveSessionStage("analyzing");
             const requestBody = buildVideoGenerateContentRequest({
@@ -530,86 +440,22 @@ Deno.serve(async (request) => {
               thinkingLevel: ANALYST_THINKING_LEVEL,
               mediaResolution: REQUESTED_ANALYSIS_MEDIA_RESOLUTION,
               temperature: 0,
+              preserveSchemaBounds: true,
             });
             const raw = await generate({ sessionId, stage: "analyzing", modelName: ANALYST_MODEL, request: requestBody, fps: REQUESTED_ANALYSIS_FPS, timeoutMs: deadline.timeoutFor("analyzing") }) as JsonRecord;
-            let initialAnalysis: ReturnType<typeof parseBoundaryFreeAnalysis>;
-            try {
-              initialAnalysis = parseBoundaryFreeAnalysis(raw, durationMs);
-            } catch (error) {
-              throw analysisContractError(error);
-            }
-            const rechecked = await runShortClipRechecks({
-              initialAnalysis,
-              durationMs,
-              review: async ({ analysis: latestAnalysis, request: recheckRequest, window, recheckNumber, remainingAfterThis }) => {
-                const recheckBody = buildVideoGenerateContentRequest({
-                  video: analysisVideo,
-                  prompt: buildBoundaryFreeRecheckPrompt({
-                    analysis: latestAnalysis,
-                    declaration,
-                    request: recheckRequest,
-                    window,
-                    remainingAfterThis,
-                  }),
-                  schema: BOUNDARY_FREE_ANALYSIS_SCHEMA,
-                  fps: REQUESTED_ANALYSIS_FPS,
-                  thinkingLevel: ANALYST_THINKING_LEVEL,
-                  mediaResolution: REQUESTED_ANALYSIS_MEDIA_RESOLUTION,
-                  temperature: 0,
-                  window,
-                });
-                const revised = await generate({
-                  sessionId,
-                  stage: `analysis_recheck_${recheckNumber}`,
-                  modelName: ANALYST_MODEL,
-                  request: recheckBody,
-                  fps: REQUESTED_ANALYSIS_FPS,
-                  window,
-                  timeoutMs: deadline.timeoutFor("analyzing"),
-                }) as JsonRecord;
-                try {
-                  return parseBoundaryFreeAnalysis(revised, durationMs);
-                } catch (error) {
-                  throw analysisContractError(error);
-                }
-              },
-            });
-            return rechecked.analysis as unknown as JsonRecord;
+            return raw as JsonRecord;
           });
-          // The leased stage stores only the already-parsed contract output.
-          // Replaying it must not run the raw provider parser a second time,
-          // because evidenceSelections have already been joined into findings.
-          const parsedAnalysis = analysis as unknown as ReturnType<typeof parseBoundaryFreeAnalysis>;
+          // The successful provider response is durably attached to the stage
+          // before local validation. A parser failure cannot trigger a rewatch.
+          let parsedAnalysis: ReturnType<typeof parseBoundaryFreeAnalysis>;
+          try {
+            parsedAnalysis = parseBoundaryFreeAnalysis(rawAnalysis, durationMs);
+          } catch (error) {
+            throw analysisContractError(error);
+          }
           await saveSessionStage("finalizing");
-          const writing = await runStage(sessionId, "analyzing", { kind: "writer", analysis: parsedAnalysis }, async () => {
-            try {
-              const requestBody = buildTextGenerateContentRequest({
-                prompt: buildWholeVideoWritingPrompt(parsedAnalysis, declaration),
-                schema: WHOLE_VIDEO_WRITING_SCHEMA,
-                thinkingLevel: "low",
-              });
-              const raw = await generate({
-                sessionId,
-                stage: "analyzing",
-                modelName: WRITER_MODEL,
-                request: requestBody,
-                fps: null,
-                timeoutMs: deadline.timeoutFor("analyzing"),
-              }) as JsonRecord;
-              return parseWholeVideoWriting(raw, parsedAnalysis) as unknown as JsonRecord;
-            } catch (error) {
-              // Writer prose is optional. Keep the validated video evidence and
-              // derive readable, personalized copy from it when Flash-Lite is
-              // unavailable, late, or returns an awkward field.
-              console.warn(JSON.stringify({
-                event: "coaching_writer_fallback",
-                sessionId,
-                errorCode: errorCode(error),
-              }));
-              return parseWholeVideoWriting(null, parsedAnalysis) as unknown as JsonRecord;
-            }
-          });
-          return { analysis: parsedAnalysis, writing: parseWholeVideoWriting(writing, parsedAnalysis) } as unknown as JsonRecord;
+          const writing = parseWholeVideoWriting(null, parsedAnalysis);
+          return { analysis: parsedAnalysis, writing } as unknown as JsonRecord;
         },
         saveAnalysis: async (sessionId, decision) => {
           await saveSessionStage("finalizing", {
@@ -706,7 +552,7 @@ Deno.serve(async (request) => {
     markFailed: async (sessionId, code) => {
       const { data: retryState, error: retryStateError } = await admin
         .from("analysis_sessions")
-        .select("status,analysis_retry_count,set_declaration,gemini_file_name")
+        .select("status,gemini_file_name")
         .eq("id", sessionId)
         .maybeSingle();
       if (retryStateError) throw databaseError("ANALYSIS_STATE_SAVE_FAILED", retryStateError);
@@ -716,9 +562,6 @@ Deno.serve(async (request) => {
         .eq("session_id", sessionId)
         .maybeSingle();
       if (existingResultError) throw databaseError("ANALYSIS_RESULT_SAVE_FAILED", existingResultError);
-      // The atomic RPC sets the session complete before telemetry/state
-      // bookkeeping. Never regress a committed result to processing because
-      // a later diagnostic write failed.
       if (retryState?.status === "complete" || existingResult?.status === "complete") {
         if (typeof retryState?.gemini_file_name === "string") {
           await files.deleteFile(retryState.gemini_file_name).catch(() => undefined);
@@ -735,63 +578,24 @@ Deno.serve(async (request) => {
           gemini_file_state: null,
           updated_at: new Date().toISOString(),
         });
-        return;
+        return { status: "complete", stage: "complete" };
       }
-      const retryCount = Math.max(0, Number(retryState?.analysis_retry_count ?? 0)) + 1;
-      const permanentMediaFailure = new Set([
-        "ANALYSIS_VIDEO_DOWNLOAD_FAILED",
-        "ANALYSIS_VIDEO_EMPTY",
-        "ANALYSIS_VIDEO_INVALID_TYPE",
-        "GEMINI_FILE_FAILED",
-      ]).has(code)
-        // Gemini content blocks are permanent for the video input, but the
-        // declared exercise can still receive honest text-only guidance.
-        || (code.startsWith("GEMINI_") && !/^GEMINI_HTTP_\d+$/.test(code));
-      if (permanentMediaFailure && retryCount >= 3 && retryState?.set_declaration) {
-        try {
-          const declaration = parseSetDeclaration(retryState.set_declaration);
-          await persistDeclarationFallback(sessionId, declaration, code);
-          if (typeof retryState.gemini_file_name === "string") {
-            await files.deleteFile(retryState.gemini_file_name).catch(() => undefined);
-          }
-          await admin.from("analysis_sessions").update({
-            gemini_file_name: null,
-            gemini_file_uri: null,
-            gemini_file_state: null,
-            updated_at: new Date().toISOString(),
-          }).eq("id", sessionId).catch(() => undefined);
-          return;
-        } catch (fallbackError) {
-          const [{ data: committedSession }, { data: committedResult }] = await Promise.all([
-            admin.from("analysis_sessions").select("status").eq("id", sessionId).maybeSingle(),
-            admin.from("analysis_results").select("status").eq("session_id", sessionId).maybeSingle(),
-          ]);
-          if (committedSession?.status === "complete" || committedResult?.status === "complete") {
-            await admin.from("analysis_sessions").update({
-              status: "complete",
-              stage: "complete",
-              failure_code: null,
-              analysis_next_retry_at: null,
-              analysis_last_error_code: null,
-              updated_at: new Date().toISOString(),
-            }).eq("id", sessionId).catch(() => undefined);
-            return;
-          }
-          console.error(JSON.stringify({ sessionId, code: "DECLARATION_FALLBACK_FAILED", message: fallbackError instanceof Error ? fallbackError.message : String(fallbackError) }));
-        }
+      if (typeof retryState?.gemini_file_name === "string") {
+        await files.deleteFile(retryState.gemini_file_name).catch(() => undefined);
       }
-      const delays = [5_000, 15_000, 30_000, 60_000, 300_000];
-      const delayMs = delays[Math.min(retryCount - 1, delays.length - 1)];
       await persistRetryState(sessionId, {
-        status: "processing",
-        stage: "retry_wait",
-        failure_code: null,
-        analysis_started_at: null,
-        analysis_retry_count: retryCount,
-        analysis_next_retry_at: new Date(Date.now() + delayMs).toISOString(),
+        status: "failed",
+        stage: "failed",
+        pipeline_version: PIPELINE_VERSION,
+        failure_code: code,
+        analysis_next_retry_at: null,
         analysis_last_error_code: code,
+        gemini_file_name: null,
+        gemini_file_uri: null,
+        gemini_file_state: null,
         updated_at: new Date().toISOString(),
       });
+      return { status: "failed", stage: "failed" };
     },
   });
 

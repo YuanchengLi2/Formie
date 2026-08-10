@@ -182,4 +182,24 @@ describe("buildReviewFrames", () => {
     expect(point.observed.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(5);
     expect(point.why.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
   });
+
+  it("keeps the bold lead separate from one-to-three supporting sentences", () => {
+    const value = resultWithTwoMoments();
+    value.priorityCorrections[0].expandedCoaching = {
+      summary: "Your shoulders stop moving evenly.",
+      whatHappened: "Your right shoulder rises before the handle reaches your ribs.",
+      whatHappenedDetail: "The rise appears on rep 3. Rep 4 repeats the same uneven finishing position.",
+      whyItMatters: "The uneven shoulder position tilts the visible handle path.",
+      whyItMattersDetail: "The final repetitions no longer match the opening path. That makes the set less repeatable.",
+      whatToDo: "Start the next rep with both shoulders level.",
+      successCheck: "Both shoulders finish at the same height.",
+    } as NonNullable<CoachingFinding["expandedCoaching"]> & { whatHappenedDetail: string; whyItMattersDetail: string };
+
+    const point = buildCoachingReviewPoints(value)[0];
+
+    expect(point.observed.body).toBe("Your right shoulder rises before the handle reaches your ribs.");
+    expect((point.observed as typeof point.observed & { detail?: string }).detail).toBe("The rise appears on rep 3. Rep 4 repeats the same uneven finishing position.");
+    expect(point.why.body).toBe("The uneven shoulder position tilts the visible handle path.");
+    expect((point.why as typeof point.why & { detail?: string }).detail).toBe("The final repetitions no longer match the opening path. That makes the set less repeatable.");
+  });
 });

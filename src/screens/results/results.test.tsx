@@ -4,7 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import type { AnalysisResult, CoachingFinding } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
-import { conciseCopy, formatAnalysisTimestamp, ResultsScreen } from ".";
+import { conciseCopy, formatAnalysisTimestamp, plainCoachingText, ResultsScreen } from ".";
 
 describe("formatAnalysisTimestamp", () => {
   it("carries rounded seconds into the next minute", () => {
@@ -19,6 +19,12 @@ describe("conciseCopy", () => {
       2,
       10,
     )).toBe("The first sentence is clear. The second sentence stays useful.");
+  });
+});
+
+describe("plainCoachingText", () => {
+  it("removes Markdown emphasis and bullet markers from persisted coaching", () => {
+    expect(plainCoachingText("**Keep the wrists straight.**\n- Match both sides.")).toBe("Keep the wrists straight. Match both sides.");
   });
 });
 
@@ -39,11 +45,13 @@ function finding(id: string, title: string): CoachingFinding {
     },
     expandedCoaching: {
       summary: `${title} changes the movement.`,
-      whatHappened: "On rep 1, your right shoulder rises as the weight moves. Your left shoulder stays lower at the top. The uneven position is clearest before the weight changes direction.",
-      whyItMatters: "When one shoulder rises first, the weight follows a tilted path. That makes the next repetition harder to repeat evenly.",
+      whatHappened: "Your right shoulder rises before the weight changes direction.",
+      whatHappenedDetail: "On rep 1, the right shoulder moves above the left as the weight rises. The uneven position is clearest at the cited frame.",
+      whyItMatters: "The uneven shoulder position tilts the visible weight path.",
+      whyItMattersDetail: "The next repetition starts from a different shoulder position. That makes the recorded pulling path less repeatable.",
       whatToDo: "Start the next rep with both shoulders level.",
       successCheck: "Both shoulders finish at the same height.",
-    },
+    } as NonNullable<CoachingFinding["expandedCoaching"]> & { whatHappenedDetail: string; whyItMattersDetail: string },
     severity: "important",
     observedIssueRegions: ["shoulders"],
     primaryEvidenceIndex: 0,
@@ -173,15 +181,42 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText(/drag to rotate/i)).toBeNull();
     expect(screen.getByTestId("coaching-workspace")).toBeTruthy();
     expect(screen.getByTestId("active-coaching-panel").props.accessibilityLabel).toContain("Priority 1");
-    expect(screen.getByTestId("coaching-topic-sentence")).toHaveStyle({ fontSize: 15, lineHeight: 21, fontWeight: "700" });
-    expect(screen.getByTestId("coaching-supporting-copy")).toHaveStyle({ fontSize: 14, lineHeight: 21, fontWeight: "400" });
-    expect(screen.getByText(/On rep 1, your right shoulder rises/)).toBeTruthy();
+    expect(screen.getByTestId("coaching-what-happened-copy")).toHaveStyle({ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: "700" });
+    expect(screen.getByTestId("coaching-what-happened-copy").props.children).toBe("Your right shoulder rises before the weight changes direction.");
+    expect(screen.getByTestId("coaching-what-happened-detail").props.children).toContain("On rep 1");
     expect(screen.queryByText("Priority 1 affects repeatable movement quality.")).toBeNull();
     expect(screen.getByLabelText("Recording timeline").props.accessibilityRole).toBe("adjustable");
     expect(screen.getByLabelText("Play recording in video")).toBeTruthy();
     expect(screen.getAllByLabelText(/Review .* at/).length).toBeGreaterThan(0);
     expect(screen.getAllByTestId(/timeline-evidence-marker-/)).toHaveLength(4);
   }, 10_000);
+
+  it("renders What to do next as one bold plain-text sentence", async () => {
+    const value = result();
+    value.priorityCorrections[0].expandedCoaching!.whatToDo = "**Start the next rep with both shoulders level.**";
+    const screen = await renderResults(jest.fn(), value);
+    await fireEvent.press(screen.getByLabelText("What to do next"));
+    const instruction = screen.getByTestId("coaching-what-to-do-next");
+    expect(instruction.props.children).toBe("Start the next rep with both shoulders level.");
+    expect(instruction).toHaveStyle({ fontWeight: "700" });
+    expect(screen.queryByText(/\*/)).toBeNull();
+    expect(screen.queryByText("Both shoulders finish at the same height.")).toBeNull();
+  });
+
+  it("renders one bold lead and normal supporting copy for what happened and why it matters", async () => {
+    const screen = await renderResults();
+
+    expect(screen.getByTestId("coaching-what-happened-copy").props.children).toBe("Your right shoulder rises before the weight changes direction.");
+    expect(screen.getByTestId("coaching-what-happened-copy")).toHaveStyle({ color: colors.text, fontWeight: "700" });
+    expect(screen.getByTestId("coaching-what-happened-detail").props.children).toContain("On rep 1");
+    expect(screen.getByTestId("coaching-what-happened-detail")).toHaveStyle({ color: colors.textSecondary, fontWeight: "400" });
+
+    await fireEvent.press(screen.getByLabelText("Why it matters"));
+    expect(screen.getByTestId("coaching-why-it-matters-copy").props.children).toBe("The uneven shoulder position tilts the visible weight path.");
+    expect(screen.getByTestId("coaching-why-it-matters-copy")).toHaveStyle({ color: colors.text, fontWeight: "700" });
+    expect(screen.getByTestId("coaching-why-it-matters-detail").props.children).toContain("less repeatable");
+    expect(screen.getByTestId("coaching-why-it-matters-detail")).toHaveStyle({ color: colors.textSecondary, fontWeight: "400" });
+  });
 
   it("renders the supported strengths and focused next-set plan", async () => {
     const screen = await renderResults();
@@ -320,43 +355,43 @@ describe("ResultsScreen", () => {
     const screen = await renderResults();
 
     expect(screen.getByText("Issue 1 of 4")).toBeTruthy();
-    expect(screen.getByText(/On rep 1, your right shoulder rises/)).toBeTruthy();
+    expect(screen.getByTestId("coaching-what-happened-copy").props.children).toBe("Your right shoulder rises before the weight changes direction.");
     await fireEvent.press(screen.getByLabelText("Why it matters"));
-    expect(screen.getByText(/When one shoulder rises first/)).toBeTruthy();
+    expect(screen.getByTestId("coaching-why-it-matters-copy").props.children).toBe("The uneven shoulder position tilts the visible weight path.");
     await fireEvent.press(screen.getByLabelText("What to do next"));
     expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
-    expect(screen.getByTestId("coaching-supporting-copy").props.children).toBe("Both shoulders finish at the same height.");
+    expect(screen.queryByTestId("coaching-supporting-copy")).toBeNull();
 
     await fireEvent.press(screen.getByLabelText("Next problem"));
     expect(screen.getByText("Issue 2 of 4")).toBeTruthy();
-    expect(screen.getByText(/On rep 1, your right shoulder rises/)).toBeTruthy();
+    expect(screen.getByTestId("coaching-what-happened-copy").props.children).toBe("Your right shoulder rises before the weight changes direction.");
     expect(screen.queryByText("Priority 2 affects repeatable movement quality.")).toBeNull();
     await fireEvent.press(screen.getByLabelText("Why it matters"));
-    expect(screen.getByText(/When one shoulder rises first/)).toBeTruthy();
+    expect(screen.getByTestId("coaching-why-it-matters-copy").props.children).toBe("The uneven shoulder position tilts the visible weight path.");
     await fireEvent.press(screen.getByLabelText("What to do next"));
     expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
   });
 
-  it("uses purpose-specific first sentences instead of repeating the issue title across tabs", async () => {
+  it("renders split coaching leads and details while keeping what-to-do-next unchanged", async () => {
     const value = result();
     value.priorityCorrections[0].title = "Control the late descent";
-    value.priorityCorrections[0].expandedCoaching!.whatHappened = "The first visible sentence explains what happened. The second visible sentence adds the rep moment. The third visible sentence completes the observation.";
+    value.priorityCorrections[0].expandedCoaching!.whatHappened = "The first visible sentence explains what happened.";
+    value.priorityCorrections[0].expandedCoaching!.whatHappenedDetail = "The second visible sentence adds the rep moment. The third visible sentence completes the observation.";
     const screen = await renderResults(jest.fn(), value);
 
-    expect(screen.getByTestId("coaching-topic-sentence").props.children).toBe("The first visible sentence explains what happened.");
-    expect(screen.getByTestId("coaching-supporting-copy").props.children).toBe(
-      "The second visible sentence adds the rep moment. The third visible sentence completes the observation.",
-    );
+    expect(screen.getByTestId("coaching-what-happened-copy").props.children).toBe(value.priorityCorrections[0].expandedCoaching!.whatHappened);
+    expect(StyleSheet.flatten(screen.getByTestId("coaching-what-happened-copy").props.style)).toMatchObject({ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: "700" });
+    expect(screen.getByTestId("coaching-what-happened-detail").props.children).toBe(value.priorityCorrections[0].expandedCoaching!.whatHappenedDetail);
+    expect(StyleSheet.flatten(screen.getByTestId("coaching-what-happened-detail").props.style)).toMatchObject({ color: colors.textSecondary, fontWeight: "400" });
 
     await fireEvent.press(screen.getByLabelText("Why it matters"));
-    expect(screen.getByTestId("coaching-topic-sentence").props.children).toBe("When one shoulder rises first, the weight follows a tilted path.");
-    expect(screen.getByTestId("coaching-supporting-copy").props.children).toBe("That makes the next repetition harder to repeat evenly.");
+    expect(screen.getByTestId("coaching-why-it-matters-copy").props.children).toBe("The uneven shoulder position tilts the visible weight path.");
+    expect(StyleSheet.flatten(screen.getByTestId("coaching-why-it-matters-copy").props.style)).toMatchObject({ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: "700" });
+    expect(screen.getByTestId("coaching-why-it-matters-detail").props.children).toContain("less repeatable");
 
     await fireEvent.press(screen.getByLabelText("What to do next"));
-    expect(screen.getByTestId("coaching-topic-sentence").props.children).toBe("Start the next rep with both shoulders level.");
-    expect(screen.getByTestId("coaching-supporting-copy").props.children).toBe("Both shoulders finish at the same height.");
-    expect(StyleSheet.flatten(screen.getByTestId("coaching-topic-sentence").props.style)).toMatchObject({ color: colors.text, fontWeight: "700" });
-    expect(StyleSheet.flatten(screen.getByTestId("coaching-supporting-copy").props.style)).toMatchObject({ color: colors.textSecondary, fontWeight: "400" });
+    expect(screen.getByTestId("coaching-what-to-do-next").props.children).toBe("Start the next rep with both shoulders level.");
+    expect(StyleSheet.flatten(screen.getByTestId("coaching-what-to-do-next").props.style)).toMatchObject({ color: colors.text, fontWeight: "700" });
   });
 
   it("uses compact summary and list typography", async () => {
@@ -466,9 +501,9 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("6 of 8 reps consistent")).toBeNull();
     expect(screen.getByText("WHOLE SET SUMMARY")).toBeTruthy();
     expect(screen.getByText("Issue 1 of 4")).toBeTruthy();
-    expect(screen.getByText(/On rep 1, your right shoulder rises/)).toBeTruthy();
+    expect(screen.getByTestId("coaching-what-happened-detail").props.children).toContain("On rep 1");
     await fireEvent.press(screen.getByLabelText("Why it matters"));
-    expect(screen.getByText(/When one shoulder rises first/)).toBeTruthy();
+    expect(screen.getByTestId("coaching-why-it-matters-detail").props.children).toContain("less repeatable");
     await fireEvent.press(screen.getByLabelText("What to do next"));
     expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
     expect(screen.queryByText(/premium run/i)).toBeNull();
