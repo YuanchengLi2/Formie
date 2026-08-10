@@ -3,16 +3,20 @@ import {
   ANALYST_THINKING_LEVEL,
   REQUESTED_ANALYSIS_FPS,
   REQUESTED_ANALYSIS_MEDIA_RESOLUTION,
+  WRITER_THINKING_LEVEL,
 } from "../_shared/analysis-settings.ts";
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
-import { buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
+import { buildTextGenerateContentRequest, buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
 import { createGeminiFilesClient, reuseOrUploadGeminiFile, type GeminiFile } from "../_shared/gemini-files.ts";
 import {
   buildBoundaryFreeAnalysisPrompt,
+  buildWholeVideoWritingPrompt,
   parseBoundaryFreeAnalysis,
   parseWholeVideoWriting,
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
+  WHOLE_VIDEO_WRITING_SCHEMA,
+  WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
   boundaryFreeToCandidate,
 } from "../_shared/boundary-free-analysis.ts";
 import type { ExerciseFamily } from "../_shared/analysis-contract.ts";
@@ -24,9 +28,11 @@ import { advanceWholeVideoPipeline } from "./whole-video-runner.ts";
 import { analyzeWholeVideoHandler, type WholeVideoSession } from "./whole-video-handler.ts";
 import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
+import { runNonBlockingWriter } from "./nonblocking-writer.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v56-single-call-rep-audit";
+const PIPELINE_VERSION = "gemini-whole-video-v57-nonblocking-writer";
 const ANALYST_MODEL = "gemini-3.6-flash";
+const WRITER_MODEL = "gemini-3.6-flash";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
 const files = createGeminiFilesClient({ apiKey });
 const generation = createGenerateContentClient({ apiKey });
@@ -352,8 +358,8 @@ Deno.serve(async (request) => {
       const durationMs = rawSession.durationMs!;
       const declaration = rawSession.setDeclaration ? parseSetDeclaration(rawSession.setDeclaration) : undefined;
       const rawDecision = rawSession.analysisDecision && typeof rawSession.analysisDecision === "object" ? rawSession.analysisDecision as JsonRecord : null;
-      // One full-video call produces both validated evidence and user-facing
-      // coaching. Finalization below is local mapping and persistence only.
+          // One full-video call establishes the evidence. The optional text-only
+          // writer can improve copy, but it cannot rewatch or fail the analysis.
       let analysisVideo: WholeVideoInput | null = null;
       let geminiFileName: string | null = typeof rawSession.geminiFileName === "string" ? rawSession.geminiFileName : null;
       let geminiFile: GeminiFile | null = null;
@@ -454,8 +460,26 @@ Deno.serve(async (request) => {
             throw analysisContractError(error);
           }
           await saveSessionStage("finalizing");
-          const writing = parseWholeVideoWriting(null, parsedAnalysis);
-          return { analysis: parsedAnalysis, writing } as unknown as JsonRecord;
+          const writing = await runNonBlockingWriter({
+            write: async () => {
+              const timeoutMs = Math.min(20_000, deadline.remainingMs());
+              if (timeoutMs < 1_000) throw Object.assign(new Error("Writer budget exhausted"), { code: "WRITER_DEADLINE_EXHAUSTED" });
+              const requestBody = buildTextGenerateContentRequest({
+                systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
+                prompt: buildWholeVideoWritingPrompt(parsedAnalysis, declaration),
+                schema: WHOLE_VIDEO_WRITING_SCHEMA,
+                thinkingLevel: WRITER_THINKING_LEVEL,
+                preserveSchemaBounds: true,
+              });
+              return generate({ sessionId, stage: "finalizing", modelName: WRITER_MODEL, request: requestBody, timeoutMs });
+            },
+            parse: (value) => parseWholeVideoWriting(value, parsedAnalysis),
+            fallback: () => parseWholeVideoWriting(null, parsedAnalysis),
+            onError: (error) => console.warn(JSON.stringify({ sessionId, code: "COACHING_WRITER_FALLBACK", message: error instanceof Error ? error.message : String(error) })),
+          });
+          const decision = { analysis: parsedAnalysis, writing } as unknown as JsonRecord;
+          await saveSessionStage("finalizing", { analysis_draft: decision });
+          return decision;
         },
         saveAnalysis: async (sessionId, decision) => {
           await saveSessionStage("finalizing", {

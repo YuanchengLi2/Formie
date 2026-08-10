@@ -62,10 +62,27 @@ describe("whole-video Gemini request construction", () => {
   });
 
   it("builds a low-thinking text-only writer request", () => {
-    const request = buildTextGenerateContentRequest({ prompt: "Rewrite immutable facts", schema, thinkingLevel: "low" });
+    const request = buildTextGenerateContentRequest({
+      systemInstruction: "Write specific coaching without changing evidence.",
+      prompt: "Rewrite immutable facts",
+      schema,
+      thinkingLevel: "low",
+    });
+    expect(request.systemInstruction).toEqual({ parts: [{ text: "Write specific coaching without changing evidence." }] });
     expect(request.contents).toEqual([{ role: "user", parts: [{ text: "Rewrite immutable facts" }] }]);
     expect(request.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "low" });
     expect(JSON.stringify(request)).not.toContain("fileData");
+  });
+
+  it("preserves required writer collection bounds", () => {
+    const request = buildTextGenerateContentRequest({
+      prompt: "Rewrite every finding",
+      schema: { type: "object", properties: { findings: { type: "array", minItems: 4, maxItems: 6, items: { type: "string" } } } },
+      thinkingLevel: "low",
+      preserveSchemaBounds: true,
+    });
+
+    expect((request.generationConfig.responseJsonSchema as any).properties.findings).toMatchObject({ minItems: 4, maxItems: 6 });
   });
 
   it("caps low-resolution image checks to a small output budget", () => {

@@ -69,6 +69,7 @@ export type VideoGenerateContentRequest = {
 };
 
 export type TextGenerateContentRequest = {
+  systemInstruction?: { parts: { text: string }[] };
   contents: { role: "user"; parts: { text: string }[] }[];
   generationConfig: GenerateConfig;
 };
@@ -140,8 +141,12 @@ export function buildVideoGenerateContentRequest(input: { file?: GeminiInputFile
   };
 }
 
-export function buildTextGenerateContentRequest(input: { prompt: string; schema: JsonSchema; thinkingLevel: ThinkingLevel }): TextGenerateContentRequest {
-  return { contents: [{ role: "user", parts: [{ text: input.prompt }] }], generationConfig: generationConfig(input.schema, input.thinkingLevel) };
+export function buildTextGenerateContentRequest(input: { systemInstruction?: string; prompt: string; schema: JsonSchema; thinkingLevel: ThinkingLevel; preserveSchemaBounds?: boolean }): TextGenerateContentRequest {
+  return {
+    ...(input.systemInstruction ? { systemInstruction: { parts: [{ text: input.systemInstruction }] } } : {}),
+    contents: [{ role: "user", parts: [{ text: input.prompt }] }],
+    generationConfig: generationConfig(input.schema, input.thinkingLevel, undefined, input.preserveSchemaBounds),
+  };
 }
 
 export function buildImageGenerateContentRequest(input: {

@@ -7,6 +7,7 @@ import {
   parseBoundaryFreeAnalysis,
   parseRecheckRequest,
   parseWholeVideoWriting,
+  WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
   type BoundaryFreeAnalysis,
   type WholeVideoWriting,
 } from "./boundary-free-analysis";
@@ -79,7 +80,7 @@ const writing: WholeVideoWriting = {
   strengths: [],
 };
 
-describe("v56 single-call rep-audited coaching contract", () => {
+describe("v57 full-video rep-audited coaching contract", () => {
   const rawAnalysis = (count: number) => {
     const coachingItems = Array.from({ length: count }, (_, index) => ({
       id: `finding-${index + 1}`,
@@ -157,7 +158,7 @@ describe("v56 single-call rep-audited coaching contract", () => {
     return raw;
   };
 
-  it("accepts exactly four split-copy issues after auditing every visible repetition", () => {
+  it("accepts four split-copy issues after auditing every visible repetition", () => {
     const parsed = parseBoundaryFreeAnalysis(v56RawAnalysis(), 9_000);
 
     expect(parsed.videoUnderstanding.repAudit).toHaveLength(3);
@@ -200,6 +201,8 @@ describe("v56 single-call rep-audited coaching contract", () => {
       whyDetails: { type: "string" },
       affectedRepNumbers: expect.objectContaining({ type: "array" }),
     }));
+    expect(schema.properties.coachingItems.minItems).toBe(4);
+    expect(schema.properties.coachingItems.maxItems).toBeUndefined();
     expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("beginning");
     expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("middle");
     expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("end");
@@ -208,15 +211,33 @@ describe("v56 single-call rep-audited coaching contract", () => {
     expect(schema.properties.coachingItems.items.properties).not.toHaveProperty("observedIssueRegions");
   });
 
-  it("rejects a claimed repetition that has no matching evidence moment", () => {
+  it("removes a claimed repetition that has no matching evidence moment", () => {
     const raw = v56RawAnalysis();
     raw.coachingItems[0].affectedRepNumbers = [1, 3];
 
-    expect(() => parseBoundaryFreeAnalysis(raw, 9_000)).toThrow(/rep 3.*evidence/i);
+    expect(parseBoundaryFreeAnalysis(raw, 9_000).coachingItems[0].affectedRepNumbers).toEqual([1]);
   });
 
-  it("requires exactly four issues instead of accepting additional padded findings", () => {
-    expect(() => parseBoundaryFreeAnalysis(rawAnalysis(5), 9_000)).toThrow(/exactly four/i);
+  it("uses the audited repetition as evidence fallback instead of rejecting the analysis", () => {
+    const raw = v56RawAnalysis();
+    raw.evidenceSelections[3].moments = [];
+
+    const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
+
+    expect(parsed.coachingItems).toHaveLength(4);
+    expect(parsed.coachingItems[3].evidence).toHaveLength(1);
+    expect(parsed.coachingItems[3].evidence[0]).toMatchObject({
+      repNumber: 1,
+      startMs: raw.videoUnderstanding.repAudit[0].startMs,
+      peakMs: raw.videoUnderstanding.repAudit[0].peakMs,
+      endMs: raw.videoUnderstanding.repAudit[0].endMs,
+    });
+  });
+
+  it("returns four to six ranked issues without rejecting a longer usable response", () => {
+    expect(parseBoundaryFreeAnalysis(rawAnalysis(5), 9_000).coachingItems).toHaveLength(5);
+    expect(parseBoundaryFreeAnalysis(rawAnalysis(6), 9_000).coachingItems).toHaveLength(6);
+    expect(parseBoundaryFreeAnalysis(rawAnalysis(7), 9_000).coachingItems).toHaveLength(6);
   });
 
   it("replaces unsupported physiology in explanations without discarding visible issues", () => {
@@ -254,14 +275,21 @@ describe("v56 single-call rep-audited coaching contract", () => {
   });
 
   it("rejects a result with fewer than four real coaching findings", () => {
-    expect(() => parseBoundaryFreeAnalysis(rawAnalysis(3), 9_000)).toThrow(/exactly four distinct evidence-backed/i);
+    expect(() => parseBoundaryFreeAnalysis(rawAnalysis(3), 9_000)).toThrow(/at least four distinct evidence-backed/i);
   });
 
-  it("rejects the whole result when malformed entries leave fewer than four valid findings", () => {
+  it("normalizes malformed coaching prose instead of rejecting an evidence-backed finding", () => {
     const raw = rawAnalysis(4);
     raw.coachingItems[3].observation = "One. Two. Three. Four.";
+    raw.coachingItems[3].observationDetails = "Only one supporting sentence is returned.";
+    raw.coachingItems[3].correctionDirection = "Make the correction. Keep doing it.";
 
-    expect(() => parseBoundaryFreeAnalysis(raw, 9_000)).toThrow(/exactly four distinct evidence-backed/i);
+    const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
+
+    expect(parsed.coachingItems).toHaveLength(4);
+    expect(parsed.coachingItems[3].observation).toBe("One.");
+    expect(parsed.coachingItems[3].observationDetails.match(/[.!?]+/g)).toHaveLength(2);
+    expect(parsed.coachingItems[3].correctionDirection).toBe("Make the correction.");
   });
 
   it("preserves exhaustive whole-set checks while requiring four genuine findings without padding", () => {
@@ -273,7 +301,7 @@ describe("v56 single-call rep-audited coaching contract", () => {
     expect(prompt).toContain("repAudit");
     expect(prompt).toContain("every observed repetition");
     expect(prompt).toContain("universal path decision gate");
-    expect(prompt).toContain("exactly four distinct evidence-backed coaching issues");
+    expect(prompt).toContain("four to six distinct evidence-backed coaching issues");
     expect(prompt).toContain("small but real visible optimization");
     expect(prompt).not.toContain("auditCoverage");
   });
@@ -292,7 +320,7 @@ describe("v56 single-call rep-audited coaching contract", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(10_000);
 
     expect(prompt).toContain("observation must be exactly one complete sentence");
-    expect(prompt).toContain("observationDetails must contain one to three normal supporting sentences");
+    expect(prompt).toContain("observationDetails must contain two to three normal supporting sentences");
     expect(prompt).toContain("whyItMatters must be exactly one complete sentence");
     expect(prompt).toContain("whyDetails must contain one to three normal supporting sentences");
     expect(prompt).toContain("correctionDirection must be exactly one complete actionable sentence");
@@ -337,16 +365,18 @@ describe("v56 single-call rep-audited coaching contract", () => {
       focusNote: null,
     });
 
-    expect(prompt).toContain("whatHappened must be exactly one complete sentence");
-    expect(prompt).toContain("whatHappenedDetail must contain one to three normal supporting sentences");
-    expect(prompt).toContain("whyItMatters must be exactly one complete sentence");
-    expect(prompt).toContain("whyItMattersDetail must contain one to three normal supporting sentences");
-    expect(prompt).toContain("whatToDo must be exactly one complete actionable sentence");
-    expect(prompt).toContain("Name the declared exercise");
-    expect(prompt).toContain("reference every numbered repetition supported by the supplied evidence");
-    expect(prompt).not.toContain("Mention a numbered repetition at most once");
-    expect(prompt).toContain("title is only the concise issue label used for navigation");
-    expect(prompt).toContain("it is not the white coaching sentence");
+    expect(prompt).not.toContain("You are Formie's coaching editor");
+    expect(prompt).toContain("Validated analysis:");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappened must be exactly one complete sentence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappenedDetail must contain two to three normal supporting sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMatters must be exactly one complete sentence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMattersDetail must contain one to three normal supporting sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatToDo must be exactly one complete actionable sentence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Name the declared exercise");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("reference every numbered repetition supported by the supplied evidence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("Mention a numbered repetition at most once");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("title is only the concise issue label used for navigation");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("it is not the white coaching sentence");
   });
 
   it("preserves Flash-Lite's concise impactful headline instead of deriving it from the paragraph", () => {
@@ -398,6 +428,10 @@ describe("v56 single-call rep-audited coaching contract", () => {
       ...writing,
       coachingItems: [{ ...writing.coachingItems[0], whatToDo: "Lower both dumbbells for two seconds. Begin only after your arms reach the bottom." }],
     }, analysis).coachingItems[0].whatToDo).toBe(analysis.coachingItems[0].correctionDirection);
+    expect(parseWholeVideoWriting({
+      ...writing,
+      coachingItems: [{ ...writing.coachingItems[0], whatHappenedDetail: "Rep 3 changes speed." }],
+    }, analysis).coachingItems[0].whatHappenedDetail).toBe(analysis.coachingItems[0].observationDetails);
   });
 
   it("creates analyst-derived copy when the writer response is unavailable", () => {
