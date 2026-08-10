@@ -14,6 +14,7 @@ import { selectBillingPlans } from "./billing-package";
 import { customerHasEntitlement } from "./purchase-access";
 import { reconcileWithDeadline } from "./reconciliation-retry";
 import { createPurchaseOperationId, isCurrentPurchaseOperation, resolvePassiveBillingStateFromSnapshot, resolvePurchaseOutcome, resolveServerProductIdentifier, type ReconciliationSnapshot } from "./purchase-reconciliation";
+import { presentSubscriptionManagement } from "./subscription-management-presentation";
 
 const STORE_OPERATION_TIMEOUT_MS = 45_000;
 
@@ -324,20 +325,21 @@ export function BillingProvider({ children }: PropsWithChildren) {
   }, [auth.phase, configure, finishReconciliation, state, syncAccess]);
 
   const manageSubscription = useCallback(async () => {
-    if (state === "purchasing" || state === "reconciling" || state === "restoring") return;
-    setEntitlementResolution("checking");
     setError(null);
     try {
-      await configure();
-      await purchasesClient.showManageSubscriptions();
-      const reconciliation = await syncAccess();
-      finishPassiveReconciliation(reconciliation.value, Boolean(offering));
+      await presentSubscriptionManagement({
+        configure,
+        present: purchasesClient.showManageSubscriptions,
+        reconcile: async () => {
+          const reconciliation = await syncAccess();
+          finishPassiveReconciliation(reconciliation.value, Boolean(offering));
+        },
+      });
     } catch (failure) {
-      setEntitlementResolution("error");
       setError(friendlyPurchaseError(failure) || "Subscription management could not be opened. Try again from Settings.");
       throw failure;
     }
-  }, [configure, finishPassiveReconciliation, offering, state, syncAccess]);
+  }, [configure, finishPassiveReconciliation, offering, syncAccess]);
 
   const logOut = useCallback(async () => {
     reconciliationGeneration.current += 1;

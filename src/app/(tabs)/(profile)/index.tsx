@@ -67,6 +67,7 @@ export default function ProfileRoute() {
       }}
       termsUrl={legal?.termsUrl}
       privacyUrl={legal?.privacyUrl}
+      retentionUrl={legal?.retentionUrl}
       onOpenUrl={async (url) => {
         await Linking.openURL(url);
       }}

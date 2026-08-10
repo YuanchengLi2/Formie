@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: "Terms of Use", alternates: { canonic
 
 export default function TermsPage() {
   return (
-    <LegalPage eyebrow="Using Formie" title="Terms of Use" updated="July 27, 2026">
+    <LegalPage eyebrow="Using Formie" title="Terms of Use" updated="August 10, 2026">
       <p>These draft terms describe the rules for using Formie and will be reviewed and finalized before public release.</p>
       <h2>Who may use Formie</h2>
       <p>You must be legally able to agree to these terms and provide accurate account information. Keep your credentials secure and use Formie only for lawful personal exercise coaching.</p>
@@ -15,7 +15,7 @@ export default function TermsPage() {
       <h2>Your content</h2>
       <p>You retain ownership of recordings and messages you submit. You give Formie permission to host and process that content only as needed to provide, secure, support, and improve the service in accordance with the Privacy Policy and your settings.</p>
       <h2>Subscriptions</h2>
-      <p>Formie Pro is offered monthly for new purchases and includes 10 analyses in each monthly quota period. Existing provider-managed annual subscriptions, if any, remain honored through their verified paid-through date; they are not a new purchase option. Unused analyses do not carry over. Apple or Google controls billing and renewal. Canceling stops the next renewal but preserves dashboard access and unused analyses through the paid-through date. Undoing cancellation restores automatic renewal without changing the current period or balance; the balance returns to 10 only when the next quota period begins. After expiration, native account history remains available, the website dashboard closes, and new analyses require repurchase through the Formie app.</p>
+      <p>Formie Pro is offered monthly for new purchases and includes 10 analyses in each monthly quota period. Existing provider-managed annual subscriptions, if any, remain honored through their verified paid-through date; they are not a new purchase option. Unused analyses do not carry over. Apple or Google controls billing and renewal. Manage your subscription in the Formie app. Canceling stops the next renewal but preserves app access and unused analyses through the paid-through date. Resubscribing restores automatic renewal without changing the current period or balance; the balance returns to 10 only when the next quota period begins. After expiration, native account history remains available and new analyses require repurchase through the Formie app.</p>
       <h2>Acceptable use</h2>
       <p>Do not misuse the service, probe or bypass security, upload content you lack permission to use, interfere with other users, or use automated output to cause harm.</p>
       <h2>Availability and changes</h2>

@@ -1,4 +1,5 @@
 import { friendlyPurchaseError } from "./billing-errors";
+import { presentSubscriptionManagement } from "./subscription-management-presentation";
 import { resolveEntitlement } from "./entitlement-resolution";
 import { isCurrentPurchaseOperation, resolvePurchaseOutcome } from "./purchase-reconciliation";
 import type { BillingCustomerInfo } from "./types";
@@ -16,6 +17,41 @@ describe("billing provider purchase messaging", () => {
 
   it("does not claim a hard-coded price when the store is unavailable", () => {
     expect(friendlyPurchaseError(new Error("product unavailable"))).toMatch(/not available/i);
+  });
+});
+
+describe("subscription management presentation", () => {
+  it("opens the store sheet independently and reconciles after it closes", async () => {
+    const events: string[] = [];
+
+    await presentSubscriptionManagement({
+      configure: async () => { events.push("configured"); },
+      present: async () => { events.push("presented"); },
+      reconcile: async () => { events.push("reconciled"); },
+    });
+    await Promise.resolve();
+
+    expect(events).toEqual(["configured", "presented", "reconciled"]);
+  });
+
+  it("does not report a post-dismissal reconciliation failure as a presentation failure", async () => {
+    await expect(presentSubscriptionManagement({
+      configure: async () => undefined,
+      present: async () => undefined,
+      reconcile: async () => { throw new Error("offline after dismissal"); },
+    })).resolves.toBeUndefined();
+    await Promise.resolve();
+  });
+
+  it("still rejects when the store sheet itself cannot be presented", async () => {
+    const reconcile = jest.fn(async () => undefined);
+
+    await expect(presentSubscriptionManagement({
+      configure: async () => undefined,
+      present: async () => { throw new Error("presentation unavailable"); },
+      reconcile,
+    })).rejects.toThrow("presentation unavailable");
+    expect(reconcile).not.toHaveBeenCalled();
   });
 });
 

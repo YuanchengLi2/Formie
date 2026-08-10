@@ -6,7 +6,6 @@ const nav = [
   { href: "/#how-it-works", label: "How it works" },
   { href: "/#coaching", label: "Coaching" },
   { href: "/#pricing", label: "Pricing" },
-  { href: "/manage-subscription", label: "Manage Subscription" },
 ];
 
 export function DownloadButton({ compact = false }: { compact?: boolean }) {
@@ -56,6 +55,7 @@ export function SiteFooter() {
       </Link>
       <div className="footer-links">
         <Link href="/privacy">Privacy</Link>
+        <Link href="/retention">Retention</Link>
         <Link href="/terms">Terms</Link>
         <Link href="/support">Support</Link>
       </div>

@@ -1,6 +1,7 @@
 export type LegalLinks = {
   termsUrl: string;
   privacyUrl: string;
+  retentionUrl: string;
 };
 
 function requirePublicUrl(value: string | undefined, name: string): string {
@@ -21,6 +22,7 @@ export function legalLinksFromEnvironment(environment: Record<string, string | u
   return {
     termsUrl: requirePublicUrl(environment.EXPO_PUBLIC_TERMS_URL, "EXPO_PUBLIC_TERMS_URL"),
     privacyUrl: requirePublicUrl(environment.EXPO_PUBLIC_PRIVACY_URL, "EXPO_PUBLIC_PRIVACY_URL"),
+    retentionUrl: requirePublicUrl(environment.EXPO_PUBLIC_RETENTION_URL, "EXPO_PUBLIC_RETENTION_URL"),
   };
 }
 
@@ -28,5 +30,6 @@ export function getLegalLinks(): LegalLinks {
   return legalLinksFromEnvironment({
     EXPO_PUBLIC_TERMS_URL: process.env.EXPO_PUBLIC_TERMS_URL ?? "https://useformie.com/terms",
     EXPO_PUBLIC_PRIVACY_URL: process.env.EXPO_PUBLIC_PRIVACY_URL ?? "https://useformie.com/privacy",
+    EXPO_PUBLIC_RETENTION_URL: process.env.EXPO_PUBLIC_RETENTION_URL ?? "https://useformie.com/retention",
   });
 }

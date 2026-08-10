@@ -23,7 +23,7 @@ test("homepage preserves section order and shows monthly pricing", () => {
   assert.match(html, /Whole-set movement breakdowns/i);
   assert.match(html, /Visible evidence and timestamps/i);
   assert.match(html, /download-on-app-store\.svg/i);
-  assert.equal((html.match(/Manage Subscription/g) ?? []).length, 1);
+  assert.doesNotMatch(html, /Manage Subscription|manage-subscription/i);
   assert.match(html, />How it works</i);
   assert.match(html, />Coaching</i);
   assert.match(html, />Pricing</i);
@@ -54,12 +54,12 @@ test("pricing card is upright and proportionate across breakpoints", () => {
   assert.match(css, /@media \(max-width:\s*760px\)[\s\S]*?\.v2-plan-options\s*\{[^}]*grid-template-columns:\s*1fr/);
 });
 
-test("320px header reserves space for brand, portal, and App Store badge", () => {
+test("320px header reserves space for brand, navigation, and App Store badge", () => {
   const css = readFileSync(new URL("./globals.css", import.meta.url), "utf8");
   assert.match(css, /\.site-header\s*\{[^}]*background:\s*rgba\(255,\s*255,\s*255,\s*\.8[0-9]\)/);
   assert.match(css, /\.app-store-badge\.disabled\s*\{[^}]*opacity:\s*1/);
   assert.match(css, /@media \(max-width:\s*900px\)[\s\S]*?\.site-header nav\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
-  assert.match(css, /@media \(max-width:\s*360px\)[\s\S]*?\.site-header nav\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(css, /@media \(max-width:\s*360px\)[\s\S]*?\.site-header nav\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
   assert.match(css, /\.app-store-badge\s*\{[^}]*width:\s*120px/);
 });
 

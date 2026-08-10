@@ -8,8 +8,11 @@ describe("ProfileScreen", () => {
     expect(screen.getByText("Yuan")).toBeTruthy();
     expect(screen.queryByText("@yuan_lifts")).toBeNull();
     expect(screen.getByText("Capture")).toBeTruthy();
-    expect(screen.getByText("Privacy and retention")).toBeTruthy();
-    expect(screen.getByText("Send Feedback")).toBeTruthy();
+    expect(screen.getByText("Get Help")).toBeTruthy();
+    expect(screen.queryByText("Premium support")).toBeNull();
+    expect(screen.queryByText("Send Feedback")).toBeNull();
+    expect(screen.queryByText("Saved on this device")).toBeNull();
+    expect(screen.queryByText("No cloud video library")).toBeNull();
     expect(screen.getByRole("button", { name: "Log Out" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Manage subscription" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: /delete account/i })).toBeNull();
@@ -50,13 +53,23 @@ describe("ProfileScreen", () => {
     expect(onLogOut).toHaveBeenCalledTimes(1);
   });
 
-  it("shows legal links only when configured", async () => {
+  it("opens Get Help and all configured policy links", async () => {
     const onOpenUrl = jest.fn().mockResolvedValue(undefined);
-    const screen = await render(<ProfileScreen termsUrl="https://example.com/terms" privacyUrl="https://example.com/privacy" onOpenUrl={onOpenUrl} />);
+    const onSendFeedback = jest.fn();
+    const screen = await render(<ProfileScreen termsUrl="https://example.com/terms" privacyUrl="https://example.com/privacy" retentionUrl="https://example.com/retention" onOpenUrl={onOpenUrl} onSendFeedback={onSendFeedback} />);
+    await fireEvent.press(screen.getByText("Get Help"));
     await fireEvent.press(screen.getByText("Terms of Use"));
     await fireEvent.press(screen.getByText("Privacy Policy"));
+    await fireEvent.press(screen.getByText("Retention Policy"));
+    expect(onSendFeedback).toHaveBeenCalledTimes(1);
     expect(onOpenUrl).toHaveBeenNthCalledWith(1, "https://example.com/terms");
     expect(onOpenUrl).toHaveBeenNthCalledWith(2, "https://example.com/privacy");
+    expect(onOpenUrl).toHaveBeenNthCalledWith(3, "https://example.com/retention");
+  });
+
+  it("keeps the subscription chevron aligned with the plan title", async () => {
+    const screen = await render(<ProfileScreen subscription={{ plan: "Formie Monthly", stateLabel: "Active" }} />);
+    expect(screen.getByTestId("subscription-chevron").props.style).toMatchObject({ alignSelf: "flex-start" });
   });
 
   it("shows grouped identity, subscription, and development Test Store lifecycle controls", async () => {
