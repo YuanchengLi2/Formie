@@ -13,7 +13,7 @@ import { friendlyPurchaseError } from "./billing-errors";
 import { selectBillingPlans } from "./billing-package";
 import { customerHasEntitlement } from "./purchase-access";
 import { reconcileWithDeadline } from "./reconciliation-retry";
-import { createPurchaseOperationId, isCurrentPurchaseOperation, resolvePurchaseOutcome, type ReconciliationSnapshot } from "./purchase-reconciliation";
+import { createPurchaseOperationId, isCurrentPurchaseOperation, resolvePassiveBillingStateFromSnapshot, resolvePurchaseOutcome, resolveServerProductIdentifier, type ReconciliationSnapshot } from "./purchase-reconciliation";
 
 const STORE_OPERATION_TIMEOUT_MS = 45_000;
 
@@ -75,34 +75,56 @@ export function BillingProvider({ children }: PropsWithChildren) {
     await purchasesClient.configure(auth.phase === "authenticated" ? auth.user?.id ?? null : null);
   }, [auth.phase, auth.user]);
 
-  const reconcileEntitlement = useCallback(async (incomingCustomerInfo?: BillingCustomerInfo): Promise<ReconciliationSnapshot> => {
+  const reconcileEntitlement = useCallback(async (incomingCustomerInfo?: BillingCustomerInfo, purchasedProductIdentifier?: string): Promise<ReconciliationSnapshot> => {
     if (auth.phase !== "authenticated" || !auth.session?.access_token) {
       setEntitlementResolution("idle");
-      return { providerActive: false, serverActive: false, customerInfo: incomingCustomerInfo ?? null, providerProductIdentifier: incomingCustomerInfo?.subscription?.productIdentifier ?? null, serverProductIdentifier: null };
+      return { providerActive: false, serverActive: false, serverLifecycleState: "unknown", customerInfo: incomingCustomerInfo ?? null, providerProductIdentifier: incomingCustomerInfo?.subscription?.productIdentifier ?? null, serverProductIdentifier: null };
     }
     const generation = reconciliationGeneration.current;
     setEntitlementResolution("checking");
     try {
       await configure();
       const customerInfo = incomingCustomerInfo ?? await purchasesClient.getCustomerInfo();
-      if (generation !== reconciliationGeneration.current) return { providerActive: false, serverActive: false, customerInfo: null, providerProductIdentifier: null, serverProductIdentifier: null };
+      if (generation !== reconciliationGeneration.current) return { providerActive: false, serverActive: false, serverLifecycleState: "unknown", customerInfo: null, providerProductIdentifier: null, serverProductIdentifier: null };
       const providerActive = customerHasEntitlement(customerInfo, REVENUECAT_ENTITLEMENT_ID);
-      const providerProductIdentifier = customerInfo.subscription?.productIdentifier ?? null;
+      const providerProductIdentifier = customerInfo.subscription?.productIdentifier ?? purchasedProductIdentifier ?? null;
       setSubscription(customerInfo.subscription);
       const refreshed = await refreshEntitlement(auth.session.access_token);
-      if (generation !== reconciliationGeneration.current) return { providerActive, serverActive: false, customerInfo, providerProductIdentifier, serverProductIdentifier: null };
-      await refreshAccess();
+      if (generation !== reconciliationGeneration.current) return { providerActive, serverActive: false, serverLifecycleState: "unknown", customerInfo, providerProductIdentifier, serverProductIdentifier: null };
+      await refreshAccess().catch(() => undefined);
       const serverActive = refreshed.access.status === "active";
-      const serverProductIdentifier = refreshed.subscription.productIdentifier;
+      const serverProductIdentifier = resolveServerProductIdentifier(refreshed.subscription.productIdentifier, refreshed.access.productIdentifier);
       const active = providerActive && serverActive;
       setEntitlementResolution(active ? "active" : providerActive && refreshed.access.lifecycleState === "renewal_pending" ? "checking" : "expired");
       if (active && onboardingStatus !== "complete") await completeAccess();
-      return { providerActive, serverActive, customerInfo, providerProductIdentifier, serverProductIdentifier };
+      return { providerActive, serverActive, serverLifecycleState: refreshed.access.lifecycleState, customerInfo, providerProductIdentifier, serverProductIdentifier };
     } catch (failure) {
       setEntitlementResolution("error");
       throw failure;
     }
   }, [auth.phase, auth.session?.access_token, completeAccess, configure, onboardingStatus, refreshAccess]);
+
+  const finishPassiveReconciliation = useCallback((result: ReconciliationSnapshot, offeringAvailable: boolean): boolean => {
+    if (purchaseOperation.current) return false;
+    if (result.providerActive && result.serverActive) {
+      setState("succeeded");
+      setEntitlementResolution("active");
+      setError(null);
+      if (onboardingStatus !== "complete") void completeAccess();
+      return true;
+    }
+
+    const passiveState = resolvePassiveBillingStateFromSnapshot(result, offeringAvailable);
+    setState(passiveState);
+    if (passiveState === "sync_required") {
+      setEntitlementResolution("checking");
+      setError("Formie is still confirming your subscription. Tap Check purchase to retry.");
+    } else {
+      setEntitlementResolution(result.serverLifecycleState === "unknown" ? "error" : "expired");
+      setError(null);
+    }
+    return false;
+  }, [completeAccess, onboardingStatus]);
 
   const load = useCallback(async () => {
     setState("loading");
@@ -122,18 +144,19 @@ export function BillingProvider({ children }: PropsWithChildren) {
         : null;
       const nextPlans = selectBillingPlans(usableOffering?.packages ?? []);
       setOffering(usableOffering && (nextPlans.monthly || nextPlans.annual) ? usableOffering : null);
-      if (reconciliation?.providerActive && !reconciliation.serverActive) setState("sync_required");
-      else setState(nextPlans.monthly || nextPlans.annual ? "ready" : "failed");
+      const offeringAvailable = Boolean(nextPlans.monthly || nextPlans.annual);
+      if (reconciliation) finishPassiveReconciliation(reconciliation, offeringAvailable);
+      else setState(offeringAvailable ? "ready" : "failed");
       if (!nextPlans.monthly && !nextPlans.annual) setError("Formie plans are not available right now.");
     } catch (failure) {
       setState("failed");
       setError(friendlyPurchaseError(failure) || null);
     }
-  }, [auth.phase, configure, reconcileEntitlement]);
+  }, [auth.phase, configure, finishPassiveReconciliation, reconcileEntitlement]);
 
-  const syncAccess = useCallback(async (incomingCustomerInfo?: BillingCustomerInfo, expectedProductIdentifier?: string) => {
+  const syncAccess = useCallback(async (incomingCustomerInfo?: BillingCustomerInfo, expectedProductIdentifier?: string, purchasedProductIdentifier?: string) => {
     if (!auth.session?.access_token) {
-      return { value: { providerActive: false, serverActive: false, customerInfo: null, providerProductIdentifier: null, serverProductIdentifier: null } as ReconciliationSnapshot, satisfied: false, attempts: 0 };
+      return { value: { providerActive: false, serverActive: false, serverLifecycleState: "unknown", customerInfo: null, providerProductIdentifier: null, serverProductIdentifier: null } as ReconciliationSnapshot, satisfied: false, attempts: 0 };
     }
     let firstAttempt = true;
     let knownCustomerInfo = incomingCustomerInfo ?? null;
@@ -142,7 +165,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
         const customerInfo = firstAttempt ? incomingCustomerInfo : undefined;
         firstAttempt = false;
         try {
-          const snapshot = await reconcileEntitlement(customerInfo);
+          const snapshot = await reconcileEntitlement(customerInfo, purchasedProductIdentifier);
           knownCustomerInfo = snapshot.customerInfo ?? knownCustomerInfo;
           return snapshot;
         } catch {
@@ -150,6 +173,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
           return {
             providerActive: knownCustomerInfo ? customerHasEntitlement(knownCustomerInfo, REVENUECAT_ENTITLEMENT_ID) : false,
             serverActive: false,
+            serverLifecycleState: "unknown",
             customerInfo: knownCustomerInfo,
             providerProductIdentifier: knownCustomerInfo?.subscription?.productIdentifier ?? null,
             serverProductIdentifier: null,
@@ -208,8 +232,8 @@ export function BillingProvider({ children }: PropsWithChildren) {
       }
       setState("reconciling");
       const reconciliation = auth.phase === "authenticated"
-        ? await syncAccess(result.customerInfo, selectedPackage.productIdentifier)
-        : { value: { providerActive: true, serverActive: true, customerInfo: result.customerInfo, providerProductIdentifier: result.productIdentifier, serverProductIdentifier: result.productIdentifier }, satisfied: true, attempts: 1 };
+        ? await syncAccess(result.customerInfo, selectedPackage.productIdentifier, result.productIdentifier)
+        : { value: { providerActive: true, serverActive: true, serverLifecycleState: "active_renewing", customerInfo: result.customerInfo, providerProductIdentifier: result.productIdentifier, serverProductIdentifier: result.productIdentifier } satisfies ReconciliationSnapshot, satisfied: true, attempts: 1 };
       const active = finishReconciliation(reconciliation, operationId, selectedPackage.productIdentifier);
       return active ? "active" : "sync_required";
     } catch (failure) {
@@ -252,7 +276,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
       }
       const reconciliation = auth.phase === "authenticated"
         ? await syncAccess(customerInfo)
-        : { value: { providerActive: true, serverActive: true, customerInfo, providerProductIdentifier: customerInfo.subscription?.productIdentifier ?? null, serverProductIdentifier: customerInfo.subscription?.productIdentifier ?? null }, satisfied: true, attempts: 1 };
+        : { value: { providerActive: true, serverActive: true, serverLifecycleState: "active_renewing", customerInfo, providerProductIdentifier: customerInfo.subscription?.productIdentifier ?? null, serverProductIdentifier: customerInfo.subscription?.productIdentifier ?? null } satisfies ReconciliationSnapshot, satisfied: true, attempts: 1 };
       return finishReconciliation(reconciliation, operationId);
     } catch (failure) {
       if (isCurrentPurchaseOperation(purchaseOperation.current, operationId)) {
@@ -284,7 +308,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
       setState("reconciling");
       const reconciliation = auth.phase === "authenticated"
         ? await syncAccess(customerInfo)
-        : { value: { providerActive: true, serverActive: true, customerInfo, providerProductIdentifier: customerInfo.subscription?.productIdentifier ?? null, serverProductIdentifier: customerInfo.subscription?.productIdentifier ?? null }, satisfied: true, attempts: 1 };
+        : { value: { providerActive: true, serverActive: true, serverLifecycleState: "active_renewing", customerInfo, providerProductIdentifier: customerInfo.subscription?.productIdentifier ?? null, serverProductIdentifier: customerInfo.subscription?.productIdentifier ?? null } satisfies ReconciliationSnapshot, satisfied: true, attempts: 1 };
       if (finishReconciliation(reconciliation)) {
         setRestoreMessage("Purchase restored.");
         return true;
@@ -333,11 +357,11 @@ export function BillingProvider({ children }: PropsWithChildren) {
     if (auth.phase !== "authenticated") return;
     const listener = AppState.addEventListener("change", (next) => {
       if (next === "active") {
-        void syncAccess().then((result) => finishReconciliation(result)).catch(() => undefined);
+        void syncAccess().then((result) => finishPassiveReconciliation(result.value, Boolean(offering))).catch(() => undefined);
       }
     });
     return () => listener.remove();
-  }, [auth.phase, finishReconciliation, syncAccess]);
+  }, [auth.phase, finishPassiveReconciliation, offering, syncAccess]);
 
   useEffect(() => {
     if (!authenticatedUserId) return;
@@ -345,9 +369,9 @@ export function BillingProvider({ children }: PropsWithChildren) {
     return purchasesClient.subscribeCustomerInfo((customerInfo) => {
       if (generation !== reconciliationGeneration.current) return;
       setSubscription(customerInfo.subscription);
-      void syncAccess(customerInfo).then((result) => finishReconciliation(result)).catch(() => undefined);
+      void syncAccess(customerInfo).then((result) => finishPassiveReconciliation(result.value, Boolean(offering))).catch(() => undefined);
     });
-  }, [authenticatedUserId, finishReconciliation, syncAccess]);
+  }, [authenticatedUserId, finishPassiveReconciliation, offering, syncAccess]);
 
   useEffect(() => {
     if (accessStatus === "active" && (state === "sync_required" || state === "reconciling")) {
@@ -363,10 +387,10 @@ export function BillingProvider({ children }: PropsWithChildren) {
     previousAccessStatus.current = accessStatus;
     if (auth.phase === "authenticated" && accessStatus === "expired" && prior !== "expired") {
       void reconcileEntitlement().then((result) => {
-        if (result.providerActive && !result.serverActive) setState("sync_required");
+        finishPassiveReconciliation(result, Boolean(offering));
       }).catch(() => undefined);
     }
-  }, [accessStatus, auth.phase, reconcileEntitlement]);
+  }, [accessStatus, auth.phase, finishPassiveReconciliation, offering, reconcileEntitlement]);
 
   const plans = useMemo(() => selectBillingPlans(offering?.packages ?? []), [offering]);
   const value = useMemo<BillingContextValue>(() => ({
