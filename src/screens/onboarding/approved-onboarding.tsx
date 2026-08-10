@@ -55,10 +55,10 @@ const logo = require("../../../assets/images/form-logo-mark.png");
 const goldGradient = require("../../../assets/production/onboarding/gold-gradient.png");
 const approvedArtwork = {
   welcome: require("../../../assets/production/onboarding/extracted/01-welcome-illustration.png"),
-  "product-value": require("../../../assets/production/onboarding/extracted/03-product-value-illustration.png"),
-  "why-formie": require("../../../assets/production/onboarding/extracted/06-why-formie-illustration.png"),
-  "product-demonstration": require("../../../assets/production/onboarding/extracted/09-product-demonstration-center.png"),
-  "long-term-value": require("../../../assets/production/onboarding/extracted/14-long-term-value-illustration.png"),
+  "product-value": require("../../../assets/production/onboarding/extracted/03-product-value-illustration.webp"),
+  "why-formie": require("../../../assets/production/onboarding/extracted/06-why-formie-illustration.webp"),
+  "product-demonstration": require("../../../assets/production/onboarding/extracted/09-product-demonstration-center.webp"),
+  "long-term-value": require("../../../assets/production/onboarding/extracted/14-long-term-value-illustration.webp"),
   loading: require("../../../assets/production/onboarding/extracted/15-loading-illustration.png"),
 } as const;
 const productDemonstrationCoachingOverlay = require("../../../assets/production/onboarding/generated/product-demonstration-coaching-overlay.png");
