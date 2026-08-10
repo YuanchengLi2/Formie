@@ -80,7 +80,7 @@ const writing: WholeVideoWriting = {
   strengths: [],
 };
 
-describe("v59 full-video rep-audited coaching contract", () => {
+describe("v60 full-video rep-audited coaching contract", () => {
   const rawAnalysis = (count: number) => {
     const coachingItems = Array.from({ length: count }, (_, index) => ({
       id: `finding-${index + 1}`,
@@ -392,6 +392,8 @@ describe("v59 full-video rep-audited coaching contract", () => {
 
     expect(prompt).not.toContain("You are Formie's coaching editor");
     expect(prompt).toContain("Validated analysis:");
+    expect(prompt).toContain('"peakSeconds":5.3');
+    expect(prompt).not.toMatch(/"(?:start|peak|end)Ms"/);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappened must be exactly one complete sentence");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappenedDetail must contain three to four normal supporting sentences");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMatters must be exactly one complete sentence");
@@ -406,6 +408,25 @@ describe("v59 full-video rep-audited coaching contract", () => {
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("Mention a numbered repetition at most once");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("title is only the concise issue label used for navigation");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("it is not the white coaching sentence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Never write milliseconds");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Do not begin multiple findings with the same opening phrase");
+  });
+
+  it("converts leaked millisecond timestamps to readable seconds without rejecting the writing", () => {
+    const parsed = parseWholeVideoWriting({
+      ...writing,
+      overallAssessment: "The row stays controlled early. The return changes at 3250ms. Slow the final lowering phase.",
+      coachingItems: [{
+        ...writing.coachingItems[0],
+        whatHappened: "Both dumbbells begin dropping faster at 3250ms.",
+        whatHappenedDetail: "The change starts around 3,250 milliseconds. Rep 3 then drops quickly. Rep 4 repeats the faster return.",
+      }],
+    }, analysis);
+
+    expect(parsed.overallAssessment).toContain("3.3 seconds");
+    expect(parsed.coachingItems[0].whatHappened).toContain("3.3 seconds");
+    expect(parsed.coachingItems[0].whatHappenedDetail).toContain("3.3 seconds");
+    expect(JSON.stringify(parsed)).not.toMatch(/milliseconds|\d[\d,]*\s*ms\b/i);
   });
 
   it("preserves Flash-Lite's concise impactful headline instead of deriving it from the paragraph", () => {

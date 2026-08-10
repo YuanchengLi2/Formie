@@ -149,10 +149,27 @@ function sentenceParts(value: string): string[] {
     .map((sentence) => /[.!?]$/.test(sentence) ? sentence : `${sentence}.`);
 }
 
+function secondsFromMilliseconds(milliseconds: number): number {
+  return Number((milliseconds / 1_000).toFixed(milliseconds >= 1_000 ? 1 : 2));
+}
+
+export function humanizeCoachingTimeUnits(value: string): string {
+  return value.replace(/\b(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*(?:milliseconds?|ms)\b/gi, (_match, raw: string) => {
+    const milliseconds = Number(raw.replaceAll(",", ""));
+    if (!Number.isFinite(milliseconds)) return _match;
+    const seconds = secondsFromMilliseconds(milliseconds);
+    return `${seconds} ${seconds === 1 ? "second" : "seconds"}`;
+  });
+}
+
 function normalizedObservableParagraph(value: unknown, fallback: string, minimum: number, maximum: number): string {
   const raw = typeof value === "string" ? value.trim() : "";
   const parts = sentenceParts(raw);
-  if (!raw || UNSUPPORTED_WRITER_CLAIM.test(raw) || parts.length < minimum) return fallback;
+  if (!raw || UNSUPPORTED_WRITER_CLAIM.test(raw)) return fallback;
+  if (parts.length < minimum) {
+    const additions = sentenceParts(fallback).filter((sentence) => !parts.includes(sentence));
+    return [...parts, ...additions].slice(0, Math.min(minimum, maximum)).join(" ");
+  }
   return parts.slice(0, maximum).join(" ");
 }
 
@@ -456,7 +473,7 @@ export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
   };
   const safeHeadline = (value: unknown): string | null => {
     try {
-      return shortHeadline(value, "writer headline");
+      return humanizeCoachingTimeUnits(shortHeadline(value, "writer headline"));
     } catch {
       return null;
     }
@@ -469,7 +486,7 @@ export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
     }
   };
   const safeCopy = (value: string | null, fallback: string, sourceContext: string): string => (
-    value && !UNSUPPORTED_WRITER_CLAIM.test(value) && isPersonalizedCopy(value, sourceContext) ? value : fallback
+    humanizeCoachingTimeUnits(value && !UNSUPPORTED_WRITER_CLAIM.test(value) && isPersonalizedCopy(value, sourceContext) ? value : fallback)
   );
   const rawCoachingById = byId(result.coachingItems, findingIds);
   const coachingItems = analysis.coachingItems.map((source) => {
@@ -521,8 +538,8 @@ export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
     const item = rawStrengthsById.get(source.id);
     return {
       id: source.id,
-      title: typeof item?.title === "string" && item.title.trim() ? item.title.trim() : source.topic,
-      detail: typeof item?.detail === "string" && item.detail.trim() ? item.detail.trim() : source.observation,
+      title: humanizeCoachingTimeUnits(typeof item?.title === "string" && item.title.trim() ? item.title.trim() : source.topic),
+      detail: humanizeCoachingTimeUnits(typeof item?.detail === "string" && item.detail.trim() ? item.detail.trim() : source.observation),
     };
   });
   const fullSetContext = [
@@ -538,20 +555,20 @@ export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
   try {
     movementScores = parseScores(result.movementScores, findingIds).map((score, index) => ({
       ...score,
-      observed: UNSUPPORTED_WRITER_CLAIM.test(score.observed)
+      observed: humanizeCoachingTimeUnits(UNSUPPORTED_WRITER_CLAIM.test(score.observed)
         ? analysis.movementScores[index]?.observed ?? analysis.videoUnderstanding.exerciseSummary
-        : score.observed,
+        : score.observed),
     }));
   } catch {
     movementScores = analysis.movementScores;
   }
   return {
-    overallAssessment: UNSUPPORTED_WRITER_CLAIM.test(validOverallAssessment ?? "") || !isPersonalizedCopy(validOverallAssessment ?? "", fullSetContext)
+    overallAssessment: humanizeCoachingTimeUnits(UNSUPPORTED_WRITER_CLAIM.test(validOverallAssessment ?? "") || !isPersonalizedCopy(validOverallAssessment ?? "", fullSetContext)
       ? fallbackOverallAssessment
-      : validOverallAssessment!,
-    coachNote: UNSUPPORTED_WRITER_CLAIM.test(validCoachNote ?? "") || !isPersonalizedCopy(validCoachNote ?? "", fullSetContext)
+      : validOverallAssessment!),
+    coachNote: humanizeCoachingTimeUnits(UNSUPPORTED_WRITER_CLAIM.test(validCoachNote ?? "") || !isPersonalizedCopy(validCoachNote ?? "", fullSetContext)
       ? fallbackCoachNote
-      : validCoachNote!,
+      : validCoachNote!),
     movementScores,
     coachingItems,
     strengths,
@@ -955,11 +972,15 @@ For each coaching item, title is only the concise issue label used for navigatio
 
 For every finding, whatHappened must be exactly one complete sentence shown as bold white coaching text. whatHappenedDetail must contain three to four normal supporting sentences. Name the declared exercise and describe the exact visible body, equipment, path, range, position, or tempo change; reference every numbered repetition supported by the supplied evidence, identify the relevant phase or moment, and explain how the visible relationship changes or repeats across the recording. Do not replace supported repetition numbers with vague phrases such as "that moment." Do not reuse the same sentence template across findings.
 
+Make each finding sound independently written for its own evidence. Lead with the specific body part or equipment action that changed. Vary sentence structure and transitions across findings. Do not begin multiple findings with the same opening phrase, and avoid canned openings such as "The cited frames show" or "The issue is visible."
+
 whyItMatters must be exactly one complete sentence shown as bold white coaching text. whyItMattersDetail must contain two to four normal supporting sentences. Directly explain why this exact visible pattern matters for the declared exercise and its specific consequence to path, range, control, position, balance, tempo, or repeatability. Do not repeat whatHappened and do not use generic wording that could apply to any exercise.
 
 whatToDo must be exactly one complete actionable sentence. This sentence is shown as the bold white coaching line, so it must name the declared exercise or its unmistakable equipment and movement action, give the corrective direction, and state when in the repetition to apply it. successCheck must be one separate sentence shown as normal text that describes what the user should visibly compare on the next set.
 
 Keep each sentence under 18 words. Prefer one direct clause, concrete exercise language, and no repeated setup phrases. Use everyday words a new lifter can understand. Replace technical anatomy or coaching jargon with the body part and visible action the user can see.
+
+Never write milliseconds or raw timing field names in coaching. If time materially helps, express it in readable seconds, such as "around 3.3 seconds." Prefer the supported repetition number and movement phase over a clock value.
 
 overallAssessment must contain three to four sentences. Summarize the complete set, its clearest strength, its main change, and the top priority. coachNote must contain exactly three sentences: what the user did, why the main pattern matters, and the clearest next-set focus.
 
@@ -969,11 +990,32 @@ Keep every observation visual: do not claim muscle activation, recruitment, grow
 
 export function buildWholeVideoWritingPrompt(analysis: BoundaryFreeAnalysis, declaration?: SetDeclaration): string {
   const { viewNotes: _viewNotes, ...videoUnderstanding } = analysis.videoUnderstanding;
+  const repAudit = videoUnderstanding.repAudit.map(({ startMs, peakMs, endMs, ...rep }) => ({
+    ...rep,
+    startSeconds: secondsFromMilliseconds(startMs),
+    peakSeconds: secondsFromMilliseconds(peakMs),
+    endSeconds: secondsFromMilliseconds(endMs),
+  }));
+  const coachingItems = analysis.coachingItems.map((item) => ({
+    ...item,
+    observation: humanizeCoachingTimeUnits(item.observation),
+    observationDetails: humanizeCoachingTimeUnits(item.observationDetails),
+    whyItMatters: humanizeCoachingTimeUnits(item.whyItMatters),
+    whyDetails: humanizeCoachingTimeUnits(item.whyDetails),
+    correctionDirection: humanizeCoachingTimeUnits(item.correctionDirection),
+    evidence: item.evidence.map(({ startMs, peakMs, endMs, ...moment }) => ({
+      ...moment,
+      visualEvidence: humanizeCoachingTimeUnits(moment.visualEvidence),
+      startSeconds: secondsFromMilliseconds(startMs),
+      peakSeconds: secondsFromMilliseconds(peakMs),
+      endSeconds: secondsFromMilliseconds(endMs),
+    })),
+  }));
   const immutableAnalysis = {
     declaration: declaredSetSummary(declaration),
-    videoUnderstanding,
+    videoUnderstanding: { ...videoUnderstanding, repAudit },
     movementScores: analysis.movementScores,
-    coachingItems: analysis.coachingItems,
+    coachingItems,
     strengths: analysis.strengths,
   };
   return `Validated analysis:\n${JSON.stringify(immutableAnalysis)}`;
