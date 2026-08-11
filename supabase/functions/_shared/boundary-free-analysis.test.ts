@@ -80,7 +80,7 @@ const writing: WholeVideoWriting = {
   strengths: [],
 };
 
-describe("v60 full-video rep-audited coaching contract", () => {
+describe("v61 full-video rep-audited coaching contract", () => {
   const rawAnalysis = (count: number) => {
     const coachingItems = Array.from({ length: count }, (_, index) => ({
       id: `finding-${index + 1}`,
@@ -194,21 +194,23 @@ describe("v60 full-video rep-audited coaching contract", () => {
 
   it("keeps the provider schema compact while retaining the rep audit and split coaching", () => {
     const schema = BOUNDARY_FREE_ANALYSIS_SCHEMA as any;
+    const coachingItem = schema.properties.coachingItems.items.anyOf[0];
 
     expect(schema.properties.videoUnderstanding.properties.repAudit).toBeDefined();
-    expect(schema.properties.coachingItems.properties ?? schema.properties.coachingItems.items.properties).toEqual(expect.objectContaining({
+    expect(coachingItem.properties).toEqual(expect.objectContaining({
       observationDetails: { type: "string" },
       whyDetails: { type: "string" },
       affectedRepNumbers: expect.objectContaining({ type: "array" }),
     }));
-    expect(schema.properties.coachingItems.minItems).toBe(4);
-    expect(schema.properties.coachingItems.maxItems).toBeUndefined();
+    expect(schema.properties.coachingItems.minItems).toBe(6);
+    expect(schema.properties.coachingItems.maxItems).toBe(6);
+    expect(schema.properties.coachingItems.items.anyOf[1]).toEqual({ type: "null" });
     expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("beginning");
     expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("middle");
     expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("end");
     expect(schema.properties).not.toHaveProperty("strengths");
     expect(schema.properties).not.toHaveProperty("recheckRequest");
-    expect(schema.properties.coachingItems.items.properties).not.toHaveProperty("observedIssueRegions");
+    expect(coachingItem.properties).not.toHaveProperty("observedIssueRegions");
   });
 
   it("removes a claimed repetition that has no matching evidence moment", () => {
@@ -269,7 +271,9 @@ describe("v60 full-video rep-audited coaching contract", () => {
   });
 
   it("accepts four distinct evidence-backed coaching findings", () => {
-    const parsed = parseBoundaryFreeAnalysis(rawAnalysis(4), 9_000);
+    const raw = rawAnalysis(4);
+    raw.coachingItems.push(null as never, null as never);
+    const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
 
     expect(parsed.coachingItems).toHaveLength(4);
   });
@@ -313,7 +317,7 @@ describe("v60 full-video rep-audited coaching contract", () => {
     expect(parsed.coachingItems[3].correctionDirection).toBe("Make the correction.");
   });
 
-  it("preserves exhaustive whole-set checks while requiring four genuine findings without padding", () => {
+  it("targets six real findings without inventing or rejecting when only four exist", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(9_000);
 
     expect(prompt).toContain("stored pixel dimensions rely on rotation metadata");
@@ -322,8 +326,10 @@ describe("v60 full-video rep-audited coaching contract", () => {
     expect(prompt).toContain("repAudit");
     expect(prompt).toContain("every observed repetition");
     expect(prompt).toContain("universal path decision gate");
-    expect(prompt).toContain("four to six distinct evidence-backed coaching issues");
-    expect(prompt).toContain("Do not stop at four");
+    expect(prompt).toContain("Your target is six real coaching issues");
+    expect(prompt).toContain("Four is the fallback, not the target");
+    expect(prompt).toContain("Use null only after the exhaustive inventory proves no additional independent issue exists");
+    expect(prompt).not.toContain("Return four to six distinct evidence-backed coaching issues");
     expect(prompt).toContain("small but real visible optimization");
     expect(prompt).not.toContain("auditCoverage");
   });
@@ -342,7 +348,7 @@ describe("v60 full-video rep-audited coaching contract", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(10_000);
 
     expect(prompt).toContain("observation must be exactly one complete sentence");
-    expect(prompt).toContain("observationDetails must contain three to four normal supporting sentences");
+    expect(prompt).toContain("observationDetails must contain three to four natural supporting sentences");
     expect(prompt).toContain("whyItMatters must be exactly one complete sentence");
     expect(prompt).toContain("whyDetails must contain two to four normal supporting sentences");
     expect(prompt).toContain("correctionDirection must be exactly one complete actionable sentence");
@@ -380,7 +386,7 @@ describe("v60 full-video rep-audited coaching contract", () => {
     expect(prompt).toContain("request another recheck only if genuine visual uncertainty remains");
   });
 
-  it("asks for exercise-specific sentence ranges and every supported rep moment", () => {
+  it("asks for exercise-specific coaching without turning every finding into a repetition log", () => {
     const prompt = buildWholeVideoWritingPrompt(analysis, {
       exercise: { source: "custom", label: "Chest-supported dumbbell row" },
       amount: { kind: "reps", value: 4, countScope: "total" },
@@ -395,7 +401,7 @@ describe("v60 full-video rep-audited coaching contract", () => {
     expect(prompt).toContain('"peakSeconds":5.3');
     expect(prompt).not.toMatch(/"(?:start|peak|end)Ms"/);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappened must be exactly one complete sentence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappenedDetail must contain three to four normal supporting sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappenedDetail must contain three to four natural supporting sentences");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMatters must be exactly one complete sentence");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMattersDetail must contain two to four normal supporting sentences");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatToDo must be exactly one complete actionable sentence");
@@ -404,7 +410,9 @@ describe("v60 full-video rep-audited coaching contract", () => {
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("everyday words a new lifter can understand");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Keep each sentence under 18 words");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Name the declared exercise");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("reference every numbered repetition supported by the supplied evidence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Do not write a chronological repetition log");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Mention repetition numbers only when they make a useful comparison clearer");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("reference every numbered repetition supported by the supplied evidence");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("Mention a numbered repetition at most once");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("title is only the concise issue label used for navigation");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("it is not the white coaching sentence");
