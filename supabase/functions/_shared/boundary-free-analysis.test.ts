@@ -80,7 +80,7 @@ const writing: WholeVideoWriting = {
   strengths: [],
 };
 
-describe("v61 full-video rep-audited coaching contract", () => {
+describe("v62 full-video rep-audited coaching contract", () => {
   const rawAnalysis = (count: number) => {
     const coachingItems = Array.from({ length: count }, (_, index) => ({
       id: `finding-${index + 1}`,
@@ -192,9 +192,9 @@ describe("v61 full-video rep-audited coaching contract", () => {
     expect(parsed.coachingItems.every((item) => item.observedIssueRegions.length === 0)).toBe(true);
   });
 
-  it("keeps the provider schema compact while retaining the rep audit and split coaching", () => {
+  it("uses the proven Gemini-compatible coaching schema while retaining the local six-item cap", () => {
     const schema = BOUNDARY_FREE_ANALYSIS_SCHEMA as any;
-    const coachingItem = schema.properties.coachingItems.items.anyOf[0];
+    const coachingItem = schema.properties.coachingItems.items;
 
     expect(schema.properties.videoUnderstanding.properties.repAudit).toBeDefined();
     expect(coachingItem.properties).toEqual(expect.objectContaining({
@@ -202,9 +202,10 @@ describe("v61 full-video rep-audited coaching contract", () => {
       whyDetails: { type: "string" },
       affectedRepNumbers: expect.objectContaining({ type: "array" }),
     }));
-    expect(schema.properties.coachingItems.minItems).toBe(6);
-    expect(schema.properties.coachingItems.maxItems).toBe(6);
-    expect(schema.properties.coachingItems.items.anyOf[1]).toEqual({ type: "null" });
+    expect(schema.properties.coachingItems.minItems).toBe(4);
+    expect(schema.properties.coachingItems.maxItems).toBeUndefined();
+    expect(coachingItem.type).toBe("object");
+    expect(coachingItem).not.toHaveProperty("anyOf");
     expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("beginning");
     expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("middle");
     expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("end");
@@ -271,9 +272,7 @@ describe("v61 full-video rep-audited coaching contract", () => {
   });
 
   it("accepts four distinct evidence-backed coaching findings", () => {
-    const raw = rawAnalysis(4);
-    raw.coachingItems.push(null as never, null as never);
-    const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
+    const parsed = parseBoundaryFreeAnalysis(rawAnalysis(4), 9_000);
 
     expect(parsed.coachingItems).toHaveLength(4);
   });
@@ -328,7 +327,8 @@ describe("v61 full-video rep-audited coaching contract", () => {
     expect(prompt).toContain("universal path decision gate");
     expect(prompt).toContain("Your target is six real coaching issues");
     expect(prompt).toContain("Four is the fallback, not the target");
-    expect(prompt).toContain("Use null only after the exhaustive inventory proves no additional independent issue exists");
+    expect(prompt).toContain("Return between four and six real coaching issues");
+    expect(prompt).not.toContain("Use null");
     expect(prompt).not.toContain("Return four to six distinct evidence-backed coaching issues");
     expect(prompt).toContain("small but real visible optimization");
     expect(prompt).not.toContain("auditCoverage");
