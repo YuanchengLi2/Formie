@@ -6,6 +6,7 @@ const mockFindPersistedGuide = jest.fn();
 const mockSavePersistedGuide = jest.fn();
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
+const mockBack = jest.fn();
 let mockParams: { previousSessionId?: string; flow?: "rejected" | "review" } = {};
 
 jest.mock("expo-router", () => {
@@ -13,7 +14,7 @@ jest.mock("expo-router", () => {
   return {
     Redirect: ({ href }: { href: string }) => <MockText>{`redirect:${href}`}</MockText>,
     useLocalSearchParams: () => mockParams,
-    useRouter: () => ({ push: mockPush, replace: mockReplace }),
+    useRouter: () => ({ back: mockBack, push: mockPush, replace: mockReplace }),
   };
 });
 
@@ -38,16 +39,19 @@ jest.mock("@/screens/exercise-guide", () => {
     ExerciseGuideScreen: ({
       guide,
       loading,
+      onBack,
       onContinue,
     }: {
       guide: { exercise: { canonicalName: string } } | null;
       loading: boolean;
+      onBack: () => void;
       onContinue: () => void;
     }) => (
       <>
         <MockText>{loading ? "guide-loading" : "guide-idle"}</MockText>
         {guide ? <MockText>{`guide:${guide.exercise.canonicalName}`}</MockText> : null}
-        <MockPressable accessibilityLabel="Continue to Camera Tips" onPress={onContinue} />
+        <MockPressable accessibilityLabel="Go back from Exercise Guide" onPress={onBack} />
+        <MockPressable accessibilityLabel="Continue to Camera" onPress={onContinue} />
       </>
     ),
   };
@@ -75,6 +79,7 @@ describe("ExerciseGuideRoute", () => {
     mockSavePersistedGuide.mockResolvedValue(undefined);
     mockPush.mockClear();
     mockReplace.mockClear();
+    mockBack.mockClear();
     useCaptureStore.getState().dispatch({ type: "reset" });
     useCaptureStore.getState().dispatch({
       type: "exercise_selected",
@@ -111,21 +116,31 @@ describe("ExerciseGuideRoute", () => {
     });
   });
 
-  it("continues to Recording Tips without stacking another capture route", async () => {
+  it("uses the custom header to go back", async () => {
     mockGetExerciseGuide.mockResolvedValue(guide);
     const screen = await render(<ExerciseGuideRoute />);
     await waitFor(() => expect(screen.getByText("guide:One-Arm Dumbbell Row")).toBeTruthy());
 
-    await fireEvent.press(screen.getByLabelText("Continue to Camera Tips"));
+    await fireEvent.press(screen.getByLabelText("Go back from Exercise Guide"));
+
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("continues directly to Camera without stacking another capture route", async () => {
+    mockGetExerciseGuide.mockResolvedValue(guide);
+    const screen = await render(<ExerciseGuideRoute />);
+    await waitFor(() => expect(screen.getByText("guide:One-Arm Dumbbell Row")).toBeTruthy());
+
+    await fireEvent.press(screen.getByLabelText("Continue to Camera"));
 
     expect(mockReplace).toHaveBeenCalledWith({
-      pathname: "/recording-tips",
+      pathname: "/camera",
       params: {},
     });
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it("continues through camera tips and discards a rejected recording only when retaking", async () => {
+  it("continues to camera and discards a rejected recording only when retaking", async () => {
     useCaptureStore.setState({
       phase: "recorded",
       recording: { localUri: "file:///set.mp4", durationMs: 8_000, mimeType: "video/mp4" },
@@ -135,11 +150,11 @@ describe("ExerciseGuideRoute", () => {
     mockParams = { previousSessionId: "session-1", flow: "rejected" };
     const screen = await render(<ExerciseGuideRoute />);
 
-    await fireEvent.press(screen.getByLabelText("Continue to Camera Tips"));
+    await fireEvent.press(screen.getByLabelText("Continue to Camera"));
 
     expect(useCaptureStore.getState().recording).toBeNull();
     expect(mockReplace).toHaveBeenCalledWith({
-      pathname: "/recording-tips",
+      pathname: "/camera",
       params: { previousSessionId: "session-1" },
     });
     expect(mockGetExerciseGuide).not.toHaveBeenCalled();
@@ -149,7 +164,7 @@ describe("ExerciseGuideRoute", () => {
     mockParams = { flow: "review" };
     const screen = await render(<ExerciseGuideRoute />);
 
-    await fireEvent.press(screen.getByLabelText("Continue to Camera Tips"));
+    await fireEvent.press(screen.getByLabelText("Continue to Camera"));
 
     expect(mockReplace).toHaveBeenCalledWith("/analysis/set-details");
     expect(mockPush).not.toHaveBeenCalled();

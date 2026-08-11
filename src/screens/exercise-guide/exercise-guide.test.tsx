@@ -1,13 +1,24 @@
 import { fireEvent, render } from "@testing-library/react-native";
+import type { ReactElement } from "react";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ExerciseGuideScreen } from "./index";
+
+const safeAreaMetrics = {
+  frame: { x: 0, y: 0, width: 390, height: 844 },
+  insets: { top: 47, right: 0, bottom: 34, left: 0 },
+};
+
+function renderGuide(element: ReactElement) {
+  return render(<SafeAreaProvider initialMetrics={safeAreaMetrics}>{element}</SafeAreaProvider>);
+}
 
 const guide = {
   exercise: { catalogExerciseId: 88, canonicalName: "One-Arm Dumbbell Row", family: "row" as const },
   setup: ["Brace one hand on a stable bench."],
   execution: ["Drive the working elbow toward your hip."],
   safety: ["Keep the supporting surface from sliding."],
-  cameraPlacement: ["Place the phone far enough away to keep your full body and bench visible."],
+  cameraPlacement: ["Side view", "Hip height", "Full body visible"],
   tutorial: {
     videoId: "dQw4w9WgXcQ",
     url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
@@ -20,40 +31,62 @@ const guide = {
 };
 
 describe("ExerciseGuideScreen", () => {
-  it("shows setup, execution, and safety before recording", async () => {
-    const screen = await render(
+  it("shows the live guide in the reference hierarchy and switches one instruction set at a time", async () => {
+    const onBack = jest.fn();
+    const onOpenSpaceHelp = jest.fn();
+    const screen = await renderGuide(
       <ExerciseGuideScreen
         exerciseName="One-Arm Dumbbell Row"
         guide={guide}
         loading={false}
         error={null}
+        onBack={onBack}
         onRetry={jest.fn()}
         onContinue={jest.fn()}
-        onOpenSpaceHelp={jest.fn()}
+        onOpenSpaceHelp={onOpenSpaceHelp}
         onOpenTutorial={jest.fn()}
       />,
     );
 
+    expect(screen.getByText("Exercise Guide")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Go back from Exercise Guide"));
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("One-Arm Dumbbell Row")).toBeTruthy();
+    expect(screen.getByText("Row")).toBeTruthy();
     expect(screen.getByText("Setup")).toBeTruthy();
-    expect(screen.getByText("How to perform it")).toBeTruthy();
+    expect(screen.getByText("Form")).toBeTruthy();
     expect(screen.getByText("Safety")).toBeTruthy();
-    expect(screen.getByText("Camera placement")).toBeTruthy();
     expect(screen.getByText("Drive the working elbow toward your hip.")).toBeTruthy();
-    expect(screen.queryByText(
-      "Review the movement, then position your camera so the full set stays visible.",
-    )).toBeNull();
+    expect(screen.queryByText("Brace one hand on a stable bench.")).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText("Show setup steps"));
+    expect(screen.getByText("Brace one hand on a stable bench.")).toBeTruthy();
+    expect(screen.queryByText("Drive the working elbow toward your hip.")).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText("Show safety steps"));
+    expect(screen.getByText("Keep the supporting surface from sliding.")).toBeTruthy();
+    expect(screen.queryByText("Brace one hand on a stable bench.")).toBeNull();
+
+    expect(screen.getByText("Camera Setup")).toBeTruthy();
+    expect(screen.getByText("Side view  ·  Hip height  ·  Full body visible")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Open camera setup help"));
+    expect(onOpenSpaceHelp).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Continue to Camera")).toBeTruthy();
     expect(screen.getByLabelText("Play One-arm dumbbell row tutorial on YouTube")).toBeTruthy();
-    expect(screen.getAllByLabelText("Row movement illustration").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("exercise-guide-tabs").props.style).toEqual(expect.objectContaining({ minHeight: 40 }));
+    expect(screen.getByTestId("exercise-guide-steps").props.style).toEqual(expect.objectContaining({ borderRadius: 16 }));
+    expect(screen.getByTestId("exercise-guide-camera-card").props.style).toEqual(expect.objectContaining({ minHeight: 72 }));
   });
 
   it("opens the selected YouTube tutorial", async () => {
     const onOpenTutorial = jest.fn();
-    const screen = await render(
+    const screen = await renderGuide(
       <ExerciseGuideScreen
         exerciseName="One-Arm Dumbbell Row"
         guide={guide}
         loading={false}
         error={null}
+        onBack={jest.fn()}
         onRetry={jest.fn()}
         onContinue={jest.fn()}
         onOpenSpaceHelp={jest.fn()}
@@ -67,12 +100,13 @@ describe("ExerciseGuideScreen", () => {
   it("allows retry or continuing with generic tips when guide generation fails", async () => {
     const onRetry = jest.fn();
     const onContinue = jest.fn();
-    const screen = await render(
+    const screen = await renderGuide(
       <ExerciseGuideScreen
         exerciseName="One-Arm Dumbbell Row"
         guide={null}
         loading={false}
         error="Guide unavailable"
+        onBack={jest.fn()}
         onRetry={onRetry}
         onContinue={onContinue}
         onOpenSpaceHelp={jest.fn()}
@@ -81,19 +115,20 @@ describe("ExerciseGuideScreen", () => {
     );
 
     await fireEvent.press(screen.getByLabelText("Retry guide"));
-    await fireEvent.press(screen.getByLabelText("Continue to Camera Tips"));
+    await fireEvent.press(screen.getByLabelText("Continue to Camera"));
     expect(onRetry).toHaveBeenCalledTimes(1);
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
 
   it("lets the user continue to camera tips while the setup guide is still loading", async () => {
     const onContinue = jest.fn();
-    const screen = await render(
+    const screen = await renderGuide(
       <ExerciseGuideScreen
         exerciseName="Jefferson Curl"
         guide={null}
         loading
         error={null}
+        onBack={jest.fn()}
         onRetry={jest.fn()}
         onContinue={onContinue}
         onOpenSpaceHelp={jest.fn()}
@@ -102,7 +137,7 @@ describe("ExerciseGuideScreen", () => {
     );
 
     expect(screen.getByLabelText("Loading exercise guide")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Continue to Camera Tips"));
+    await fireEvent.press(screen.getByLabelText("Continue to Camera"));
     expect(onContinue).toHaveBeenCalledTimes(1);
   });
 });

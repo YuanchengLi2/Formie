@@ -1,192 +1,115 @@
 import { ScrollView, Text, View } from "react-native";
-import { VideoView, useVideoPlayer } from "expo-video";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CaptureReferenceIcon, type CaptureReferenceIconName } from "@/components/capture-reference-icon";
+import { CaptureScreenHeader } from "@/components/capture-screen-header";
 import { FormButton } from "@/components/form-button";
+import { ReferenceVideoControls } from "@/components/reference-video-controls";
 import { colors } from "@/theme/colors";
-import { radii, spacing } from "@/theme/spacing";
+import { radii } from "@/theme/spacing";
 import { typography } from "@/theme/type";
 
 type RecordingReviewScreenProps = {
   localVideoUri: string;
+  analysisRemaining: number | null;
   onUseRecording: () => void;
   onRetake: () => void;
 };
 
-const reviewTips = [
-  {
-    title: "Choose an angle that preserves your form",
-    detail: "Pick the side that shows your form clearly, then use the angle that keeps the exercise’s perspective true.",
-  },
-  {
-    title: "Keep the full movement visible",
-    detail: "Keep your full range of motion, working joints, equipment, and contact points in frame.",
-  },
-  {
-    title: "Keep the phone level and stable",
-    detail: "Avoid steep up-or-down angles, close wide-angle views, shaking, and strong perspective distortion.",
-  },
-  {
-    title: "Make important details easy to see",
-    detail: "Use clear lighting and enough distance to fit the movement without making your body too small.",
-  },
-] as const;
+const reviewChecks: readonly { label: string; icon: CaptureReferenceIconName }[] = [
+  { label: "Full body visible", icon: "fullBody" },
+  { label: "Side angle", icon: "sideAngle" },
+  { label: "Phone level", icon: "phone" },
+  { label: "Good lighting", icon: "lighting" },
+];
 
 export function RecordingReviewScreen({
   localVideoUri,
+  analysisRemaining,
   onUseRecording,
   onRetake,
 }: RecordingReviewScreenProps) {
   const insets = useSafeAreaInsets();
-  const player = useVideoPlayer(localVideoUri, (created) => {
-    created.loop = true;
-  });
+  const projectedRemaining = typeof analysisRemaining === "number" && Number.isFinite(analysisRemaining)
+    ? Math.max(0, Math.floor(analysisRemaining) - 1)
+    : null;
 
   return (
     <ScrollView
-      contentContainerStyle={{
-        gap: spacing.xl,
-        paddingTop: insets.top + spacing.xl,
-        paddingBottom: insets.bottom + spacing.xxl,
-        paddingHorizontal: spacing.lg,
-      }}
-      contentInsetAdjustmentBehavior="automatic"
-      style={{ flex: 1, backgroundColor: colors.background }}
+      alwaysBounceVertical={false}
+      bounces={false}
+      contentInsetAdjustmentBehavior="never"
+      contentContainerStyle={{ paddingBottom: insets.bottom + 18 }}
+      style={{ flex: 1, backgroundColor: colors.cameraBlack }}
       testID="recording-review-scroll"
     >
-      <View style={{ gap: spacing.sm }}>
-        <Text
-          selectable
-          style={[
-            typography.caption,
-            {
-              color: colors.gold,
-              fontWeight: "700",
-              letterSpacing: 2.2,
-            },
-          ]}
-        >
-          FINAL CHECK
-        </Text>
-        <Text
-          selectable
-          accessibilityRole="header"
-          testID="recording-review-title"
-          style={[
-            typography.title,
-            {
-              color: colors.text,
-              fontSize: 40,
-              lineHeight: 43,
-              letterSpacing: -1.4,
-            },
-          ]}
-        >
-          Is this recording ready?
-        </Text>
-        <Text selectable style={[typography.body, { color: colors.textSecondary, maxWidth: 350 }]}>
-          Watch the clip once. A clear angle gives Formie better evidence and gives you more useful coaching.
-        </Text>
-      </View>
+      <CaptureScreenHeader title="Review Recording" onBack={onRetake} />
+      <View style={{ gap: 16, paddingHorizontal: 20 }}>
+        <ReferenceVideoControls localVideoUri={localVideoUri} />
 
-      <View
-        style={{
-          height: 260,
-          overflow: "hidden",
-          borderRadius: radii.lg,
-          borderCurve: "continuous",
-          borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.cameraBlack,
-        }}
-      >
-        <VideoView
-          accessibilityLabel="Recorded set preview"
-          contentFit="contain"
-          nativeControls
-          player={player}
-          style={{ width: "100%", height: "100%" }}
-        />
-      </View>
+        <View style={{ gap: 3, paddingHorizontal: 12 }}>
+          <Text accessibilityRole="header" selectable style={[typography.heading, { color: colors.text, fontSize: 21, lineHeight: 27, letterSpacing: -0.45 }]}>Before you continue</Text>
+          <Text selectable style={[typography.body, { color: colors.text, fontSize: 14, lineHeight: 20 }]}>A clear angle gives you a more accurate analysis.</Text>
+        </View>
 
-      <View style={{ gap: spacing.md }}>
-        <Text selectable style={[typography.heading, { color: colors.text }]}>
-          Before you continue
-        </Text>
-        {reviewTips.map((tip, index) => (
-          <View
-            key={tip.title}
-            style={{
-              flexDirection: "row",
-              gap: spacing.md,
-              alignItems: "flex-start",
-              padding: spacing.md,
-              borderRadius: radii.md,
-              borderCurve: "continuous",
-              borderWidth: 1,
-              borderColor: colors.border,
-              backgroundColor: colors.surface,
-            }}
-          >
+        <View
+          testID="recording-review-checklist"
+          style={{
+            overflow: "hidden",
+            flexDirection: "row",
+            flexWrap: "wrap",
+            borderRadius: 16,
+            borderCurve: "continuous",
+            borderWidth: 1,
+            borderColor: "#3A3A3A",
+            backgroundColor: colors.surface,
+          }}
+        >
+          {reviewChecks.map((check, index) => (
             <View
+              key={check.label}
               style={{
-                width: 30,
-                height: 30,
-                borderRadius: radii.pill,
+                width: "50%",
+                minHeight: 104,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: colors.goldSoft,
+                gap: 8,
+                paddingHorizontal: 8,
+                paddingVertical: 12,
+                borderRightWidth: index % 2 === 0 ? 1 : 0,
+                borderRightColor: "#3A3A3A",
+                borderBottomWidth: index < 2 ? 1 : 0,
+                borderBottomColor: "#3A3A3A",
               }}
             >
-              <Text selectable style={[typography.label, { color: colors.gold }]}>
-                {index + 1}
-              </Text>
+              <View style={{ width: 58, height: 50, alignItems: "center", justifyContent: "center" }}>
+                <CaptureReferenceIcon name={check.icon} size={48} />
+                <View style={{ position: "absolute", top: -2, right: -3, width: 23, height: 23, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.gold }}>
+                  <CaptureReferenceIcon name="check" color={colors.cameraBlack} size={15} />
+                </View>
+              </View>
+              <Text selectable style={[typography.body, { color: colors.text, fontSize: 14, lineHeight: 18, textAlign: "center" }]}>{check.label}</Text>
             </View>
-            <View style={{ flex: 1, gap: spacing.xs }}>
-              <Text selectable style={[typography.label, { color: colors.text, fontSize: 14 }]}>
-                {tip.title}
-              </Text>
-              <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>
-                {tip.detail}
-              </Text>
-            </View>
-          </View>
-        ))}
-      </View>
+          ))}
+        </View>
 
-      <View
-        accessibilityRole="alert"
-        style={{
-          gap: spacing.xs,
-          padding: spacing.lg,
-          borderRadius: radii.lg,
-          borderCurve: "continuous",
-          borderWidth: 1,
-          borderColor: colors.gold,
-          backgroundColor: colors.goldSoft,
-        }}
-      >
-        <Text
-          selectable
-          style={[
-            typography.caption,
-            {
-              color: colors.gold,
-              fontWeight: "700",
-              letterSpacing: 1.3,
-            },
-          ]}
+        <View
+          accessibilityRole="summary"
+          style={{ minHeight: 74, flexDirection: "row", alignItems: "center", gap: 15, paddingHorizontal: 20, paddingVertical: 13, borderRadius: radii.lg, borderCurve: "continuous", borderWidth: 1, borderColor: colors.gold, backgroundColor: "rgba(200,169,107,0.10)" }}
         >
-          ONE ANALYSIS
-        </Text>
-        <Text selectable style={[typography.heading, { color: colors.text }]}>
-          Submitting this recording will use 1 analysis. Make it count.
-        </Text>
-      </View>
+          <CaptureReferenceIcon name="quota" size={36} />
+          <View style={{ flex: 1, gap: 1 }}>
+            <Text selectable style={[typography.heading, { color: colors.text, fontSize: 16, lineHeight: 21 }]}>1 analysis will be used</Text>
+            <Text selectable style={[typography.body, { color: colors.textSecondary, fontSize: 13, lineHeight: 18, fontVariant: ["tabular-nums"] }]}>
+              {projectedRemaining === null ? "Balance updates after submission" : `${projectedRemaining} remaining this month`}
+            </Text>
+          </View>
+        </View>
 
-      <View style={{ gap: spacing.sm }}>
-        <FormButton label="Use This Recording" onPress={onUseRecording} />
-        <FormButton label="Retake" variant="secondary" onPress={onRetake} />
+        <View testID="recording-review-actions" style={{ flexDirection: "row", gap: 16 }}>
+          <FormButton label="Record Again" onPress={onRetake} variant="secondary" style={{ flex: 1, minHeight: 62, borderRadius: 13 }} />
+          <FormButton label="Use Recording" onPress={onUseRecording} style={{ flex: 1, minHeight: 62, borderRadius: 13 }} />
+        </View>
       </View>
     </ScrollView>
   );

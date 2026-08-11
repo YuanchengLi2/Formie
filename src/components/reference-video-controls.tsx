@@ -1,0 +1,132 @@
+import { VideoView, useVideoPlayer } from "expo-video";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, Text, View, type LayoutChangeEvent } from "react-native";
+
+import { CaptureReferenceIcon } from "@/components/capture-reference-icon";
+import { colors } from "@/theme/colors";
+import { radii } from "@/theme/spacing";
+import { typography } from "@/theme/type";
+
+type ReferenceVideoControlsProps = {
+  localVideoUri: string;
+};
+
+export function formatPlaybackTime(seconds: number): string {
+  const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  const minutes = Math.floor(safeSeconds / 60);
+  return `${minutes}:${String(safeSeconds % 60).padStart(2, "0")}`;
+}
+
+export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControlsProps) {
+  const player = useVideoPlayer(localVideoUri, (created) => {
+    created.loop = true;
+    created.timeUpdateEventInterval = 0.25;
+  });
+  const videoRef = useRef<VideoView>(null);
+  const timelineWidthRef = useRef(1);
+  const [playing, setPlaying] = useState(player.playing);
+  const [currentTime, setCurrentTime] = useState(player.currentTime);
+  const [duration, setDuration] = useState(player.duration);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const playingSubscription = player.addListener("playingChange", ({ isPlaying }) => setPlaying(isPlaying));
+    const timeSubscription = player.addListener("timeUpdate", ({ currentTime: nextTime }) => setCurrentTime(nextTime));
+    const statusSubscription = player.addListener("statusChange", ({ status, error: playerError }) => {
+      setDuration(Number.isFinite(player.duration) ? player.duration : 0);
+      setError(status === "error" ? playerError?.message ?? "This recording could not be played." : null);
+    });
+    return () => {
+      playingSubscription.remove();
+      timeSubscription.remove();
+      statusSubscription.remove();
+    };
+  }, [player]);
+
+  const togglePlayback = useCallback(() => {
+    if (playing) player.pause();
+    else player.play();
+  }, [player, playing]);
+
+  const seek = useCallback((locationX: number) => {
+    const safeDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
+    const ratio = Math.max(0, Math.min(1, locationX / Math.max(1, timelineWidthRef.current)));
+    const nextTime = ratio * safeDuration;
+    player.currentTime = nextTime;
+    setCurrentTime(nextTime);
+  }, [duration, player]);
+
+  const onTimelineLayout = (event: LayoutChangeEvent) => {
+    timelineWidthRef.current = Math.max(1, event.nativeEvent.layout.width);
+  };
+  const safeDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
+  const progress = safeDuration > 0 ? Math.max(0, Math.min(1, currentTime / safeDuration)) : 0;
+
+  return (
+    <View style={{ overflow: "hidden", aspectRatio: 16 / 10, borderRadius: radii.lg, borderCurve: "continuous", borderWidth: 1, borderColor: "#3A3A3A", backgroundColor: colors.cameraBlack }}>
+      <VideoView
+        accessibilityLabel="Recorded set preview"
+        contentFit="contain"
+        fullscreenOptions={{ enable: true }}
+        nativeControls={false}
+        player={player}
+        ref={videoRef}
+        style={{ width: "100%", height: "100%", backgroundColor: colors.cameraBlack }}
+      />
+
+      {!playing && !error ? (
+        <Pressable
+          accessibilityLabel="Play recording preview"
+          accessibilityRole="button"
+          onPress={togglePlayback}
+          style={{ position: "absolute", top: "50%", left: "50%", width: 72, height: 72, marginTop: -36, marginLeft: -36, alignItems: "center", justifyContent: "center", borderRadius: 36, backgroundColor: "rgba(8,8,8,0.88)" }}
+        >
+          <View style={{ marginLeft: 4 }}><CaptureReferenceIcon name="play" color={colors.text} size={34} /></View>
+        </Pressable>
+      ) : null}
+
+      {error ? (
+        <View style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.72)" }}>
+          <Text accessibilityRole="alert" selectable style={[typography.body, { color: colors.text, textAlign: "center" }]}>{error}</Text>
+        </View>
+      ) : null}
+
+      <View style={{ position: "absolute", left: 14, right: 14, bottom: 10, minHeight: 34, flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <Pressable
+          accessibilityLabel={playing ? "Pause recording" : "Play recording"}
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={togglePlayback}
+          style={{ width: 22, height: 30, alignItems: "center", justifyContent: "center" }}
+        >
+          <CaptureReferenceIcon name={playing ? "pause" : "play"} color={colors.text} size={17} />
+        </Pressable>
+        <Pressable
+          accessibilityLabel="Recording timeline"
+          accessibilityRole="adjustable"
+          accessibilityValue={{ min: 0, max: Math.round(safeDuration), now: Math.round(currentTime), text: `${formatPlaybackTime(currentTime)} of ${formatPlaybackTime(safeDuration)}` }}
+          onLayout={onTimelineLayout}
+          onPress={(event) => seek(event.nativeEvent.locationX)}
+          style={{ flex: 1, height: 30, justifyContent: "center" }}
+        >
+          <View style={{ height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.24)" }}>
+            <View style={{ width: `${progress * 100}%`, height: 4, borderRadius: 2, backgroundColor: colors.gold }} />
+            <View style={{ position: "absolute", top: -4, left: `${progress * 100}%`, width: 12, height: 12, marginLeft: -6, borderRadius: 6, backgroundColor: colors.gold }} />
+          </View>
+        </Pressable>
+        <Text selectable style={[typography.caption, { width: 34, color: colors.text, fontSize: 12, lineHeight: 16, textAlign: "right", fontVariant: ["tabular-nums"] }]}>
+          {formatPlaybackTime(currentTime)}
+        </Text>
+        <Pressable
+          accessibilityLabel="View recording fullscreen"
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={() => void videoRef.current?.enterFullscreen()}
+          style={{ width: 22, height: 30, alignItems: "center", justifyContent: "center" }}
+        >
+          <CaptureReferenceIcon name="fullscreen" color={colors.text} size={20} />
+        </Pressable>
+      </View>
+    </View>
+  );
+}

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports, import/first */
-import { fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render } from "@testing-library/react-native";
 import type { ReactElement } from "react";
-import { BackHandler, StyleSheet } from "react-native";
+import { BackHandler } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 const mockReplace = jest.fn();
@@ -69,12 +69,40 @@ jest.mock("@/screens/set-declaration", () => {
 });
 
 jest.mock("expo-video", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
   const { View: MockView } = require("react-native");
+  const MockVideoView = React.forwardRef((props: Record<string, unknown>, ref: React.ForwardedRef<unknown>) => {
+    React.useImperativeHandle(ref, () => ({ enterFullscreen: jest.fn() }));
+    return <MockView {...props} />;
+  });
+  MockVideoView.displayName = "MockVideoView";
   return {
-    useVideoPlayer: () => ({ loop: false, play: jest.fn() }),
-    VideoView: MockView,
+    useVideoPlayer: (_source: string, setup?: (player: Record<string, unknown>) => void) => {
+      const playerRef = React.useRef<Record<string, unknown> | null>(null);
+      if (!playerRef.current) {
+        const player = {
+          addListener: jest.fn(() => ({ remove: jest.fn() })),
+          currentTime: 0,
+          duration: 18,
+          loop: false,
+          pause: jest.fn(),
+          play: jest.fn(),
+          playing: false,
+          status: "readyToPlay",
+          timeUpdateEventInterval: 0,
+        };
+        setup?.(player);
+        playerRef.current = player;
+      }
+      return playerRef.current;
+    },
+    VideoView: MockVideoView,
   };
 });
+
+jest.mock("@/features/access/access-provider", () => ({
+  useAccess: () => ({ access: { remaining: 10 } }),
+}));
 
 jest.mock("@/features/analysis/exercise-catalog", () => ({
   searchExerciseCatalog: jest.fn(),
@@ -146,7 +174,9 @@ describe("post-recording route invariants", () => {
 
     expect(addEventListener).toHaveBeenCalledWith("hardwareBackPress", expect.any(Function));
     const handler = addEventListener.mock.calls[0]?.[1];
-    expect(handler?.()).toBe(true);
+    let handled = false;
+    await act(async () => { handled = handler?.() ?? false; });
+    expect(handled).toBe(true);
     expect(mockReplace).toHaveBeenCalledWith({
       pathname: "/recording-tips",
       params: {},
@@ -172,7 +202,7 @@ describe("post-recording route invariants", () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it("renders a separate styled clip review without a post-recording camera verdict", async () => {
+  it("renders the reference clip review with the authoritative projected quota", async () => {
     useCaptureStore.setState({
       phase: "recorded",
       recording,
@@ -185,25 +215,30 @@ describe("post-recording route invariants", () => {
     });
     const screen = await renderRoute(<AnalysisReviewRoute />);
 
-    expect(screen.getByText("FINAL CHECK")).toBeTruthy();
-    expect(screen.getByText("Is this recording ready?")).toBeTruthy();
-    expect(StyleSheet.flatten(screen.getByTestId("recording-review-title").props.style)).toMatchObject({
-      color: "#FFFFFF",
-      fontSize: 40,
-      lineHeight: 43,
-      letterSpacing: -1.4,
-    });
+    expect(screen.getByText("Review Recording")).toBeTruthy();
     expect(screen.getByLabelText("Recorded set preview")).toBeTruthy();
-    expect(screen.getByText("Submitting this recording will use 1 analysis. Make it count.")).toBeTruthy();
-    expect(screen.getByText("Choose an angle that preserves your form")).toBeTruthy();
-    expect(screen.getByText("Pick the side that shows your form clearly, then use the angle that keeps the exercise’s perspective true.")).toBeTruthy();
+    expect(screen.getByText("1 analysis will be used")).toBeTruthy();
+    expect(screen.getByText("9 remaining this month")).toBeTruthy();
+    expect(screen.getByText("Full body visible")).toBeTruthy();
+    expect(screen.getByText("Good lighting")).toBeTruthy();
+    expect(screen.queryByText("FINAL CHECK")).toBeNull();
     expect(screen.queryByText(/Formie can only analyze what the camera clearly shows/)).toBeNull();
     expect(screen.queryByText("set-details-screen")).toBeNull();
 
-    await fireEvent.press(screen.getByLabelText("Use This Recording"));
+    await fireEvent.press(screen.getByLabelText("Use Recording"));
 
     expect(mockReplace).toHaveBeenCalledWith("/analysis/set-details");
     expect(useCaptureStore.getState().phase).toBe("recorded");
+  });
+
+  it("uses the visible review back control as the same discard-and-retake action", async () => {
+    useCaptureStore.setState({ phase: "recorded", recording });
+    const screen = await renderRoute(<AnalysisReviewRoute />);
+
+    await fireEvent.press(screen.getByLabelText("Go back from Review Recording"));
+
+    expect(useCaptureStore.getState().recording).toBeNull();
+    expect(mockReplace).toHaveBeenCalledWith({ pathname: "/recording-tips", params: {} });
   });
 
   it("renders Set Details on its own route without duplicating clip review", async () => {
@@ -257,7 +292,7 @@ describe("post-recording route invariants", () => {
 
     const screen = await renderRoute(<AnalysisReviewRoute />);
 
-    expect(screen.getByText("Is this recording ready?")).toBeTruthy();
+    expect(screen.getByText("Review Recording")).toBeTruthy();
     expect(screen.queryByText("set-details-screen")).toBeNull();
   });
 });

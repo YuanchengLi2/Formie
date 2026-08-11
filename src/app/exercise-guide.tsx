@@ -86,6 +86,7 @@ export default function ExerciseGuideRoute() {
       guide={guide}
       loading={loading}
       error={error}
+      onBack={() => router.back()}
       onRetry={() => void loadGuide(true)}
       onContinue={() => {
         if (flow === "review") {
@@ -96,13 +97,13 @@ export default function ExerciseGuideRoute() {
           analysisUploadCoordinator.reset();
           dispatch({ type: "discard_recording" });
           router.replace({
-            pathname: "/recording-tips",
+            pathname: "/camera",
             params: previousSessionId ? { previousSessionId } : {},
           });
           return;
         }
         router.replace({
-          pathname: "/recording-tips",
+          pathname: "/camera",
           params: previousSessionId ? { previousSessionId } : {},
         });
       }}
