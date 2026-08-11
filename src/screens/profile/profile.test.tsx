@@ -7,8 +7,8 @@ describe("ProfileScreen", () => {
     const screen = await render(<ProfileScreen displayName="Yuan" />);
     expect(screen.getByText("Yuan")).toBeTruthy();
     expect(screen.queryByText("@yuan_lifts")).toBeNull();
-    expect(screen.getByText("Capture")).toBeTruthy();
-    expect(screen.getByText("Get Help")).toBeTruthy();
+    expect(screen.getByText("Preferences")).toBeTruthy();
+    expect(screen.getByText("Help & Support")).toBeTruthy();
     expect(screen.queryByText("Premium support")).toBeNull();
     expect(screen.queryByText("Send Feedback")).toBeNull();
     expect(screen.queryByText("Saved on this device")).toBeNull();
@@ -27,27 +27,29 @@ describe("ProfileScreen", () => {
     expect(screen.queryByText(/Cancel Subscription|Resume Subscription|Resubscribe/i)).toBeNull();
   });
 
-  it("stages athlete and capture edits until Apply Settings", async () => {
+  it("edits the name in a focused modal and saves preferences immediately", async () => {
     const onSaveProfile = jest.fn().mockResolvedValue(undefined);
     const onSaveCapturePreferences = jest.fn().mockResolvedValue(undefined);
-    const screen = await render(<ProfileScreen displayName="Yuan" capturePreferences={{ countdownSeconds: 10, hapticsEnabled: true }} onSaveProfile={onSaveProfile} onSaveCapturePreferences={onSaveCapturePreferences} />);
+    const screen = await render(<ProfileScreen displayName="Yuan" capturePreferences={{ countdownSeconds: 10, recordingVibrationEnabled: true, interactionHapticsEnabled: true }} onSaveProfile={onSaveProfile} onSaveCapturePreferences={onSaveCapturePreferences} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Edit account" }));
     await fireEvent.changeText(screen.getByLabelText("Display name"), "Yuan Cheng");
-    await fireEvent.press(screen.getByText("15 sec"));
-    await fireEvent(screen.getByLabelText("Start haptics"), "valueChange", false);
-    expect(onSaveProfile).not.toHaveBeenCalled();
-    await fireEvent.press(screen.getByText("Save Changes"));
+    await fireEvent.press(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(onSaveProfile).toHaveBeenCalledWith({ displayName: "Yuan Cheng" }));
-    expect(onSaveCapturePreferences).toHaveBeenCalledWith({ countdownSeconds: 15, hapticsEnabled: false });
+    await fireEvent.press(screen.getByText("15s"));
+    await fireEvent(screen.getByLabelText("Vibrate on record"), "valueChange", false);
+    await waitFor(() => expect(onSaveCapturePreferences).toHaveBeenLastCalledWith({ countdownSeconds: 15, recordingVibrationEnabled: false, interactionHapticsEnabled: true }));
+    expect(screen.queryByText("Save Changes")).toBeNull();
   });
 
   it("keeps apply retryable and logout available", async () => {
     const onSaveProfile = jest.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue(undefined);
     const onLogOut = jest.fn().mockResolvedValue(undefined);
     const screen = await render(<ProfileScreen onSaveProfile={onSaveProfile} onLogOut={onLogOut} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Edit account" }));
     await fireEvent.changeText(screen.getByLabelText("Display name"), "Formie Athlete Updated");
-    await fireEvent.press(screen.getByText("Save Changes"));
-    await waitFor(() => expect(screen.getByText("Settings could not be applied. Try again.")).toBeTruthy());
-    await fireEvent.press(screen.getByText("Save Changes"));
+    await fireEvent.press(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(screen.getByText("Your display name could not be saved. Try again.")).toBeTruthy());
+    await fireEvent.press(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => expect(onSaveProfile).toHaveBeenCalledTimes(2));
     await fireEvent.press(screen.getByRole("button", { name: "Log Out" }));
     expect(onLogOut).toHaveBeenCalledTimes(1);
@@ -57,7 +59,7 @@ describe("ProfileScreen", () => {
     const onOpenUrl = jest.fn().mockResolvedValue(undefined);
     const onSendFeedback = jest.fn();
     const screen = await render(<ProfileScreen termsUrl="https://example.com/terms" privacyUrl="https://example.com/privacy" retentionUrl="https://example.com/retention" onOpenUrl={onOpenUrl} onSendFeedback={onSendFeedback} />);
-    await fireEvent.press(screen.getByText("Get Help"));
+    await fireEvent.press(screen.getByText("Help & Support"));
     await fireEvent.press(screen.getByText("Terms of Use"));
     await fireEvent.press(screen.getByText("Privacy Policy"));
     await fireEvent.press(screen.getByText("Retention Policy"));
@@ -69,7 +71,7 @@ describe("ProfileScreen", () => {
 
   it("keeps the subscription chevron aligned with the plan title", async () => {
     const screen = await render(<ProfileScreen subscription={{ plan: "Formie Monthly", stateLabel: "Active" }} />);
-    expect(screen.getByTestId("subscription-chevron").props.style).toMatchObject({ alignSelf: "flex-start" });
+    expect(screen.getByTestId("subscription-chevron").props.style).toEqual(expect.arrayContaining([expect.objectContaining({ alignSelf: "center" })]));
   });
 
   it("shows grouped identity, subscription, and development Test Store lifecycle controls", async () => {
@@ -100,5 +102,19 @@ describe("ProfileScreen", () => {
     await fireEvent.press(screen.getByLabelText("Apply remaining analyses"));
     await waitFor(() => expect(onSetTestRemaining).toHaveBeenCalledWith(5));
     expect(screen.getByText("Start 20-minute Period")).toBeTruthy();
+  });
+
+  it("shows only the analysis balance control for an Apple sandbox subscription", async () => {
+    const onSetTestRemaining = jest.fn().mockResolvedValue(undefined);
+    const screen = await render(<ProfileScreen subscription={{ plan: "Formie Monthly", stateLabel: "Active" }} testRemaining={9} showAnalysisBalanceControl onSetTestRemaining={onSetTestRemaining} />);
+    expect(screen.getByText("Analysis balance")).toBeTruthy();
+    expect(screen.getByText("Analyses remaining: 9")).toBeTruthy();
+    const rendered = JSON.stringify(screen.toJSON());
+    expect(rendered.indexOf("Analysis balance")).toBeLessThan(rendered.indexOf("Preferences"));
+    expect(screen.queryByText("Test Store lifecycle")).toBeNull();
+    expect(screen.queryByText("Renew Now")).toBeNull();
+    await fireEvent.press(screen.getByLabelText("Decrease analyses remaining"));
+    await fireEvent.press(screen.getByLabelText("Apply remaining analyses"));
+    await waitFor(() => expect(onSetTestRemaining).toHaveBeenCalledWith(8));
   });
 });

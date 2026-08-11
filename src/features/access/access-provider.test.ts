@@ -1,4 +1,4 @@
-import { accessBoundaryRefreshDelays, accessExpiryRefreshDelay, mergeAccessMutation, preserveConfirmedAccessDuringRenewal, renewalReconciliationDelays, shouldCommitAccessRefresh, shouldReconcileProviderOnResume } from "./access-provider";
+import { accessBoundaryRefreshDelays, accessExpiryRefreshDelay, billingFallbackRefreshInterval, mergeAccessMutation, preserveConfirmedAccessDuringRenewal, renewalReconciliationDelays, shouldCommitAccessRefresh, shouldReconcileProviderOnResume } from "./access-provider";
 import { unknownAccess } from "./types";
 
 describe("access status", () => {
@@ -30,6 +30,14 @@ describe("access status", () => {
 
   it("uses bounded renewal reconciliation polling", () => {
     expect(renewalReconciliationDelays()).toEqual([2_000, 5_000, 10_000, 15_000, 30_000, 30_000]);
+  });
+
+  it("uses provider-aware fallback polling only while a billing screen is visible", () => {
+    expect(billingFallbackRefreshInterval({ ...unknownAccess, sandbox: true, lifecycleState: "active_renewing" }, true, true)).toBe(5_000);
+    expect(billingFallbackRefreshInterval({ ...unknownAccess, sandbox: false, lifecycleState: "renewal_pending" }, true, true)).toBe(5_000);
+    expect(billingFallbackRefreshInterval({ ...unknownAccess, status: "active", sandbox: false, lifecycleState: "active_renewing" }, true, true)).toBe(30_000);
+    expect(billingFallbackRefreshInterval(unknownAccess, false, true)).toBeNull();
+    expect(billingFallbackRefreshInterval(unknownAccess, true, false)).toBeNull();
   });
 
   it("keeps the last confirmed quota while renewal is propagating", () => {

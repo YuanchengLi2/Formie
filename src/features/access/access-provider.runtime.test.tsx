@@ -7,8 +7,12 @@ const mockChannel = {
   on: jest.fn(),
   subscribe: jest.fn(),
 };
+let realtimeStatusListener: ((status: string) => void) | null = null;
 mockChannel.on.mockReturnValue(mockChannel);
-mockChannel.subscribe.mockReturnValue(mockChannel);
+mockChannel.subscribe.mockImplementation((listener?: (status: string) => void) => {
+  realtimeStatusListener = listener ?? null;
+  return mockChannel;
+});
 const mockRemoveChannel = jest.fn();
 const mockAuth = {
   phase: "authenticated",
@@ -38,6 +42,7 @@ function Probe() {
 describe("AccessProvider runtime lifecycle", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    realtimeStatusListener = null;
     mockRpc.mockResolvedValue({
       data: {
         status: "active",
@@ -50,6 +55,16 @@ describe("AccessProvider runtime lifecycle", () => {
       },
       error: null,
     });
+  });
+
+  it("refreshes immediately when Realtime subscribes or reconnects", async () => {
+    await render(<AccessProvider><Probe /></AccessProvider>);
+    expect(realtimeStatusListener).not.toBeNull();
+    await act(async () => {
+      realtimeStatusListener?.("SUBSCRIBED");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    expect(mockRpc).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the resolved access snapshot ready instead of restarting the load cycle", async () => {

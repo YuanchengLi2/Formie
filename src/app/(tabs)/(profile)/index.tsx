@@ -9,8 +9,8 @@ import { getLegalLinks } from "@/features/auth/legal-config";
 import { useOnboarding } from "@/features/onboarding/onboarding-store";
 import { useCapturePreferences } from "@/features/capture/capture-preferences";
 import { useProfile } from "@/features/profile/profile-provider";
-import { useAccess } from "@/features/access/access-provider";
-import { formatSubscriptionStateLabel } from "@/features/access/account-access";
+import { useAccess, useBillingSurfaceRefresh } from "@/features/access/access-provider";
+import { createSubscriptionPresentation } from "@/features/billing/subscription-management-presentation";
 import { runSubscriptionTestControl, setSubscriptionTestRemaining } from "@/features/billing/subscription-test-controls";
 
 export default function ProfileRoute() {
@@ -23,6 +23,8 @@ export default function ProfileRoute() {
   const capture = useCapturePreferences((state) => state.preferences);
   const hydrateCapture = useCapturePreferences((state) => state.hydrate);
   const updateCapture = useCapturePreferences((state) => state.update);
+  useBillingSurfaceRefresh();
+  const subscriptionPresentation = createSubscriptionPresentation(access.access);
   const legal = (() => {
     try {
       return getLegalLinks();
@@ -40,8 +42,10 @@ export default function ProfileRoute() {
       email={auth.user?.email ?? null}
       subscription={{
         plan: access.access.planCode === "annual" ? "Formie Annual" : "Formie Monthly",
-        stateLabel: formatSubscriptionStateLabel(access.access),
+        stateLabel: `${subscriptionPresentation.badgeLabel} · Automatic renewal ${access.access.willRenew ? "on" : access.access.lifecycleState === "renewal_pending" ? "checking" : "off"}`,
+        access: { lifecycleState: access.access.lifecycleState, willRenew: access.access.willRenew, paidThrough: access.access.paidThrough, sandbox: access.access.sandbox },
       }}
+      onSubscriptionBoundary={() => void access.reconcile()}
       capturePreferences={capture}
       onSaveProfile={async (nextProfile) => {
         await profileState.saveProfile(nextProfile);
@@ -56,6 +60,7 @@ export default function ProfileRoute() {
         router.push("/account/manage-subscription" as Href);
       }}
       showTestControls={access.access.sandbox && access.access.store === "test_store"}
+      showAnalysisBalanceControl={access.access.sandbox}
       testRemaining={access.access.remaining}
       onTestControl={async (action) => {
         await runSubscriptionTestControl(action);

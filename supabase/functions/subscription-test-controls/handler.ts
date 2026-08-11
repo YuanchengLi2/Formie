@@ -32,7 +32,9 @@ export async function subscriptionTestControlsHandler(request: Request, dependen
   try {
     const userId = await dependencies.authenticate(request);
     const current = await dependencies.loadCurrent(userId);
-    if (!current.sandbox || current.store !== "test_store") return json({ code: "TEST_STORE_REQUIRED" }, 403);
+    const mayEditSandboxBalance = command.action === "set_remaining" && current.sandbox;
+    const maySimulateLifecycle = current.sandbox && current.store === "test_store";
+    if (!mayEditSandboxBalance && !maySimulateLifecycle) return json({ code: "TEST_STORE_REQUIRED" }, 403);
     return json(await dependencies.apply(userId, command), 200);
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") return json({ code: "UNAUTHORIZED" }, 401);

@@ -36,7 +36,7 @@ describe("account access screens", () => {
     expect(onCreateAccount).toHaveBeenCalledTimes(1);
   });
 
-  it("does not require onboarding consent again for returning login", async () => {
+  it("keeps Apple enabled while Google and email are blurred, inert coming-soon actions", async () => {
     const onOAuth = jest.fn();
     const onEmail = jest.fn();
     const screen = await render(withSafeArea(<SocialLoginScreen onOAuth={onOAuth} onEmail={onEmail} onCreateAccount={jest.fn()} busyProvider={null} />));
@@ -47,10 +47,15 @@ describe("account access screens", () => {
     expect(onOAuth).toHaveBeenCalledWith("apple");
     expect(screen.queryByLabelText("Agree to the Terms of Use")).toBeNull();
     expect(screen.queryByLabelText("Acknowledge the Privacy Policy")).toBeNull();
-    await fireEvent.press(screen.getByText("Sign in with Google"));
-    await fireEvent.press(screen.getByText("Sign in with Email"));
-    expect(onOAuth).toHaveBeenCalledWith("google");
-    expect(onEmail).toHaveBeenCalledTimes(1);
+    const google = screen.getByLabelText("Sign in with Google — Coming soon");
+    const email = screen.getByLabelText("Sign in with Email — Coming soon");
+    expect(google.props.accessibilityState.disabled).toBe(true);
+    expect(email.props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(google);
+    await fireEvent.press(email);
+    expect(onOAuth).not.toHaveBeenCalledWith("google");
+    expect(onEmail).not.toHaveBeenCalled();
+    expect(screen.getAllByText("Coming soon")).toHaveLength(2);
   });
 
   it("matches the approved white save-progress reference", async () => {

@@ -46,6 +46,19 @@ function finite(value: unknown, name: string): number {
   return value;
 }
 
+function normalizedObservation(value: string): string {
+  return value.toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function substantiveText(value: unknown, name: string): string {
+  const parsed = text(value, name);
+  const words = normalizedObservation(parsed).split(" ").filter(Boolean);
+  const generic = /^(?:visible\s+)?(?:problem|issue|form|technique|movement)(?:\s+number)?\b/i.test(parsed)
+    || /\b(?:problem|issue)\s+(?:is\s+)?visible(?:\s+in\s+the\s+(?:video|recording))?\.?$/i.test(parsed);
+  if (words.length < 4 || generic) throw new Error(`${name} must be substantive visible evidence`);
+  return parsed;
+}
+
 function declarationContext(declaration: SetDeclaration): string {
   const amount = declaration.amount.kind === "reps"
     ? `${declaration.amount.value} repetitions${declaration.amount.countScope === "per_side" ? " per side" : " total"}`
@@ -64,7 +77,7 @@ function declarationContext(declaration: SetDeclaration): string {
 }
 
 export function buildProblemFinderPrompt(durationMs: number, declaration: SetDeclaration): string {
-  return `Watch the complete ${durationMs} ms exercise recording. Your only job is to identify visible problems in the declared exercise. Return at least four distinct genuine visible problems. Four is a minimum, never a stopping target. Continue beyond four when more genuine problems are visible. Do not stop after the first obvious problem; rank all findings by importance. Do not combine distinct problems. Do not omit a visible problem because it is subtle or intermittent; use appropriate confidence. Every problem must be supported by visible evidence with timestamps. Return unable only when reliable problem identification is impossible. The declaration is identification context, not a target or a claim about what occurred; do not judge whether its amount, load, side, styles, or note was followed: ${declarationContext(declaration)}. Return only matching JSON.`;
+  return `Watch the complete ${durationMs} ms exercise recording from beginning, middle, and end. Your only job is to identify visible problems in the declared exercise. Inspect the movement broadly and exercise-specifically: equipment setup and body-to-equipment contact; posture and joint alignment; grip and other contact points; movement and equipment path; usable range and endpoints; tempo, control, and momentum; balance, support, stability, and left-right symmetry; changes across repetitions; and any other visible issue relevant to this exercise. These are inspection directions, not required output categories. Report only distinct problems that are genuinely visible; do not invent one merely to cover a category. Return at least four distinct genuine visible problems. Four is a minimum, never a stopping target. Continue beyond four when more genuine problems are visible. Do not stop after the first obvious problem; rank all findings by importance. Do not combine distinct problems or restate the same observation with different wording. Do not omit a visible problem because it is subtle or intermittent; use appropriate confidence. Every problem must state a specific body, equipment, position, path, or timing relationship and must be supported by specific visible evidence with timestamps. If fewer than four genuine distinct problems can be supported, return unable with insufficient_visual_evidence rather than padding the result with vague, duplicated, or invented issues. Return unable for unreadable or out-of-frame movement as appropriate. The declaration is identification context, not a target or a claim about what occurred; do not judge whether its amount, load, side, styles, or note was followed: ${declarationContext(declaration)}. Return only matching JSON.`;
 }
 
 const problemSchema = {
@@ -138,6 +151,7 @@ export function parseProblemFinderResult(value: unknown, durationMs: number): Pr
   if (result.status !== "complete" || result.unableReason !== null) throw new Error("complete results require a null unableReason");
   if (result.problems.length < 4) throw new Error("complete results require at least four problems");
   const ids = new Set<string>();
+  const observations = new Set<string>();
   const problems = result.problems.map((raw, problemIndex) => {
     const problem = record(raw, `problems[${problemIndex}]`);
     exactKeys(problem, ["id", "observation", "evidence"], `problems[${problemIndex}]`);
@@ -154,9 +168,13 @@ export function parseProblemFinderResult(value: unknown, durationMs: number): Pr
       const confidence = finite(moment.confidence, "confidence");
       if (!Number.isInteger(startMs) || !Number.isInteger(peakMs) || !Number.isInteger(endMs) || startMs < 0 || startMs > peakMs || peakMs > endMs || endMs > durationMs) throw new Error("problem evidence timestamps are invalid");
       if (confidence < 0 || confidence > 1) throw new Error("problem evidence confidence is invalid");
-      return { startMs, peakMs, endMs, visualEvidence: text(moment.visualEvidence, "visualEvidence"), confidence };
+      return { startMs, peakMs, endMs, visualEvidence: substantiveText(moment.visualEvidence, "visualEvidence"), confidence };
     });
-    return { id, observation: text(problem.observation, `problems[${problemIndex}].observation`), evidence };
+    const observation = substantiveText(problem.observation, `problems[${problemIndex}].observation`);
+    const normalized = normalizedObservation(observation);
+    if (observations.has(normalized)) throw new Error(`duplicate problem observation: ${observation}`);
+    observations.add(normalized);
+    return { id, observation, evidence };
   });
   return { status: "complete", unableReason: null, problems };
 }

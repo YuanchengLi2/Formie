@@ -1,4 +1,6 @@
+import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
+import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { SocialProvider } from "@/features/auth/auth-service";
@@ -13,6 +15,7 @@ export function SocialProviderButtons({ onOAuth, onEmail, mode, busyProvider = n
   busyProvider?: SocialProvider | null;
   disabled?: boolean;
 }) {
+  void onEmail;
   const unavailable = disabled || busyProvider !== null;
   const appleLabel = "Sign in with Apple";
   const googleLabel = "Sign in with Google";
@@ -22,14 +25,22 @@ export function SocialProviderButtons({ onOAuth, onEmail, mode, busyProvider = n
       <Image source={appleIcon} contentFit="contain" accessibilityLabel="Apple" style={[styles.icon, styles.appleIcon]} />
       <Text style={styles.appleText}>{busyProvider === "apple" ? "Connecting to Apple…" : appleLabel}</Text>
     </Pressable>
-    <Pressable testID="provider-google" accessibilityLabel={googleLabel} accessibilityRole="button" accessibilityState={{ disabled: unavailable }} disabled={unavailable} onPress={() => onOAuth("google")} style={({ pressed }) => [styles.provider, styles.google, (pressed || unavailable) && styles.pressed]}>
+    <UnavailableProvider testID="provider-google" label={googleLabel}>
       <Image source={googleIcon} contentFit="contain" accessibilityLabel="Google" style={styles.icon} />
-      <Text style={styles.googleText}>{busyProvider === "google" ? "Connecting to Google…" : googleLabel}</Text>
-    </Pressable>
-    <Pressable testID="provider-email" accessibilityLabel={emailLabel} accessibilityRole="button" accessibilityState={{ disabled: unavailable }} disabled={unavailable} onPress={onEmail} style={({ pressed }) => [styles.provider, styles.email, (pressed || unavailable) && styles.pressed]}>
+      <Text style={styles.googleText}>{googleLabel}</Text>
+    </UnavailableProvider>
+    <UnavailableProvider testID="provider-email" label={emailLabel}>
       <View accessibilityElementsHidden style={styles.emailIcon}><View style={styles.emailFlapLeft} /><View style={styles.emailFlapRight} /></View>
       <Text style={styles.emailText}>{emailLabel}</Text>
-    </Pressable>
+    </UnavailableProvider>
+  </View>;
+}
+
+function UnavailableProvider({ testID, label, children }: { testID: string; label: string; children: ReactNode }) {
+  return <View style={styles.unavailableWrap}>
+    <Pressable testID={testID} accessibilityLabel={`${label} — Coming soon`} accessibilityRole="button" accessibilityState={{ disabled: true }} disabled style={[styles.provider, styles.unavailableProvider]}>{children}</Pressable>
+    <BlurView pointerEvents="none" intensity={14} tint="dark" style={StyleSheet.absoluteFill} />
+    <View pointerEvents="none" style={styles.comingSoonBadge}><Text style={styles.comingSoonText}>Coming soon</Text></View>
   </View>;
 }
 
@@ -37,8 +48,7 @@ const styles = StyleSheet.create({
   actions: { gap: 22 },
   provider: { minHeight: 58, borderRadius: 29, borderCurve: "continuous", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 18, backgroundColor: "#111110", borderWidth: 1, borderColor: "#E5AD32" },
   apple: { backgroundColor: "#E5AD32", borderColor: "#E5AD32" },
-  google: { backgroundColor: "#111110" },
-  email: { backgroundColor: "#111110" },
+  unavailableProvider: { backgroundColor: "#111110", borderColor: "#E5AD32" },
   icon: { width: 22, height: 22 },
   appleIcon: { tintColor: "#080808" },
   appleText: { color: "#080808", fontSize: 16, fontWeight: "700" },
@@ -48,4 +58,7 @@ const styles = StyleSheet.create({
   emailFlapLeft: { position: "absolute", top: 2, left: 0, width: 15, height: 1.8, backgroundColor: "#E5AD32", transform: [{ rotate: "32deg" }] },
   emailFlapRight: { position: "absolute", top: 2, right: 0, width: 15, height: 1.8, backgroundColor: "#E5AD32", transform: [{ rotate: "-32deg" }] },
   pressed: { opacity: 0.55 },
+  unavailableWrap: { position: "relative", minHeight: 58, overflow: "hidden", borderRadius: 29 },
+  comingSoonBadge: { position: "absolute", right: 12, top: 8, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 12, backgroundColor: "rgba(229,173,50,0.95)" },
+  comingSoonText: { color: "#080808", fontSize: 10, lineHeight: 12, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.4 },
 });

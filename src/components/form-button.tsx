@@ -4,6 +4,7 @@ import { Pressable, Text, type StyleProp, type ViewStyle } from "react-native";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { useCapturePreferences } from "@/features/capture/capture-preferences";
 
 type FormButtonProps = {
   label: string;
@@ -23,7 +24,7 @@ export function FormButton({
   testID,
 }: FormButtonProps) {
   const handlePress = () => {
-    if (process.env.EXPO_OS === "ios") {
+    if (process.env.EXPO_OS === "ios" && useCapturePreferences.getState().preferences.interactionHapticsEnabled) {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     onPress();

@@ -57,7 +57,7 @@ async function withTimeout<T>(operation: Promise<T>, milliseconds = STORE_OPERAT
 
 export function BillingProvider({ children }: PropsWithChildren) {
   const auth = useAuth();
-  const { refresh: refreshAccess, access: serverAccess } = useAccess();
+  const { refresh: refreshAccess, reconcileUntilChanged: reconcileAccessUntilChanged, access: serverAccess } = useAccess();
   const accessStatus = serverAccess.status;
   const onboarding = useOnboarding();
   const onboardingStatus = onboarding.status;
@@ -216,6 +216,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
   const purchase = useCallback(async (planCode: BillingPlanCode = "monthly"): Promise<PurchaseOutcome> => {
     const selectedPackage = selectBillingPlans(offering?.packages ?? [])[planCode];
     if (!selectedPackage) return "failed";
+    if (purchaseOperation.current) return "sync_required";
     if (state === "purchasing" || state === "reconciling" || state === "sync_required") return "sync_required";
     const operationId = createPurchaseOperationId();
     purchaseOperation.current = operationId;
@@ -260,6 +261,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
   }, [auth.phase, configure, finishReconciliation, offering?.packages, serverAccess.productIdentifier, state, syncAccess]);
 
   const retryPurchaseSync = useCallback(async (): Promise<boolean> => {
+    if (purchaseOperation.current) return false;
     if (state === "purchasing" || state === "reconciling") return false;
     const operationId = createPurchaseOperationId();
     purchaseOperation.current = operationId;
@@ -331,6 +333,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
         configure,
         present: purchasesClient.showManageSubscriptions,
         reconcile: async () => {
+          await reconcileAccessUntilChanged();
           const reconciliation = await syncAccess();
           finishPassiveReconciliation(reconciliation.value, Boolean(offering));
         },
@@ -339,7 +342,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
       setError(friendlyPurchaseError(failure) || "Subscription management could not be opened. Try again from Settings.");
       throw failure;
     }
-  }, [configure, finishPassiveReconciliation, offering, syncAccess]);
+  }, [configure, finishPassiveReconciliation, offering, reconcileAccessUntilChanged, syncAccess]);
 
   const logOut = useCallback(async () => {
     reconciliationGeneration.current += 1;

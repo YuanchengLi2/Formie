@@ -63,12 +63,13 @@ describe("CameraScreen capture lifecycle", () => {
       type: "exercise_customized",
       canonicalName: "Goblet Squat",
     });
-    useCapturePreferences.setState({ preferences: { countdownSeconds: 10, hapticsEnabled: true }, hydrated: true });
+    useCapturePreferences.setState({ preferences: { countdownSeconds: 10, recordingVibrationEnabled: true, interactionHapticsEnabled: true }, hydrated: true });
+    (Haptics.notificationAsync as jest.Mock).mockClear();
   });
 
   it("starts from the selected countdown with a haptic-only cue", async () => {
     jest.useFakeTimers();
-    useCapturePreferences.setState({ preferences: { countdownSeconds: 5, hapticsEnabled: true }, hydrated: true });
+    useCapturePreferences.setState({ preferences: { countdownSeconds: 5, recordingVibrationEnabled: true, interactionHapticsEnabled: true }, hydrated: true });
     const screen = await render(<CameraScreen />);
 
     await fireEvent.press(screen.getByLabelText("Start countdown"));
@@ -78,6 +79,15 @@ describe("CameraScreen capture lifecycle", () => {
     });
 
     expect(Haptics.notificationAsync).toHaveBeenCalledWith("success");
+  });
+
+  it("can disable only the recording-start vibration", async () => {
+    jest.useFakeTimers();
+    useCapturePreferences.setState({ preferences: { countdownSeconds: 5, recordingVibrationEnabled: false, interactionHapticsEnabled: true }, hydrated: true });
+    const screen = await render(<CameraScreen />);
+    await fireEvent.press(screen.getByLabelText("Start countdown"));
+    await act(async () => { jest.advanceTimersByTime(5_000); });
+    expect(Haptics.notificationAsync).not.toHaveBeenCalled();
   });
 
   it("abandons the prepared upload target when the camera closes", async () => {

@@ -1,6 +1,6 @@
 import { createAdminClient } from "../_shared/auth.ts";
 import { fetchRevenueCatSubscriber } from "../_shared/revenuecat.ts";
-import { applyRevenueCatLifecycleEvent, persistEntitlementLedger } from "../_shared/entitlement-ledger.ts";
+import { applyRevenueCatLifecycleEvent, expireTransferredEntitlement, persistEntitlementLedger } from "../_shared/entitlement-ledger.ts";
 import { revenueCatWebhookHandler } from "./handler.ts";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -32,10 +32,21 @@ Deno.serve(async (request) => {
       if (error) throw error;
       return data?.user_id ? String(data.user_id) : null;
     },
+    expireTransferredUser: (userId, event) => expireTransferredEntitlement(admin, userId, event),
     applyEvent: (userId, event) => applyRevenueCatLifecycleEvent(admin, userId, event),
     loadSubscriber: (userId) => fetchRevenueCatSubscriber(userId),
-    saveSubscriber: async (userId, subscriber) => {
-      await persistEntitlementLedger(admin, userId, subscriber, Deno.env.get("REVENUECAT_ENTITLEMENT_ID") ?? "formie_pro", new Date(), true);
+    saveSubscriber: async (userId, subscriber, event) => {
+      await persistEntitlementLedger(admin, userId, subscriber, Deno.env.get("REVENUECAT_ENTITLEMENT_ID") ?? "formie_pro", new Date(), {
+        authoritativeEvent: {
+          id: event.id,
+          eventAt: event.event_timestamp ?? null,
+          originalTransactionId: event.original_transaction_id ?? null,
+          transactionId: event.transaction_id ?? null,
+          store: event.store?.toLowerCase() ?? null,
+          purchasedAt: event.purchased_at ?? null,
+          expiresAt: event.expiration_at ?? null,
+        },
+      });
     },
     completeEvent: async (eventId) => {
       const { error } = await admin.from("revenuecat_webhook_events").update({ status: "completed", completed_at: new Date().toISOString(), last_error: null }).eq("event_id", eventId);

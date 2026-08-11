@@ -23,9 +23,14 @@ describe("v49 problem finder", () => {
     expect(prompt).toContain("not a target or a claim about what occurred");
     expect(prompt).toContain("do not judge whether");
     expect(prompt).toContain("Do not omit a visible problem because it is subtle");
-    expect(prompt.split(/\s+/).length).toBeLessThan(150);
+    expect(prompt).toContain("equipment setup and body-to-equipment contact");
+    expect(prompt).toContain("posture and joint alignment");
+    expect(prompt).toContain("movement and equipment path");
+    expect(prompt).toContain("beginning, middle, and end");
+    expect(prompt).toContain("inspection directions, not required output categories");
+    expect(prompt).toContain("return unable with insufficient_visual_evidence rather than padding");
+    expect(prompt.split(/\s+/).length).toBeLessThan(300);
     expect(prompt).not.toMatch(/small|familiar|acceptable|conservative|improvement counts/i);
-    expect(prompt).not.toMatch(/posture|path|range|tempo|balance|grip|muscle|score|strength|beginning|middle|end|rep count/i);
   });
 
   it("sends Gemini a four-item minimum only for complete results, with no maximum", () => {
@@ -37,13 +42,20 @@ describe("v49 problem finder", () => {
   });
 
   it.each([4, 5])("accepts %i grounded problems", (count) => {
+    const grounded = [
+      ["Torso lifts away from the support pad during the pull", "The chest separates from the support pad near the top."],
+      ["Right elbow travels higher than the left elbow near the top", "The right elbow finishes visibly above the left elbow."],
+      ["Dumbbells accelerate through the final third of the lowering phase", "The weights descend faster just before the arms straighten."],
+      ["Wrists bend inward as the handles approach the torso", "Both wrists lose their straight alignment beside the torso."],
+      ["Feet shift between repetitions and narrow the support base", "The right foot moves inward before the final repetition."],
+    ];
     const result = parseProblemFinderResult({
       status: "complete",
       unableReason: null,
       problems: Array.from({ length: count }, (_, index) => ({
         id: `problem-${index + 1}`,
-        observation: `Visible problem ${index + 1}`,
-        evidence: [{ startMs: 100, peakMs: 200, endMs: 300, visualEvidence: "The issue is visible.", confidence: 0.9 }],
+        observation: grounded[index][0],
+        evidence: [{ startMs: 100, peakMs: 200, endMs: 300, visualEvidence: grounded[index][1], confidence: 0.9 }],
       })),
     }, 1_000);
 
@@ -69,10 +81,40 @@ describe("v49 problem finder", () => {
       unableReason: null,
       problems: Array.from({ length: 4 }, () => ({
         id: "same-id",
-        observation: "Visible issue",
-        evidence: [{ startMs: 0, peakMs: 50, endMs: 100, visualEvidence: "Visible issue.", confidence: 0.8 }],
+        observation: "The right elbow rises above the left elbow at the top.",
+        evidence: [{ startMs: 0, peakMs: 50, endMs: 100, visualEvidence: "The right elbow finishes visibly above the left elbow.", confidence: 0.8 }],
       })),
     }, 1_000)).toThrow(/duplicate/i);
+  });
+
+  it("rejects duplicate observations even when the model changes their IDs and punctuation", () => {
+    const observations = [
+      "The right elbow rises above the left elbow at the top.",
+      "The right elbow rises above the left elbow at the top!",
+      "The torso lifts away from the support pad during the pull.",
+      "The wrists bend inward as the handles approach the torso.",
+    ];
+    expect(() => parseProblemFinderResult({
+      status: "complete",
+      unableReason: null,
+      problems: observations.map((observation, index) => ({
+        id: `problem-${index + 1}`,
+        observation,
+        evidence: [{ startMs: 100, peakMs: 200, endMs: 300, visualEvidence: `Visible body and equipment relationship for observation ${index + 1}.`, confidence: 0.9 }],
+      })),
+    }, 1_000)).toThrow(/duplicate problem observation/i);
+  });
+
+  it("rejects generic filler instead of counting it toward the four-problem minimum", () => {
+    expect(() => parseProblemFinderResult({
+      status: "complete",
+      unableReason: null,
+      problems: Array.from({ length: 4 }, (_, index) => ({
+        id: `problem-${index + 1}`,
+        observation: `Visible problem number ${index + 1}`,
+        evidence: [{ startMs: 100, peakMs: 200, endMs: 300, visualEvidence: "The issue is visible in the recording.", confidence: 0.9 }],
+      })),
+    }, 1_000)).toThrow(/substantive/i);
   });
 
   it("accepts an honest unable response with no problems", () => {

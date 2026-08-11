@@ -20,11 +20,19 @@ describe("capture preferences", () => {
   });
 
   it("persists only supported countdown and haptic settings", async () => {
-    await saveCapturePreferences({ countdownSeconds: 15, hapticsEnabled: false });
+    await saveCapturePreferences({ countdownSeconds: 15, recordingVibrationEnabled: false, interactionHapticsEnabled: true });
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
-      "form.capture-preferences.v1",
-      JSON.stringify({ countdownSeconds: 15, hapticsEnabled: false }),
+      "form.capture-preferences.v2",
+      JSON.stringify({ countdownSeconds: 15, recordingVibrationEnabled: false, interactionHapticsEnabled: true }),
     );
+  });
+
+  it("migrates the v1 haptics selection into both independent switches", async () => {
+    (SecureStore.getItemAsync as jest.Mock)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(JSON.stringify({ countdownSeconds: 5, hapticsEnabled: false }));
+    await expect(loadCapturePreferences()).resolves.toEqual({ countdownSeconds: 5, recordingVibrationEnabled: false, interactionHapticsEnabled: false });
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith("form.capture-preferences.v2", JSON.stringify({ countdownSeconds: 5, recordingVibrationEnabled: false, interactionHapticsEnabled: false }));
   });
 
   it("falls back when stored values are malformed", async () => {

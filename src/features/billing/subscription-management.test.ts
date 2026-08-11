@@ -2,8 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { subscriptionManagementCopy } from "@/features/billing/subscription-management";
+import { createSubscriptionPresentation } from "@/features/billing/subscription-management-presentation";
 
-const routeSource = readFileSync(resolve(__dirname, "../../app/account/manage-subscription.tsx"), "utf8");
+const routeSource = readFileSync(resolve(__dirname, "../../screens/subscription-management/index.tsx"), "utf8");
 
 describe("native subscription management copy", () => {
   it("distinguishes cancellation from renewal without changing the paid-through period", () => {
@@ -13,6 +14,22 @@ describe("native subscription management copy", () => {
 
   it("describes provider reconciliation at the renewal boundary", () => {
     expect(subscriptionManagementCopy("renewal_pending", "2026-08-11T02:34:50Z")).toMatchObject({ title: "Checking the next billing period" });
+  });
+});
+
+describe("shared subscription presentation", () => {
+  it.each([
+    ["active_renewing", "is on", "Active", false],
+    ["active_cancelled", "is off", "Canceled", false],
+    ["renewal_pending", "renewal", "Checking", false],
+    ["expired", "has ended", "Expired", true],
+    ["not_subscribed", "Formie Pro", "Available", true],
+  ] as const)("maps %s to stable screen geometry and lifecycle copy", (lifecycleState, accent, badge, showPurchase) => {
+    expect(createSubscriptionPresentation({ lifecycleState, willRenew: lifecycleState === "active_renewing", paidThrough: "2026-08-11T02:34:50Z", status: lifecycleState === "expired" || lifecycleState === "not_subscribed" ? "expired" : "active" })).toMatchObject({ headlineAccent: accent, badgeLabel: badge, showPurchase });
+  });
+
+  it("does not render explanatory hero copy below the renewal headline", () => {
+    expect(routeSource).not.toContain("presentation.heroDetail");
   });
 });
 

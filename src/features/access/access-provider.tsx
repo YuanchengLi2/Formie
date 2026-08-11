@@ -13,6 +13,10 @@ type AccessContextValue = {
   access: AccessStatus;
   error: string | null;
   refresh: () => Promise<AccessStatus>;
+  reconcile: () => Promise<AccessStatus>;
+  reconcileUntilChanged: () => Promise<AccessStatus>;
+  realtimeStatus: "disconnected" | "connecting" | "connected";
+  registerBillingSurface: () => () => void;
   reserve: (kind: "analysis" | "reanalysis", clientRequestId: string, sessionId?: string) => Promise<AnalysisReservation>;
   cancelReservation: (reservationId: string) => Promise<void>;
 };
@@ -36,6 +40,12 @@ export function accessBoundaryRefreshDelays(access: Pick<AccessStatus, "quotaRes
 
 export function renewalReconciliationDelays(): number[] {
   return [2_000, 5_000, 10_000, 15_000, 30_000, 30_000];
+}
+
+export function billingFallbackRefreshInterval(access: Pick<AccessStatus, "status" | "lifecycleState" | "sandbox">, visible: boolean, appActive: boolean): number | null {
+  if (!visible || !appActive) return null;
+  if (access.sandbox || access.lifecycleState === "renewal_pending") return 5_000;
+  return access.status === "active" ? 30_000 : 30_000;
 }
 
 export function mergeAccessMutation(access: AccessStatus, mutation: AccessMutation): AccessStatus {
@@ -63,6 +73,9 @@ export function AccessProvider({ children }: PropsWithChildren) {
   const [accessOwnerId, setAccessOwnerId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [renewalPending, setRenewalPending] = useState(false);
+  const [realtimeStatus, setRealtimeStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
+  const [billingSurfaceCount, setBillingSurfaceCount] = useState(0);
+  const [appActive, setAppActive] = useState(AppState.currentState === "active");
   const refreshDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentUserId = auth.phase === "authenticated" ? auth.user?.id ?? null : null;
   const identityRef = useRef<string | null>(currentUserId);
@@ -127,6 +140,16 @@ export function AccessProvider({ children }: PropsWithChildren) {
     return reconcileProvider((accessToken) => refreshProviderAccessUntilChanged(accessToken, baseline));
   }, [access, reconcileProvider]);
 
+  const registerBillingSurface = useCallback(() => {
+    let registered = true;
+    setBillingSurfaceCount((count) => count + 1);
+    return () => {
+      if (!registered) return;
+      registered = false;
+      setBillingSurfaceCount((count) => Math.max(0, count - 1));
+    };
+  }, []);
+
   const refreshOnResume = useCallback(async () => {
     if (!shouldReconcileProviderOnResume(access)) return refresh();
     try {
@@ -152,6 +175,7 @@ export function AccessProvider({ children }: PropsWithChildren) {
     setStatus("loading");
     void refresh().catch(() => undefined);
     const listener = AppState.addEventListener("change", (next) => {
+      setAppActive(next === "active");
       if (next === "active") void refreshOnResumeRef.current().catch(() => undefined);
     });
     const timer = setInterval(() => void refreshOnResumeRef.current().catch(() => undefined), 15 * 60 * 1000);
@@ -178,12 +202,30 @@ export function AccessProvider({ children }: PropsWithChildren) {
       .on("postgres_changes", { event: "*", schema: "public", table: "user_access_entitlements", filter: `user_id=eq.${currentUserId}` }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "analysis_credit_reservations", filter: `user_id=eq.${currentUserId}` }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "subscription_test_scenarios", filter: `user_id=eq.${currentUserId}` }, scheduleRefresh)
-      .subscribe();
+      .subscribe((nextStatus) => {
+        if (nextStatus === "SUBSCRIBED") {
+          setRealtimeStatus("connected");
+          scheduleRefresh();
+        } else if (nextStatus === "CHANNEL_ERROR" || nextStatus === "TIMED_OUT" || nextStatus === "CLOSED") {
+          setRealtimeStatus("disconnected");
+        } else {
+          setRealtimeStatus("connecting");
+        }
+      });
     return () => {
+      setRealtimeStatus("disconnected");
       if (refreshDebounce.current) clearTimeout(refreshDebounce.current);
       void supabase.removeChannel(channel);
     };
   }, [currentUserId, refresh]);
+
+  useEffect(() => {
+    const interval = billingFallbackRefreshInterval(access, billingSurfaceCount > 0, appActive);
+    if (auth.phase !== "authenticated" || interval === null) return;
+    const refreshBilling = shouldReconcileProviderOnResume(access) ? reconcileProvider : refresh;
+    const timer = setInterval(() => void refreshBilling().catch(() => undefined), interval);
+    return () => clearInterval(timer);
+  }, [access, appActive, auth.phase, billingSurfaceCount, reconcileProvider, refresh]);
 
   useEffect(() => {
     if (auth.phase !== "authenticated") return;
@@ -233,7 +275,7 @@ export function AccessProvider({ children }: PropsWithChildren) {
 
   const visibleAccess = accessOwnerId === currentUserId ? access : unknownAccess;
   const visibleStatus = currentUserId && accessOwnerId !== currentUserId ? "loading" : status;
-  const value = useMemo<AccessContextValue>(() => ({ status: visibleStatus, access: visibleAccess, error, refresh, reserve, cancelReservation }), [cancelReservation, error, refresh, reserve, visibleAccess, visibleStatus]);
+  const value = useMemo<AccessContextValue>(() => ({ status: visibleStatus, access: visibleAccess, error, refresh, reconcile: reconcileProvider, reconcileUntilChanged: reconcileProviderUntilChanged, realtimeStatus, registerBillingSurface, reserve, cancelReservation }), [cancelReservation, error, realtimeStatus, reconcileProvider, reconcileProviderUntilChanged, refresh, registerBillingSurface, reserve, visibleAccess, visibleStatus]);
   return <AccessContext value={value}>{children}</AccessContext>;
 }
 
@@ -245,4 +287,9 @@ export function useAccess(): AccessContextValue {
 
 export function useOptionalAccess(): AccessContextValue | null {
   return use(AccessContext);
+}
+
+export function useBillingSurfaceRefresh(): void {
+  const { registerBillingSurface } = useAccess();
+  useEffect(() => registerBillingSurface(), [registerBillingSurface]);
 }

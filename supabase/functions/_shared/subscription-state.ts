@@ -12,6 +12,7 @@ export type SubscriptionLedgerState = {
   billingPeriodEnd: string | null;
   latestEventAt: string | null;
   latestEventId: string | null;
+  providerOriginalTransactionId?: string | null;
 };
 
 export type SubscriptionLifecycleEvent = {
@@ -24,6 +25,7 @@ export type SubscriptionLifecycleEvent = {
   planCode?: SubscriptionPlanCode | null;
   store?: string | null;
   sandbox?: boolean;
+  originalTransactionId?: string | null;
 };
 
 function time(value: string | null | undefined): number {
@@ -38,7 +40,9 @@ function withEvent(state: SubscriptionLedgerState, event: SubscriptionLifecycleE
 export function reduceSubscriptionState(current: SubscriptionLedgerState, event: SubscriptionLifecycleEvent): SubscriptionLedgerState {
   const currentEventAt = time(current.latestEventAt);
   const incomingEventAt = time(event.eventAt);
-  if (Number.isFinite(currentEventAt) && Number.isFinite(incomingEventAt) && incomingEventAt < currentEventAt) return current;
+  if (Number.isFinite(currentEventAt) && Number.isFinite(incomingEventAt) && incomingEventAt < currentEventAt
+    && current.providerOriginalTransactionId
+    && event.originalTransactionId === current.providerOriginalTransactionId) return current;
   if (current.productIdentifier && event.productIdentifier && current.productIdentifier !== event.productIdentifier && event.type !== "PRODUCT_CHANGE" && event.type !== "INITIAL_PURCHASE") return current;
 
   if (event.type === "CANCELLATION") {
@@ -69,6 +73,7 @@ export function reduceSubscriptionState(current: SubscriptionLedgerState, event:
       willRenew: true,
       billingPeriodStart: event.purchasedAt,
       billingPeriodEnd: event.expiresAt,
+      providerOriginalTransactionId: event.originalTransactionId ?? current.providerOriginalTransactionId ?? null,
     }, event);
   }
   return withEvent(current, event);

@@ -38,7 +38,7 @@ describe("revenueCatWebhookHandler", () => {
       claimEvent: jest.fn().mockResolvedValue("claimed"), resolveUserId: jest.fn().mockResolvedValue("8e6dbfc0-23c9-4a8a-a232-273c4f48c161"),
       applyEvent: jest.fn().mockResolvedValue(undefined), loadSubscriber: jest.fn().mockResolvedValue({ appUserId: "u1", entitlements: [] }), saveSubscriber: jest.fn(), completeEvent: jest.fn(), failEvent: jest.fn(),
     };
-    const response = await revenueCatWebhookHandler(request({ event: { ...event.event, id: "uncancel", type: "UNCANCELLATION", product_id: "formie_monthly", purchased_at_ms: 1786058836000, expiration_at_ms: 1786059136000, event_timestamp_ms: 1786058896000, entitlement_ids: ["formie_pro"], environment: "SANDBOX" } }), dependencies as never, "secret");
+    const response = await revenueCatWebhookHandler(request({ event: { ...event.event, id: "uncancel", type: "UNCANCELLATION", product_id: "formie_monthly", purchased_at_ms: 1786058836000, expiration_at_ms: 1786059136000, event_timestamp_ms: 1786058896000, entitlement_ids: ["formie_pro"], environment: "SANDBOX", store: "APP_STORE", original_transaction_id: "200000123", transaction_id: "200000456" } }), dependencies as never, "secret");
     expect(response.status).toBe(200);
     expect(dependencies.applyEvent).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
       type: "UNCANCELLATION",
@@ -48,7 +48,11 @@ describe("revenueCatWebhookHandler", () => {
       purchased_at: new Date(1786058836000).toISOString(),
       expiration_at: new Date(1786059136000).toISOString(),
       event_timestamp: new Date(1786058896000).toISOString(),
+      store: "APP_STORE",
+      original_transaction_id: "200000123",
+      transaction_id: "200000456",
     }));
+    expect(dependencies.saveSubscriber).toHaveBeenCalledWith(expect.any(String), expect.any(Object), expect.objectContaining({ id: "uncancel", original_transaction_id: "200000123" }));
   });
 
   it("returns success without reprocessing a completed duplicate", async () => {
@@ -77,20 +81,30 @@ describe("revenueCatWebhookHandler", () => {
     expect(dependencies.resolveUserId).toHaveBeenCalledWith(event.event.app_user_id, ["8d4b4da4-f6d7-4fc0-96ec-ae8b20f1340a"]);
   });
 
-  it("includes RevenueCat transfer identity arrays when resolving a user", async () => {
+  it("expires every transfer source before activating the authenticated destination", async () => {
+    const oldUser = "8d4b4da4-f6d7-4fc0-96ec-ae8b20f1340a";
+    const newUser = "c72d8ddd-91b9-43d1-9db3-25b3bfa9bf43";
     const dependencies = {
-      claimEvent: jest.fn().mockResolvedValue("claimed"), resolveUserId: jest.fn().mockResolvedValue(null),
-      loadSubscriber: jest.fn(), saveSubscriber: jest.fn(), completeEvent: jest.fn().mockResolvedValue(undefined), failEvent: jest.fn(),
+      claimEvent: jest.fn().mockResolvedValue("claimed"),
+      resolveUserId: jest.fn(async (candidate: string) => candidate === oldUser || candidate === newUser ? candidate : null),
+      expireTransferredUser: jest.fn().mockResolvedValue({ originalTransactionId: "200000123", transactionId: "200000456", store: "app_store" }),
+      applyEvent: jest.fn().mockResolvedValue(undefined),
+      loadSubscriber: jest.fn(async (userId: string) => ({ appUserId: userId, entitlements: [] })),
+      saveSubscriber: jest.fn().mockResolvedValue(undefined), completeEvent: jest.fn().mockResolvedValue(undefined), failEvent: jest.fn(),
     };
     const response = await revenueCatWebhookHandler(request({ event: {
-      ...event.event,
+      id: "transfer-1",
       type: "TRANSFER",
       aliases: ["alias-user"],
-      transferred_from: ["old-user"],
-      transferred_to: ["new-user"],
+      transferred_from: [oldUser],
+      transferred_to: [newUser],
+      event_timestamp_ms: 1786058896000,
     } }), dependencies as never, "secret");
     expect(response.status).toBe(200);
-    expect(dependencies.resolveUserId).toHaveBeenCalledWith(event.event.app_user_id, ["alias-user", "old-user", "new-user"]);
+    expect(dependencies.resolveUserId).toHaveBeenCalledWith(newUser, ["alias-user"]);
+    expect(dependencies.expireTransferredUser).toHaveBeenCalledWith(oldUser, expect.objectContaining({ transferred_from: [oldUser], transferred_to: [newUser] }));
+    expect(dependencies.applyEvent).toHaveBeenCalledWith(newUser, expect.objectContaining({ type: "TRANSFER", original_transaction_id: "200000123", transaction_id: "200000456", store: "app_store" }));
+    expect(dependencies.expireTransferredUser.mock.invocationCallOrder[0]).toBeLessThan(dependencies.applyEvent.mock.invocationCallOrder[0]);
   });
 
   it("accepts RevenueCat test webhook events for deployment verification", async () => {

@@ -71,6 +71,20 @@ describe("reduceSubscriptionState", () => {
     })).toEqual(current);
   });
 
+  it("uses event-time out-of-order protection only within the same original transaction", () => {
+    const canonical = { ...active, providerOriginalTransactionId: "apple-original-a" };
+    const olderSameReceipt = reduceSubscriptionState(canonical, {
+      id: "late-same-receipt", type: "RENEWAL", eventAt: "2026-08-06T23:26:00.000Z",
+      originalTransactionId: "apple-original-a", purchasedAt: "2026-08-06T23:32:16.000Z", expiresAt: "2026-08-06T23:37:16.000Z",
+    });
+    const replacementReceipt = reduceSubscriptionState(canonical, {
+      id: "replacement-receipt", type: "INITIAL_PURCHASE", eventAt: "2026-08-06T23:26:00.000Z",
+      originalTransactionId: "apple-original-b", purchasedAt: "2026-08-06T23:32:16.000Z", expiresAt: "2026-08-06T23:37:16.000Z",
+    });
+    expect(olderSameReceipt).toEqual(canonical);
+    expect(replacementReceipt).toMatchObject({ providerOriginalTransactionId: "apple-original-b", latestEventId: "replacement-receipt" });
+  });
+
   it("records a scheduled product change without activating the new plan early", () => {
     expect(reduceSubscriptionState(active, {
       id: "scheduled-annual",

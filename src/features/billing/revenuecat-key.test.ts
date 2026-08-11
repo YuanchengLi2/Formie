@@ -1,14 +1,20 @@
 import { assertRevenueCatPublicKey } from "./constants";
 
-describe("RevenueCat release key validation", () => {
+describe("RevenueCat key validation", () => {
   it("rejects a Test Store key in a release build", () => {
-    expect(() => assertRevenueCatPublicKey("test_example", true)).toThrow(
+    expect(() => assertRevenueCatPublicKey("test_example", { platform: "web", releaseBuild: true })).toThrow(
       /Test Store.*release/i,
     );
   });
 
-  it("allows Test Store keys only in development and accepts a real store key in release", () => {
-    expect(() => assertRevenueCatPublicKey("test_example", false)).not.toThrow();
-    expect(() => assertRevenueCatPublicKey("appl_example", true)).not.toThrow();
+  it.each(["ios", "android"] as const)("rejects a Test Store key for native %s development", (platform) => {
+    expect(() => assertRevenueCatPublicKey("test_example", { platform, releaseBuild: false })).toThrow(
+      /Test Store.*native/i,
+    );
+  });
+
+  it("keeps Test Store available to web development and accepts the App Store key on iOS", () => {
+    expect(() => assertRevenueCatPublicKey("test_example", { platform: "web", releaseBuild: false })).not.toThrow();
+    expect(() => assertRevenueCatPublicKey("appl_example", { platform: "ios", releaseBuild: false })).not.toThrow();
   });
 });

@@ -3,16 +3,19 @@ import { create } from "zustand";
 
 import type { CaptureCountdownSeconds } from "./types";
 
-const STORAGE_KEY = "form.capture-preferences.v1";
+const STORAGE_KEY = "form.capture-preferences.v2";
+const LEGACY_STORAGE_KEY = "form.capture-preferences.v1";
 
 export type CapturePreferences = {
   countdownSeconds: CaptureCountdownSeconds;
-  hapticsEnabled: boolean;
+  recordingVibrationEnabled: boolean;
+  interactionHapticsEnabled: boolean;
 };
 
 export const defaultCapturePreferences: CapturePreferences = {
   countdownSeconds: 10,
-  hapticsEnabled: true,
+  recordingVibrationEnabled: true,
+  interactionHapticsEnabled: true,
 };
 
 function isCapturePreferences(value: unknown): value is CapturePreferences {
@@ -20,8 +23,16 @@ function isCapturePreferences(value: unknown): value is CapturePreferences {
   const candidate = value as Partial<CapturePreferences>;
   return (
     (candidate.countdownSeconds === 5 || candidate.countdownSeconds === 10 || candidate.countdownSeconds === 15)
-    && typeof candidate.hapticsEnabled === "boolean"
+    && typeof candidate.recordingVibrationEnabled === "boolean"
+    && typeof candidate.interactionHapticsEnabled === "boolean"
   );
+}
+
+function migrateLegacyPreferences(value: unknown): CapturePreferences | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as { countdownSeconds?: unknown; hapticsEnabled?: unknown };
+  if ((candidate.countdownSeconds !== 5 && candidate.countdownSeconds !== 10 && candidate.countdownSeconds !== 15) || typeof candidate.hapticsEnabled !== "boolean") return null;
+  return { countdownSeconds: candidate.countdownSeconds, recordingVibrationEnabled: candidate.hapticsEnabled, interactionHapticsEnabled: candidate.hapticsEnabled };
 }
 
 export async function loadCapturePreferences(): Promise<CapturePreferences> {
@@ -30,7 +41,14 @@ export async function loadCapturePreferences(): Promise<CapturePreferences> {
       ? globalThis.localStorage?.getItem(STORAGE_KEY) ?? null
       : await SecureStore.getItemAsync(STORAGE_KEY);
     const parsed: unknown = raw ? JSON.parse(raw) : null;
-    return isCapturePreferences(parsed) ? parsed : defaultCapturePreferences;
+    if (isCapturePreferences(parsed)) return parsed;
+    const legacyRaw = process.env.EXPO_OS === "web"
+      ? globalThis.localStorage?.getItem(LEGACY_STORAGE_KEY) ?? null
+      : await SecureStore.getItemAsync(LEGACY_STORAGE_KEY);
+    const migrated = migrateLegacyPreferences(legacyRaw ? JSON.parse(legacyRaw) : null);
+    if (!migrated) return defaultCapturePreferences;
+    await saveCapturePreferences(migrated);
+    return migrated;
   } catch {
     return defaultCapturePreferences;
   }

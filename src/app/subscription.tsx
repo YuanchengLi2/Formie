@@ -11,6 +11,7 @@ import { PremiumScreen } from "@/screens/onboarding/premium-screen";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { setAuthReturnTarget } from "@/features/auth/auth-return-target";
 
 export default function SubscriptionRoute() {
   const router = useRouter();
@@ -20,6 +21,13 @@ export default function SubscriptionRoute() {
   const onboarding = useOnboarding();
   const completeAccess = onboarding.completeAccess;
   const view = resolveSubscriptionView(access.access.status, access.access.lifecycleState, access.access.remaining);
+
+  useEffect(() => {
+    if (auth.phase !== "signed_out") return;
+    void setAuthReturnTarget("/subscription").finally(() => {
+      router.replace("/login?returnTo=%2Fsubscription" as Href);
+    });
+  }, [auth.phase, router]);
 
   useEffect(() => {
     if (view.mode !== "completed_account") return;
@@ -38,7 +46,8 @@ export default function SubscriptionRoute() {
 
   const finish = async () => {
     if (auth.phase !== "authenticated") {
-      router.replace("/login" as Href);
+      await setAuthReturnTarget("/subscription");
+      router.replace("/login?returnTo=%2Fsubscription" as Href);
       return;
     }
     const outcome = await billing.purchase("monthly");
@@ -46,6 +55,14 @@ export default function SubscriptionRoute() {
   };
 
   const purchasing = billing.state === "purchasing" || billing.state === "reconciling";
+
+  if (auth.phase !== "authenticated") {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator color={colors.gold} />
+      </View>
+    );
+  }
 
   if (view.mode === "verify") {
     return (

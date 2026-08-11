@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 describe("subscription state machine migration", () => {
@@ -67,5 +67,18 @@ describe("subscription state machine migration", () => {
     expect(latestAccessDefinition).toContain("scenario.quota_actual_used_at_override");
     expect(latestAccessDefinition).toContain("greatest(actual_used - scenario.quota_actual_used_at_override, 0)");
     expect(latestAccessDefinition).toContain("effective_state in ('active_renewing', 'active_cancelled', 'renewal_pending')");
+  });
+
+  it("uses provider billing boundaries instead of five-minute sandbox quota windows", () => {
+    const migrationPath = resolve(
+      process.cwd(),
+      "supabase/migrations/202608100002_provider_billing_periods_for_sandbox.sql",
+    );
+
+    expect(existsSync(migrationPath)).toBe(true);
+    const migration = readFileSync(migrationPath, "utf8");
+    expect(migration).toContain("return query select p_billing_start, p_billing_end");
+    expect(migration).not.toContain("interval '5 minutes'");
+    expect(migration).not.toContain("p_store = 'test_store'");
   });
 });

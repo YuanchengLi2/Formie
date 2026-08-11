@@ -60,9 +60,9 @@ function normalizeFindings(
         typeof region === "string" && ANATOMY_REGIONS.has(region)
       ),
     actionableCorrection: finding.actionableCorrection ?? (finding.correction || finding.cue || requireActionable ? {
-      instruction: finding.correction ?? finding.cue ?? `Repeat the visible improvement described in â€œ${finding.title}â€.`,
+      instruction: finding.correction ?? finding.cue ?? `Repeat the visible improvement described in “${finding.title}”.`,
       cue: finding.cue ?? finding.correction ?? finding.title,
-      successCheck: `Repeat the visible relationship described in â€œ${finding.title}â€ without the cited deviation.`,
+      successCheck: `Repeat the visible relationship described in “${finding.title}” without the cited deviation.`,
       applyWhen: "On the next repetition at the cited phase.",
     } : null),
     evidence: finding.evidence.map((moment) => ({ ...moment, coachingNote: moment.coachingNote ?? moment.visualEvidence, focusRegion: moment.focusRegion ?? null })),

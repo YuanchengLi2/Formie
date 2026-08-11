@@ -1,16 +1,16 @@
 # Formie onboarding and RevenueCat release setup
 
-The approved onboarding and social-auth flow is wired to RevenueCat. The local Chrome sandbox uses RevenueCat Test Store, so it can exercise offer loading, the purchase modal, entitlement sync, restore, logout, and login without charging money. Production purchases still require the store and RevenueCat records below. The app intentionally disables an authenticated `Go Now` button when RevenueCat has not returned a live package; it never charges a stale hard-coded price.
+The approved onboarding and social-auth flow is wired to RevenueCat. Local web QA uses RevenueCat Test Store, while native iOS development uses the real App Store public key so StoreKit presents Apple's no-charge sandbox purchase sheet. Production purchases still require the store and RevenueCat records below. The app intentionally disables an authenticated `Go Now` button when RevenueCat has not returned a live package; it never charges a stale hard-coded price.
 
 ## Current sandbox configuration
 
 - RevenueCat project: `Form Ai`.
-- RevenueCat app: `Test Store` only (no real App Store or Google Play app configuration yet).
-- Offering: `default` exposes `$rc_monthly` for the current monthly Test Store product. The legacy `$rc_annual` mapping remains only so existing provider records can be read; annual is not exposed as a new purchase option.
+- RevenueCat apps: App Store for native iOS and Test Store for local web QA.
+- Offering: `default` exposes `$rc_monthly` for `formie_monthly` in each configured store. The legacy `$rc_annual` mapping remains only so existing provider records can be read; annual is not exposed as a new purchase option.
 - Entitlement: `formie_pro`.
-- Test Store keys are loaded only from the ignored local `.env.local` file. Never submit a build containing a `test_` key; Test Store is for development QA only.
+- Native iOS and Android keys must use their real store prefixes even in development (`appl_` for App Store and `goog_` for Play Store). Only `EXPO_PUBLIC_REVENUECAT_WEB_PUBLIC_KEY` may use `test_` for local browser QA. Never run or ship a native build containing a Test Store key.
 
-The Chrome preview is started with `npm run web -- --port 8082`. A sandbox purchase creates a Test Store receipt, and the Supabase `refresh-entitlement` function reads the RevenueCat subscriber using the server secret before the app grants access. Test Store values must remain limited to the EAS `development` environment; they must never be copied into `preview` or `production`.
+The Chrome preview is started with `npm run web -- --port 8082`. A web sandbox purchase creates a Test Store receipt, and the Supabase `refresh-entitlement` function reads the RevenueCat subscriber using the server secret before the app grants access. Native iOS development must use the App Store key and Apple sandbox; Test Store credentials belong only in the web-specific key.
 
 ## RevenueCat dashboard
 
@@ -36,8 +36,8 @@ Set the following in the Expo build environment (never commit real values):
 Set the platform public keys separately in all three EAS environments. The profile-to-environment mapping is explicit in `eas.json`:
 
 ```powershell
-eas env:create --environment development --name EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_KEY --value <test-store-ios-public-key> --visibility sensitive
-eas env:create --environment development --name EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_KEY --value <test-store-android-public-key> --visibility sensitive
+eas env:create --environment development --name EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_KEY --value <app-store-ios-public-key> --visibility sensitive
+eas env:create --environment development --name EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_KEY --value <play-store-android-public-key> --visibility sensitive
 eas env:create --environment preview --name EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_KEY --value <app-store-ios-public-key> --visibility sensitive
 eas env:create --environment preview --name EXPO_PUBLIC_REVENUECAT_ANDROID_PUBLIC_KEY --value <play-store-android-public-key> --visibility sensitive
 eas env:create --environment production --name EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_KEY --value <app-store-ios-public-key> --visibility sensitive
@@ -114,7 +114,7 @@ Account deletion is not exposed through the website portal or an Edge Function. 
 ## Release build sequence
 
 1. Verify RevenueCat App Store/Google Play products and the production offering.
-2. Set the real platform public keys in EAS `preview` and `production`; keep Test Store keys in `development` only.
+2. Set the App Store public key for iOS in EAS `development`, `preview`, and `production`. Keep the Test Store key isolated to `EXPO_PUBLIC_REVENUECAT_WEB_PUBLIC_KEY` for local web QA.
 3. Apply and verify the Supabase migrations/functions and hosted Auth redirect configuration.
 4. Build with `eas build --profile preview --platform ios` (and Android), install on physical devices, and test OAuth, purchase, restore, cancellation, logout, and expiry.
 5. Build/submit the production-compatible artifact only after both store configurations and the physical-device flows pass. A local Metro run or a passing Jest suite is not a substitute for this build.

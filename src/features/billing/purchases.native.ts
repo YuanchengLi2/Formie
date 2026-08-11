@@ -31,7 +31,7 @@ export const purchasesClient: PurchasesClient = {
   async configure(appUserId = null) {
     const apiKey = process.env.EXPO_OS === "ios" ? REVENUECAT_IOS_PUBLIC_KEY : REVENUECAT_ANDROID_PUBLIC_KEY;
     if (!apiKey) throw new Error("RevenueCat is not configured for this platform yet.");
-    assertRevenueCatPublicKey(apiKey, !__DEV__);
+    assertRevenueCatPublicKey(apiKey, { platform: process.env.EXPO_OS === "ios" ? "ios" : "android", releaseBuild: !__DEV__ });
     const configured = await Purchases.isConfigured();
     if (!configured) Purchases.configure(appUserId ? { apiKey, appUserID: appUserId } : { apiKey });
     else if (appUserId && configuredUserId !== appUserId) await Purchases.logIn(appUserId);

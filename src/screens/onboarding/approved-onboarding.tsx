@@ -18,6 +18,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { heightToCm, weightToKg } from "@/features/onboarding/onboarding-schema";
+import { useCapturePreferences } from "@/features/capture/capture-preferences";
 import { onboardingSteps, type OnboardingAnswers, type OnboardingStep } from "@/features/onboarding/types";
 import type { PurchaseState } from "@/features/billing/types";
 import { AccountAccessScreen } from "@/components/account-access-screen";
@@ -108,10 +109,12 @@ export function getOnboardingDensity(windowHeight: number, topInset: number, bot
 }
 
 function selectHaptic() {
+  if (!useCapturePreferences.getState().preferences.interactionHapticsEnabled) return;
   void Haptics.selectionAsync().catch(() => undefined);
 }
 
 function impactHaptic() {
+  if (!useCapturePreferences.getState().preferences.interactionHapticsEnabled) return;
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
 }
 

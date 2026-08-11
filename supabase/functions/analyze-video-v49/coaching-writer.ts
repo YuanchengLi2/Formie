@@ -40,6 +40,22 @@ function text(value: unknown, name: string): string {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${name} must be non-empty text`);
   return value.trim();
 }
+function plainText(value: unknown, name: string): string {
+  const parsed = text(value, name)
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^\s*(?:[-+*]|\d+[.)])\s+/gm, "")
+    .replace(/[*_`~#]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!parsed) throw new Error(`${name} must contain plain text`);
+  return parsed;
+}
+function oneSentence(value: unknown, name: string): string {
+  const parsed = plainText(value, name);
+  const sentences = parsed.match(/[^.!?]+(?:[.!?]+|$)/g)?.map((sentence) => sentence.trim()).filter(Boolean) ?? [];
+  if (sentences.length !== 1 || !/[.!?]$/.test(parsed)) throw new Error(`${name} must be exactly one sentence`);
+  return parsed;
+}
 function number(value: unknown, name: string, min: number, max: number): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) throw new Error(`${name} is invalid`);
   return value;
@@ -55,7 +71,7 @@ export function buildCoachingWriterPrompt(input: CoachingWriterInput): string {
   const equipmentRequirement = input.catalogContext.equipment.length > 0
     ? ` Each of those fields must also name the relevant equipment from ${JSON.stringify(input.catalogContext.equipment)}.`
     : "";
-  return `You are Formie's exercise-specific coaching writer. Transform the immutable visual problems into clear coaching for the exact declared exercise. You must not add, remove, merge, split, rename, contradict, or reorder problems. Return exactly one correction and one next-set action for every problem ID, in the same order. Every statement about what was visible must come directly from an immutable problem. You must not invent positive visible facts, strengths, consistency, successful repetitions, or good technique. If the problem list is empty, use neutral language saying that the problem finder returned no visible problems; never call the performance good, great, excellent, or perfect. Every whatToDo, successCheck, and nextSetPlan action must literally name "${input.declaration.exercise.label}" and state the corrective direction.${equipmentRequirement} Every nextSetPlan.action must begin with "For your ${input.declaration.exercise.label}," and continue as a complete actionable sentence. Do not return fragmentary next-set actions. Use the least aggressive cue that directly corrects the observation while preserving a normal, comfortable range of motion for the declared exercise. Do not prescribe an extreme or absolute joint position unless the immutable problem explicitly requires it. Do not claim that a correction prevents injury, maximizes muscle recruitment, or transfers stress unless that claim is directly supported by the immutable input. Explain why the correction matters using calibrated language about the observed execution, not guaranteed physiological or safety outcomes. Success checks must be visible, testable, and proportional to the immutable observation. Preserve useful anatomical language such as cervical, thoracic, lumbar, scapular, trajectory, lockout, lat, muscle, or joint when it makes the coaching more precise; explain it plainly when useful. Return one issue score for each of the first four immutable problems, in their exact order. Each issue score ID and its only evidence ID must equal that problem ID. Do not score unobserved dimensions or return a separate overall score; deterministic code calculates the aggregate from the issue scores. Use an empty movementScores array when there are no problems. Otherwise use a 0-to-100 percentage scale. The set summary contains only a verdict; do not claim how many repetitions were consistent. Create the target-muscle map, issue-region map, assessment, and verdict only from the declaration and immutable problems. Return only JSON matching the schema.\n\nImmutable input:\n${JSON.stringify(input)}`;
+  return `You are Formie's exercise-specific coaching writer. Transform the immutable visual problems into clear coaching for the exact declared exercise. You must not add, remove, merge, split, rename, contradict, or reorder problems. Return exactly one correction and one next-set action for every problem ID, in the same order. Every statement about what was visible must come directly from an immutable problem. You must not invent positive visible facts, strengths, consistency, successful repetitions, or good technique. If the problem list is empty, use neutral language saying that the problem finder returned no visible problems; never call the performance good, great, excellent, or perfect. All user-visible fields must contain plain text only: never include Markdown, asterisks, emphasis markers, headings, bullets, numbered lists, or backticks. Each whatToDo must be exactly one complete actionable sentence containing one corrective direction. The app renders whatToDo in bold, so do not add formatting around it or append a success check, rationale, or second sentence. Every whatToDo, successCheck, and nextSetPlan action must literally name "${input.declaration.exercise.label}" and state the corrective direction.${equipmentRequirement} Every nextSetPlan.action must begin with "For your ${input.declaration.exercise.label}," and continue as exactly one complete actionable sentence. Do not return fragmentary next-set actions. Use the least aggressive cue that directly corrects the observation while preserving a normal, comfortable range of motion for the declared exercise. Do not prescribe an extreme or absolute joint position unless the immutable problem explicitly requires it. Do not claim that a correction prevents injury, maximizes muscle recruitment, or transfers stress unless that claim is directly supported by the immutable input. Explain why the correction matters using calibrated language about the observed execution, not guaranteed physiological or safety outcomes. Success checks must be visible, testable, and proportional to the immutable observation. Preserve useful anatomical language such as cervical, thoracic, lumbar, scapular, trajectory, lockout, lat, muscle, or joint when it makes the coaching more precise; explain it plainly when useful. Return one issue score for each of the first four immutable problems, in their exact order. Each issue score ID and its only evidence ID must equal that problem ID. Do not score unobserved dimensions or return a separate overall score; deterministic code calculates the aggregate from the issue scores. Use an empty movementScores array when there are no problems. Otherwise use a 0-to-100 percentage scale. The set summary contains only a verdict; do not claim how many repetitions were consistent. Create the target-muscle map, issue-region map, assessment, and verdict only from the declaration and immutable problems. Return only JSON matching the schema.\n\nImmutable input:\n${JSON.stringify(input)}`;
 }
 
 const muscleTargetSchema = { type: "object", additionalProperties: false, required: ["name", "region"], properties: { name: { type: "string" }, region: { type: "string", enum: [...MUSCLE_REGIONS] } } } as const;
@@ -80,7 +96,7 @@ function parseMuscleFocus(value: unknown): MuscleFocus {
       const target = record(entry, `${name}[${index}]`);
       const region = text(target.region, `${name}[${index}].region`);
       if (!MUSCLE_REGIONS.has(region)) throw new Error(`${name}[${index}].region is invalid`);
-      return { name: text(target.name, `${name}[${index}].name`), region: region as MuscleFocus["primary"][number]["region"] };
+      return { name: plainText(target.name, `${name}[${index}].name`), region: region as MuscleFocus["primary"][number]["region"] };
     });
   };
   if (!Array.isArray(focus.unclassified) || focus.unclassified.some((item) => typeof item !== "string" || !item.trim())) throw new Error("muscleFocus.unclassified is invalid");
@@ -88,7 +104,7 @@ function parseMuscleFocus(value: unknown): MuscleFocus {
   const primary = uniqueByRegion(parseTargets(focus.primary, "muscleFocus.primary"));
   const primaryRegions = new Set(primary.map((target) => target.region));
   const secondary = uniqueByRegion(parseTargets(focus.secondary, "muscleFocus.secondary")).filter((target) => !primaryRegions.has(target.region));
-  return { primary, secondary, unclassified: [...new Set(focus.unclassified.map((item) => String(item).trim()))] };
+  return { primary, secondary, unclassified: [...new Set(focus.unclassified.map((item, index) => plainText(item, `muscleFocus.unclassified[${index}]`)))] };
 }
 
 export function parseCoachingWriterResult(value: unknown, problems: ProblemFinderProblem[]): CoachingWriterResult {
@@ -99,7 +115,7 @@ export function parseCoachingWriterResult(value: unknown, problems: ProblemFinde
     const score = record(entry, `movementScores[${index}]`);
     const expectedId = scoreProblems[index].id;
     if (score.id !== expectedId || !Array.isArray(score.evidenceIds) || score.evidenceIds.length !== 1 || score.evidenceIds[0] !== expectedId) throw new Error(`movementScores[${index}] must cite exactly its matching immutable problem ID`);
-    return { id: text(score.id, `movementScores[${index}].id`), label: text(score.label, `movementScores[${index}].label`), score: number(score.score, `movementScores[${index}].score`, 0, 100), observed: text(score.observed, `movementScores[${index}].observed`), evidenceIds: score.evidenceIds as string[] };
+    return { id: text(score.id, `movementScores[${index}].id`), label: plainText(score.label, `movementScores[${index}].label`), score: number(score.score, `movementScores[${index}].score`, 0, 100), observed: plainText(score.observed, `movementScores[${index}].observed`), evidenceIds: score.evidenceIds as string[] };
   });
   if (new Set(movementScores.map((score) => score.id)).size !== movementScores.length || new Set(movementScores.map((score) => score.label.toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim())).size !== movementScores.length) throw new Error("movementScores IDs and labels must be unique");
   const corrections = exactProblemOrder(result.corrections, problems, "corrections").map((item, index) => {
@@ -107,12 +123,12 @@ export function parseCoachingWriterResult(value: unknown, problems: ProblemFinde
     const coachingArea = text(item.coachingArea, `corrections[${index}].coachingArea`);
     if (!SEVERITIES.has(severity) || !COACHING_AREAS.has(coachingArea as CoachingArea)) throw new Error(`corrections[${index}] classification is invalid`);
     if (!Array.isArray(item.observedIssueRegions) || item.observedIssueRegions.length === 0 || item.observedIssueRegions.some((region) => typeof region !== "string" || !ANATOMY_REGIONS.has(region as AnatomyRegion))) throw new Error(`corrections[${index}].observedIssueRegions is invalid`);
-    return { problemId: problems[index].id, title: text(item.title, "title"), whatHappened: text(item.whatHappened, "whatHappened"), whyItMatters: text(item.whyItMatters, "whyItMatters"), whatToDo: text(item.whatToDo, "whatToDo"), successCheck: text(item.successCheck, "successCheck"), severity: severity as WrittenCorrection["severity"], coachingArea: coachingArea as CoachingArea, observedIssueRegions: item.observedIssueRegions as AnatomyRegion[] };
+    return { problemId: problems[index].id, title: plainText(item.title, "title"), whatHappened: plainText(item.whatHappened, "whatHappened"), whyItMatters: plainText(item.whyItMatters, "whyItMatters"), whatToDo: oneSentence(item.whatToDo, "whatToDo"), successCheck: plainText(item.successCheck, "successCheck"), severity: severity as WrittenCorrection["severity"], coachingArea: coachingArea as CoachingArea, observedIssueRegions: item.observedIssueRegions as AnatomyRegion[] };
   });
-  const nextSetPlan = exactProblemOrder(result.nextSetPlan, problems, "nextSetPlan").map((item, index) => ({ problemId: problems[index].id, action: text(item.action, "action"), rationale: text(item.rationale, "rationale"), successCheck: text(item.successCheck, "successCheck") }));
+  const nextSetPlan = exactProblemOrder(result.nextSetPlan, problems, "nextSetPlan").map((item, index) => ({ problemId: problems[index].id, action: oneSentence(item.action, "action"), rationale: plainText(item.rationale, "rationale"), successCheck: plainText(item.successCheck, "successCheck") }));
   const summary = record(result.setSummary, "setSummary");
   const score = movementScores.length === 0
     ? null
     : Math.round((movementScores.reduce((sum, item) => sum + item.score, 0) / movementScores.length) * 10) / 10;
-  return { overallAssessment: text(result.overallAssessment, "overallAssessment"), coachNote: text(result.coachNote, "coachNote"), score, movementScores, muscleFocus: parseMuscleFocus(result.muscleFocus), corrections, setSummary: { verdict: text(summary.verdict, "setSummary.verdict") }, nextSetPlan };
+  return { overallAssessment: plainText(result.overallAssessment, "overallAssessment"), coachNote: plainText(result.coachNote, "coachNote"), score, movementScores, muscleFocus: parseMuscleFocus(result.muscleFocus), corrections, setSummary: { verdict: plainText(summary.verdict, "setSummary.verdict") }, nextSetPlan };
 }

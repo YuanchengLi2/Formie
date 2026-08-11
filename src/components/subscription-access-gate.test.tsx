@@ -62,6 +62,6 @@ describe("SubscriptionAccessGate", () => {
 
     expect(screen.getByText("Protected history")).toBeTruthy();
     expect(screen.queryByText("Checking your subscription")).toBeNull();
-    expect(screen.queryByText("We couldnâ€™t verify your subscription")).toBeNull();
+    expect(screen.queryByText("We couldn’t verify your subscription")).toBeNull();
   });
 });

@@ -36,6 +36,20 @@ describe("subscriptionTestControlsHandler", () => {
     expect(deps.apply).toHaveBeenCalledWith("u1", { action: "set_remaining", remaining: 0 });
   });
 
+  it("lets an Apple sandbox subscriber set the remaining analysis balance", async () => {
+    const deps = { enabled: () => true, authenticate: jest.fn().mockResolvedValue("u1"), loadCurrent: jest.fn().mockResolvedValue({ sandbox: true, store: "app_store" }), apply: jest.fn().mockResolvedValue({ remaining: 7 }) };
+    const response = await subscriptionTestControlsHandler(commandRequest({ action: "set_remaining", remaining: 7 }), deps);
+    expect(response.status).toBe(200);
+    expect(deps.apply).toHaveBeenCalledWith("u1", { action: "set_remaining", remaining: 7 });
+  });
+
+  it("keeps lifecycle simulation unavailable for Apple sandbox subscriptions", async () => {
+    const deps = { enabled: () => true, authenticate: jest.fn().mockResolvedValue("u1"), loadCurrent: jest.fn().mockResolvedValue({ sandbox: true, store: "app_store" }), apply: jest.fn() };
+    const response = await subscriptionTestControlsHandler(request("renew_now"), deps);
+    expect(response.status).toBe(403);
+    expect(deps.apply).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid balances and extra command fields", async () => {
     const deps = { enabled: () => true, authenticate: jest.fn().mockResolvedValue("u1"), loadCurrent: jest.fn().mockResolvedValue({ sandbox: true, store: "test_store" }), apply: jest.fn() };
     expect((await subscriptionTestControlsHandler(commandRequest({ action: "set_remaining", remaining: 11 }), deps)).status).toBe(400);

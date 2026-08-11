@@ -75,7 +75,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     const actualStart = Date.now();
     requestedStopAtRef.current = null;
     dispatch({ type: "recording_started", startedAt: actualStart });
-    if (capturePreferences.hapticsEnabled) {
+    if (capturePreferences.recordingVibrationEnabled) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
 
@@ -103,7 +103,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         dispatch({ type: "recording_failed", message });
       }
     }
-  }, [capturePreferences.hapticsEnabled, dispatch, router]);
+  }, [capturePreferences.recordingVibrationEnabled, dispatch, router]);
 
   useEffect(() => {
     if (phase !== "countingDown" || countdown === null) return;

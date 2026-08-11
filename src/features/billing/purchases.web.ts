@@ -44,7 +44,7 @@ function mapOffering(current: Awaited<ReturnType<Purchases["getOfferings"]>>["cu
 async function ensureConfigured(appUserId?: string | null): Promise<void> {
   if (configurePromise) await configurePromise;
   if (!REVENUECAT_WEB_PUBLIC_KEY) throw new Error("RevenueCat is not configured for web yet.");
-  assertRevenueCatPublicKey(REVENUECAT_WEB_PUBLIC_KEY, !__DEV__);
+  assertRevenueCatPublicKey(REVENUECAT_WEB_PUBLIC_KEY, { platform: "web", releaseBuild: !__DEV__ });
 
   const sdk = await loadSdk();
   // Calls made by getOfferings/getCustomerInfo must keep the user selected by

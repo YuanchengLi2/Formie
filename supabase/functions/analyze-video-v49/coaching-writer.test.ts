@@ -46,6 +46,9 @@ describe("v49 coaching writer", () => {
     expect(prompt).toContain("must not invent positive visible facts");
     expect(prompt).toContain("one issue score for each of the first four immutable problems");
     expect(prompt).toContain('Every whatToDo, successCheck, and nextSetPlan action must literally name "Chest-Supported Row"');
+    expect(prompt).toContain("plain text only");
+    expect(prompt).toContain("whatToDo must be exactly one complete actionable sentence");
+    expect(prompt).toContain("The app renders whatToDo in bold");
     expect(prompt).not.toMatch(/forbid.*cervical|banned words|imperative/i);
   });
 
@@ -64,6 +67,21 @@ describe("v49 coaching writer", () => {
     const parsed = parseCoachingWriterResult(validWriterResult(), problems);
     expect(parsed.corrections[0].whatToDo).toContain("thoracic and lumbar");
     expect(parsed.corrections[1].whatToDo).toContain("Chest-Supported Row");
+  });
+
+  it("removes Markdown markers from model copy before it reaches the app", () => {
+    const markedUp = validWriterResult();
+    markedUp.corrections[0].whatToDo = "**Keep your thoracic and lumbar spine steady during the Chest-Supported Row.**";
+    markedUp.corrections[0].whyItMatters = "*This keeps the observed pull easier to repeat.*";
+    const parsed = parseCoachingWriterResult(markedUp, problems);
+    expect(parsed.corrections[0].whatToDo).toBe("Keep your thoracic and lumbar spine steady during the Chest-Supported Row.");
+    expect(parsed.corrections[0].whyItMatters).toBe("This keeps the observed pull easier to repeat.");
+  });
+
+  it("rejects a multi-sentence what-to-do instruction", () => {
+    const verbose = validWriterResult();
+    verbose.corrections[0].whatToDo = "Set your Chest-Supported Row position against the pad. Then keep your spine steady.";
+    expect(() => parseCoachingWriterResult(verbose, problems)).toThrow(/exactly one sentence/i);
   });
 
   it("returns only issue-derived scores and no score when no problem was discovered", () => {
