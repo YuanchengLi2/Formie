@@ -91,8 +91,8 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       evidence,
       evidenceIndex,
       finding.title,
-      expanded?.whatHappened?.trim() || compactParagraph([finding.detail], 4),
-      expanded?.whatHappenedDetail?.trim(),
+      compactParagraph([expanded?.whatHappened?.trim() || finding.detail], 1),
+      compactParagraph([expanded?.whatHappenedDetail], 2),
       finding.id,
     );
     const why = frameFor(

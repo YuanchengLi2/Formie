@@ -174,12 +174,12 @@ describe("buildReviewFrames", () => {
 
     const point = buildCoachingReviewPoints(value)[0];
 
-    expect(point.observed.body).toBe(value.priorityCorrections[0].expandedCoaching?.whatHappened);
+    expect(point.observed.body).toBe("Your right shoulder rises before the handle reaches your ribs at the beginning.");
     expect(point.why.body).toBe(value.priorityCorrections[0].expandedCoaching?.whyItMatters);
     expect(point.next.title).toBe("Start the next rep with both shoulders level.");
     expect(point.next.body).toBe("Both shoulders finish at the same height.");
-    expect(point.observed.body).toBe(value.priorityCorrections[0].expandedCoaching?.whatHappened);
-    expect(point.observed.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(5);
+    expect(point.observed.body).toBe("Your right shoulder rises before the handle reaches your ribs at the beginning.");
+    expect(point.observed.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(1);
     expect(point.why.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
   });
 
@@ -201,5 +201,25 @@ describe("buildReviewFrames", () => {
     expect((point.observed as typeof point.observed & { detail?: string }).detail).toBe("The rise appears on rep 3. Rep 4 repeats the same uneven finishing position.");
     expect(point.why.body).toBe("The uneven shoulder position tilts the visible handle path.");
     expect((point.why as typeof point.why & { detail?: string }).detail).toBe("The final repetitions no longer match the opening path. That makes the set less repeatable.");
+  });
+
+  it("caps the complete what happened section at three sentences", () => {
+    const value = resultWithTwoMoments();
+    value.priorityCorrections[0].expandedCoaching = {
+      summary: "Your shoulders stop moving evenly.",
+      whatHappened: "Your right shoulder rises before the handle reaches your ribs. This extra lead sentence should not render.",
+      whatHappenedDetail: "The rise appears on rep 3. Rep 4 repeats the same uneven finish. The final pull tilts farther. This fourth detail should not render.",
+      whyItMatters: "The uneven shoulder position tilts the visible handle path.",
+      whyItMattersDetail: "The final repetitions no longer match the opening path. That makes the set less repeatable.",
+      whatToDo: "Start the next rep with both shoulders level.",
+      successCheck: "Both shoulders finish at the same height.",
+    } as NonNullable<CoachingFinding["expandedCoaching"]> & { whatHappenedDetail: string; whyItMattersDetail: string };
+
+    const observed = buildCoachingReviewPoints(value)[0].observed;
+    const visibleCopy = `${observed.body} ${observed.detail}`;
+
+    expect(visibleCopy.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
+    expect(observed.body).toBe("Your right shoulder rises before the handle reaches your ribs.");
+    expect(observed.detail).toBe("The rise appears on rep 3. Rep 4 repeats the same uneven finish.");
   });
 });

@@ -80,7 +80,7 @@ const writing: WholeVideoWriting = {
   strengths: [],
 };
 
-describe("v62 full-video rep-audited coaching contract", () => {
+describe("v63 full-video rep-audited coaching contract", () => {
   const rawAnalysis = (count: number) => {
     const coachingItems = Array.from({ length: count }, (_, index) => ({
       id: `finding-${index + 1}`,
@@ -312,7 +312,7 @@ describe("v62 full-video rep-audited coaching contract", () => {
 
     expect(parsed.coachingItems).toHaveLength(4);
     expect(parsed.coachingItems[3].observation).toBe("One.");
-    expect(parsed.coachingItems[3].observationDetails.match(/[.!?]+/g)).toHaveLength(3);
+    expect(parsed.coachingItems[3].observationDetails).toBe("Only one supporting sentence is returned.");
     expect(parsed.coachingItems[3].correctionDirection).toBe("Make the correction.");
   });
 
@@ -348,7 +348,8 @@ describe("v62 full-video rep-audited coaching contract", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(10_000);
 
     expect(prompt).toContain("observation must be exactly one complete sentence");
-    expect(prompt).toContain("observationDetails must contain three to four natural supporting sentences");
+    expect(prompt).toContain("observationDetails must contain one to two natural supporting sentences");
+    expect(prompt).toContain("The complete What happened section must never exceed three sentences");
     expect(prompt).toContain("whyItMatters must be exactly one complete sentence");
     expect(prompt).toContain("whyDetails must contain two to four normal supporting sentences");
     expect(prompt).toContain("correctionDirection must be exactly one complete actionable sentence");
@@ -401,7 +402,8 @@ describe("v62 full-video rep-audited coaching contract", () => {
     expect(prompt).toContain('"peakSeconds":5.3');
     expect(prompt).not.toMatch(/"(?:start|peak|end)Ms"/);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappened must be exactly one complete sentence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappenedDetail must contain three to four natural supporting sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappenedDetail must contain one to two natural supporting sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("The complete What happened section must never exceed three sentences");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMatters must be exactly one complete sentence");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMattersDetail must contain two to four normal supporting sentences");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatToDo must be exactly one complete actionable sentence");
@@ -471,6 +473,20 @@ describe("v62 full-video rep-audited coaching contract", () => {
     expect(finding.actionableCorrection?.instruction).toBe(writing.coachingItems[0].whatToDo);
   });
 
+  it("caps the complete what happened section at three sentences", () => {
+    const parsed = parseWholeVideoWriting({
+      ...writing,
+      coachingItems: [{
+        ...writing.coachingItems[0],
+        whatHappenedDetail: "Rep 3 drops quickly after reaching your ribs. Rep 4 repeats the faster lowering phase. The first two rows return more slowly. The final row finishes lowest.",
+      }],
+    }, analysis);
+    const visibleCopy = `${parsed.coachingItems[0].whatHappened} ${parsed.coachingItems[0].whatHappenedDetail}`;
+
+    expect(visibleCopy.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
+    expect(parsed.coachingItems[0].whatHappenedDetail).toBe("Rep 3 drops quickly after reaching your ribs. Rep 4 repeats the faster lowering phase.");
+  });
+
   it("falls back per field when writer coaching is awkward or malformed", () => {
     const raw = {
       ...writing,
@@ -488,8 +504,8 @@ describe("v62 full-video rep-audited coaching contract", () => {
     }, analysis).coachingItems[0].whatToDo).toBe(analysis.coachingItems[0].correctionDirection);
     expect(parseWholeVideoWriting({
       ...writing,
-      coachingItems: [{ ...writing.coachingItems[0], whatHappenedDetail: "Rep 3 changes speed." }],
-    }, analysis).coachingItems[0].whatHappenedDetail).toBe(analysis.coachingItems[0].observationDetails);
+      coachingItems: [{ ...writing.coachingItems[0], whatHappenedDetail: "" }],
+    }, analysis).coachingItems[0].whatHappenedDetail).toBe("Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase.");
   });
 
   it("creates analyst-derived copy when the writer response is unavailable", () => {
@@ -499,7 +515,7 @@ describe("v62 full-video rep-audited coaching contract", () => {
       id: analysis.coachingItems[0].id,
       title: analysis.coachingItems[0].topic,
       whatHappened: analysis.coachingItems[0].observation,
-      whatHappenedDetail: analysis.coachingItems[0].observationDetails,
+      whatHappenedDetail: "Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase.",
       whyItMatters: analysis.coachingItems[0].whyItMatters,
       whyItMattersDetail: analysis.coachingItems[0].whyDetails,
       whatToDo: analysis.coachingItems[0].correctionDirection,
@@ -521,7 +537,7 @@ describe("v62 full-video rep-audited coaching contract", () => {
     }, analysis);
     const item = parsed.coachingItems[0];
 
-    expect(item.whatHappenedDetail.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
+    expect(item.whatHappenedDetail.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
     expect(item.whyItMattersDetail.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.length).toBeGreaterThanOrEqual(2);
     expect(parsed.coachNote.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
     expect(parsed.overallAssessment.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.length).toBeGreaterThanOrEqual(3);

@@ -192,7 +192,7 @@ function visibleObservationDetailFallback(topic: string, affectedRepNumbers: num
   const repList = affectedRepNumbers.length === 1
     ? `rep ${affectedRepNumbers[0]}`
     : `reps ${affectedRepNumbers.slice(0, -1).join(", ")} and ${affectedRepNumbers.at(-1)}`;
-  return `The cited frames show the ${topic.toLowerCase()} pattern on ${repList}. The same phase was checked on every visible repetition. That comparison shows where the difference starts, repeats, or becomes clearest.`;
+  return `The cited frames show the ${topic.toLowerCase()} pattern on ${repList}. The same phase across the visible repetitions shows where the difference is clearest.`;
 }
 
 function firstSentence(value: string, fallback: string): string {
@@ -485,6 +485,12 @@ export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
       return null;
     }
   };
+  const safeCappedParagraph = (value: unknown, minimum: number, maximum: number): string | null => {
+    if (typeof value !== "string" || UNSUPPORTED_WRITER_CLAIM.test(value)) return null;
+    const sentences = sentenceParts(value.trim());
+    if (sentences.length < minimum) return null;
+    return sentences.slice(0, maximum).join(" ");
+  };
   const safeCopy = (value: string | null, fallback: string, sourceContext: string): string => (
     humanizeCoachingTimeUnits(value && !UNSUPPORTED_WRITER_CLAIM.test(value) && isPersonalizedCopy(value, sourceContext) ? value : fallback)
   );
@@ -498,8 +504,8 @@ export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
       sourceContext,
     );
     const whatHappenedDetail = safeCopy(
-      safeParagraph(item?.whatHappenedDetail, 3, 4),
-      normalizedObservableParagraph(source.observationDetails, visibleObservationDetailFallback(source.topic, source.affectedRepNumbers), 3, 4),
+      safeCappedParagraph(item?.whatHappenedDetail, 1, 2),
+      normalizedObservableParagraph(source.observationDetails, visibleObservationDetailFallback(source.topic, source.affectedRepNumbers), 1, 2),
       sourceContext,
     );
     const whyItMatters = safeCopy(
@@ -630,8 +636,8 @@ export function parseBoundaryFreeAnalysis(value: unknown, durationMs: number): B
         observationDetails: normalizedObservableParagraph(
           item.observationDetails,
           visibleObservationDetailFallback(topic, affectedRepNumbers),
-          3,
-          4,
+          1,
+          2,
         ),
         whyItMatters: observableWhyOrFallback(item.whyItMatters, `coachingItems[${index}].whyItMatters`, visibleWhyFallback(topic, observation), 1, 1),
         whyDetails: observableWhyOrFallback(item.whyDetails, `coachingItems[${index}].whyDetails`, visibleWhyDetailFallback(topic, affectedRepNumbers), 2, 4),
@@ -970,7 +976,7 @@ Do not add, remove, merge, or rename finding IDs or strength IDs. Do not invent 
 
 For each coaching item, title is only the concise issue label used for navigation; it is not the white coaching sentence. Make the title specific, normally four to ten words, without generic labels or numbering.
 
-For every finding, whatHappened must be exactly one complete sentence shown as bold white coaching text. whatHappenedDetail must contain three to four natural supporting sentences. Name the declared exercise and describe the exact visible body, equipment, path, range, position, or tempo change. Explain the useful beginning-to-end pattern, contrast, or recurring moment as one cohesive coaching thought. Do not write a chronological repetition log. Mention repetition numbers only when they make a useful comparison clearer; group matching repetitions instead of assigning one sentence to each. Do not begin consecutive sentences with "Rep" or "In repetition," and do not reuse the same sentence template across findings.
+For every finding, whatHappened must be exactly one complete sentence shown as bold white coaching text. whatHappenedDetail must contain one to two natural supporting sentences. The complete What happened section must never exceed three sentences. Name the declared exercise and describe the exact visible body, equipment, path, range, position, or tempo change. Explain the useful beginning-to-end pattern, contrast, or recurring moment as one cohesive coaching thought. Do not write a chronological repetition log. Mention repetition numbers only when they make a useful comparison clearer; group matching repetitions instead of assigning one sentence to each. Do not begin consecutive sentences with "Rep" or "In repetition," and do not reuse the same sentence template across findings.
 
 Make each finding sound independently written for its own evidence. Lead with the specific body part or equipment action that changed. Vary sentence structure and transitions across findings. Do not begin multiple findings with the same opening phrase, and avoid canned openings such as "The cited frames show" or "The issue is visible."
 
@@ -1075,7 +1081,7 @@ Rest between completed repetitions is not a technique error. Do not create a fin
 
 Every coaching item must stay semantically aligned: topic, observation, observationDetails, whyItMatters, whyDetails, correctionDirection, affectedRepNumbers, and evidence must all describe the same visible relationship. Do not split one issue into duplicate topics or merge separate visible problems into one. Explain importance only through visible path, range, control, steadiness, position, balance, or repeatability. Never claim hidden muscle activation, involvement, recruitment, effort, or tension; internal forces; joint stress or mobility; work output; pain; injury; tissue effects; or exact joint angles. Do not label knees traveling past the toes, looking up or down, or stopping above parallel as an error by itself. Those relationships are findings only when the recording also shows a specific visible consequence such as heel lift, lost balance, a changed equipment path, an inconsistent endpoint, or a declared range constraint.
 
-Finish the user-facing coaching inside this same whole-video response. For every coaching item, observation must be exactly one complete sentence naming the exact visible issue in this declared exercise. observationDetails must contain three to four natural supporting sentences that explain the relevant phase and whole-set comparison as one cohesive thought. Do not turn observationDetails into a chronological repetition log, assign one sentence to each repetition, or repeatedly begin sentences with "Rep" or "In repetition." Mention individual repetition numbers only when they make a meaningful contrast clearer; otherwise group matching repetitions or say opening, middle, and final. whyItMatters must be exactly one complete sentence describing the direct visible consequence. whyDetails must contain two to four normal supporting sentences tied specifically to visible path, range, control, position, balance, tempo, or repeatability. correctionDirection must be exactly one complete actionable sentence naming what to change and when in the repetition to apply it. Keep each coaching sentence under 18 words, with one direct clause whenever possible. Use specific, common words a new lifter can understand immediately. Name the visible body part or equipment action instead of using technical coaching jargon. Use plain text only with no Markdown, asterisks, headings, bullets, numbered labels, or backticks.
+Finish the user-facing coaching inside this same whole-video response. For every coaching item, observation must be exactly one complete sentence naming the exact visible issue in this declared exercise. observationDetails must contain one to two natural supporting sentences that explain the relevant phase and whole-set comparison as one cohesive thought. The complete What happened section must never exceed three sentences. Do not turn observationDetails into a chronological repetition log, assign one sentence to each repetition, or repeatedly begin sentences with "Rep" or "In repetition." Mention individual repetition numbers only when they make a meaningful contrast clearer; otherwise group matching repetitions or say opening, middle, and final. whyItMatters must be exactly one complete sentence describing the direct visible consequence. whyDetails must contain two to four normal supporting sentences tied specifically to visible path, range, control, position, balance, tempo, or repeatability. correctionDirection must be exactly one complete actionable sentence naming what to change and when in the repetition to apply it. Keep each coaching sentence under 18 words, with one direct clause whenever possible. Use specific, common words a new lifter can understand immediately. Name the visible body part or equipment action instead of using technical coaching jargon. Use plain text only with no Markdown, asterisks, headings, bullets, numbered labels, or backticks.
 
 Return between four and six real coaching issues, ordered from most useful to least important. Your target is six real coaching issues. Preserve the four strongest issues, then return a fifth and sixth for every additional independent visible issue or useful optimization supported by the video. Four is the fallback, not the target. A smaller issue is still useful when it is specific, independent, and evidence-backed. When fewer than four major faults exist, use a small but real visible optimization as severity note; never invent hidden physiology, duplicate another topic, use camera uncertainty, or use actions outside real repetitions. Every issue must carry its own matching evidence and affectedRepNumbers.
 

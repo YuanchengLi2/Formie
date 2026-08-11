@@ -13,7 +13,7 @@ describe("whole-video analyst and nonblocking writer wiring", () => {
     expect(source).toContain("modelName: WRITER_MODEL");
     expect(source).not.toContain('runStage(sessionId, "analyzing", { kind: "writer"');
     expect(source).toContain("fallback: () => parseWholeVideoWriting(null, parsedAnalysis)");
-    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v62-provider-compatible-coaching"');
+    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v63-three-sentence-what-happened"');
     expect(source.indexOf("return raw as JsonRecord")).toBeLessThan(source.indexOf("parseBoundaryFreeAnalysis(rawAnalysis, durationMs)"));
   });
 
