@@ -411,6 +411,13 @@ describe("v63 full-video rep-audited coaching contract", () => {
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("overallAssessment must contain three to four sentences");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("everyday words a new lifter can understand");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Keep each sentence under 18 words");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("no anatomy, sports-science, or biomechanics background");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("clear gym coach speaking between sets");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("understand every sentence on the first read");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("ordinary body-part, equipment, direction, and movement words");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Avoid technical anatomy and biomechanics terms");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("explain it immediately in plain words inside the same sentence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Do not remove useful detail or shorten a required section");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Name the declared exercise");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Do not write a chronological repetition log");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Mention repetition numbers only when they make a useful comparison clearer");

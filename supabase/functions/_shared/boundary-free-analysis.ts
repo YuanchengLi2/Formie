@@ -986,6 +986,8 @@ whatToDo must be exactly one complete actionable sentence. This sentence is show
 
 Keep each sentence under 18 words. Prefer one direct clause, concrete exercise language, and no repeated setup phrases. Use everyday words a new lifter can understand. Replace technical anatomy or coaching jargon with the body part and visible action the user can see.
 
+Write for someone with no anatomy, sports-science, or biomechanics background. Sound like a clear gym coach speaking between sets, never like a biomechanics report or medical textbook. The user must understand every sentence on the first read. Use ordinary body-part, equipment, direction, and movement words. Avoid technical anatomy and biomechanics terms whenever everyday wording communicates the same visible fact. If a technical term is genuinely unavoidable, explain it immediately in plain words inside the same sentence. Simplify the wording only: Do not remove useful detail or shorten a required section, and do not change any sentence-count rule.
+
 Never write milliseconds or raw timing field names in coaching. If time materially helps, express it in readable seconds, such as "around 3.3 seconds." Prefer the supported repetition number and movement phase over a clock value.
 
 overallAssessment must contain three to four sentences. Summarize the complete set, its clearest strength, its main change, and the top priority. coachNote must contain exactly three sentences: what the user did, why the main pattern matters, and the clearest next-set focus.
