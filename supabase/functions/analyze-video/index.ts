@@ -13,6 +13,7 @@ import {
   buildBoundaryFreeAnalysisPrompt,
   buildWholeVideoWritingRepairPrompt,
   buildWholeVideoWritingPrompt,
+  normalizeWholeVideoWriting,
   parseBoundaryFreeAnalysis,
   parseRequiredWholeVideoWriting,
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
@@ -31,7 +32,7 @@ import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline
 import { writeValidatedCoaching } from "./coaching-writer.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v67-fact-then-write";
+const PIPELINE_VERSION = "gemini-whole-video-v68-writer-always-finalizes";
 const MAX_DURABLE_RETRIES = 3;
 const ANALYST_MODEL = "gemini-3.6-flash";
 const WRITER_MODEL = "gemini-3.6-flash";
@@ -477,7 +478,7 @@ Deno.serve(async (request) => {
           rawSession.storedVideoStageOutput = rawAnalysis;
           rawSession.stage = "finalizing";
           await saveSessionStage("finalizing");
-          const writing = await runStage(sessionId, "finalizing", { kind: "writer", analysis: parsedAnalysis }, async () => {
+          const writing = await runStage(sessionId, "finalizing", { kind: "writer", retry: rawSession.analysisRetryCount ?? 0, analysis: parsedAnalysis }, async () => {
             const generateWriting = (prompt: string) => generate({
               sessionId,
               stage: "finalizing",
@@ -495,6 +496,7 @@ Deno.serve(async (request) => {
                 write: () => generateWriting(buildWholeVideoWritingPrompt(parsedAnalysis, declaration)),
                 repair: ({ rejected, validationError }) => generateWriting(buildWholeVideoWritingRepairPrompt(parsedAnalysis, declaration, rejected, validationError)),
                 parse: (value) => parseRequiredWholeVideoWriting(value, parsedAnalysis),
+                normalize: (value) => normalizeWholeVideoWriting(value, parsedAnalysis),
               });
             } catch (error) {
               throw Object.assign(error instanceof Error ? error : new Error(String(error)), { code: "COACHING_WRITER_INVALID" });

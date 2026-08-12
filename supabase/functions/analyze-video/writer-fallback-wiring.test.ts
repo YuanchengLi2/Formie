@@ -13,9 +13,9 @@ describe("whole-video analyst and coaching-writer wiring", () => {
     expect(source).toContain("writeValidatedCoaching");
     expect(source).toContain("buildWholeVideoWritingRepairPrompt");
     expect(source).not.toContain("parseWholeVideoWriting(null, parsedAnalysis)");
-    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v67-fact-then-write"');
+    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v68-writer-always-finalizes"');
     expect(source).toContain("storedVideoStageOutput ?? await runStage");
-    expect(source).toContain('runStage(sessionId, "finalizing", { kind: "writer"');
+    expect(source).toContain('runStage(sessionId, "finalizing", { kind: "writer", retry: rawSession.analysisRetryCount ?? 0');
     expect(source).toContain("rawSession.hasStoredVideoEvidence = true");
     expect(source).toContain('rawSession.stage = "finalizing"');
     expect(source).not.toContain("preserveSchemaBounds: true");

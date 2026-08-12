@@ -8,6 +8,7 @@ import {
   parseRequiredWholeVideoWriting,
   parseRecheckRequest,
   parseWholeVideoWriting,
+  normalizeWholeVideoWriting,
   WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
   type BoundaryFreeAnalysis,
   type WholeVideoWriting,
@@ -453,6 +454,50 @@ describe("v63 full-video rep-audited coaching contract", () => {
         whyItMattersDetail: "Full contraction ensures optimal muscle engagement.",
       }],
     }, analysis)).toThrow("unsupported coaching language");
+  });
+
+  it("reports every invalid writer field in one repair request", () => {
+    const requiredWriting = {
+      ...writing,
+      overallAssessment: "Your set loses upper back engagement. The lowering changes. Keep the next set steady.",
+      coachingItems: writing.coachingItems.map(({ successCheck: _successCheck, ...item }, index) => index === 0
+        ? {
+          ...item,
+          whatHappenedDetail: "Your neck reaches hyperextension at peak contraction. This is clearest late in the set.",
+          whyItMattersDetail: "Full contraction ensures optimal muscle engagement.",
+        }
+        : item),
+    };
+
+    expect(() => parseRequiredWholeVideoWriting(requiredWriting, analysis)).toThrow(
+      /overallAssessment[\s\S]*coachingItems\[0\]\.whatHappenedDetail[\s\S]*coachingItems\[0\]\.whyItMattersDetail/,
+    );
+  });
+
+  it("normalizes a rejected repair into publishable coaching instead of failing analysis", () => {
+    const rejectedRepair = {
+      ...writing,
+      overallAssessment: "Your set loses upper back engagement. The lowering changes. Keep the next set steady.",
+      coachingItems: writing.coachingItems.map(({ successCheck: _successCheck, ...item }, index) => index === 0
+        ? {
+          ...item,
+          whatHappened: "Your cervical spine reaches hyperextension at peak contraction.",
+          whatHappenedDetail: "Your neck tips back during the concentric phase.",
+          whyItMattersDetail: "Full scapular retraction improves muscle engagement.",
+          whatToDo: "Keep your sternum on the pad through the eccentric phase.",
+        }
+        : item),
+    };
+
+    const normalized = normalizeWholeVideoWriting(rejectedRepair, analysis);
+    const sentenceTotal = (value: string) => value.match(/[.!?](?:\s|$)/g)?.length ?? 1;
+
+    expect(sentenceTotal(normalized.coachingItems[0].whatHappened)).toBe(1);
+    expect(sentenceTotal(normalized.coachingItems[0].whatHappenedDetail ?? "")).toBeGreaterThanOrEqual(2);
+    expect(sentenceTotal(normalized.coachingItems[0].whyItMattersDetail ?? "")).toBeGreaterThanOrEqual(2);
+    expect(sentenceTotal(normalized.coachingItems[0].whatToDo)).toBe(1);
+    expect(normalized.coachingItems[0].successCheck).toBeNull();
+    expect(JSON.stringify(normalized)).not.toMatch(/engagement|contraction|cervical|hyperextension|scapular|sternum|concentric|eccentric/i);
   });
 
   it("enforces one white summary and the requested gray-detail sentence ranges", () => {

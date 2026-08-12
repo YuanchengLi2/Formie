@@ -10,7 +10,7 @@ describe("validated coaching writer", () => {
       return copy;
     });
 
-    await expect(writeValidatedCoaching({ write, repair, parse })).resolves.toBe("clean");
+    await expect(writeValidatedCoaching({ write, repair, parse, normalize: () => "normalized" })).resolves.toBe("clean");
     expect(write).toHaveBeenCalledTimes(1);
     expect(repair).toHaveBeenCalledWith({ rejected: { copy: "rough" }, validationError: expect.any(Error) });
     expect(repair).toHaveBeenCalledTimes(1);
@@ -22,15 +22,44 @@ describe("validated coaching writer", () => {
       write: async () => ({ copy: "clean" }),
       repair,
       parse: (value) => (value as { copy: string }).copy,
+      normalize: () => "normalized",
     })).resolves.toBe("clean");
     expect(repair).not.toHaveBeenCalled();
   });
 
-  it("surfaces a second invalid response so durable finalization retry can take over", async () => {
+  it("normalizes a still-invalid repair instead of failing finalization", async () => {
+    const repair = jest.fn(async () => ({ copy: "still rough" }));
+    const normalize = jest.fn(() => "safe coaching");
     await expect(writeValidatedCoaching({
       write: async () => ({ copy: "rough" }),
-      repair: async () => ({ copy: "still rough" }),
+      repair,
       parse: () => { throw new Error("writer contract invalid"); },
-    })).rejects.toThrow("writer contract invalid");
+      normalize,
+    })).resolves.toBe("safe coaching");
+    expect(repair).toHaveBeenCalledTimes(1);
+    expect(normalize).toHaveBeenCalledWith({ copy: "still rough" });
+  });
+
+  it("normalizes saved analyst facts when the writer provider is unavailable", async () => {
+    const normalize = jest.fn(() => "safe analyst coaching");
+    await expect(writeValidatedCoaching({
+      write: async () => { throw new Error("writer timed out"); },
+      repair: async () => ({ copy: "unused" }),
+      parse: () => { throw new Error("unused"); },
+      normalize,
+    })).resolves.toBe("safe analyst coaching");
+    expect(normalize).toHaveBeenCalledWith(null);
+  });
+
+  it("normalizes the first writer response when the cleanup provider is unavailable", async () => {
+    const normalize = jest.fn(() => "safe first response");
+    const first = { copy: "rough" };
+    await expect(writeValidatedCoaching({
+      write: async () => first,
+      repair: async () => { throw new Error("cleanup timed out"); },
+      parse: () => { throw new Error("writer contract invalid"); },
+      normalize,
+    })).resolves.toBe("safe first response");
+    expect(normalize).toHaveBeenCalledWith(first);
   });
 });

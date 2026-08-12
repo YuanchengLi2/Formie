@@ -117,6 +117,40 @@ const TOPIC_NORMALIZATION = /[^a-z0-9]+/g;
 const UNSUPPORTED_WRITER_CLAIM = /\b(?:activat(?:e|es|ed|ing|ion)|contraction|development|engag(?:e|es|ed|ing|ement)|injur(?:y|ies)|internal forces?|joint (?:stress|protection|mobility)|mind-muscle|muscle (?:engagement|growth|involvement|recruitment|tension|effort)|muscular(?: work| tension)?|power production|spine (?:safety|strain)|strain|target (?:back )?muscles?|tension|tissue|glute involvement|work output)\b/i;
 const TECHNICAL_WRITER_LANGUAGE = /\b(?:biomechanics?|cervical|concentric|eccentric|hyperextension|implement|kinematic|kinetic chain|lumbar|peak contraction|scapular|thoracic|time under tension|trajectory)\b/i;
 const NUMERIC_TIMING_REFERENCE = /\b(?:at|around|near|after|before)\s+(?:the\s+)?\d+(?:\.\s*\d+)?\s*(?:seconds?|s)\b/i;
+const PLAIN_LANGUAGE_REPLACEMENTS: Array<[RegExp, string]> = [
+  [/\bpeak contraction\b/gi, "top of the rep"],
+  [/\bfull contraction\b/gi, "full top position"],
+  [/\bcontraction\b/gi, "top position"],
+  [/\bcervical spine\b/gi, "neck"],
+  [/\bcervical\b/gi, "neck"],
+  [/\bhyperextension\b/gi, "tilting too far back"],
+  [/\bconcentric phase\b/gi, "lifting phase"],
+  [/\bconcentric\b/gi, "lifting"],
+  [/\beccentric phase\b/gi, "lowering phase"],
+  [/\beccentric\b/gi, "lowering"],
+  [/\bnegative phase\b/gi, "lowering phase"],
+  [/\bscapular retraction\b/gi, "shoulder blades coming together"],
+  [/\bscapular\b/gi, "shoulder-blade"],
+  [/\bthoracic spine\b/gi, "upper back"],
+  [/\bthoracic\b/gi, "upper-back"],
+  [/\blumbar spine\b/gi, "lower back"],
+  [/\blumbar\b/gi, "lower-back"],
+  [/\btime under tension\b/gi, "controlled tempo"],
+  [/\bmuscular work\b/gi, "movement"],
+  [/\bmuscular tension\b/gi, "control"],
+  [/\bmuscle engagement\b/gi, "movement control"],
+  [/\bupper back engagement\b/gi, "upper-back control"],
+  [/\bengagement\b/gi, "control"],
+  [/\btension\b/gi, "control"],
+  [/\btarget muscles?\b/gi, "intended movement"],
+  [/\bbiomechanics?\b/gi, "movement"],
+  [/\bkinetic chain\b/gi, "whole-body movement"],
+  [/\bkinematic(?:s)?\b/gi, "movement"],
+  [/\btrajectory\b/gi, "path"],
+  [/\bsternum\b/gi, "chest"],
+  [/\badduct(?:ion)?\b/gi, "come together"],
+  [/\bretraction\b/gi, "pulling together"],
+];
 
 function sentenceCount(value: string): number {
   return sentenceParts(value).length;
@@ -177,17 +211,40 @@ function naturalObservableParagraph(value: unknown, fallback: string): string {
   return raw;
 }
 
-function requiredWriterParagraph(value: unknown, name: string, minimum: number, maximum: number): string {
-  const paragraph = humanizeCoachingTimeUnits(text(value, name));
+function plainWriterLanguage(value: string): string {
+  return PLAIN_LANGUAGE_REPLACEMENTS.reduce(
+    (current, [pattern, replacement]) => current.replace(pattern, replacement),
+    humanizeCoachingTimeUnits(value),
+  ).replace(/\s{2,}/g, " ").trim();
+}
+
+function sanitizeWriterValue(value: unknown): unknown {
+  if (typeof value === "string") return plainWriterLanguage(value);
+  if (Array.isArray(value)) return value.map(sanitizeWriterValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value as JsonRecord).map(([key, nested]) => [key, sanitizeWriterValue(nested)]));
+}
+
+function sentenceRange(value: string, fallback: string, minimum: number, maximum: number): string {
+  const primary = sentenceParts(plainWriterLanguage(value));
+  const additions = sentenceParts(plainWriterLanguage(fallback))
+    .filter((sentence) => !primary.includes(sentence));
+  const combined = [...primary, ...additions];
+  return combined.slice(0, Math.max(minimum, Math.min(maximum, combined.length))).join(" ");
+}
+
+function writerParagraphIssue(value: unknown, name: string, minimum: number, maximum: number): string | null {
+  if (typeof value !== "string" || !value.trim()) return `${name} must be non-empty text`;
+  const paragraph = humanizeCoachingTimeUnits(value.trim());
   if (UNSUPPORTED_WRITER_CLAIM.test(paragraph) || TECHNICAL_WRITER_LANGUAGE.test(paragraph)) {
-    throw new Error(`${name} contains unsupported coaching language`);
+    return `${name} contains unsupported coaching language`;
   }
   const count = sentenceCount(paragraph);
   if (count < minimum || count > maximum) {
     const expected = minimum === maximum ? `exactly ${minimum === 1 ? "one" : minimum}` : `${minimum} to ${maximum}`;
-    throw new Error(`${name} must contain ${expected} ${minimum === 1 && maximum === 1 ? "sentence" : "sentences"}`);
+    return `${name} must contain ${expected} ${minimum === 1 && maximum === 1 ? "sentence" : "sentences"}`;
   }
-  return paragraph;
+  return null;
 }
 
 function visibleWhyFallback(topic: string, observation: string): string {
@@ -609,13 +666,63 @@ export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
   };
 }
 
+export function normalizeWholeVideoWriting(value: unknown, analysis: BoundaryFreeAnalysis): WholeVideoWriting {
+  let writing: WholeVideoWriting;
+  try {
+    writing = parseWholeVideoWriting(sanitizeWriterValue(value), analysis);
+  } catch {
+    writing = parseWholeVideoWriting(null, analysis);
+  }
+  const analystById = new Map(analysis.coachingItems.map((item) => [item.id, item]));
+
+  return {
+    ...writing,
+    overallAssessment: sentenceRange(writing.overallAssessment, overallAssessmentFallback(analysis), 3, 4),
+    coachNote: sentenceRange(writing.coachNote, coachNoteFallback(analysis), 3, 3),
+    movementScores: writing.movementScores.map((score) => ({
+      ...score,
+      label: sentenceRange(score.label, score.label, 1, 1),
+      observed: sentenceRange(score.observed, score.observed, 1, 3),
+    })),
+    coachingItems: writing.coachingItems.map((item) => {
+      const analyst = analystById.get(item.id);
+      const observationFallback = analyst
+        ? visibleObservationDetailFallback(analyst.topic, analyst.affectedRepNumbers)
+        : item.whatHappenedDetail ?? item.whatHappened;
+      const whyFallback = analyst
+        ? visibleWhyDetailFallback(analyst.topic, analyst.affectedRepNumbers)
+        : item.whyItMattersDetail ?? item.whyItMatters;
+      return {
+        ...item,
+        title: sentenceRange(item.title, analyst?.topic ?? item.title, 1, 1),
+        whatHappened: sentenceRange(item.whatHappened, analyst?.observation ?? item.whatHappened, 1, 1),
+        whatHappenedDetail: sentenceRange(item.whatHappenedDetail ?? "", observationFallback, 2, 3),
+        whyItMatters: sentenceRange(item.whyItMatters, analyst?.whyItMatters ?? item.whyItMatters, 1, 1),
+        whyItMattersDetail: sentenceRange(item.whyItMattersDetail ?? "", whyFallback, 2, 3),
+        whatToDo: sentenceRange(item.whatToDo, analyst?.correctionDirection ?? item.whatToDo, 1, 1),
+        successCheck: null,
+      };
+    }),
+    strengths: writing.strengths.map((strength) => ({
+      ...strength,
+      title: sentenceRange(strength.title, strength.title, 1, 1),
+      detail: sentenceRange(strength.detail, strength.detail, 1, 3),
+    })),
+  };
+}
+
 export function parseRequiredWholeVideoWriting(value: unknown, analysis: BoundaryFreeAnalysis): WholeVideoWriting {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error("writer response must be an object");
   }
   const result = value as JsonRecord;
-  requiredWriterParagraph(result.overallAssessment, "overallAssessment", 3, 4);
-  requiredWriterParagraph(result.coachNote, "coachNote", 3, 3);
+  const issues: string[] = [];
+  const checkParagraph = (paragraph: unknown, name: string, minimum: number, maximum: number) => {
+    const issue = writerParagraphIssue(paragraph, name, minimum, maximum);
+    if (issue) issues.push(issue);
+  };
+  checkParagraph(result.overallAssessment, "overallAssessment", 3, 4);
+  checkParagraph(result.coachNote, "coachNote", 3, 3);
 
   if (!Array.isArray(result.coachingItems) || result.coachingItems.length !== analysis.coachingItems.length) {
     throw new Error("writer coachingItems must include every analyst issue exactly once");
@@ -629,14 +736,14 @@ export function parseRequiredWholeVideoWriting(value: unknown, analysis: Boundar
       throw new Error("writer coachingItems must include every analyst issue exactly once");
     }
     returnedFindingIds.add(id);
-    requiredWriterParagraph(item.title, `coachingItems[${index}].title`, 1, 1);
-    requiredWriterParagraph(item.whatHappened, `coachingItems[${index}].whatHappened`, 1, 1);
-    requiredWriterParagraph(item.whatHappenedDetail, `coachingItems[${index}].whatHappenedDetail`, 2, 3);
-    requiredWriterParagraph(item.whyItMatters, `coachingItems[${index}].whyItMatters`, 1, 1);
-    requiredWriterParagraph(item.whyItMattersDetail, `coachingItems[${index}].whyItMattersDetail`, 2, 3);
-    requiredWriterParagraph(item.whatToDo, `coachingItems[${index}].whatToDo`, 1, 1);
+    checkParagraph(item.title, `coachingItems[${index}].title`, 1, 1);
+    checkParagraph(item.whatHappened, `coachingItems[${index}].whatHappened`, 1, 1);
+    checkParagraph(item.whatHappenedDetail, `coachingItems[${index}].whatHappenedDetail`, 2, 3);
+    checkParagraph(item.whyItMatters, `coachingItems[${index}].whyItMatters`, 1, 1);
+    checkParagraph(item.whyItMattersDetail, `coachingItems[${index}].whyItMattersDetail`, 2, 3);
+    checkParagraph(item.whatToDo, `coachingItems[${index}].whatToDo`, 1, 1);
     if (item.successCheck !== undefined && item.successCheck !== null) {
-      throw new Error(`coachingItems[${index}].successCheck must not be returned`);
+      issues.push(`coachingItems[${index}].successCheck must not be returned`);
     }
   });
 
@@ -652,8 +759,8 @@ export function parseRequiredWholeVideoWriting(value: unknown, analysis: Boundar
       throw new Error("writer strengths must include every analyst strength exactly once");
     }
     returnedStrengthIds.add(id);
-    requiredWriterParagraph(item.title, `strengths[${index}].title`, 1, 1);
-    requiredWriterParagraph(item.detail, `strengths[${index}].detail`, 1, 3);
+    checkParagraph(item.title, `strengths[${index}].title`, 1, 1);
+    checkParagraph(item.detail, `strengths[${index}].detail`, 1, 3);
   });
 
   if (!Array.isArray(result.movementScores) || result.movementScores.length !== 4) {
@@ -661,9 +768,13 @@ export function parseRequiredWholeVideoWriting(value: unknown, analysis: Boundar
   }
   result.movementScores.forEach((raw, index) => {
     const item = record(raw, `movementScores[${index}]`);
-    requiredWriterParagraph(item.label, `movementScores[${index}].label`, 1, 1);
-    requiredWriterParagraph(item.observed, `movementScores[${index}].observed`, 1, 3);
+    checkParagraph(item.label, `movementScores[${index}].label`, 1, 1);
+    checkParagraph(item.observed, `movementScores[${index}].observed`, 1, 3);
   });
+
+  if (issues.length > 0) {
+    throw new Error(`writer response invalid:\n- ${issues.join("\n- ")}`);
+  }
 
   return parseWholeVideoWriting(value, analysis);
 }
@@ -1059,6 +1170,8 @@ export const WHOLE_VIDEO_WRITING_SCHEMA = {
 } as const;
 
 const NATURAL_COACHING_INSTRUCTIONS = `Write like a helpful trainer talking to a person at the gym. Use everyday words and short, natural sentences that a beginner can understand on the first read. Name the actual exercise, equipment or handle, familiar body part, and useful part of the rep. Translate technical analyst language into ordinary gym language without changing the visible fact.
+
+Do not copy technical terms from the analyst record. Never use activation, engagement, contraction, muscular work, muscular tension, target muscles, biomechanics, cervical, concentric, eccentric, hyperextension, kinematic, kinetic chain, lumbar, scapular, thoracic, time under tension, or trajectory. Translate them into familiar body parts and plain actions such as neck, shoulder blades, lifting, lowering, top of the rep, bottom of the rep, or movement path.
 
 Each coaching tab has two deliberately separate display fields. The first is a white bold summary: one short, plain sentence that summarizes the point without loading it with rep numbers or supporting evidence. The second is smaller gray detail: the specific explanation that names the exercise, equipment or familiar body part, the useful part of the rep, exact rep progression when supported, and the visible change. Never put detail into the summary and never make the app derive either field by splitting a paragraph.
 
