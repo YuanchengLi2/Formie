@@ -99,7 +99,7 @@ export type WholeVideoWriting = {
     whyItMatters: string;
     whyItMattersDetail?: string;
     whatToDo: string;
-    successCheck: string;
+    successCheck: string | null;
   }>;
   strengths: Array<{ id: string; title: string; detail: string }>;
 };
@@ -114,7 +114,8 @@ const ANATOMY_REGION_ALIASES: Record<string, AnatomyRegion> = {
 };
 const MUSCLE_REGIONS = ["chest", "front_shoulders", "rear_shoulders", "upper_back", "lats", "biceps", "triceps", "forearms", "abs", "obliques", "lower_back", "glutes", "quads", "hamstrings", "adductors", "calves"] as const;
 const TOPIC_NORMALIZATION = /[^a-z0-9]+/g;
-const UNSUPPORTED_WRITER_CLAIM = /\b(?:activat(?:e|es|ed|ing|ion)|development|injur(?:y|ies)|internal forces?|joint (?:stress|protection|mobility)|mind-muscle|muscle (?:engagement|growth|involvement|recruitment|tension|effort)|muscular tension|power production|spine (?:safety|strain)|strain|tissue|glute involvement|work output)\b/i;
+const UNSUPPORTED_WRITER_CLAIM = /\b(?:activat(?:e|es|ed|ing|ion)|contraction|development|engag(?:e|es|ed|ing|ement)|injur(?:y|ies)|internal forces?|joint (?:stress|protection|mobility)|mind-muscle|muscle (?:engagement|growth|involvement|recruitment|tension|effort)|muscular(?: work| tension)?|power production|spine (?:safety|strain)|strain|target (?:back )?muscles?|tension|tissue|glute involvement|work output)\b/i;
+const TECHNICAL_WRITER_LANGUAGE = /\b(?:biomechanics?|cervical|concentric|eccentric|hyperextension|implement|kinematic|kinetic chain|lumbar|peak contraction|scapular|thoracic|time under tension|trajectory)\b/i;
 const NUMERIC_TIMING_REFERENCE = /\b(?:at|around|near|after|before)\s+(?:the\s+)?\d+(?:\.\s*\d+)?\s*(?:seconds?|s)\b/i;
 
 function sentenceCount(value: string): number {
@@ -174,6 +175,19 @@ function naturalObservableParagraph(value: unknown, fallback: string): string {
   const raw = typeof value === "string" ? value.trim() : "";
   if (!raw || UNSUPPORTED_WRITER_CLAIM.test(raw)) return fallback;
   return raw;
+}
+
+function requiredWriterParagraph(value: unknown, name: string, minimum: number, maximum: number): string {
+  const paragraph = humanizeCoachingTimeUnits(text(value, name));
+  if (UNSUPPORTED_WRITER_CLAIM.test(paragraph) || TECHNICAL_WRITER_LANGUAGE.test(paragraph)) {
+    throw new Error(`${name} contains unsupported coaching language`);
+  }
+  const count = sentenceCount(paragraph);
+  if (count < minimum || count > maximum) {
+    const expected = minimum === maximum ? `exactly ${minimum === 1 ? "one" : minimum}` : `${minimum} to ${maximum}`;
+    throw new Error(`${name} must contain ${expected} ${minimum === 1 && maximum === 1 ? "sentence" : "sentences"}`);
+  }
+  return paragraph;
 }
 
 function visibleWhyFallback(topic: string, observation: string): string {
@@ -469,9 +483,9 @@ function parseScores(value: unknown, findingIds: Set<string>): MovementScore[] {
 }
 
 export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAnalysis): WholeVideoWriting {
-  // The video analyst is the source of truth. A writer response is a
-  // presentation enhancement, so malformed or unavailable prose must never
-  // discard an otherwise valid visual analysis or force a retry_wait state.
+  // Keep this permissive mapper for stored legacy results and migrations.
+  // New analyses use parseRequiredWholeVideoWriting and cannot publish
+  // analyst notes as user-facing coaching.
   const result = value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
   const findingIds = new Set(analysis.coachingItems.map((item) => item.id));
   const strengthIds = new Set(analysis.strengths.map((item) => item.id));
@@ -542,12 +556,11 @@ export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
         : null,
       source.correctionDirection,
     );
-    const successCheck = safeCopy(
-      typeof item?.successCheck === "string" && item.successCheck.trim() && !UNSUPPORTED_WRITER_CLAIM.test(item.successCheck)
-        ? item.successCheck.trim()
-        : null,
-      source.successCheck,
-    );
+    const successCheck = item
+      ? (typeof item.successCheck === "string" && item.successCheck.trim() && !UNSUPPORTED_WRITER_CLAIM.test(item.successCheck)
+        ? safeCopy(item.successCheck.trim(), source.successCheck)
+        : null)
+      : safeCopy(null, source.successCheck);
     return {
       id: source.id,
       title: safeHeadline(item?.title) ?? source.topic,
@@ -594,6 +607,65 @@ export function parseWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
     coachingItems,
     strengths,
   };
+}
+
+export function parseRequiredWholeVideoWriting(value: unknown, analysis: BoundaryFreeAnalysis): WholeVideoWriting {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("writer response must be an object");
+  }
+  const result = value as JsonRecord;
+  requiredWriterParagraph(result.overallAssessment, "overallAssessment", 3, 4);
+  requiredWriterParagraph(result.coachNote, "coachNote", 3, 3);
+
+  if (!Array.isArray(result.coachingItems) || result.coachingItems.length !== analysis.coachingItems.length) {
+    throw new Error("writer coachingItems must include every analyst issue exactly once");
+  }
+  const expectedFindingIds = new Set(analysis.coachingItems.map((item) => item.id));
+  const returnedFindingIds = new Set<string>();
+  result.coachingItems.forEach((raw, index) => {
+    const item = record(raw, `coachingItems[${index}]`);
+    const id = text(item.id, `coachingItems[${index}].id`);
+    if (!expectedFindingIds.has(id) || returnedFindingIds.has(id)) {
+      throw new Error("writer coachingItems must include every analyst issue exactly once");
+    }
+    returnedFindingIds.add(id);
+    requiredWriterParagraph(item.title, `coachingItems[${index}].title`, 1, 1);
+    requiredWriterParagraph(item.whatHappened, `coachingItems[${index}].whatHappened`, 1, 1);
+    requiredWriterParagraph(item.whatHappenedDetail, `coachingItems[${index}].whatHappenedDetail`, 2, 3);
+    requiredWriterParagraph(item.whyItMatters, `coachingItems[${index}].whyItMatters`, 1, 1);
+    requiredWriterParagraph(item.whyItMattersDetail, `coachingItems[${index}].whyItMattersDetail`, 2, 3);
+    requiredWriterParagraph(item.whatToDo, `coachingItems[${index}].whatToDo`, 1, 1);
+    if (item.successCheck !== undefined && item.successCheck !== null) {
+      throw new Error(`coachingItems[${index}].successCheck must not be returned`);
+    }
+  });
+
+  if (!Array.isArray(result.strengths) || result.strengths.length !== analysis.strengths.length) {
+    throw new Error("writer strengths must include every analyst strength exactly once");
+  }
+  const expectedStrengthIds = new Set(analysis.strengths.map((item) => item.id));
+  const returnedStrengthIds = new Set<string>();
+  result.strengths.forEach((raw, index) => {
+    const item = record(raw, `strengths[${index}]`);
+    const id = text(item.id, `strengths[${index}].id`);
+    if (!expectedStrengthIds.has(id) || returnedStrengthIds.has(id)) {
+      throw new Error("writer strengths must include every analyst strength exactly once");
+    }
+    returnedStrengthIds.add(id);
+    requiredWriterParagraph(item.title, `strengths[${index}].title`, 1, 1);
+    requiredWriterParagraph(item.detail, `strengths[${index}].detail`, 1, 3);
+  });
+
+  if (!Array.isArray(result.movementScores) || result.movementScores.length !== 4) {
+    throw new Error("writer movementScores must contain exactly four scores");
+  }
+  result.movementScores.forEach((raw, index) => {
+    const item = record(raw, `movementScores[${index}]`);
+    requiredWriterParagraph(item.label, `movementScores[${index}].label`, 1, 1);
+    requiredWriterParagraph(item.observed, `movementScores[${index}].observed`, 1, 3);
+  });
+
+  return parseWholeVideoWriting(value, analysis);
 }
 
 export function parseBoundaryFreeAnalysis(value: unknown, durationMs: number): BoundaryFreeAnalysis {
@@ -967,10 +1039,10 @@ export const WHOLE_VIDEO_WRITING_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "title", "whatHappened", "whatHappenedDetail", "whyItMatters", "whyItMattersDetail", "whatToDo", "successCheck"],
+        required: ["id", "title", "whatHappened", "whatHappenedDetail", "whyItMatters", "whyItMattersDetail", "whatToDo"],
         properties: {
           id: { type: "string" }, title: { type: "string" }, whatHappened: { type: "string" },
-          whatHappenedDetail: { type: "string" }, whyItMatters: { type: "string" }, whyItMattersDetail: { type: "string" }, whatToDo: { type: "string" }, successCheck: { type: "string" },
+          whatHappenedDetail: { type: "string" }, whyItMatters: { type: "string" }, whyItMattersDetail: { type: "string" }, whatToDo: { type: "string" },
         },
       },
     },
@@ -988,13 +1060,15 @@ export const WHOLE_VIDEO_WRITING_SCHEMA = {
 
 const NATURAL_COACHING_INSTRUCTIONS = `Write like a helpful trainer talking to a person at the gym. Use everyday words and short, natural sentences that a beginner can understand on the first read. Name the actual exercise, equipment or handle, familiar body part, and useful part of the rep. Translate technical analyst language into ordinary gym language without changing the visible fact.
 
-For every issue, the complete What happened section across observation and observationDetails has a recommended range of one to three sentences. Put the opening sentence in observation and supporting sentences in observationDetails. Say exactly what the person visibly did, where it happened in the rep, and how it changed from the beginning to the middle or end when the evidence supports that comparison. If it happened once, say so honestly. Do not turn the section into a chronological rep log or repeat the same sentence template across findings.
+Each coaching tab has two deliberately separate display fields. The first is a white bold summary: one short, plain sentence that summarizes the point without loading it with rep numbers or supporting evidence. The second is smaller gray detail: the specific explanation that names the exercise, equipment or familiar body part, the useful part of the rep, exact rep progression when supported, and the visible change. Never put detail into the summary and never make the app derive either field by splitting a paragraph.
 
-The complete Why it matters section across whyItMatters and whyDetails has a recommended range of two to three sentences. Put the opening reason in whyItMatters and supporting explanation in whyDetails. Explain one simple, practical consequence for this exercise's visible path, range, control, steadiness, position, balance, tempo, or repeatability. Do not repeat What happened or use generic wording that could fit any exercise.
+For What happened, write the white bold summary in whatHappened and the smaller gray detail in whatHappenedDetail. What happened detail must contain two to three sentences. Say exactly what the person visibly did, where it happened in the rep, and how it changed from the beginning to the middle or end when the evidence supports that comparison. If it happened once, say so honestly. Do not turn the detail into a chronological rep log or repeat the same sentence template across findings.
 
-The complete What to do next section across correctionDirection and successCheck has a recommended range of one to two sentences. Give one clear physical instruction tied to the same body part or equipment and the part of the rep where it applies. Use successCheck for an easy visible comparison when that adds value. Do not repeat the observation or rationale.
+For Why it matters, write the white bold summary in whyItMatters and the smaller gray detail in whyItMattersDetail. Why it matters detail must contain two to three sentences. Explain one simple, practical consequence for this exercise's visible path, range, control, steadiness, position, balance, tempo, or repeatability. Do not repeat What happened or use generic wording that could fit any exercise.
 
-These sentence ranges are guidance, not truncation rules or validation requirements. Use complete grammatical sentences, natural transitions, and correct punctuation. Do not compress useful coaching into fragments, force every sentence under a fixed word count, pad sections, use canned phrases, or write Markdown. The app controls which sentence is bold.
+What to do next has no gray detail field. Write only whatToDo as one complete white instruction that clearly tells the person what body part or equipment to move or hold, and where in the rep to do it. Do not return successCheck, and do not repeat the observation or rationale.
+
+The three white summaries must each contain exactly one sentence. The gray detail sentence ranges are deterministic output requirements. Use complete grammatical sentences, natural transitions, and correct punctuation. Do not compress useful coaching into fragments, force every sentence under a fixed word count, pad sections, use canned phrases, or write Markdown.
 
 Keep the voice calm, candid, specific, and easy to picture. Keep every field about the same issue. Never add hidden muscle activation, internal force, exact joint angles, pain, strain, injury, tissue, or medical claims. Do not recommend changing load, stance, equipment, or setup unless the visible evidence directly shows that change is needed.`;
 
@@ -1008,7 +1082,7 @@ ${NATURAL_COACHING_INSTRUCTIONS}
 
 overallAssessment must contain three to four sentences. Summarize the complete set, its clearest strength, its main change, and the top priority. coachNote must contain exactly three sentences: what the user did, why the main pattern matters, and the clearest next-set focus.
 
-Write direct, supportive coaching for this exact recorded set. Never write generic advice that could be pasted onto another person's result. Tie each whatToDo and successCheck to that finding's visible body position, path, range, tempo, equipment contact, or beginning-to-end change. Use the declared exercise, load, equipment, side, or set amount when it genuinely makes the instruction more personal. The overallAssessment and coachNote must name concrete details unique to this set.
+Write direct, supportive coaching for this exact recorded set. Never write generic advice that could be pasted onto another person's result. Tie each whatToDo to that finding's visible body position, path, range, tempo, equipment contact, or beginning-to-end change. Use the declared exercise, load, equipment, side, or set amount when it genuinely makes the instruction more personal. The overallAssessment and coachNote must name concrete details unique to this set.
 
 Keep every observation visual: do not claim muscle activation, recruitment, growth, internal forces, joint stress or protection, strain, injury risk, pain, tissue effects, or medical safety. Explain visible consistency, control, path, range, balance, or stability instead. Keep scores generous but honest: 90-100 is excellent with only tiny refinements; 80-89 is strong; 70-79 is generally good with fixable issues; 60-69 means several clear problems; below 60 is reserved for major or repeated problems. Recognize visible strengths and do not punish camera uncertainty. Return exactly four distinct, exercise-specific scores. Do not return general guidance or view notes.`;
 
@@ -1037,6 +1111,21 @@ export function buildWholeVideoWritingPrompt(analysis: BoundaryFreeAnalysis, dec
   return `Validated analysis:\n${JSON.stringify(immutableAnalysis)}`;
 }
 
+export function buildWholeVideoWritingRepairPrompt(
+  analysis: BoundaryFreeAnalysis,
+  declaration: SetDeclaration | undefined,
+  rejectedWriting: unknown,
+  validationError: unknown,
+): string {
+  const reason = validationError instanceof Error ? validationError.message : String(validationError);
+  return `${buildWholeVideoWritingPrompt(analysis, declaration)}
+
+The previous coaching JSON was rejected by the application validator. Rewrite the complete coaching JSON from the same immutable analyst facts. Fix only its wording or structure; do not add, remove, merge, rename, or reinterpret findings, strengths, evidence, reps, scores, or exercise facts.
+Validation issue: ${reason}
+Rejected coaching JSON:
+${JSON.stringify(rejectedWriting)}`;
+}
+
 export const BOUNDARY_FREE_ANALYSIS_SCHEMA = {
   type: "object", additionalProperties: false,
   required: ["videoUnderstanding", "movementScores", "muscleFocus", "coachingItems", "evidenceSelections"],
@@ -1057,7 +1146,7 @@ function declaredSetSummary(declaration?: SetDeclaration): string {
 }
 
 export function buildBoundaryFreeAnalysisPrompt(durationMs: number, declaration?: SetDeclaration): string {
-  return `You are Formie's full-video exercise analyst and coaching writer. The recording is ${durationMs} ms long. ${declaredSetSummary(declaration)}
+  return `You are Formie's full-video exercise analyst. You do not write the user-facing coaching. The recording is ${durationMs} ms long. ${declaredSetSummary(declaration)}
 
 Watch the complete original recording once, from its first frame through its final frame, before drafting findings. The declared exercise is authoritative: do not rename or second-guess it. Orient mobile footage using gravity, the floor, bench, rack, and other stable scene references. Calibrate the actual camera view and lower confidence when foreshortening or occlusion hides depth instead of inventing a fault.
 
@@ -1077,9 +1166,7 @@ Build one ranked inventory of all independently visible, useful problems. Return
 
 Every issue needs confidence of at least 0.75, exact affectedRepNumbers, its own matching evidence moments, and only the anatomical regions visibly involved. Choose peakMs as the clearest exact frame, with short surrounding context. Use recurrence language only when separated reps support it. Keep muscleFocus separate as normal exercise anatomy, never observed muscle activation.
 
-Write the final coaching directly in this response; no later model should reinterpret it.
-
-${NATURAL_COACHING_INSTRUCTIONS}
+Return the evidence-backed analyst record, not polished user-facing prose. A separate text-only coaching writer will receive these validated facts. Keep observation and observationDetails factual and specific; keep whyItMatters and whyDetails limited to visible movement consequences; keep correctionDirection, cue, and successCheck as precise analyst recommendations. Do not spend output on style, formatting, or display hierarchy, and do not address the user conversationally.
 
 Use topic as a short, neutral issue label. Use cue as one memorable version of the correction. Return exactly four distinct exercise-specific movement scores that agree with the issues, their severity, and recurrence. Recognize genuine strengths without using strengths as filler issues or punishing camera uncertainty.
 

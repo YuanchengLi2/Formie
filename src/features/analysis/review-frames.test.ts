@@ -44,7 +44,7 @@ describe("buildReviewFrames", () => {
     expect(groups.observed).toHaveLength(1);
     expect(groups.why.map((frame) => frame.body)).toEqual(["Uneven shoulders reduce repeatability."]);
     expect(groups.next.map((frame) => frame.title)).toEqual(["Square your shoulders before each pull."]);
-    expect(groups.next.map((frame) => frame.body)).toEqual(["Both shoulders begin and finish level."]);
+    expect(groups.next.map((frame) => frame.body)).toEqual([undefined]);
     expect(new Set([...groups.observed, ...groups.why, ...groups.next].map((frame) => frame.id)).size).toBe(3);
   });
 
@@ -74,12 +74,12 @@ describe("buildReviewFrames", () => {
     expect(points[0].observed.body).toBe("Keep the pull controlled and focus on repeatable form during the full set.");
     expect(points[0].why.body).toBe("Uneven shoulders reduce repeatability.");
     expect(points[0].next.title).toBe("Square your shoulders before each pull.");
-    expect(points[0].next.body).toBe("Both shoulders begin and finish level.");
+    expect(points[0].next.body).toBeUndefined();
     expect(points[0].observed.timeMs).toBe(1_200);
     expect(points[0].observed.timeMs).not.toBe(points[0].observed.evidence.startMs);
     expect(points[0].observed.timeMs).not.toBe(points[0].observed.evidence.endMs);
     expect(points[0].paragraph).toBe(
-      "Keep the pull controlled and focus on repeatable form during the full set. Uneven shoulders reduce repeatability. Square your shoulders before each pull. Both shoulders begin and finish level.",
+      "Keep the pull controlled and focus on repeatable form during the full set. Uneven shoulders reduce repeatability. Square your shoulders before each pull.",
     );
     expect(points[1].observed.title).toBe("Control the lowering");
     expect(points[1].next.title).toBe("Lower for two seconds.");
@@ -177,7 +177,7 @@ describe("buildReviewFrames", () => {
     expect(point.observed.body).toBe(value.priorityCorrections[0].expandedCoaching?.whatHappened);
     expect(point.why.body).toBe(value.priorityCorrections[0].expandedCoaching?.whyItMatters);
     expect(point.next.title).toBe("Start the next rep with both shoulders level.");
-    expect(point.next.body).toBe("Both shoulders finish at the same height.");
+    expect(point.next.body).toBeUndefined();
     expect(point.observed.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(5);
     expect(point.why.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
   });

@@ -48,13 +48,6 @@ export function plainCoachingText(value: string): string {
     .trim();
 }
 
-function splitOpeningSentence(value: string): { opening: string; supporting: string } {
-  const match = value.trim().match(/^(.+?[.!?])(?:\s+|$)([\s\S]*)$/);
-  return match
-    ? { opening: match[1].trim(), supporting: match[2].trim() }
-    : { opening: value.trim(), supporting: "" };
-}
-
 function SummaryList({ title, items, testPrefix }: { title: string; items: { id: string; text: string }[]; testPrefix: string }) {
   if (items.length === 0) return null;
   const treatment = title === "WHAT YOU DID WELL"
@@ -178,14 +171,20 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
     }
   };
 
-  const activeCoachingCopy = point
+  const activeCoachingSummary = point
     ? purpose === "observed"
-      ? normalizeAnalysisText([point.observed.body, point.observed.detail].filter(Boolean).join(" "))
+      ? normalizeAnalysisText(point.observed.body ?? "")
       : purpose === "why"
-        ? normalizeAnalysisText([point.why.body ?? point.observed.finding.whyItMatters, point.why.detail].filter(Boolean).join(" "))
-        : normalizeAnalysisText([point.next.title, point.next.body].filter(Boolean).join(" "))
+        ? normalizeAnalysisText(point.why.body ?? point.observed.finding.whyItMatters)
+        : normalizeAnalysisText(point.next.title)
     : "";
-  const { opening: activeCoachingOpening, supporting: activeCoachingSupporting } = splitOpeningSentence(plainCoachingText(activeCoachingCopy));
+  const activeCoachingDetail = point
+    ? purpose === "observed"
+      ? normalizeAnalysisText(point.observed.detail ?? "")
+      : purpose === "why"
+        ? normalizeAnalysisText(point.why.detail ?? "")
+        : ""
+    : "";
   const activeCoachingTestId = purpose === "observed" ? "coaching-what-happened" : purpose === "why" ? "coaching-why-it-matters" : "coaching-what-to-do-next";
 
   if (presentation.status === "unable") {
@@ -231,14 +230,14 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
             testID={`${activeCoachingTestId}${purpose === "next" ? "" : "-copy"}`}
             style={{ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: "700" }}
           >
-            {plainCoachingText(activeCoachingOpening)}
+            {plainCoachingText(activeCoachingSummary)}
           </Text>
-          {activeCoachingSupporting ? <Text
+          {activeCoachingDetail ? <Text
             selectable
             testID={`${activeCoachingTestId}-detail`}
             style={{ color: colors.textSecondary, fontSize: 15, lineHeight: 22, fontWeight: "400" }}
           >
-            {plainCoachingText(activeCoachingSupporting)}
+            {plainCoachingText(activeCoachingDetail)}
           </Text> : null}
         </View>
       </View>

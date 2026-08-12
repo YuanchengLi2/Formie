@@ -111,7 +111,7 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       evidence,
       evidenceIndex,
       expanded?.whatToDo ?? action?.instruction ?? finding.correction ?? finding.cue ?? finding.title,
-      compactParagraph([expanded?.successCheck ?? action?.successCheck]),
+      undefined,
       undefined,
     );
     const paragraph = [

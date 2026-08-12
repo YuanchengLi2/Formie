@@ -70,6 +70,7 @@ describe("resultPayload", () => {
       "gemini-whole-video-v64-durable-single-pass-retry",
       "gemini-whole-video-v65-original-coaching",
       "gemini-whole-video-v66-original-coaching-provider-compatible",
+      "gemini-whole-video-v67-fact-then-write",
     ]) {
       const current = resultPayload({ pipeline_version, detected_label: "Squat", detected_equipment: [], exercise_family: "squat" }, result);
       expect(current?.priorityCorrections).toBe(result.priority_corrections);

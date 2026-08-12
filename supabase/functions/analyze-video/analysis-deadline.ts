@@ -1,4 +1,4 @@
-export type TimedAnalysisStage = "analyzing";
+export type TimedAnalysisStage = "analyzing" | "finalizing";
 
 const SERVER_BUDGET_MS = 120_000;
 
@@ -26,7 +26,8 @@ export class AnalysisDeadline {
     return Math.max(0, this.deadlineMs - nowMs);
   }
 
-  timeoutFor(_stage: TimedAnalysisStage, nowMs = Date.now()): number {
-    return Math.max(0, Math.min(115_000, this.remainingMs(nowMs)));
+  timeoutFor(stage: TimedAnalysisStage, nowMs = Date.now()): number {
+    const stageLimitMs = stage === "finalizing" ? 30_000 : 115_000;
+    return Math.max(0, Math.min(stageLimitMs, this.remainingMs(nowMs)));
   }
 }

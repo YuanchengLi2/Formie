@@ -3,16 +3,21 @@ import {
   ANALYST_THINKING_LEVEL,
   REQUESTED_ANALYSIS_FPS,
   REQUESTED_ANALYSIS_MEDIA_RESOLUTION,
+  WRITER_THINKING_LEVEL,
 } from "../_shared/analysis-settings.ts";
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
-import { buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
+import { buildTextGenerateContentRequest, buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
 import { createGeminiFilesClient, reuseOrUploadGeminiFile, type GeminiFile } from "../_shared/gemini-files.ts";
 import {
   buildBoundaryFreeAnalysisPrompt,
+  buildWholeVideoWritingRepairPrompt,
+  buildWholeVideoWritingPrompt,
   parseBoundaryFreeAnalysis,
-  parseWholeVideoWriting,
+  parseRequiredWholeVideoWriting,
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
+  WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
+  WHOLE_VIDEO_WRITING_SCHEMA,
   boundaryFreeToCandidate,
 } from "../_shared/boundary-free-analysis.ts";
 import type { ExerciseFamily } from "../_shared/analysis-contract.ts";
@@ -23,11 +28,13 @@ import { selectGeminiVideoPath } from "./analysis-input.ts";
 import { advanceWholeVideoPipeline } from "./whole-video-runner.ts";
 import { analyzeWholeVideoHandler, type WholeVideoSession } from "./whole-video-handler.ts";
 import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline.ts";
+import { writeValidatedCoaching } from "./coaching-writer.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v66-original-coaching-provider-compatible";
+const PIPELINE_VERSION = "gemini-whole-video-v67-fact-then-write";
 const MAX_DURABLE_RETRIES = 3;
 const ANALYST_MODEL = "gemini-3.6-flash";
+const WRITER_MODEL = "gemini-3.6-flash";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
 const files = createGeminiFilesClient({ apiKey });
 const generation = createGenerateContentClient({ apiKey });
@@ -312,6 +319,7 @@ Deno.serve(async (request) => {
       if (resultError) throw resultError;
       if (storedStageError) throw storedStageError;
       if (!session) return null;
+      const currentPipeline = session.pipeline_version === PIPELINE_VERSION;
       const declaration = session.set_declaration ? parseSetDeclaration(session.set_declaration) : null;
       let catalogExerciseFamily: ExerciseFamily | undefined;
       let catalogEquipment: string[] | undefined;
@@ -347,7 +355,7 @@ Deno.serve(async (request) => {
         geminiFileState: session.gemini_file_state ?? null,
         durationMs: session.duration_ms,
         result: resultPayload(session, result),
-        analysisDecision: session.analysis_draft && typeof session.analysis_draft === "object" ? session.analysis_draft : null,
+        analysisDecision: currentPipeline && session.analysis_draft && typeof session.analysis_draft === "object" ? session.analysis_draft : null,
         storedVideoStageOutput: storedStage?.output && typeof storedStage.output === "object" ? storedStage.output : null,
         hasStoredVideoEvidence: Boolean(session.analysis_draft || storedStage?.output),
         analysisRetryCount: Number(session.analysis_retry_count ?? 0),
@@ -361,8 +369,9 @@ Deno.serve(async (request) => {
       const durationMs = rawSession.durationMs!;
       const declaration = rawSession.setDeclaration ? parseSetDeclaration(rawSession.setDeclaration) : undefined;
       const rawDecision = rawSession.analysisDecision && typeof rawSession.analysisDecision === "object" ? rawSession.analysisDecision as JsonRecord : null;
-          // One full-video call establishes the evidence. The optional text-only
-          // writer can improve copy, but it cannot rewatch or fail the analysis.
+          // One full-video call establishes the evidence. The mandatory text-only
+          // writer turns those saved facts into user-facing coaching without
+          // receiving the video or changing the analyst's findings.
       let analysisVideo: WholeVideoInput | null = null;
       let geminiFileName: string | null = typeof rawSession.geminiFileName === "string" ? rawSession.geminiFileName : null;
       let geminiFile: GeminiFile | null = null;
@@ -464,8 +473,33 @@ Deno.serve(async (request) => {
           } catch (error) {
             throw analysisContractError(error);
           }
+          rawSession.hasStoredVideoEvidence = true;
+          rawSession.storedVideoStageOutput = rawAnalysis;
+          rawSession.stage = "finalizing";
           await saveSessionStage("finalizing");
-          const writing = parseWholeVideoWriting(null, parsedAnalysis);
+          const writing = await runStage(sessionId, "finalizing", { kind: "writer", analysis: parsedAnalysis }, async () => {
+            const generateWriting = (prompt: string) => generate({
+              sessionId,
+              stage: "finalizing",
+              modelName: WRITER_MODEL,
+              request: buildTextGenerateContentRequest({
+                systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
+                prompt,
+                schema: WHOLE_VIDEO_WRITING_SCHEMA,
+                thinkingLevel: WRITER_THINKING_LEVEL,
+              }),
+              timeoutMs: deadline.timeoutFor("finalizing"),
+            });
+            try {
+              return await writeValidatedCoaching({
+                write: () => generateWriting(buildWholeVideoWritingPrompt(parsedAnalysis, declaration)),
+                repair: ({ rejected, validationError }) => generateWriting(buildWholeVideoWritingRepairPrompt(parsedAnalysis, declaration, rejected, validationError)),
+                parse: (value) => parseRequiredWholeVideoWriting(value, parsedAnalysis),
+              });
+            } catch (error) {
+              throw Object.assign(error instanceof Error ? error : new Error(String(error)), { code: "COACHING_WRITER_INVALID" });
+            }
+          });
           const decision = { analysis: parsedAnalysis, writing } as unknown as JsonRecord;
           await saveSessionStage("finalizing", { analysis_draft: decision });
           return decision;
@@ -476,7 +510,7 @@ Deno.serve(async (request) => {
           });
         },
         assembleResult: (decision) => {
-              const combined = decision as { analysis: ReturnType<typeof parseBoundaryFreeAnalysis>; writing: ReturnType<typeof parseWholeVideoWriting> };
+              const combined = decision as { analysis: ReturnType<typeof parseBoundaryFreeAnalysis>; writing: ReturnType<typeof parseRequiredWholeVideoWriting> };
               return boundaryFreeToCandidate(
                 combined.analysis,
                 declaration,

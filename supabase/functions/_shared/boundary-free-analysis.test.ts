@@ -5,6 +5,7 @@ import {
   buildWholeVideoWritingPrompt,
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
   parseBoundaryFreeAnalysis,
+  parseRequiredWholeVideoWriting,
   parseRecheckRequest,
   parseWholeVideoWriting,
   WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
@@ -367,15 +368,15 @@ describe("v63 full-video rep-audited coaching contract", () => {
     expect(() => parseBoundaryFreeAnalysis(concentrated, 9_000)).toThrow(/every observed repetition/i);
   });
 
-  it("uses the original natural coaching ranges in the one whole-video pass without requesting a rewatch", () => {
+  it("keeps the one whole-video pass focused on evidence for the separate writer", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(10_000);
 
-    expect(prompt).toContain("Write the final coaching directly in this response");
-    expect(prompt).toContain("recommended range of one to three sentences");
-    expect(prompt).toContain("recommended range of two to three sentences");
-    expect(prompt).toContain("recommended range of one to two sentences");
-    expect(prompt).toContain("guidance, not truncation rules or validation requirements");
-    expect(prompt).toContain("helpful trainer talking to a person at the gym");
+    expect(prompt).toContain("You do not write the user-facing coaching");
+    expect(prompt).not.toContain("analyst and coaching writer");
+    expect(prompt).toContain("Return the evidence-backed analyst record, not polished user-facing prose");
+    expect(prompt).toContain("A separate text-only coaching writer will receive these validated facts");
+    expect(prompt).not.toContain("white bold summary");
+    expect(prompt).not.toContain("smaller gray detail");
     expect(prompt).toContain("Always set recheckRequest to null");
     expect(prompt).not.toContain("Keep each coaching sentence under 18 words");
     expect(prompt).not.toContain("request a recheck only when");
@@ -422,21 +423,68 @@ describe("v63 full-video rep-audited coaching contract", () => {
     expect(prompt).not.toMatch(/"(?:start|peak|end)(?:Ms|Seconds)"/);
     expect(prompt).toContain('"repNumber":3');
     expect(prompt).toContain('"phase":"lowering"');
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("recommended range of one to three sentences");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("recommended range of two to three sentences");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("recommended range of one to two sentences");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("guidance, not truncation rules or validation requirements");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("whatHappened must be exactly one complete sentence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("What happened detail must contain two to three sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Why it matters detail must contain two to three sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("What to do next has no gray detail field");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("white summaries must each contain exactly one sentence");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("Keep each sentence under 18 words");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("coachNote must contain exactly three sentences");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("overallAssessment must contain three to four sentences");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("helpful trainer talking to a person at the gym");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("beginner can understand on the first read");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("actual exercise, equipment or handle, familiar body part");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Do not turn the section into a chronological rep log");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Do not turn the detail into a chronological rep log");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("title is only the concise issue label used for navigation");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("it is not the white coaching sentence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("The app controls which sentence is bold");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("white bold summary");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("smaller gray detail");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("What happened detail must contain two to three sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Why it matters detail must contain two to three sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("What to do next has no gray detail field");
+  });
+
+  it("requires complete writer copy instead of exposing rough analyst prose", () => {
+    expect(() => parseRequiredWholeVideoWriting(null, analysis)).toThrow("writer response must be an object");
+    const requiredItems = writing.coachingItems.map(({ successCheck: _successCheck, ...item }) => item);
+    expect(() => parseRequiredWholeVideoWriting({
+      ...writing,
+      coachingItems: [{
+        ...requiredItems[0],
+        whyItMattersDetail: "Full contraction ensures optimal muscle engagement.",
+      }],
+    }, analysis)).toThrow("unsupported coaching language");
+  });
+
+  it("enforces one white summary and the requested gray-detail sentence ranges", () => {
+    const requiredWriting = {
+      ...writing,
+      coachingItems: writing.coachingItems.map(({ successCheck: _successCheck, ...item }) => item),
+    };
+    const valid = parseRequiredWholeVideoWriting(requiredWriting, analysis);
+    expect(valid.coachingItems[0]).toMatchObject({
+      whatHappened: writing.coachingItems[0].whatHappened,
+      whatHappenedDetail: writing.coachingItems[0].whatHappenedDetail,
+      whyItMatters: writing.coachingItems[0].whyItMatters,
+      whyItMattersDetail: writing.coachingItems[0].whyItMattersDetail,
+      whatToDo: writing.coachingItems[0].whatToDo,
+      successCheck: null,
+    });
+    expect(() => parseRequiredWholeVideoWriting({
+      ...requiredWriting,
+      coachingItems: [{ ...requiredWriting.coachingItems[0], whatHappened: "Your lowering speeds up. It changes late." }],
+    }, analysis)).toThrow("whatHappened must contain exactly one sentence");
+    expect(() => parseRequiredWholeVideoWriting({
+      ...requiredWriting,
+      coachingItems: [{ ...requiredWriting.coachingItems[0], whyItMattersDetail: "The last rows are harder to match." }],
+    }, analysis)).toThrow("whyItMattersDetail must contain 2 to 3 sentences");
+    expect(() => parseRequiredWholeVideoWriting({
+      ...requiredWriting,
+      coachingItems: [{ ...requiredWriting.coachingItems[0], whatHappenedDetail: "Only one gray sentence." }],
+    }, analysis)).toThrow("whatHappenedDetail must contain 2 to 3 sentences");
+    expect(() => parseRequiredWholeVideoWriting({
+      ...requiredWriting,
+      coachingItems: [{ ...requiredWriting.coachingItems[0], successCheck: "Do not return gray next-step copy." }],
+    }, analysis)).toThrow("successCheck must not be returned");
   });
 
   it("converts leaked millisecond timestamps to readable seconds without rejecting the writing", () => {

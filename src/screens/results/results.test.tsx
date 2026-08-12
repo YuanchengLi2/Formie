@@ -191,7 +191,7 @@ describe("ResultsScreen", () => {
     expect(screen.getAllByTestId(/timeline-evidence-marker-/)).toHaveLength(4);
   }, 10_000);
 
-  it("renders What to do next as a separate two-sentence plain-text paragraph", async () => {
+  it("renders What to do next as one complete white instruction without gray copy", async () => {
     const value = result();
     value.priorityCorrections[0].expandedCoaching!.whatToDo = "**Start the next rep with both shoulders level.**";
     const screen = await renderResults(jest.fn(), value);
@@ -200,8 +200,7 @@ describe("ResultsScreen", () => {
     expect(instruction.props.children).toBe("Start the next rep with both shoulders level.");
     expect(instruction).toHaveStyle({ fontWeight: "700" });
     expect(screen.queryByText(/\*/)).toBeNull();
-    expect(screen.getByTestId("coaching-what-to-do-next-detail").props.children).toBe("Both shoulders finish at the same height.");
-    expect(screen.getByTestId("coaching-what-to-do-next-detail")).toHaveStyle({ color: colors.textSecondary, fontWeight: "400" });
+    expect(screen.queryByTestId("coaching-what-to-do-next-detail")).toBeNull();
   });
 
   it("renders What happened as one coherent paragraph while keeping Why it matters separate", async () => {
@@ -410,10 +409,10 @@ describe("ResultsScreen", () => {
     expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
   });
 
-  it("bolds only the opening What happened sentence and keeps the supporting sentences at regular weight", async () => {
+  it("renders writer summaries in white and writer details in gray without splitting or recombining them", async () => {
     const value = result();
     value.priorityCorrections[0].title = "Control the late descent";
-    value.priorityCorrections[0].expandedCoaching!.whatHappened = "The first visible sentence explains what happened.";
+    value.priorityCorrections[0].expandedCoaching!.whatHappened = "Your lowering speed changes. Keep this as one white summary field.";
     value.priorityCorrections[0].expandedCoaching!.whatHappenedDetail = "The second visible sentence adds the rep moment. The third visible sentence completes the observation.";
     const screen = await renderResults(jest.fn(), value);
 
@@ -430,8 +429,7 @@ describe("ResultsScreen", () => {
     await fireEvent.press(screen.getByLabelText("What to do next"));
     expect(screen.getByTestId("coaching-what-to-do-next").props.children).toBe("Start the next rep with both shoulders level.");
     expect(StyleSheet.flatten(screen.getByTestId("coaching-what-to-do-next").props.style)).toMatchObject({ color: colors.text, fontWeight: "700" });
-    expect(screen.getByTestId("coaching-what-to-do-next-detail").props.children).toBe("Both shoulders finish at the same height.");
-    expect(StyleSheet.flatten(screen.getByTestId("coaching-what-to-do-next-detail").props.style)).toMatchObject({ color: colors.textSecondary, fontWeight: "400" });
+    expect(screen.queryByTestId("coaching-what-to-do-next-detail")).toBeNull();
   });
 
   it("uses compact summary and list typography", async () => {
