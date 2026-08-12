@@ -13,7 +13,7 @@ import {
   buildBoundaryFreeAnalysisPrompt,
   buildWholeVideoWritingPrompt,
   parseBoundaryFreeAnalysis,
-  parseWholeVideoWriting,
+  mergeWholeVideoWriting,
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
   WHOLE_VIDEO_WRITING_SCHEMA,
   WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
@@ -30,7 +30,7 @@ import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 import { runNonBlockingWriter } from "./nonblocking-writer.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v63-three-sentence-what-happened";
+const PIPELINE_VERSION = "gemini-whole-video-v69-natural-three-sentence-coaching";
 const ANALYST_MODEL = "gemini-3.6-flash";
 const WRITER_MODEL = "gemini-3.6-flash";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
@@ -443,11 +443,10 @@ Deno.serve(async (request) => {
                   prompt: buildBoundaryFreeAnalysisPrompt(durationMs, declaration),
                   schema: BOUNDARY_FREE_ANALYSIS_SCHEMA,
               fps: REQUESTED_ANALYSIS_FPS,
-              thinkingLevel: ANALYST_THINKING_LEVEL,
-              mediaResolution: REQUESTED_ANALYSIS_MEDIA_RESOLUTION,
-              temperature: 0,
-              preserveSchemaBounds: true,
-            });
+                  thinkingLevel: ANALYST_THINKING_LEVEL,
+                  mediaResolution: REQUESTED_ANALYSIS_MEDIA_RESOLUTION,
+                  temperature: 0,
+                });
             const raw = await generate({ sessionId, stage: "analyzing", modelName: ANALYST_MODEL, request: requestBody, fps: REQUESTED_ANALYSIS_FPS, timeoutMs: deadline.timeoutFor("analyzing") }) as JsonRecord;
             return raw as JsonRecord;
           });
@@ -467,14 +466,13 @@ Deno.serve(async (request) => {
               const requestBody = buildTextGenerateContentRequest({
                 systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
                 prompt: buildWholeVideoWritingPrompt(parsedAnalysis, declaration),
-                schema: WHOLE_VIDEO_WRITING_SCHEMA,
-                thinkingLevel: WRITER_THINKING_LEVEL,
-                preserveSchemaBounds: true,
-              });
+                    schema: WHOLE_VIDEO_WRITING_SCHEMA,
+                    thinkingLevel: WRITER_THINKING_LEVEL,
+                  });
               return generate({ sessionId, stage: "finalizing", modelName: WRITER_MODEL, request: requestBody, timeoutMs });
             },
-            parse: (value) => parseWholeVideoWriting(value, parsedAnalysis),
-            fallback: () => parseWholeVideoWriting(null, parsedAnalysis),
+            merge: (value) => mergeWholeVideoWriting(value, parsedAnalysis),
+            fallback: () => mergeWholeVideoWriting(null, parsedAnalysis),
             onError: (error) => console.warn(JSON.stringify({ sessionId, code: "COACHING_WRITER_FALLBACK", message: error instanceof Error ? error.message : String(error) })),
           });
           const decision = { analysis: parsedAnalysis, writing } as unknown as JsonRecord;
@@ -487,7 +485,7 @@ Deno.serve(async (request) => {
           });
         },
         assembleResult: (decision) => {
-              const combined = decision as { analysis: ReturnType<typeof parseBoundaryFreeAnalysis>; writing: ReturnType<typeof parseWholeVideoWriting> };
+              const combined = decision as { analysis: ReturnType<typeof parseBoundaryFreeAnalysis>; writing: ReturnType<typeof mergeWholeVideoWriting> };
               return boundaryFreeToCandidate(
                 combined.analysis,
                 declaration,

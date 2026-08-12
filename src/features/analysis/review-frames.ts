@@ -101,8 +101,8 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       evidence,
       evidenceIndex,
       finding.title,
-      expanded?.whyItMatters?.trim() || compactParagraph([finding.whyItMatters], 3),
-      expanded?.whyItMattersDetail?.trim(),
+      compactParagraph([expanded?.whyItMatters?.trim() || finding.whyItMatters], 1),
+      compactParagraph([expanded?.whyItMattersDetail], 2),
       finding.id,
     );
     const next = frameFor(
@@ -110,8 +110,8 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       finding,
       evidence,
       evidenceIndex,
-      expanded?.whatToDo ?? action?.instruction ?? finding.correction ?? finding.cue ?? finding.title,
-      compactParagraph([expanded?.successCheck ?? action?.successCheck], 1),
+      compactParagraph([expanded?.whatToDo ?? action?.instruction ?? finding.correction ?? finding.cue ?? finding.title], 1) ?? finding.title,
+      undefined,
       undefined,
     );
     const paragraph = [

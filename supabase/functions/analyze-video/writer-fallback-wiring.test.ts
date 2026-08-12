@@ -11,9 +11,10 @@ describe("whole-video analyst and nonblocking writer wiring", () => {
     expect(source).toContain("buildWholeVideoWritingPrompt");
     expect(source).toContain("buildTextGenerateContentRequest");
     expect(source).toContain("modelName: WRITER_MODEL");
+    expect(source).not.toContain("preserveSchemaBounds: true");
     expect(source).not.toContain('runStage(sessionId, "analyzing", { kind: "writer"');
-    expect(source).toContain("fallback: () => parseWholeVideoWriting(null, parsedAnalysis)");
-    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v63-three-sentence-what-happened"');
+    expect(source).toContain("fallback: () => mergeWholeVideoWriting(null, parsedAnalysis)");
+    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v69-natural-three-sentence-coaching"');
     expect(source.indexOf("return raw as JsonRecord")).toBeLessThan(source.indexOf("parseBoundaryFreeAnalysis(rawAnalysis, durationMs)"));
   });
 
@@ -24,15 +25,15 @@ describe("whole-video analyst and nonblocking writer wiring", () => {
   it("returns analyst coaching when the text writer fails", async () => {
     await expect(runNonBlockingWriter({
       write: async () => { throw new Error("writer unavailable"); },
-      parse: () => "writer copy",
+      merge: () => "writer copy",
       fallback: () => "analyst copy",
     })).resolves.toBe("analyst copy");
   });
 
-  it("returns analyst coaching when the writer response cannot be parsed", async () => {
+  it("returns analyst coaching if merging unexpectedly fails", async () => {
     await expect(runNonBlockingWriter({
       write: async () => ({ malformed: true }),
-      parse: () => { throw new Error("malformed writer response"); },
+      merge: () => { throw new Error("unexpected merge failure"); },
       fallback: () => "analyst copy",
     })).resolves.toBe("analyst copy");
   });

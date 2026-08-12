@@ -6,7 +6,7 @@ import {
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
   parseBoundaryFreeAnalysis,
   parseRecheckRequest,
-  parseWholeVideoWriting,
+  mergeWholeVideoWriting,
   WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
   type BoundaryFreeAnalysis,
   type WholeVideoWriting,
@@ -80,7 +80,7 @@ const writing: WholeVideoWriting = {
   strengths: [],
 };
 
-describe("v63 full-video rep-audited coaching contract", () => {
+describe("clean full-video analysis and coaching contract", () => {
   const rawAnalysis = (count: number) => {
     const coachingItems = Array.from({ length: count }, (_, index) => ({
       id: `finding-${index + 1}`,
@@ -221,6 +221,21 @@ describe("v63 full-video rep-audited coaching contract", () => {
     expect(parseBoundaryFreeAnalysis(raw, 9_000).coachingItems[0].affectedRepNumbers).toEqual([1]);
   });
 
+  it("keeps all four findings when evidence omits optional repetition numbers", () => {
+    const raw = v56RawAnalysis();
+    raw.evidenceSelections = raw.evidenceSelections.map((selection) => ({
+      ...selection,
+      moments: selection.moments.map(({ repNumber: _repNumber, ...moment }) => moment),
+    }));
+
+    const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
+
+    expect(parsed.coachingItems).toHaveLength(4);
+    expect(parsed.coachingItems.map((item) => item.affectedRepNumbers)).toEqual(
+      raw.coachingItems.map((item) => item.affectedRepNumbers),
+    );
+  });
+
   it("uses the audited repetition as evidence fallback instead of rejecting the analysis", () => {
     const raw = v56RawAnalysis();
     raw.evidenceSelections[3].moments = [];
@@ -243,7 +258,7 @@ describe("v63 full-video rep-audited coaching contract", () => {
     expect(parseBoundaryFreeAnalysis(rawAnalysis(7), 9_000).coachingItems).toHaveLength(6);
   });
 
-  it("replaces unsupported physiology in explanations without discarding visible issues", () => {
+  it("preserves exercise-specific explanations without keyword censorship", () => {
     const raw = v56RawAnalysis();
     raw.coachingItems[0].whyItMatters = "Partial depth limits full lower-body muscle activation.";
     raw.coachingItems[0].whyDetails = "Greater depth optimizes quadriceps and glute development.";
@@ -253,22 +268,21 @@ describe("v63 full-video rep-audited coaching contract", () => {
     const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
 
     expect(parsed.coachingItems).toHaveLength(4);
-    expect(parsed.coachingItems[0].whyItMatters).not.toMatch(/activation|development/i);
-    expect(parsed.coachingItems[0].whyDetails).not.toMatch(/activation|development/i);
-    expect(parsed.coachingItems[1].whyItMatters).not.toMatch(/joint stress|tension|power production/i);
-    expect(parsed.coachingItems[1].whyDetails).not.toMatch(/joint stress|tension|power production/i);
+    expect(parsed.coachingItems[0].whyItMatters).toBe(raw.coachingItems[0].whyItMatters);
+    expect(parsed.coachingItems[0].whyDetails).toBe(raw.coachingItems[0].whyDetails);
+    expect(parsed.coachingItems[1].whyItMatters).toBe(raw.coachingItems[1].whyItMatters);
+    expect(parsed.coachingItems[1].whyDetails).toBe(raw.coachingItems[1].whyDetails);
     expect(parsed.coachingItems[0].observation).toBe(raw.coachingItems[0].observation);
   });
 
-  it("replaces muscular tension wording even when no other unsupported phrase is present", () => {
+  it("does not replace advanced coaching language with a generic visible-pattern sentence", () => {
     const raw = v56RawAnalysis();
     raw.coachingItems[3].whyItMatters = "Rapid turnaround reduces muscular tension at the deep position.";
 
     const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
 
     expect(parsed.coachingItems).toHaveLength(4);
-    expect(parsed.coachingItems[3].whyItMatters).not.toMatch(/muscular tension/i);
-    expect(parsed.coachingItems[3].whyItMatters).toMatch(/visible|timing|controlled|repeatable/i);
+    expect(parsed.coachingItems[3].whyItMatters).toBe("Rapid turnaround reduces muscular tension at the deep position.");
   });
 
   it("accepts four distinct evidence-backed coaching findings", () => {
@@ -302,7 +316,7 @@ describe("v63 full-video rep-audited coaching contract", () => {
     expect(() => parseBoundaryFreeAnalysis(rawAnalysis(3), 9_000)).toThrow(/at least four distinct evidence-backed/i);
   });
 
-  it("normalizes malformed coaching prose instead of rejecting an evidence-backed finding", () => {
+  it("leaves analyst wording intact for the separate coaching writer", () => {
     const raw = rawAnalysis(4);
     raw.coachingItems[3].observation = "One. Two. Three. Four.";
     raw.coachingItems[3].observationDetails = "Only one supporting sentence is returned.";
@@ -311,27 +325,30 @@ describe("v63 full-video rep-audited coaching contract", () => {
     const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
 
     expect(parsed.coachingItems).toHaveLength(4);
-    expect(parsed.coachingItems[3].observation).toBe("One.");
+    expect(parsed.coachingItems[3].observation).toBe("One. Two. Three. Four.");
     expect(parsed.coachingItems[3].observationDetails).toBe("Only one supporting sentence is returned.");
-    expect(parsed.coachingItems[3].correctionDirection).toBe("Make the correction.");
+    expect(parsed.coachingItems[3].correctionDirection).toBe("Make the correction. Keep doing it.");
   });
 
-  it("targets six real findings without inventing or rejecting when only four exist", () => {
+  it("asks for four to six form issues after understanding the complete video", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(9_000);
 
-    expect(prompt).toContain("stored pixel dimensions rely on rotation metadata");
-    expect(prompt).toContain("continuous active-set interval");
-    expect(prompt).toContain("equivalent phases near the beginning, middle, and end");
-    expect(prompt).toContain("repAudit");
-    expect(prompt).toContain("every observed repetition");
-    expect(prompt).toContain("universal path decision gate");
-    expect(prompt).toContain("Your target is six real coaching issues");
-    expect(prompt).toContain("Four is the fallback, not the target");
-    expect(prompt).toContain("Return between four and six real coaching issues");
-    expect(prompt).not.toContain("Use null");
-    expect(prompt).not.toContain("Return four to six distinct evidence-backed coaching issues");
-    expect(prompt).toContain("small but real visible optimization");
-    expect(prompt).not.toContain("auditCoverage");
+    expect(prompt).toContain("Watch and understand the complete recording");
+    expect(prompt).toContain("beginning, middle, and end");
+    expect(prompt).toContain("Return four to six distinct form issues");
+    expect(prompt).toContain("hands and grip");
+    expect(prompt).toContain("equipment and contact points");
+    expect(prompt).toContain("body position and alignment");
+    expect(prompt).toContain("left-right imbalance");
+    expect(prompt).toContain("recommended checks, not required categories");
+    expect(prompt).toContain("Do not report ordinary differences between repetitions, sets, or intentional variations as issues");
+    expect(prompt).toContain("Do not title or describe an issue as inconsistency, variation, or a change between repetitions");
+    expect(prompt).toContain("Changing arm position during a bodyweight squat is not itself a form issue");
+    expect(prompt).toContain("Do not infer a counterbalance benefit or balance fault from arm position alone");
+    expect(prompt).toContain("Do not report arm position as a second explanation for an already-reported torso or balance fault");
+    expect(prompt).not.toContain("universal path decision gate");
+    expect(prompt).not.toContain("Your target is six real coaching issues");
+    expect(prompt).not.toContain("Keep each coaching sentence under 18 words");
   });
 
   it("rejects an analysis that does not audit every observed repetition", () => {
@@ -344,21 +361,16 @@ describe("v63 full-video rep-audited coaching contract", () => {
     expect(() => parseBoundaryFreeAnalysis(concentrated, 9_000)).toThrow(/every observed repetition/i);
   });
 
-  it("finishes readable coaching in the one whole-video pass without requesting a rewatch", () => {
+  it("keeps the analyst focused on evidence instead of prescribing the writer's prose", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(10_000);
 
-    expect(prompt).toContain("observation must be exactly one complete sentence");
-    expect(prompt).toContain("observationDetails must contain one to two natural supporting sentences");
-    expect(prompt).toContain("The complete What happened section must never exceed three sentences");
-    expect(prompt).toContain("whyItMatters must be exactly one complete sentence");
-    expect(prompt).toContain("whyDetails must contain two to four normal supporting sentences");
-    expect(prompt).toContain("correctionDirection must be exactly one complete actionable sentence");
-    expect(prompt).toContain("common words a new lifter can understand immediately");
-    expect(prompt).toContain("Spread primaryEvidenceIndex choices across different valid repetitions and timepoints");
-    expect(prompt).toContain("Keep each coaching sentence under 18 words");
+    expect(prompt).toContain("Only identify problems with the performed form itself");
+    expect(prompt).toContain("Every issue must be specific to the declared exercise and supported by visible evidence");
+    expect(prompt).toContain("Pass the resulting evidence-backed issue record to the coaching writer");
     expect(prompt).toContain("Always set recheckRequest to null");
-    expect(prompt).not.toContain("request a recheck only when");
-    expect(prompt).not.toMatch(/bench angle|pull toward|spinal rounding|knee cave/i);
+    expect(prompt).not.toContain("observation must be exactly one complete sentence");
+    expect(prompt).not.toContain("whyDetails must contain two to four normal supporting sentences");
+    expect(prompt).not.toContain("Spread primaryEvidenceIndex choices");
   });
 
   it("parses one requested center and rejects malformed recheck requests", () => {
@@ -387,7 +399,7 @@ describe("v63 full-video rep-audited coaching contract", () => {
     expect(prompt).toContain("request another recheck only if genuine visual uncertainty remains");
   });
 
-  it("asks for exercise-specific coaching without turning every finding into a repetition log", () => {
+  it("asks the writer for specific natural coaching with only the requested section shapes", () => {
     const prompt = buildWholeVideoWritingPrompt(analysis, {
       exercise: { source: "custom", label: "Chest-supported dumbbell row" },
       amount: { kind: "reps", value: 4, countScope: "total" },
@@ -401,36 +413,61 @@ describe("v63 full-video rep-audited coaching contract", () => {
     expect(prompt).toContain("Validated analysis:");
     expect(prompt).toContain('"peakSeconds":5.3');
     expect(prompt).not.toMatch(/"(?:start|peak|end)Ms"/);
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappened must be exactly one complete sentence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappenedDetail must contain one to two natural supporting sentences");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("The complete What happened section must never exceed three sentences");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMatters must be exactly one complete sentence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMattersDetail must contain two to four normal supporting sentences");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatToDo must be exactly one complete actionable sentence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("coachNote must contain exactly three sentences");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("overallAssessment must contain three to four sentences");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("everyday words a new lifter can understand");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Keep each sentence under 18 words");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("no anatomy, sports-science, or biomechanics background");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("clear gym coach speaking between sets");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("understand every sentence on the first read");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("ordinary body-part, equipment, direction, and movement words");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Avoid technical anatomy and biomechanics terms");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("explain it immediately in plain words inside the same sentence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Do not remove useful detail or shorten a required section");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Name the declared exercise");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Do not write a chronological repetition log");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Mention repetition numbers only when they make a useful comparison clearer");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("reference every numbered repetition supported by the supplied evidence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("Mention a numbered repetition at most once");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("title is only the concise issue label used for navigation");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("it is not the white coaching sentence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Never write milliseconds");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Do not begin multiple findings with the same opening phrase");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappened must be one short summary sentence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappenedDetail must be exactly two supporting sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMatters must be one short summary sentence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMattersDetail must be exactly two supporting sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatToDo must be exactly one actionable sentence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("specific to this exercise, this set, and the supplied video evidence");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Do not use a reusable sentence template");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Vary sentence openings, order, cadence, and explanation across findings");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("precise coaching language while keeping it easy to understand");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("name the actual form fault rather than the fact that repetitions differ");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("Keep each sentence under 18 words");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("Avoid technical anatomy and biomechanics terms");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("clear gym coach speaking between sets");
+  });
+
+  it("preserves advanced exercise-specific coaching instead of replacing it with a formulaic fallback", () => {
+    const parsed = mergeWholeVideoWriting({
+      ...writing,
+      coachingItems: [{
+        ...writing.coachingItems[0],
+        whatHappenedDetail: "The right scapula elevates as the dumbbell approaches the ribs. Your torso remains supported on the bench. The asymmetry is clearest at the top of the row.",
+        whyItMatters: "Scapular asymmetry compromises force transfer through the upper body.",
+        whyItMattersDetail: "The elevated side changes the pulling line of the chest-supported row. That makes it harder to finish both dumbbells from the same shoulder position. It can also shift more of the correction into your torso.",
+      }],
+    }, analysis);
+
+    expect(parsed.coachingItems[0].whatHappenedDetail).toContain("right scapula elevates");
+    expect(parsed.coachingItems[0].whatHappenedDetail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
+    expect(parsed.coachingItems[0].whyItMatters).toBe("Scapular asymmetry compromises force transfer through the upper body.");
+    expect(parsed.coachingItems[0].whyItMattersDetail).toContain("pulling line of the chest-supported row");
+    expect(parsed.coachingItems[0].whyItMattersDetail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
+  });
+
+  it("accepts writer prose without rejecting or rewriting its sentence counts or headline length", () => {
+    const unrestricted = {
+      ...writing.coachingItems[0],
+      title: "Depth",
+      whatHappened: "Your right knee moves inward. The shift is clearest at the bottom.",
+      whatHappenedDetail: "The knee crosses inside the foot. Your heel remains planted. The bar stays over the midfoot. The camera keeps the leg visible.",
+      whyItMatters: "This changes how the squat receives the load. The effect continues into the ascent.",
+      whyItMattersDetail: "The inward knee changes the leg's alignment under the bar. Your hip then shifts to keep the bar centered. The ascent starts from an uneven base. That can make the same squat harder to reproduce.",
+      whatToDo: "Drive your right knee over your second toe. Keep that line through the ascent.",
+      successCheck: "Watch the knee stay over the foot. Confirm the hip remains centered.",
+    };
+
+    const parsed = mergeWholeVideoWriting({
+      ...writing,
+      coachingItems: [unrestricted],
+    }, analysis).coachingItems[0];
+
+    expect(parsed).toMatchObject(unrestricted);
   });
 
   it("converts leaked millisecond timestamps to readable seconds without rejecting the writing", () => {
-    const parsed = parseWholeVideoWriting({
+    const parsed = mergeWholeVideoWriting({
       ...writing,
       overallAssessment: "The row stays controlled early. The return changes at 3250ms. Slow the final lowering phase.",
       coachingItems: [{
@@ -447,22 +484,22 @@ describe("v63 full-video rep-audited coaching contract", () => {
   });
 
   it("preserves Flash-Lite's concise impactful headline instead of deriving it from the paragraph", () => {
-    const parsed = parseWholeVideoWriting(writing, analysis);
+    const parsed = mergeWholeVideoWriting(writing, analysis);
     expect(parsed.coachingItems[0].title).toBe("Slow the late-row return");
   });
 
-  it("falls back from a multiline or long writer headline to the analyst topic", () => {
-    const multiline = parseWholeVideoWriting({
+  it("preserves writer headlines without length or line-count rejection", () => {
+    const multiline = mergeWholeVideoWriting({
       ...writing,
       coachingItems: [{ ...writing.coachingItems[0], title: "Slow the return\nKeep the dumbbells controlled" }],
     }, analysis);
-    expect(multiline.coachingItems[0].title).toBe(analysis.coachingItems[0].topic);
+    expect(multiline.coachingItems[0].title).toBe("Slow the return\nKeep the dumbbells controlled");
 
-    const long = parseWholeVideoWriting({
+    const long = mergeWholeVideoWriting({
       ...writing,
       coachingItems: [{ ...writing.coachingItems[0], title: "Keep both dumbbells moving through the entire lowering phase with exactly the same controlled speed on every repetition" }],
     }, analysis);
-    expect(long.coachingItems[0].title).toBe(analysis.coachingItems[0].topic);
+    expect(long.coachingItems[0].title).toBe("Keep both dumbbells moving through the entire lowering phase with exactly the same controlled speed on every repetition");
   });
 
   it("preserves complete technical and exercise-specific coaching without generic rewriting", () => {
@@ -480,59 +517,58 @@ describe("v63 full-video rep-audited coaching contract", () => {
     expect(finding.actionableCorrection?.instruction).toBe(writing.coachingItems[0].whatToDo);
   });
 
-  it("caps the complete what happened section at three sentences", () => {
-    const parsed = parseWholeVideoWriting({
+  it("preserves all supporting sentences for presentation to shape", () => {
+    const parsed = mergeWholeVideoWriting({
       ...writing,
       coachingItems: [{
         ...writing.coachingItems[0],
         whatHappenedDetail: "Rep 3 drops quickly after reaching your ribs. Rep 4 repeats the faster lowering phase. The first two rows return more slowly. The final row finishes lowest.",
       }],
     }, analysis);
-    const visibleCopy = `${parsed.coachingItems[0].whatHappened} ${parsed.coachingItems[0].whatHappenedDetail}`;
-
-    expect(visibleCopy.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
-    expect(parsed.coachingItems[0].whatHappenedDetail).toBe("Rep 3 drops quickly after reaching your ribs. Rep 4 repeats the faster lowering phase.");
+    expect(parsed.coachingItems[0].whatHappened.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(1);
+    expect(parsed.coachingItems[0].whatHappenedDetail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(4);
+    expect(parsed.coachingItems[0].whatHappenedDetail).toBe("Rep 3 drops quickly after reaching your ribs. Rep 4 repeats the faster lowering phase. The first two rows return more slowly. The final row finishes lowest.");
   });
 
-  it("falls back per field when writer coaching is awkward or malformed", () => {
+  it("accepts writer fields regardless of sentence count and falls back only when text is absent", () => {
     const raw = {
       ...writing,
       coachingItems: [{ ...writing.coachingItems[0], whatHappened: "One. Two. Three. Four." }],
     };
 
-    expect(parseWholeVideoWriting(raw, analysis).coachingItems[0].whatHappened).toBe(analysis.coachingItems[0].observation);
-    expect(parseWholeVideoWriting({
+    expect(mergeWholeVideoWriting(raw, analysis).coachingItems[0].whatHappened).toBe("One. Two. Three. Four.");
+    expect(mergeWholeVideoWriting({
       ...writing,
       coachingItems: [{ ...writing.coachingItems[0], whyItMatters: "The row changes. The visible path changes again." }],
-    }, analysis).coachingItems[0].whyItMatters).toBe(analysis.coachingItems[0].whyItMatters);
-    expect(parseWholeVideoWriting({
+    }, analysis).coachingItems[0].whyItMatters).toBe("The row changes. The visible path changes again.");
+    expect(mergeWholeVideoWriting({
       ...writing,
       coachingItems: [{ ...writing.coachingItems[0], whatToDo: "Lower both dumbbells for two seconds. Begin only after your arms reach the bottom." }],
-    }, analysis).coachingItems[0].whatToDo).toBe(analysis.coachingItems[0].correctionDirection);
-    expect(parseWholeVideoWriting({
+    }, analysis).coachingItems[0].whatToDo).toBe("Lower both dumbbells for two seconds. Begin only after your arms reach the bottom.");
+    expect(mergeWholeVideoWriting({
       ...writing,
       coachingItems: [{ ...writing.coachingItems[0], whatHappenedDetail: "" }],
-    }, analysis).coachingItems[0].whatHappenedDetail).toBe("Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase.");
+    }, analysis).coachingItems[0].whatHappenedDetail).toBe("Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase. The opening two repetitions lower more slowly.");
   });
 
   it("creates analyst-derived copy when the writer response is unavailable", () => {
-    const parsed = parseWholeVideoWriting(null, analysis);
+    const parsed = mergeWholeVideoWriting(null, analysis);
 
     expect(parsed.coachingItems[0]).toMatchObject({
       id: analysis.coachingItems[0].id,
       title: analysis.coachingItems[0].topic,
       whatHappened: analysis.coachingItems[0].observation,
-      whatHappenedDetail: "Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase.",
+      whatHappenedDetail: "Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase. The opening two repetitions lower more slowly.",
       whyItMatters: analysis.coachingItems[0].whyItMatters,
-      whyItMattersDetail: analysis.coachingItems[0].whyDetails,
+      whyItMattersDetail: "The late repetitions no longer match the opening pull-and-return rhythm. That makes their path less repeatable. Rep 3 drops faster from the ribs to the bottom.",
       whatToDo: analysis.coachingItems[0].correctionDirection,
     });
     expect(parsed.coachNote.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
     expect(parsed.overallAssessment.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("falls back to complete readable sections when the writer returns copy that is too short", () => {
-    const parsed = parseWholeVideoWriting({
+  it("accepts short writer sections without replacing them", () => {
+    const parsed = mergeWholeVideoWriting({
       ...writing,
       overallAssessment: "The row changes late.",
       coachNote: "Slow the final rows.",
@@ -545,8 +581,8 @@ describe("v63 full-video rep-audited coaching contract", () => {
     const item = parsed.coachingItems[0];
 
     expect(item.whatHappenedDetail.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
-    expect(item.whyItMattersDetail.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.length).toBeGreaterThanOrEqual(2);
-    expect(parsed.coachNote.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
-    expect(parsed.overallAssessment.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(item.whyItMattersDetail).toBe("The late path changes.");
+    expect(parsed.coachNote).toBe("Slow the final rows.");
+    expect(parsed.overallAssessment).toBe("The row changes late.");
   });
 });
