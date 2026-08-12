@@ -528,6 +528,13 @@ describe("v63 full-video rep-audited coaching contract", () => {
     }, analysis)).toThrow("whatHappenedDetail must contain 2 to 3 sentences");
     expect(() => parseRequiredWholeVideoWriting({
       ...requiredWriting,
+      coachingItems: [{
+        ...requiredWriting.coachingItems[0],
+        whyItMattersDetail: "The path changes at the top of the rep. Keeping the handle close makes the next rep steadier. The bench stays planted. The final position is easier to repeat.",
+      }],
+    }, analysis)).toThrow("whyItMattersDetail must contain 2 to 3 sentences");
+    expect(() => parseRequiredWholeVideoWriting({
+      ...requiredWriting,
       coachingItems: [{ ...requiredWriting.coachingItems[0], successCheck: "Do not return gray next-step copy." }],
     }, analysis)).toThrow("successCheck must not be returned");
   });

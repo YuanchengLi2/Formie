@@ -161,7 +161,8 @@ const PROTECTED_SENTENCE_PERIOD = "\uE000";
 function protectedSentenceText(value: string): string {
   return value
     .replace(/(?<=\d)\.(?=\d)/g, PROTECTED_SENTENCE_PERIOD)
-    .replace(/\b(?:e\.g|i\.e|u\.s|u\.k|vs|mr|mrs|ms|dr|st|no|rep)\./gi, (match) => match.replaceAll(".", PROTECTED_SENTENCE_PERIOD));
+    .replace(/\b(?:e\.g|i\.e|u\.s|u\.k|vs|mr|mrs|ms|dr|st|no)\./gi, (match) => match.replaceAll(".", PROTECTED_SENTENCE_PERIOD))
+    .replace(/\brep\.(?=\s*\d)/gi, (match) => match.replaceAll(".", PROTECTED_SENTENCE_PERIOD));
 }
 
 function sentenceParts(value: string): string[] {
