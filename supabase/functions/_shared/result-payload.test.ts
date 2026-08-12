@@ -64,6 +64,17 @@ describe("resultPayload", () => {
     );
     expect(accuracyRestoredPayload?.priorityCorrections).toBe(result.priority_corrections);
     expect(accuracyRestoredPayload).not.toHaveProperty("repTimeline");
+    for (const pipeline_version of [
+      "gemini-whole-video-v57-nonblocking-writer",
+      "gemini-whole-video-v63-three-sentence-what-happened",
+      "gemini-whole-video-v64-durable-single-pass-retry",
+      "gemini-whole-video-v65-original-coaching",
+      "gemini-whole-video-v66-original-coaching-provider-compatible",
+    ]) {
+      const current = resultPayload({ pipeline_version, detected_label: "Squat", detected_equipment: [], exercise_family: "squat" }, result);
+      expect(current?.priorityCorrections).toBe(result.priority_corrections);
+      expect(current).not.toHaveProperty("repTimeline");
+    }
     expect(resultPayload(
       { pipeline_version: "gemini-whole-video-v46", detected_label: "Squat", detected_equipment: [], exercise_family: "squat" },
       { ...result, analysis_basis: "mixed" },

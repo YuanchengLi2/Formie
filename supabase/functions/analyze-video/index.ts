@@ -3,20 +3,16 @@ import {
   ANALYST_THINKING_LEVEL,
   REQUESTED_ANALYSIS_FPS,
   REQUESTED_ANALYSIS_MEDIA_RESOLUTION,
-  WRITER_THINKING_LEVEL,
 } from "../_shared/analysis-settings.ts";
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
-import { buildTextGenerateContentRequest, buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
+import { buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
 import { createGeminiFilesClient, reuseOrUploadGeminiFile, type GeminiFile } from "../_shared/gemini-files.ts";
 import {
   buildBoundaryFreeAnalysisPrompt,
-  buildWholeVideoWritingPrompt,
   parseBoundaryFreeAnalysis,
   parseWholeVideoWriting,
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
-  WHOLE_VIDEO_WRITING_SCHEMA,
-  WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
   boundaryFreeToCandidate,
 } from "../_shared/boundary-free-analysis.ts";
 import type { ExerciseFamily } from "../_shared/analysis-contract.ts";
@@ -28,11 +24,10 @@ import { advanceWholeVideoPipeline } from "./whole-video-runner.ts";
 import { analyzeWholeVideoHandler, type WholeVideoSession } from "./whole-video-handler.ts";
 import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
-import { runNonBlockingWriter } from "./nonblocking-writer.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v63-three-sentence-what-happened";
+const PIPELINE_VERSION = "gemini-whole-video-v66-original-coaching-provider-compatible";
+const MAX_DURABLE_RETRIES = 3;
 const ANALYST_MODEL = "gemini-3.6-flash";
-const WRITER_MODEL = "gemini-3.6-flash";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
 const files = createGeminiFilesClient({ apiKey });
 const generation = createGenerateContentClient({ apiKey });
@@ -278,13 +273,17 @@ Deno.serve(async (request) => {
         updated_at: new Date().toISOString(),
       }).eq("id", session.id);
       if (processingError) throw Object.assign(processingError, { code: "ANALYSIS_FILE_METADATA_FAILED" });
-      for (const delayMs of [150, 350, 750, 1_500, 3_000]) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      const readinessStartedAt = Date.now();
+      let delayMs = 0;
+      while (file.state === "PROCESSING" && Date.now() - readinessStartedAt < 60_000) {
+        const remainingMs = 60_000 - (Date.now() - readinessStartedAt);
+        if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, Math.min(delayMs, remainingMs)));
+        if (Date.now() - readinessStartedAt >= 60_000) break;
         file = await files.getFile(file.name);
-        if (file.state !== "PROCESSING") break;
+        delayMs = Math.min(delayMs === 0 ? 250 : delayMs * 2, 5_000);
       }
     }
-    if (file.state === "FAILED") throw Object.assign(new Error("Gemini could not process the uploaded video"), { code: "GEMINI_FILE_FAILED" });
+    if (file.state === "FAILED") throw Object.assign(new Error(file.failureReason || "Gemini could not process the uploaded video"), { code: "GEMINI_FILE_FAILED", providerStatus: "FAILED" });
     if (file.state !== "ACTIVE") throw Object.assign(new Error("The uploaded video is still processing"), { code: "ANALYSIS_FILE_PROCESSING" });
     return { input: { uri: file.uri, mimeType: file.mimeType || "video/mp4" }, byteLength, file };
   }
@@ -304,14 +303,15 @@ Deno.serve(async (request) => {
       return requireUserId(incoming, admin);
     },
     loadSession: async (sessionId, userId) => {
-      const [{ data: session, error }, { data: result, error: resultError }] = await Promise.all([
+      const [{ data: session, error }, { data: result, error: resultError }, { data: storedStage, error: storedStageError }] = await Promise.all([
         admin.from("analysis_sessions").select("*").eq("id", sessionId).eq("user_id", userId).maybeSingle(),
         admin.from("analysis_results").select("*").eq("session_id", sessionId).maybeSingle(),
+        admin.from("analysis_stage_runs").select("output,pipeline_version").eq("session_id", sessionId).eq("stage", "analyzing").eq("status", "succeeded").not("output", "is", null).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (error) throw error;
       if (resultError) throw resultError;
+      if (storedStageError) throw storedStageError;
       if (!session) return null;
-      const currentPipeline = session.pipeline_version === PIPELINE_VERSION;
       const declaration = session.set_declaration ? parseSetDeclaration(session.set_declaration) : null;
       let catalogExerciseFamily: ExerciseFamily | undefined;
       let catalogEquipment: string[] | undefined;
@@ -347,7 +347,10 @@ Deno.serve(async (request) => {
         geminiFileState: session.gemini_file_state ?? null,
         durationMs: session.duration_ms,
         result: resultPayload(session, result),
-        analysisDecision: currentPipeline && session.analysis_draft && typeof session.analysis_draft === "object" ? session.analysis_draft : null,
+        analysisDecision: session.analysis_draft && typeof session.analysis_draft === "object" ? session.analysis_draft : null,
+        storedVideoStageOutput: storedStage?.output && typeof storedStage.output === "object" ? storedStage.output : null,
+        hasStoredVideoEvidence: Boolean(session.analysis_draft || storedStage?.output),
+        analysisRetryCount: Number(session.analysis_retry_count ?? 0),
         catalogExerciseFamily,
         catalogEquipment,
         setDeclaration: declaration,
@@ -435,7 +438,10 @@ Deno.serve(async (request) => {
       }, {
         analyzeWholeVideo: async ({ sessionId }) => {
           await saveSessionStage("analyzing");
-          const rawAnalysis = await runStage(sessionId, "analyzing", { kind: "video", durationMs, transport: "file", fps: REQUESTED_ANALYSIS_FPS }, async () => {
+          const storedVideoStageOutput = rawSession.storedVideoStageOutput && typeof rawSession.storedVideoStageOutput === "object"
+            ? rawSession.storedVideoStageOutput as JsonRecord
+            : null;
+          const rawAnalysis = storedVideoStageOutput ?? await runStage(sessionId, "analyzing", { kind: "video", durationMs, transport: "file", fps: REQUESTED_ANALYSIS_FPS }, async () => {
             const analysisVideo = await getGeminiVideo();
             await saveSessionStage("analyzing");
             const requestBody = buildVideoGenerateContentRequest({
@@ -446,7 +452,6 @@ Deno.serve(async (request) => {
               thinkingLevel: ANALYST_THINKING_LEVEL,
               mediaResolution: REQUESTED_ANALYSIS_MEDIA_RESOLUTION,
               temperature: 0,
-              preserveSchemaBounds: true,
             });
             const raw = await generate({ sessionId, stage: "analyzing", modelName: ANALYST_MODEL, request: requestBody, fps: REQUESTED_ANALYSIS_FPS, timeoutMs: deadline.timeoutFor("analyzing") }) as JsonRecord;
             return raw as JsonRecord;
@@ -460,23 +465,7 @@ Deno.serve(async (request) => {
             throw analysisContractError(error);
           }
           await saveSessionStage("finalizing");
-          const writing = await runNonBlockingWriter({
-            write: async () => {
-              const timeoutMs = Math.min(20_000, deadline.remainingMs());
-              if (timeoutMs < 1_000) throw Object.assign(new Error("Writer budget exhausted"), { code: "WRITER_DEADLINE_EXHAUSTED" });
-              const requestBody = buildTextGenerateContentRequest({
-                systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
-                prompt: buildWholeVideoWritingPrompt(parsedAnalysis, declaration),
-                schema: WHOLE_VIDEO_WRITING_SCHEMA,
-                thinkingLevel: WRITER_THINKING_LEVEL,
-                preserveSchemaBounds: true,
-              });
-              return generate({ sessionId, stage: "finalizing", modelName: WRITER_MODEL, request: requestBody, timeoutMs });
-            },
-            parse: (value) => parseWholeVideoWriting(value, parsedAnalysis),
-            fallback: () => parseWholeVideoWriting(null, parsedAnalysis),
-            onError: (error) => console.warn(JSON.stringify({ sessionId, code: "COACHING_WRITER_FALLBACK", message: error instanceof Error ? error.message : String(error) })),
-          });
+          const writing = parseWholeVideoWriting(null, parsedAnalysis);
           const decision = { analysis: parsedAnalysis, writing } as unknown as JsonRecord;
           await saveSessionStage("finalizing", { analysis_draft: decision });
           return decision;
@@ -574,10 +563,10 @@ Deno.serve(async (request) => {
         },
       });
     },
-    markFailed: async (sessionId, code) => {
+    persistFailure: async (sessionId, code, disposition) => {
       const { data: retryState, error: retryStateError } = await admin
         .from("analysis_sessions")
-        .select("status,gemini_file_name")
+        .select("status,gemini_file_name,analysis_retry_count")
         .eq("id", sessionId)
         .maybeSingle();
       if (retryStateError) throw databaseError("ANALYSIS_STATE_SAVE_FAILED", retryStateError);
@@ -587,12 +576,12 @@ Deno.serve(async (request) => {
         .eq("session_id", sessionId)
         .maybeSingle();
       if (existingResultError) throw databaseError("ANALYSIS_RESULT_SAVE_FAILED", existingResultError);
-      if (retryState?.status === "complete" || existingResult?.status === "complete") {
+      if (retryState?.status === "complete" || retryState?.status === "partial" || existingResult?.status === "complete" || existingResult?.status === "partial") {
         if (typeof retryState?.gemini_file_name === "string") {
           await files.deleteFile(retryState.gemini_file_name).catch(() => undefined);
         }
         await persistRetryState(sessionId, {
-          status: "complete",
+          status: existingResult?.status ?? retryState?.status ?? "complete",
           stage: "complete",
           failure_code: null,
           analysis_retry_count: 0,
@@ -603,10 +592,26 @@ Deno.serve(async (request) => {
           gemini_file_state: null,
           updated_at: new Date().toISOString(),
         });
-        return { status: "complete", stage: "complete" };
+        return { status: existingResult?.status ?? retryState?.status ?? "complete", stage: "complete" };
       }
-      if (typeof retryState?.gemini_file_name === "string") {
+      const nextRetryCount = Number(retryState?.analysis_retry_count ?? 0) + 1;
+      const terminal = disposition.disposition === "terminal_failure" || nextRetryCount > MAX_DURABLE_RETRIES;
+      if (terminal && typeof retryState?.gemini_file_name === "string") {
         await files.deleteFile(retryState.gemini_file_name).catch(() => undefined);
+      }
+      if (!terminal) {
+        const backoffSeconds = Math.min(5 * 2 ** Math.max(0, nextRetryCount - 1), 60);
+        await persistRetryState(sessionId, {
+          status: "processing",
+          stage: "retry_wait",
+          pipeline_version: PIPELINE_VERSION,
+          failure_code: null,
+          analysis_retry_count: nextRetryCount,
+          analysis_next_retry_at: new Date(Date.now() + backoffSeconds * 1_000).toISOString(),
+          analysis_last_error_code: code,
+          updated_at: new Date().toISOString(),
+        });
+        return { status: "processing", stage: "retry_wait" };
       }
       await persistRetryState(sessionId, {
         status: "failed",
@@ -614,6 +619,7 @@ Deno.serve(async (request) => {
         pipeline_version: PIPELINE_VERSION,
         failure_code: code,
         analysis_next_retry_at: null,
+        analysis_retry_count: nextRetryCount,
         analysis_last_error_code: code,
         gemini_file_name: null,
         gemini_file_uri: null,

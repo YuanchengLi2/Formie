@@ -1,4 +1,5 @@
 import { MAX_ANALYSIS_VIDEO_DURATION_MS } from "../_shared/analysis-settings.ts";
+import { classifyAnalysisFailure, type AnalysisFailureDisposition } from "./failure-disposition.ts";
 
 export type WholeVideoSession = {
   id: string;
@@ -11,6 +12,8 @@ export type WholeVideoSession = {
   durationMs: number | null;
   analysisNextRetryAt: string | null;
   result: Record<string, unknown> | null;
+  analysisRetryCount?: number;
+  hasStoredVideoEvidence?: boolean;
   [key: string]: unknown;
 };
 
@@ -24,7 +27,7 @@ export type WholeVideoHandlerDependencies = {
   authenticate: (request: Request) => Promise<string>;
   loadSession: (sessionId: string, userId: string) => Promise<WholeVideoSession | null>;
   advancePipeline: (session: WholeVideoSession) => Promise<WholeVideoPipelineResult>;
-  markFailed: (sessionId: string, code: string) => Promise<WholeVideoPipelineResult>;
+  persistFailure: (sessionId: string, code: string, disposition: AnalysisFailureDisposition) => Promise<WholeVideoPipelineResult>;
   now?: () => Date;
 };
 
@@ -50,6 +53,18 @@ function failureCode(error: unknown): string {
     .replace(/^_+|_+$/g, "")
     .slice(0, 44);
   return detail ? `ANALYSIS_ERROR_${detail}`.slice(0, 64) : "ANALYSIS_FAILED";
+}
+
+function numericErrorProperty(error: unknown, key: "httpStatus" | "status"): number | undefined {
+  if (!error || typeof error !== "object" || !(key in error)) return undefined;
+  const value = Number((error as Record<string, unknown>)[key]);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function stringErrorProperty(error: unknown, key: "providerStatus"): string | undefined {
+  if (!error || typeof error !== "object" || !(key in error)) return undefined;
+  const value = (error as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : undefined;
 }
 
 function payload(session: WholeVideoSession, state: WholeVideoPipelineResult) {
@@ -108,7 +123,16 @@ export async function analyzeWholeVideoHandler(request: Request, dependencies: W
     }
     if (session) {
       try {
-        const failedState = await dependencies.markFailed(session.id, code);
+        const disposition = classifyAnalysisFailure({
+          code,
+          providerStatus: stringErrorProperty(error, "providerStatus"),
+          httpStatus: numericErrorProperty(error, "httpStatus") ?? numericErrorProperty(error, "status"),
+          completedStage: session.stage === "finalizing" ? "analyzing" : null,
+          hasStoredVideoEvidence: Boolean(session.hasStoredVideoEvidence),
+          retryCount: session.analysisRetryCount ?? 0,
+          maxRetries: 3,
+        });
+        const failedState = await dependencies.persistFailure(session.id, code, disposition);
         const failedSession = {
           ...session,
           status: failedState.status,

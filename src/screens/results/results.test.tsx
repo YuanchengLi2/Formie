@@ -191,7 +191,7 @@ describe("ResultsScreen", () => {
     expect(screen.getAllByTestId(/timeline-evidence-marker-/)).toHaveLength(4);
   }, 10_000);
 
-  it("renders What to do next as one bold plain-text sentence", async () => {
+  it("renders What to do next as a separate two-sentence plain-text paragraph", async () => {
     const value = result();
     value.priorityCorrections[0].expandedCoaching!.whatToDo = "**Start the next rep with both shoulders level.**";
     const screen = await renderResults(jest.fn(), value);
@@ -200,10 +200,11 @@ describe("ResultsScreen", () => {
     expect(instruction.props.children).toBe("Start the next rep with both shoulders level.");
     expect(instruction).toHaveStyle({ fontWeight: "700" });
     expect(screen.queryByText(/\*/)).toBeNull();
-    expect(screen.queryByText("Both shoulders finish at the same height.")).toBeNull();
+    expect(screen.getByTestId("coaching-what-to-do-next-detail").props.children).toBe("Both shoulders finish at the same height.");
+    expect(screen.getByTestId("coaching-what-to-do-next-detail")).toHaveStyle({ color: colors.textSecondary, fontWeight: "400" });
   });
 
-  it("renders one bold lead and normal supporting copy for what happened and why it matters", async () => {
+  it("renders What happened as one coherent paragraph while keeping Why it matters separate", async () => {
     const screen = await renderResults();
 
     expect(screen.getByTestId("coaching-what-happened-copy").props.children).toBe("Your right shoulder rises before the weight changes direction.");
@@ -306,21 +307,41 @@ describe("ResultsScreen", () => {
     expect(screen.getByLabelText("Rotatable anatomy model")).toBeTruthy();
     expect(screen.getByLabelText("Rotate anatomy")).toBeTruthy();
     expect(screen.queryByLabelText("Zoom out anatomy")).toBeNull();
-    expect(screen.getByLabelText("Your Form").props.accessibilityState).toEqual({ selected: true });
-    expect(screen.queryByTestId("anatomy-target-chest")).toBeNull();
-    expect(screen.getByTestId("anatomy-issue-shoulders")).toBeTruthy();
+    expect(screen.getByLabelText("Target Muscles").props.accessibilityState).toEqual({ selected: true });
+    expect(screen.queryByTestId("anatomy-issue-shoulders")).toBeNull();
     expect(screen.getByText("Target Muscles")).toBeTruthy();
     expect(screen.getByText("Your Form")).toBeTruthy();
-    expect(screen.getByText("Observed issue areas")).toBeTruthy();
+    expect(screen.queryByText("Observed issue areas")).toBeNull();
     expect(screen.queryByText(/never claims actual muscle activation/i)).toBeNull();
     expect(screen.getByTestId("anatomy-gesture-surface")).toBeTruthy();
-    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(true);
-    await fireEvent.press(screen.getByLabelText("Target Muscles"));
+    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(false);
     expect(screen.getByTestId("anatomy-target-lats")).toBeTruthy();
     expect(screen.getByTestId("anatomy-target-upper_back")).toBeTruthy();
     expect(screen.getByTestId("anatomy-secondary-biceps")).toBeTruthy();
     expect(screen.getByText("Primary muscles")).toBeTruthy();
     expect(screen.getByText("Supporting muscles")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Your Form"));
+    expect(screen.getByTestId("anatomy-issue-shoulders")).toBeTruthy();
+    expect(screen.getByText("Observed issue areas")).toBeTruthy();
+    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(true);
+  });
+
+  it("highlights only the currently selected coaching issue on the form map", async () => {
+    const value = result();
+    value.priorityCorrections[1] = {
+      ...value.priorityCorrections[1],
+      observedIssueRegions: ["ankles"],
+      evidence: value.priorityCorrections[1].evidence.map((moment) => ({ ...moment, visibleBodyAreas: ["ankles"] })),
+    };
+    const screen = await renderResults(jest.fn(), value);
+
+    await fireEvent.press(screen.getByLabelText("Your Form"));
+    expect(screen.getByTestId("anatomy-issue-shoulders")).toBeTruthy();
+    expect(screen.queryByTestId("anatomy-issue-ankles")).toBeNull();
+
+    await fireEvent.press(screen.getByLabelText("Next problem"));
+    expect(screen.getByTestId("anatomy-issue-ankles")).toBeTruthy();
+    expect(screen.queryByTestId("anatomy-issue-shoulders")).toBeNull();
   });
 
   it("still renders red issue regions when a custom exercise has no target-muscle catalog entry", async () => {
@@ -332,8 +353,25 @@ describe("ResultsScreen", () => {
     const screen = await renderResults(jest.fn(), value);
 
     expect(screen.getByTestId("muscle-focus-figure")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Your Form"));
     expect(screen.getByTestId("anatomy-issue-shoulders")).toBeTruthy();
     expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(true);
+  });
+
+  it("recovers observed issue areas from legacy evidence when the provider region field is empty", async () => {
+    const value = result();
+    value.priorityCorrections = value.priorityCorrections.map((item) => ({
+      ...item,
+      observedIssueRegions: [],
+      evidence: item.evidence.map((moment) => ({ ...moment, visibleBodyAreas: ["feet", "ankles"] })),
+    }));
+    const screen = await renderResults(jest.fn(), value);
+
+    await fireEvent.press(screen.getByLabelText("Your Form"));
+    expect(screen.getByLabelText("Your Form").props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByTestId("anatomy-issue-ankles")).toBeTruthy();
+    expect(screen.getByText("Ankles")).toBeTruthy();
+    expect(screen.queryByText("None identified from this recording")).toBeNull();
   });
 
   it("uses one compact Coach's Note card with separate Scores and Coach's Note views", async () => {
@@ -355,7 +393,7 @@ describe("ResultsScreen", () => {
     const screen = await renderResults();
 
     expect(screen.getByText("Issue 1 of 4")).toBeTruthy();
-    expect(screen.getByTestId("coaching-what-happened-copy").props.children).toBe("Your right shoulder rises before the weight changes direction.");
+    expect(screen.getByTestId("coaching-what-happened-detail").props.children).toContain("On rep 1");
     await fireEvent.press(screen.getByLabelText("Why it matters"));
     expect(screen.getByTestId("coaching-why-it-matters-copy").props.children).toBe("The uneven shoulder position tilts the visible weight path.");
     await fireEvent.press(screen.getByLabelText("What to do next"));
@@ -364,7 +402,7 @@ describe("ResultsScreen", () => {
 
     await fireEvent.press(screen.getByLabelText("Next problem"));
     expect(screen.getByText("Issue 2 of 4")).toBeTruthy();
-    expect(screen.getByTestId("coaching-what-happened-copy").props.children).toBe("Your right shoulder rises before the weight changes direction.");
+    expect(screen.getByTestId("coaching-what-happened-detail").props.children).toContain("On rep 1");
     expect(screen.queryByText("Priority 2 affects repeatable movement quality.")).toBeNull();
     await fireEvent.press(screen.getByLabelText("Why it matters"));
     expect(screen.getByTestId("coaching-why-it-matters-copy").props.children).toBe("The uneven shoulder position tilts the visible weight path.");
@@ -372,7 +410,7 @@ describe("ResultsScreen", () => {
     expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
   });
 
-  it("renders split coaching leads and details while keeping what-to-do-next unchanged", async () => {
+  it("bolds only the opening What happened sentence and keeps the supporting sentences at regular weight", async () => {
     const value = result();
     value.priorityCorrections[0].title = "Control the late descent";
     value.priorityCorrections[0].expandedCoaching!.whatHappened = "The first visible sentence explains what happened.";
@@ -382,7 +420,7 @@ describe("ResultsScreen", () => {
     expect(screen.getByTestId("coaching-what-happened-copy").props.children).toBe(value.priorityCorrections[0].expandedCoaching!.whatHappened);
     expect(StyleSheet.flatten(screen.getByTestId("coaching-what-happened-copy").props.style)).toMatchObject({ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: "700" });
     expect(screen.getByTestId("coaching-what-happened-detail").props.children).toBe(value.priorityCorrections[0].expandedCoaching!.whatHappenedDetail);
-    expect(StyleSheet.flatten(screen.getByTestId("coaching-what-happened-detail").props.style)).toMatchObject({ color: colors.textSecondary, fontWeight: "400" });
+    expect(StyleSheet.flatten(screen.getByTestId("coaching-what-happened-detail").props.style)).toMatchObject({ color: colors.textSecondary, fontSize: 15, lineHeight: 22, fontWeight: "400" });
 
     await fireEvent.press(screen.getByLabelText("Why it matters"));
     expect(screen.getByTestId("coaching-why-it-matters-copy").props.children).toBe("The uneven shoulder position tilts the visible weight path.");
@@ -392,6 +430,8 @@ describe("ResultsScreen", () => {
     await fireEvent.press(screen.getByLabelText("What to do next"));
     expect(screen.getByTestId("coaching-what-to-do-next").props.children).toBe("Start the next rep with both shoulders level.");
     expect(StyleSheet.flatten(screen.getByTestId("coaching-what-to-do-next").props.style)).toMatchObject({ color: colors.text, fontWeight: "700" });
+    expect(screen.getByTestId("coaching-what-to-do-next-detail").props.children).toBe("Both shoulders finish at the same height.");
+    expect(StyleSheet.flatten(screen.getByTestId("coaching-what-to-do-next-detail").props.style)).toMatchObject({ color: colors.textSecondary, fontWeight: "400" });
   });
 
   it("uses compact summary and list typography", async () => {

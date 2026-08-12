@@ -162,7 +162,7 @@ describe("buildReviewFrames", () => {
     expect(point.observed.evidence.visualEvidence).toBe("The same rise repeats.");
   });
 
-  it("uses the personalized tab-specific coaching contract", () => {
+  it("preserves the personalized tab-specific coaching without truncating it", () => {
     const value = resultWithTwoMoments();
     value.priorityCorrections[0].expandedCoaching = {
       summary: "Your shoulders stop moving evenly.",
@@ -174,12 +174,11 @@ describe("buildReviewFrames", () => {
 
     const point = buildCoachingReviewPoints(value)[0];
 
-    expect(point.observed.body).toBe("Your right shoulder rises before the handle reaches your ribs at the beginning.");
+    expect(point.observed.body).toBe(value.priorityCorrections[0].expandedCoaching?.whatHappened);
     expect(point.why.body).toBe(value.priorityCorrections[0].expandedCoaching?.whyItMatters);
     expect(point.next.title).toBe("Start the next rep with both shoulders level.");
     expect(point.next.body).toBe("Both shoulders finish at the same height.");
-    expect(point.observed.body).toBe("Your right shoulder rises before the handle reaches your ribs at the beginning.");
-    expect(point.observed.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(1);
+    expect(point.observed.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(5);
     expect(point.why.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
   });
 
@@ -203,7 +202,7 @@ describe("buildReviewFrames", () => {
     expect((point.why as typeof point.why & { detail?: string }).detail).toBe("The final repetitions no longer match the opening path. That makes the set less repeatable.");
   });
 
-  it("caps the complete what happened section at three sentences", () => {
+  it("keeps complete What happened copy because sentence ranges are writing guidance", () => {
     const value = resultWithTwoMoments();
     value.priorityCorrections[0].expandedCoaching = {
       summary: "Your shoulders stop moving evenly.",
@@ -218,8 +217,8 @@ describe("buildReviewFrames", () => {
     const observed = buildCoachingReviewPoints(value)[0].observed;
     const visibleCopy = `${observed.body} ${observed.detail}`;
 
-    expect(visibleCopy.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
-    expect(observed.body).toBe("Your right shoulder rises before the handle reaches your ribs.");
-    expect(observed.detail).toBe("The rise appears on rep 3. Rep 4 repeats the same uneven finish.");
+    expect(visibleCopy.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(6);
+    expect(observed.body).toBe(value.priorityCorrections[0].expandedCoaching?.whatHappened);
+    expect(observed.detail).toBe(value.priorityCorrections[0].expandedCoaching?.whatHappenedDetail);
   });
 });

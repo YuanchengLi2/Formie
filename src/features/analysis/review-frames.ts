@@ -1,4 +1,5 @@
 import type { AnalysisResult, CoachingFinding, EvidenceMoment } from "./result-schema";
+import { normalizeAnalysisText } from "./sentences";
 
 export type ReviewPurpose = "observed" | "why" | "next";
 
@@ -25,15 +26,14 @@ export type CoachingReviewPoint = {
   next: ReviewFrame;
 };
 
-function compactParagraph(parts: (string | null | undefined)[], sentenceLimit = 4): string | undefined {
+function compactParagraph(parts: (string | null | undefined)[]): string | undefined {
   const combined = [...new Set(parts.map((part) => part?.trim()).filter((part): part is string => Boolean(part)))].join(" ");
   if (!combined) return undefined;
-  const sentences = combined.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((sentence) => sentence.trim()).filter(Boolean) ?? [combined];
-  return sentences.slice(0, sentenceLimit).join(" ");
+  return normalizeAnalysisText(combined);
 }
 
 function coachingSentence(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
+  const trimmed = value ? normalizeAnalysisText(value) : "";
   if (!trimmed) return null;
   return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
@@ -91,8 +91,8 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       evidence,
       evidenceIndex,
       finding.title,
-      compactParagraph([expanded?.whatHappened?.trim() || finding.detail], 1),
-      compactParagraph([expanded?.whatHappenedDetail], 2),
+      compactParagraph([expanded?.whatHappened?.trim() || finding.detail]),
+      compactParagraph([expanded?.whatHappenedDetail]),
       finding.id,
     );
     const why = frameFor(
@@ -101,7 +101,7 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       evidence,
       evidenceIndex,
       finding.title,
-      expanded?.whyItMatters?.trim() || compactParagraph([finding.whyItMatters], 3),
+      expanded?.whyItMatters?.trim() || compactParagraph([finding.whyItMatters]),
       expanded?.whyItMattersDetail?.trim(),
       finding.id,
     );
@@ -111,7 +111,7 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       evidence,
       evidenceIndex,
       expanded?.whatToDo ?? action?.instruction ?? finding.correction ?? finding.cue ?? finding.title,
-      compactParagraph([expanded?.successCheck ?? action?.successCheck], 1),
+      compactParagraph([expanded?.successCheck ?? action?.successCheck]),
       undefined,
     );
     const paragraph = [

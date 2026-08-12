@@ -35,4 +35,30 @@ describe("Gemini Files client", () => {
     })).rejects.toThrow("503");
     expect(upload).not.toHaveBeenCalled();
   });
+
+  it("preserves provider HTTP status and file failure detail for retry disposition", async () => {
+    const unavailable = createGeminiFilesClient({
+      apiKey: "secret",
+      fetcher: jest.fn(async () => new Response(JSON.stringify({ error: { message: "backend overloaded" } }), { status: 503 })),
+    });
+    await expect(unavailable.getFile("files/busy")).rejects.toMatchObject({
+      message: expect.stringContaining("backend overloaded"),
+      httpStatus: 503,
+      providerStatus: "HTTP_503",
+    });
+
+    const failed = createGeminiFilesClient({
+      apiKey: "secret",
+      fetcher: jest.fn(async () => new Response(JSON.stringify({
+        name: "files/failed",
+        uri: "https://files.example/failed",
+        state: "FAILED",
+        error: { message: "Video codec is unsupported" },
+      }), { status: 200 })),
+    });
+    await expect(failed.getFile("files/failed")).resolves.toMatchObject({
+      state: "FAILED",
+      failureReason: "Video codec is unsupported",
+    });
+  });
 });

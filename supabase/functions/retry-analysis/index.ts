@@ -22,12 +22,8 @@ Deno.serve(async (request) => {
         .from("analysis_sessions")
         .select("id,user_id,active_v49_run_id,pipeline_version")
         .eq("status", "processing");
-      query = primaryV49Enabled
-        ? query.not("active_v49_run_id", "is", null)
-        : query.is("active_v49_run_id", null);
-      const stages = primaryV49Enabled
-        ? ["input_ready", "video_processing", "problem_finding", "coaching", "committing", "retry_wait"]
-        : ["input_ready", "video_processing", "analyzing", "finalizing", "retry_wait"];
+      if (!primaryV49Enabled) query = query.is("active_v49_run_id", null);
+      const stages = ["input_ready", "video_processing", "problem_finding", "coaching", "committing", "analyzing", "finalizing", "retry_wait"];
       const { data, error } = await query
         .in("stage", stages)
         .or(`analysis_next_retry_at.is.null,analysis_next_retry_at.lte.${now.toISOString()}`)
@@ -38,10 +34,11 @@ Deno.serve(async (request) => {
         id: session.id,
         userId: session.user_id,
         pipelineVersion: session.pipeline_version ?? null,
+        activeV49RunId: session.active_v49_run_id ?? null,
       })).filter(canAutomaticallyRetry);
     },
     invokeAnalysis: async (session) => {
-      const endpoint = primaryV49Enabled ? "analyze-video-v49" : "analyze-video";
+      const endpoint = primaryV49Enabled && session.activeV49RunId ? "analyze-video-v49" : "analyze-video";
       const url = `${Deno.env.get("SUPABASE_URL") ?? ""}/functions/v1/${endpoint}`;
       const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
       const retrySecret = Deno.env.get("ANALYSIS_RETRY_SECRET") ?? Deno.env.get("RETENTION_CLEANUP_SECRET") ?? "";

@@ -2,13 +2,11 @@ export type RetryAnalysisSession = {
   id: string;
   userId: string;
   pipelineVersion: string | null;
+  activeV49RunId?: string | null;
 };
 
-const FIRST_NON_RETRYABLE_WHOLE_VIDEO_VERSION = 56;
-
 export function canAutomaticallyRetry(session: RetryAnalysisSession): boolean {
-  const match = session.pipelineVersion?.match(/^gemini-whole-video-v(\d+)(?:-|$)/);
-  return !match || Number(match[1]) < FIRST_NON_RETRYABLE_WHOLE_VIDEO_VERSION;
+  return Boolean(session.id && session.userId);
 }
 
 export type RetryAnalysisDependencies = {

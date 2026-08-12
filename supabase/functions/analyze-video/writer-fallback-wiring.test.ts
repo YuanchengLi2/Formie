@@ -1,19 +1,18 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { runNonBlockingWriter } from "./nonblocking-writer";
-
 const source = readFileSync(join(__dirname, "index.ts"), "utf8");
 
-describe("whole-video analyst and nonblocking writer wiring", () => {
-  it("uses one full-video model call followed by a text-only writer that cannot fail analysis", () => {
+describe("whole-video analyst wiring", () => {
+  it("uses the analyst's original evidence-grounded coaching without a second model rewrite", () => {
     expect(source).not.toContain("runShortClipRechecks({");
-    expect(source).toContain("buildWholeVideoWritingPrompt");
-    expect(source).toContain("buildTextGenerateContentRequest");
-    expect(source).toContain("modelName: WRITER_MODEL");
-    expect(source).not.toContain('runStage(sessionId, "analyzing", { kind: "writer"');
-    expect(source).toContain("fallback: () => parseWholeVideoWriting(null, parsedAnalysis)");
-    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v63-three-sentence-what-happened"');
+    expect(source).not.toContain("buildWholeVideoWritingPrompt");
+    expect(source).not.toContain("buildTextGenerateContentRequest");
+    expect(source).not.toContain("WRITER_MODEL");
+    expect(source).toContain("parseWholeVideoWriting(null, parsedAnalysis)");
+    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v66-original-coaching-provider-compatible"');
+    expect(source).toContain("storedVideoStageOutput ?? await runStage");
+    expect(source).not.toContain("preserveSchemaBounds: true");
     expect(source.indexOf("return raw as JsonRecord")).toBeLessThan(source.indexOf("parseBoundaryFreeAnalysis(rawAnalysis, durationMs)"));
   });
 
@@ -21,19 +20,4 @@ describe("whole-video analyst and nonblocking writer wiring", () => {
     expect(source).toContain("rep_timeline: candidate.repTimeline");
   });
 
-  it("returns analyst coaching when the text writer fails", async () => {
-    await expect(runNonBlockingWriter({
-      write: async () => { throw new Error("writer unavailable"); },
-      parse: () => "writer copy",
-      fallback: () => "analyst copy",
-    })).resolves.toBe("analyst copy");
-  });
-
-  it("returns analyst coaching when the writer response cannot be parsed", async () => {
-    await expect(runNonBlockingWriter({
-      write: async () => ({ malformed: true }),
-      parse: () => { throw new Error("malformed writer response"); },
-      fallback: () => "analyst copy",
-    })).resolves.toBe("analyst copy");
-  });
 });

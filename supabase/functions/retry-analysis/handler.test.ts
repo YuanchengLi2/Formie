@@ -52,13 +52,12 @@ describe("retry-analysis worker", () => {
     expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "session-1", userId: "user-1", pipelineVersion: "legacy-retryable" });
   });
 
-  it("never automatically invokes current or future single-call whole-video sessions", async () => {
+  it("retries v64 and future whole-video sessions from their durable recorded stage", async () => {
     const deps = dependencies({
       findDueSessions: jest.fn(async () => [
         { id: "single-call", userId: "user-1", pipelineVersion: "gemini-whole-video-v56-single-call-rep-audit" },
         { id: "writer", userId: "user-2", pipelineVersion: "gemini-whole-video-v57-nonblocking-writer" },
-        { id: "diverse", userId: "user-3", pipelineVersion: "gemini-whole-video-v58-diverse-moments-concise-coaching" },
-        { id: "future", userId: "user-4", pipelineVersion: "gemini-whole-video-v59-future-single-call" },
+        { id: "current", userId: "user-3", pipelineVersion: "gemini-whole-video-v64-durable-retry" },
         { id: "legacy", userId: "user-2", pipelineVersion: "gemini-whole-video-v55-single-pass-coaching" },
       ]),
     });
@@ -66,8 +65,8 @@ describe("retry-analysis worker", () => {
     const response = await retryAnalysisHandler(new Request("https://example/retry-analysis", { method: "POST" }), deps);
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ processed: 1, succeeded: 1, failed: 0 });
-    expect(deps.invokeAnalysis).toHaveBeenCalledTimes(1);
-    expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "legacy", userId: "user-2", pipelineVersion: "gemini-whole-video-v55-single-pass-coaching" });
+    await expect(response.json()).resolves.toEqual({ processed: 4, succeeded: 4, failed: 0 });
+    expect(deps.invokeAnalysis).toHaveBeenCalledTimes(4);
+    expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "current", userId: "user-3", pipelineVersion: "gemini-whole-video-v64-durable-retry" });
   });
 });
