@@ -2,7 +2,22 @@ import type { AnalysisCandidate } from "./analysis-contract.ts";
 import { historicalResultPayload } from "../_historical/legacy-result-payload.ts";
 import { parseSetDeclaration } from "./set-declaration.ts";
 
-const WHOLE_VIDEO_PIPELINES = new Set(["gemini-whole-video-v46", "gemini-whole-video-v47", "gemini-whole-video-v48", "gemini-whole-video-v48-recheck1", "gemini-whole-video-v48-recheck2", "gemini-whole-video-v50", "gemini-whole-video-v51", "gemini-whole-video-v52", "gemini-whole-video-v53-readable-coaching", "gemini-whole-video-v54-required-four-coaching", "gemini-whole-video-v55-single-pass-coaching", "gemini-whole-video-v56-single-call-rep-audit"]);
+const WHOLE_VIDEO_PIPELINES = new Set([
+  "gemini-whole-video-v46",
+  "gemini-whole-video-v47",
+  "gemini-whole-video-v48",
+  "gemini-whole-video-v48-recheck1",
+  "gemini-whole-video-v48-recheck2",
+  "gemini-whole-video-v50",
+  "gemini-whole-video-v51",
+  "gemini-whole-video-v52",
+  "gemini-whole-video-v53-readable-coaching",
+  "gemini-whole-video-v54-required-four-coaching",
+  "gemini-whole-video-v55-single-pass-coaching",
+  "gemini-whole-video-v56-single-call-rep-audit",
+  "gemini-whole-video-v72-leased-direct-ai-coaching",
+  "gemini-whole-video-v73-focused-analyst-flash-lite-writer",
+]);
 
 function currentResultPayload(session: Record<string, unknown>, result: Record<string, unknown>): AnalysisCandidate {
   const declaration = session.set_declaration ? parseSetDeclaration(session.set_declaration) : null;

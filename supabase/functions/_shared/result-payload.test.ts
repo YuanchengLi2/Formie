@@ -379,4 +379,40 @@ describe("resultPayload", () => {
     expect(payload?.score).toBe(94);
   });
 
+  it.each([
+    "gemini-whole-video-v72-leased-direct-ai-coaching",
+    "gemini-whole-video-v73-focused-analyst-flash-lite-writer",
+  ])("returns stored writer scores, muscle focus, and issue regions unchanged for %s", (pipelineVersion) => {
+    const movementScores = [
+      { id: "path", label: "Path", score: 91, observed: "Visible path", evidenceIds: ["path"] },
+      { id: "support", label: "Support", score: 89, observed: "Stable support", evidenceIds: [] },
+      { id: "range", label: "Range", score: 87, observed: "Visible range", evidenceIds: [] },
+      { id: "control", label: "Control", score: 93, observed: "Controlled lowering", evidenceIds: [] },
+    ];
+    const muscleFocus = { primary: [{ name: "Lats", region: "lats" }], secondary: [{ name: "Biceps", region: "biceps" }], unclassified: [] };
+    const correction = {
+      id: "path", title: "Elbow path rises", detail: "The elbow rises above the intended route.", whyItMatters: "The row finishes from a different position.", correction: "Guide the elbow toward the hip.", cue: "Elbow to hip.",
+      actionableCorrection: { instruction: "Guide the elbow toward the hip.", cue: "Elbow to hip.", successCheck: "The elbow finishes beside the torso.", applyWhen: "During the pull." },
+      severity: "important", observedIssueRegions: ["elbows"],
+      evidence: [{ startMs: 1_000, peakMs: 1_300, endMs: 1_600, repNumber: null, phase: null, visualEvidence: "The elbow rises.", visibleBodyAreas: ["elbow"], confidence: 0.9 }],
+    };
+    const payload = resultPayload(
+      { pipeline_version: pipelineVersion, detected_label: "Row", detected_equipment: ["dumbbell"], exercise_family: "row" },
+      { status: "complete", overall_assessment: "Visible row set", score: 90, score_rationale: [], movement_scores: movementScores, muscle_focus: muscleFocus, did_well: [], priority_corrections: [correction], coaching_cues: [], set_context: {}, set_summary: {}, next_set_plan: [], comparison: null },
+    );
+
+    expect(payload?.score).toBe(90);
+    expect(payload?.movementScores).toEqual(movementScores);
+    expect(payload?.muscleFocus).toEqual(muscleFocus);
+    expect(payload?.priorityCorrections[0].observedIssueRegions).toEqual(["elbows"]);
+  });
+
+  it("continues applying legacy compatibility to older pipelines", () => {
+    const payload = resultPayload(
+      { pipeline_version: "gemini-analyst-coach-v33", detected_label: "Row", detected_equipment: [], exercise_family: "row" },
+      { status: "complete", score: 40, score_rationale: [], movement_scores: [], did_well: [], priority_corrections: [{ id: "issue", title: "Visible issue", detail: "Visible detail.", whyItMatters: "Visible impact.", correction: "Correct it.", cue: "Correct it.", severity: "high", evidence: [] }], coaching_cues: [], next_set_plan: [], comparison: null },
+    );
+    expect(payload?.score).toBe(72);
+  });
+
 });

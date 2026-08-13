@@ -3,8 +3,8 @@ import { join } from "node:path";
 
 const source = readFileSync(join(__dirname, "index.ts"), "utf8");
 
-describe("whole-video analyst and direct AI writer wiring", () => {
-  it("uses one full-video model call followed by the AI writer without a parser or completer", () => {
+describe("v73 focused analyst and Flash Lite writer wiring", () => {
+  it("uses one full-video Gemini 3.6 call followed by one text-only Gemini 3.1 Flash Lite call", () => {
     expect(source).not.toContain("runShortClipRechecks({");
     expect(source).toContain("buildWholeVideoWritingPrompt");
     expect(source).toContain("buildTextGenerateContentRequest");
@@ -16,12 +16,34 @@ describe("whole-video analyst and direct AI writer wiring", () => {
     expect(source).not.toContain("mergeWholeVideoWriting");
     expect(source).not.toContain("COACHING_WRITER_FALLBACK");
     expect(source).toContain("as WholeVideoWriting");
-    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v72-leased-direct-ai-coaching"');
-    expect(source.indexOf("return raw as JsonRecord")).toBeLessThan(source.indexOf("parseBoundaryFreeAnalysis(rawAnalysis, durationMs)"));
+    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v73-focused-analyst-flash-lite-writer"');
+    expect(source).toContain('const ANALYST_MODEL = "gemini-3.6-flash"');
+    expect(source).toContain('const WRITER_MODEL = "gemini-3.1-flash-lite"');
+    expect(source).not.toContain("parseBoundaryFreeAnalysis");
+    expect(source).not.toContain("analysisContractError");
+    expect(source).not.toContain("coaching completer");
+    expect(source).not.toContain("runShortClipRechecks");
+    expect(source.match(/buildVideoGenerateContentRequest\(/g)).toHaveLength(1);
+    expect(source.match(/buildTextGenerateContentRequest\(/g)).toHaveLength(1);
   });
 
-  it("persists the complete per-repetition audit in the atomic result payload", () => {
-    expect(source).toContain("rep_timeline: candidate.repTimeline");
+  it("loads complete neutral catalog mechanics from the declaration ID first", () => {
+    expect(source).toContain("declaration?.exercise.catalogExerciseId ?? session.exercise_variant_v2_id");
+    expect(source).toContain('.select("name,family,mechanics")');
+    for (const key of ["equipmentClass", "movementFamily", "support", "trajectory", "laterality", "stance", "grip", "angle"]) {
+      expect(source).toContain(key);
+    }
+    expect(source).toContain("catalog: rawSession.catalogExerciseContext");
+  });
+
+  it("durably reuses raw analyst output before writer finalization and persists no model rep timeline", () => {
+    const analystStage = source.indexOf('runStage(sessionId, "analyzing"');
+    const writerStage = source.indexOf('runStage(sessionId, "finalizing"');
+    expect(analystStage).toBeGreaterThanOrEqual(0);
+    expect(analystStage).toBeLessThan(writerStage);
+    expect(source).toContain("limitWholeVideoAnalysis");
+    expect(source).toContain("rep_timeline: []");
+    expect(source).not.toContain("rep_timeline: candidate.repTimeline");
   });
 
   it("claims the analyst lease before publishing the analyzing stage", () => {

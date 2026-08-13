@@ -12,11 +12,14 @@ import { createGeminiFilesClient, reuseOrUploadGeminiFile, type GeminiFile } fro
 import {
   buildBoundaryFreeAnalysisPrompt,
   buildWholeVideoWritingPrompt,
-  parseBoundaryFreeAnalysis,
+  limitWholeVideoAnalysis,
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
   WHOLE_VIDEO_WRITING_SCHEMA,
   WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
   boundaryFreeToCandidate,
+  type ExerciseCatalogContext,
+  type ExerciseCatalogMechanics,
+  type WholeVideoAnalysis,
   type WholeVideoWriting,
 } from "../_shared/boundary-free-analysis.ts";
 import type { ExerciseFamily } from "../_shared/analysis-contract.ts";
@@ -29,9 +32,9 @@ import { analyzeWholeVideoHandler, type WholeVideoSession } from "./whole-video-
 import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v72-leased-direct-ai-coaching";
+const PIPELINE_VERSION = "gemini-whole-video-v73-focused-analyst-flash-lite-writer";
 const ANALYST_MODEL = "gemini-3.6-flash";
-const WRITER_MODEL = "gemini-3.6-flash";
+const WRITER_MODEL = "gemini-3.1-flash-lite";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
 const files = createGeminiFilesClient({ apiKey });
 const generation = createGenerateContentClient({ apiKey });
@@ -54,18 +57,6 @@ function errorCode(error: unknown): string {
     if (/^[A-Z][A-Z0-9_]{2,63}$/.test(code)) return code;
   }
   return error instanceof Error ? error.name : "ANALYSIS_FAILED";
-}
-
-function analysisContractError(error: unknown): Error {
-  const message = error instanceof Error ? error.message : String(error);
-  const code = /movementScores|movement scores/i.test(message)
-    ? "ANALYSIS_CONTRACT_MOVEMENT_SCORES"
-    : /evidenceSelections|evidence selection|timestamp/i.test(message)
-      ? "ANALYSIS_CONTRACT_EVIDENCE"
-      : /generalGuidance|general guidance/i.test(message)
-        ? "ANALYSIS_CONTRACT_GUIDANCE"
-        : "ANALYSIS_CONTRACT_INVALID";
-  return Object.assign(new Error(message), { code });
 }
 
 function databaseError(context: "ANALYSIS_STATE_SAVE_FAILED" | "ANALYSIS_RESULT_SAVE_FAILED", error: unknown): Error {
@@ -106,6 +97,18 @@ function catalogFamily(value: unknown): ExerciseFamily | undefined {
   return typeof value === "string" && EXERCISE_FAMILIES.has(value as ExerciseFamily)
     ? value as ExerciseFamily
     : undefined;
+}
+
+const CATALOG_MECHANIC_KEYS = [
+  "equipmentClass", "movementFamily", "support", "trajectory",
+  "laterality", "stance", "grip", "angle",
+] as const satisfies readonly (keyof ExerciseCatalogMechanics)[];
+
+function catalogMechanics(value: unknown): ExerciseCatalogMechanics | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const source = value as Record<string, unknown>;
+  if (CATALOG_MECHANIC_KEYS.some((key) => typeof source[key] !== "string" || !String(source[key]).trim())) return undefined;
+  return Object.fromEntries(CATALOG_MECHANIC_KEYS.map((key) => [key, String(source[key]).trim()])) as ExerciseCatalogMechanics;
 }
 
 Deno.serve(async (request) => {
@@ -315,23 +318,20 @@ Deno.serve(async (request) => {
       if (!session) return null;
       const currentPipeline = session.pipeline_version === PIPELINE_VERSION;
       const declaration = session.set_declaration ? parseSetDeclaration(session.set_declaration) : null;
-      let catalogExerciseFamily: ExerciseFamily | undefined;
-      let catalogEquipment: string[] | undefined;
-      if (typeof session.exercise_variant_v2_id === "number") {
+      let catalogExerciseContext: ExerciseCatalogContext | undefined;
+      const catalogExerciseId = declaration?.exercise.catalogExerciseId ?? session.exercise_variant_v2_id;
+      if (typeof catalogExerciseId === "number") {
         const { data: catalog, error: catalogError } = await admin
           .from("exercise_variants_v2")
-          .select("family,mechanics")
-          .eq("id", session.exercise_variant_v2_id)
+          .select("name,family,mechanics")
+          .eq("id", catalogExerciseId)
           .maybeSingle();
         if (catalogError) throw catalogError;
-        catalogExerciseFamily = catalogFamily(catalog?.family);
-        const mechanics = catalog?.mechanics;
-        const equipmentClass = mechanics && typeof mechanics === "object" && !Array.isArray(mechanics)
-          ? (mechanics as Record<string, unknown>).equipmentClass
-          : null;
-        catalogEquipment = typeof equipmentClass === "string" && equipmentClass.trim()
-          ? [equipmentClass.trim()]
-          : [];
+        const family = catalogFamily(catalog?.family);
+        const mechanics = catalogMechanics(catalog?.mechanics);
+        if (catalog && typeof catalog.name === "string" && catalog.name.trim() && family && mechanics) {
+          catalogExerciseContext = { id: catalogExerciseId, name: catalog.name.trim(), family, mechanics };
+        }
       }
       return {
         ...session,
@@ -350,8 +350,7 @@ Deno.serve(async (request) => {
         durationMs: session.duration_ms,
         result: resultPayload(session, result),
         analysisDecision: currentPipeline && session.analysis_draft && typeof session.analysis_draft === "object" ? session.analysis_draft : null,
-        catalogExerciseFamily,
-        catalogEquipment,
+        catalogExerciseContext,
         setDeclaration: declaration,
       } as WholeVideoSession;
     },
@@ -359,6 +358,7 @@ Deno.serve(async (request) => {
       const invocationStartedAt = Date.now();
       const durationMs = rawSession.durationMs!;
       const declaration = rawSession.setDeclaration ? parseSetDeclaration(rawSession.setDeclaration) : undefined;
+      const catalog = rawSession.catalogExerciseContext as ExerciseCatalogContext | undefined;
       const rawDecision = rawSession.analysisDecision && typeof rawSession.analysisDecision === "object" ? rawSession.analysisDecision as JsonRecord : null;
       // One full-video call establishes the evidence. The text-only writer
       // produces the final coaching without another video pass.
@@ -441,7 +441,7 @@ Deno.serve(async (request) => {
             await saveSessionStage("analyzing");
             const requestBody = buildVideoGenerateContentRequest({
               video: analysisVideo,
-                  prompt: buildBoundaryFreeAnalysisPrompt(durationMs, declaration),
+                  prompt: buildBoundaryFreeAnalysisPrompt(durationMs, declaration, catalog),
                   schema: BOUNDARY_FREE_ANALYSIS_SCHEMA,
               fps: REQUESTED_ANALYSIS_FPS,
                   thinkingLevel: ANALYST_THINKING_LEVEL,
@@ -451,26 +451,37 @@ Deno.serve(async (request) => {
             const raw = await generate({ sessionId, stage: "analyzing", modelName: ANALYST_MODEL, request: requestBody, fps: REQUESTED_ANALYSIS_FPS, timeoutMs: deadline.timeoutFor("analyzing") }) as JsonRecord;
             return raw as JsonRecord;
           });
-          // The successful provider response is durably attached to the stage
-          // before local validation. A parser failure cannot trigger a rewatch.
-          let parsedAnalysis: ReturnType<typeof parseBoundaryFreeAnalysis>;
-          try {
-            parsedAnalysis = parseBoundaryFreeAnalysis(rawAnalysis, durationMs);
-          } catch (error) {
-            throw analysisContractError(error);
-          }
-          const decision = await runStage(sessionId, "finalizing", { kind: "writer", analysis: parsedAnalysis, declaration: declaration ?? null }, async () => {
+          // Structured analyst output is already durable in the successful
+          // analyzing stage. Writer retries replay this output without video.
+          const structuredAnalysis = rawAnalysis as unknown as WholeVideoAnalysis;
+          const analystIssueCount = structuredAnalysis.issues.length;
+          const analysis = limitWholeVideoAnalysis(structuredAnalysis);
+          const visibilityLevel = analysis.visibility.notVisible.length > analysis.visibility.clearlyVisible.length
+            ? "limited"
+            : analysis.visibility.partlyVisible.length > 0 || analysis.visibility.notVisible.length > 0
+              ? "partial"
+              : "clear";
+          console.info(JSON.stringify({
+            event: "whole_video_analysis_ready",
+            sessionId,
+            analystIssueCount,
+            visibilityLevel,
+            analystModel: ANALYST_MODEL,
+            writerModel: WRITER_MODEL,
+            issueCountBelowFour: analystIssueCount < 4,
+          }));
+          const decision = await runStage(sessionId, "finalizing", { kind: "writer", analysis, declaration: declaration ?? null, catalog: catalog ?? null }, async () => {
             await saveSessionStage("finalizing");
             const timeoutMs = Math.min(20_000, deadline.remainingMs());
             if (timeoutMs < 1_000) throw Object.assign(new Error("Writer budget exhausted"), { code: "WRITER_DEADLINE_EXHAUSTED" });
             const writerRequest = buildTextGenerateContentRequest({
               systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
-              prompt: buildWholeVideoWritingPrompt(parsedAnalysis, declaration),
+              prompt: buildWholeVideoWritingPrompt(analysis, declaration, catalog),
               schema: WHOLE_VIDEO_WRITING_SCHEMA,
               thinkingLevel: WRITER_THINKING_LEVEL,
             });
             const writing = await generate({ sessionId, stage: "finalizing", modelName: WRITER_MODEL, request: writerRequest, timeoutMs }) as WholeVideoWriting;
-            return { analysis: parsedAnalysis, writing } as unknown as JsonRecord;
+            return { analysis, writing } as unknown as JsonRecord;
           });
           await saveSessionStage("finalizing", { analysis_draft: decision });
           return decision;
@@ -481,15 +492,14 @@ Deno.serve(async (request) => {
           });
         },
         assembleResult: (decision) => {
-              const combined = decision as { analysis: ReturnType<typeof parseBoundaryFreeAnalysis>; writing: WholeVideoWriting };
+              const combined = decision as { analysis: WholeVideoAnalysis; writing: WholeVideoWriting };
               return boundaryFreeToCandidate(
                 combined.analysis,
+                combined.writing,
                 declaration,
                 {
-                  exerciseFamily: rawSession.catalogExerciseFamily as ExerciseFamily | undefined,
-                  equipment: Array.isArray(rawSession.catalogEquipment) ? rawSession.catalogEquipment as string[] : undefined,
+                  catalog: rawSession.catalogExerciseContext as ExerciseCatalogContext | undefined,
                 },
-                combined.writing,
               ) as unknown as JsonRecord;
         },
         saveResult: async (sessionId, rawResult) => {
@@ -524,7 +534,7 @@ Deno.serve(async (request) => {
                 did_well: candidate.didWell,
                 priority_corrections: candidate.priorityCorrections,
                 coaching_cues: candidate.coachingCues,
-                rep_timeline: candidate.repTimeline,
+                rep_timeline: [],
                 set_context: candidate.setContext,
                 set_summary: candidate.setSummary,
                 next_set_plan: candidate.nextSetPlan,
