@@ -57,8 +57,7 @@ describe("retry-analysis worker", () => {
       findDueSessions: jest.fn(async () => [
         { id: "single-call", userId: "user-1", pipelineVersion: "gemini-whole-video-v56-single-call-rep-audit" },
         { id: "writer", userId: "user-2", pipelineVersion: "gemini-whole-video-v57-nonblocking-writer" },
-        { id: "diverse", userId: "user-3", pipelineVersion: "gemini-whole-video-v58-diverse-moments-concise-coaching" },
-        { id: "future", userId: "user-4", pipelineVersion: "gemini-whole-video-v59-future-single-call" },
+        { id: "current", userId: "user-3", pipelineVersion: "gemini-whole-video-v64-durable-retry" },
         { id: "legacy", userId: "user-2", pipelineVersion: "gemini-whole-video-v55-single-pass-coaching" },
         { id: "leased-active", userId: "user-5", pipelineVersion: "gemini-whole-video-v72-leased-direct-ai-coaching", analysisNextRetryAt: null },
         { id: "leased", userId: "user-6", pipelineVersion: "gemini-whole-video-v72-leased-direct-ai-coaching", analysisNextRetryAt: "2026-08-02T15:59:59.000Z" },

@@ -11,11 +11,12 @@ import { buildTextGenerateContentRequest, buildVideoGenerateContentRequest, crea
 import { createGeminiFilesClient, reuseOrUploadGeminiFile, type GeminiFile } from "../_shared/gemini-files.ts";
 import {
   buildBoundaryFreeAnalysisPrompt,
+  buildWholeVideoWritingRepairPrompt,
   buildWholeVideoWritingPrompt,
   limitWholeVideoAnalysis,
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
-  WHOLE_VIDEO_WRITING_SCHEMA,
   WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
+  WHOLE_VIDEO_WRITING_SCHEMA,
   boundaryFreeToCandidate,
   type ExerciseCatalogContext,
   type ExerciseCatalogMechanics,
@@ -30,6 +31,7 @@ import { selectGeminiVideoPath } from "./analysis-input.ts";
 import { advanceWholeVideoPipeline } from "./whole-video-runner.ts";
 import { analyzeWholeVideoHandler, type WholeVideoSession } from "./whole-video-handler.ts";
 import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline.ts";
+import { writeValidatedCoaching } from "./coaching-writer.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 
 const PIPELINE_VERSION = "gemini-whole-video-v73-focused-analyst-flash-lite-writer";
@@ -286,10 +288,10 @@ Deno.serve(async (request) => {
       for (const delayMs of [250, 500, 1_000, 2_000, 4_000, 8_000, 12_000]) {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         file = await files.getFile(file.name);
-        if (file.state !== "PROCESSING") break;
+        delayMs = Math.min(delayMs === 0 ? 250 : delayMs * 2, 5_000);
       }
     }
-    if (file.state === "FAILED") throw Object.assign(new Error("Gemini could not process the uploaded video"), { code: "GEMINI_FILE_FAILED" });
+    if (file.state === "FAILED") throw Object.assign(new Error(file.failureReason || "Gemini could not process the uploaded video"), { code: "GEMINI_FILE_FAILED", providerStatus: "FAILED" });
     if (file.state !== "ACTIVE") throw Object.assign(new Error("The uploaded video is still processing"), { code: "ANALYSIS_FILE_PROCESSING" });
     return { input: { uri: file.uri, mimeType: file.mimeType || "video/mp4" }, byteLength, file };
   }
@@ -309,12 +311,14 @@ Deno.serve(async (request) => {
       return requireUserId(incoming, admin);
     },
     loadSession: async (sessionId, userId) => {
-      const [{ data: session, error }, { data: result, error: resultError }] = await Promise.all([
+      const [{ data: session, error }, { data: result, error: resultError }, { data: storedStage, error: storedStageError }] = await Promise.all([
         admin.from("analysis_sessions").select("*").eq("id", sessionId).eq("user_id", userId).maybeSingle(),
         admin.from("analysis_results").select("*").eq("session_id", sessionId).maybeSingle(),
+        admin.from("analysis_stage_runs").select("output,pipeline_version").eq("session_id", sessionId).eq("stage", "analyzing").eq("status", "succeeded").not("output", "is", null).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (error) throw error;
       if (resultError) throw resultError;
+      if (storedStageError) throw storedStageError;
       if (!session) return null;
       const currentPipeline = session.pipeline_version === PIPELINE_VERSION;
       const declaration = session.set_declaration ? parseSetDeclaration(session.set_declaration) : null;
@@ -604,7 +608,7 @@ Deno.serve(async (request) => {
     markFailed: async (sessionId, code) => {
       const { data: retryState, error: retryStateError } = await admin
         .from("analysis_sessions")
-        .select("status,gemini_file_name")
+        .select("status,gemini_file_name,analysis_retry_count")
         .eq("id", sessionId)
         .maybeSingle();
       if (retryStateError) throw databaseError("ANALYSIS_STATE_SAVE_FAILED", retryStateError);
@@ -614,12 +618,12 @@ Deno.serve(async (request) => {
         .eq("session_id", sessionId)
         .maybeSingle();
       if (existingResultError) throw databaseError("ANALYSIS_RESULT_SAVE_FAILED", existingResultError);
-      if (retryState?.status === "complete" || existingResult?.status === "complete") {
+      if (retryState?.status === "complete" || retryState?.status === "partial" || existingResult?.status === "complete" || existingResult?.status === "partial") {
         if (typeof retryState?.gemini_file_name === "string") {
           await files.deleteFile(retryState.gemini_file_name).catch(() => undefined);
         }
         await persistRetryState(sessionId, {
-          status: "complete",
+          status: existingResult?.status ?? retryState?.status ?? "complete",
           stage: "complete",
           failure_code: null,
           analysis_retry_count: 0,
@@ -630,10 +634,26 @@ Deno.serve(async (request) => {
           gemini_file_state: null,
           updated_at: new Date().toISOString(),
         });
-        return { status: "complete", stage: "complete" };
+        return { status: existingResult?.status ?? retryState?.status ?? "complete", stage: "complete" };
       }
-      if (typeof retryState?.gemini_file_name === "string") {
+      const nextRetryCount = Number(retryState?.analysis_retry_count ?? 0) + 1;
+      const terminal = disposition.disposition === "terminal_failure" || nextRetryCount > MAX_DURABLE_RETRIES;
+      if (terminal && typeof retryState?.gemini_file_name === "string") {
         await files.deleteFile(retryState.gemini_file_name).catch(() => undefined);
+      }
+      if (!terminal) {
+        const backoffSeconds = Math.min(5 * 2 ** Math.max(0, nextRetryCount - 1), 60);
+        await persistRetryState(sessionId, {
+          status: "processing",
+          stage: "retry_wait",
+          pipeline_version: PIPELINE_VERSION,
+          failure_code: null,
+          analysis_retry_count: nextRetryCount,
+          analysis_next_retry_at: new Date(Date.now() + backoffSeconds * 1_000).toISOString(),
+          analysis_last_error_code: code,
+          updated_at: new Date().toISOString(),
+        });
+        return { status: "processing", stage: "retry_wait" };
       }
       await persistRetryState(sessionId, {
         status: "failed",
@@ -641,6 +661,7 @@ Deno.serve(async (request) => {
         pipeline_version: PIPELINE_VERSION,
         failure_code: code,
         analysis_next_retry_at: null,
+        analysis_retry_count: nextRetryCount,
         analysis_last_error_code: code,
         gemini_file_name: null,
         gemini_file_uri: null,

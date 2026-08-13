@@ -1,5 +1,6 @@
 import { fireEvent, render } from "@testing-library/react-native";
 import type { ReactElement } from "react";
+import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ExerciseGuideScreen } from "./index";
@@ -55,7 +56,7 @@ describe("ExerciseGuideScreen", () => {
     expect(screen.getByText("Row")).toBeTruthy();
     expect(screen.getByText("Setup")).toBeTruthy();
     expect(screen.getByText("Form")).toBeTruthy();
-    expect(screen.getByText("Safety")).toBeTruthy();
+    expect(screen.queryByText("Safety")).toBeNull();
     expect(screen.getByText("Drive the working elbow toward your hip.")).toBeTruthy();
     expect(screen.queryByText("Brace one hand on a stable bench.")).toBeNull();
 
@@ -63,9 +64,7 @@ describe("ExerciseGuideScreen", () => {
     expect(screen.getByText("Brace one hand on a stable bench.")).toBeTruthy();
     expect(screen.queryByText("Drive the working elbow toward your hip.")).toBeNull();
 
-    await fireEvent.press(screen.getByLabelText("Show safety steps"));
-    expect(screen.getByText("Keep the supporting surface from sliding.")).toBeTruthy();
-    expect(screen.queryByText("Brace one hand on a stable bench.")).toBeNull();
+    expect(screen.queryByText("Keep the supporting surface from sliding.")).toBeNull();
 
     expect(screen.getByText("Camera Setup")).toBeTruthy();
     expect(screen.getByText("Side view  ·  Hip height  ·  Full body visible")).toBeTruthy();
@@ -73,9 +72,14 @@ describe("ExerciseGuideScreen", () => {
     expect(onOpenSpaceHelp).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText("Continue to Camera")).toBeTruthy();
     expect(screen.getByLabelText("Play One-arm dumbbell row tutorial on YouTube")).toBeTruthy();
-    expect(screen.getByTestId("exercise-guide-tabs").props.style).toEqual(expect.objectContaining({ minHeight: 40 }));
-    expect(screen.getByTestId("exercise-guide-steps").props.style).toEqual(expect.objectContaining({ borderRadius: 16 }));
-    expect(screen.getByTestId("exercise-guide-camera-card").props.style).toEqual(expect.objectContaining({ minHeight: 72 }));
+    expect(screen.getByTestId("exercise-guide-tabs").props.style).toEqual(expect.objectContaining({ minHeight: 44 }));
+    expect(StyleSheet.flatten(screen.getByTestId("exercise-guide-steps").props.style)).toMatchObject({ gap: 16 });
+    expect(StyleSheet.flatten(screen.getByTestId("exercise-guide-steps").props.style)).not.toHaveProperty("borderWidth");
+    expect(StyleSheet.flatten(screen.getByTestId("exercise-guide-step-0").props.style)).toMatchObject({ paddingVertical: 0 });
+    expect(StyleSheet.flatten(screen.getByTestId("exercise-guide-step-0").props.style)).not.toHaveProperty("minHeight");
+    expect(StyleSheet.flatten(screen.getByText("Brace one hand on a stable bench.").props.style)).toMatchObject({ fontSize: 15, lineHeight: 22 });
+    expect(screen.queryByTestId("exercise-guide-step-number-bubble-0")).toBeNull();
+    expect(screen.getByTestId("exercise-guide-camera-card").props.style).toEqual(expect.objectContaining({ minHeight: 60 }));
   });
 
   it("opens the selected YouTube tutorial", async () => {

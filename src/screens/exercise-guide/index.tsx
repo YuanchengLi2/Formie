@@ -24,12 +24,11 @@ type ExerciseGuideScreenProps = {
   onOpenTutorial: (tutorial: TutorialVideo) => void;
 };
 
-type GuideTab = "setup" | "form" | "safety";
+type GuideTab = "setup" | "form";
 
 const guideTabs: readonly { key: GuideTab; label: string; accessibilityLabel: string }[] = [
   { key: "setup", label: "Setup", accessibilityLabel: "Show setup steps" },
   { key: "form", label: "Form", accessibilityLabel: "Show form steps" },
-  { key: "safety", label: "Safety", accessibilityLabel: "Show safety steps" },
 ];
 
 function TutorialCard({ tutorial, onOpen }: { tutorial: TutorialVideo; onOpen: () => void }) {
@@ -86,9 +85,7 @@ export function ExerciseGuideScreen({
   const steps = guide
     ? activeTab === "setup"
       ? guide.setup
-      : activeTab === "safety"
-        ? guide.safety
-        : guide.execution
+      : guide.execution
     : [];
   const cameraSummary = guide?.cameraPlacement.filter(Boolean).slice(0, 3).join("  ·  ") ?? "Side view  ·  Hip height  ·  Full body visible";
 
@@ -97,11 +94,11 @@ export function ExerciseGuideScreen({
       alwaysBounceVertical={false}
       bounces={false}
       contentInsetAdjustmentBehavior="never"
-      contentContainerStyle={{ paddingBottom: insets.bottom + 18 }}
+      contentContainerStyle={{ flexGrow: 1, paddingTop: Math.max(insets.top, 8), paddingBottom: insets.bottom + 32 }}
       style={{ flex: 1, backgroundColor: colors.cameraBlack }}
     >
       <CaptureScreenHeader title="Exercise Guide" onBack={onBack} testID="exercise-guide-header" />
-      <View style={{ gap: compact ? 10 : 14, paddingHorizontal: 20 }}>
+      <View style={{ gap: compact ? 12 : 16, paddingHorizontal: 20 }}>
         <View style={{ gap: 1 }}>
           <Text selectable style={[typography.title, { color: colors.text, fontSize: 26, lineHeight: 31, letterSpacing: -0.7 }]}>
             {exerciseName}
@@ -124,7 +121,7 @@ export function ExerciseGuideScreen({
 
         {guide ? (
           <>
-            <View testID="exercise-guide-tabs" style={{ minHeight: 40, flexDirection: "row", padding: 2, borderRadius: 10, borderCurve: "continuous", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+            <View testID="exercise-guide-tabs" style={{ minHeight: 44, flexDirection: "row", padding: 2, borderRadius: 10, borderCurve: "continuous", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
               {guideTabs.map((tab) => {
                 const active = tab.key === activeTab;
                 return (
@@ -134,7 +131,8 @@ export function ExerciseGuideScreen({
                     accessibilityRole="tab"
                     accessibilityState={{ selected: active }}
                     onPress={() => setActiveTab(tab.key)}
-                    style={{ flex: 1, minHeight: 34, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: active ? colors.gold : "transparent" }}
+                    hitSlop={4}
+                    style={{ flex: 1, minHeight: 40, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: active ? colors.gold : "transparent" }}
                   >
                     <Text selectable style={[typography.label, { color: active ? colors.cameraBlack : colors.text, fontSize: 13 }]}>{tab.label}</Text>
                   </Pressable>
@@ -142,15 +140,16 @@ export function ExerciseGuideScreen({
               })}
             </View>
 
-            <View testID="exercise-guide-steps" style={{ overflow: "hidden", borderRadius: 16, borderCurve: "continuous", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+            <View style={{ gap: 5 }}>
+              <Text selectable style={[typography.label, { color: colors.gold, fontSize: 13, lineHeight: 18, letterSpacing: 1.1 }]}>{activeTab === "setup" ? "SETUP STEPS" : "FORM STEPS"}</Text>
+            <View testID="exercise-guide-steps" style={{ gap: spacing.lg }}>
               {steps.map((step, index) => (
-                <View key={`${activeTab}-${index}`} style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 8, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: "#343434" }}>
-                  <View style={{ width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.goldSoft }}>
-                    <Text selectable style={[typography.heading, { color: colors.gold, fontSize: 17, lineHeight: 21 }]}>{index + 1}</Text>
-                  </View>
-                  <Text selectable style={[typography.body, { flex: 1, color: colors.text, fontSize: 14, lineHeight: 19 }]}>{step}</Text>
+                <View key={`${activeTab}-${index}`} testID={`exercise-guide-step-${index}`} style={{ flexDirection: "row", alignItems: "flex-start", gap: 8, paddingVertical: 0 }}>
+                  <Text selectable style={[typography.heading, { width: 22, color: colors.gold, fontSize: 12, lineHeight: 20, letterSpacing: 0.6 }]}>{String(index + 1).padStart(2, "0")}</Text>
+                  <Text selectable style={[typography.body, { flex: 1, color: colors.text, fontSize: 15, lineHeight: 22 }]}>{step}</Text>
                 </View>
               ))}
+            </View>
             </View>
 
             <Pressable
@@ -159,7 +158,7 @@ export function ExerciseGuideScreen({
               onPress={onOpenSpaceHelp}
               testID="exercise-guide-camera-card"
               style={({ pressed }) => ({
-                minHeight: 72,
+                minHeight: 60,
                 flexDirection: "row",
                 alignItems: "center",
                 gap: 13,
@@ -190,7 +189,7 @@ export function ExerciseGuideScreen({
           </View>
         ) : null}
 
-        <FormButton label="Continue to Camera" onPress={onContinue} style={{ minHeight: 62, borderRadius: 13 }} />
+        <FormButton label="Continue to Camera" onPress={onContinue} style={{ minHeight: 56, borderRadius: 13 }} />
       </View>
     </ScrollView>
   );

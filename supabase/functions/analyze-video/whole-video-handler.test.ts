@@ -21,7 +21,9 @@ function dependencies(overrides: Partial<WholeVideoHandlerDependencies> = {}): W
     authenticate: jest.fn(async () => "user-1"),
     loadSession: jest.fn(async () => session()),
     advancePipeline: jest.fn(async () => { throw Object.assign(new Error("contract invalid"), { code: "ANALYSIS_CONTRACT_INVALID" }); }),
-    markFailed: jest.fn(async () => ({ status: "failed", stage: "failed" })),
+    persistFailure: jest.fn(async (_sessionId, _code, disposition) => disposition.disposition === "terminal_failure"
+      ? ({ status: "failed", stage: "failed" })
+      : ({ status: "processing", stage: "retry_wait" })),
     ...overrides,
   };
 }

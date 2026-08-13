@@ -6,9 +6,11 @@ import { FormButton } from "@/components/form-button";
 import { FullRecording } from "@/components/full-recording";
 import { MuscleFocusFigure } from "@/components/muscle-focus-figure";
 import { resolveExerciseMuscleFocus } from "@/features/analysis/exercise-muscle-focus";
+import { deriveObservedIssueRegions } from "@/features/analysis/issue-regions";
 import { getResultPresentation } from "@/features/analysis/presentation";
 import { resolvePlaybackWindow, sourceToClipMs, type PlaybackWindow } from "@/features/analysis/playback-window";
 import { buildCoachingReviewPoints, buildReviewFrames, type ReviewFrame, type ReviewPurpose } from "@/features/analysis/review-frames";
+import { limitAnalysisSentences, normalizeAnalysisText } from "@/features/analysis/sentences";
 import type { AnalysisResult, AnatomyRegion } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
@@ -31,8 +33,7 @@ type ResultsScreenProps = {
 const summaryTextStyle = { fontSize: 16, lineHeight: 23, fontWeight: "400" as const };
 const summaryListTextStyle = { fontSize: 16, lineHeight: 23, fontWeight: "600" as const };
 export function conciseCopy(value: string, maxSentences: number, maxWords: number): string {
-  const sentences = value.trim().match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((sentence) => sentence.trim()) ?? [];
-  const selected = sentences.slice(0, maxSentences).join(" ").trim();
+  const selected = limitAnalysisSentences(value, maxSentences);
   const words = selected.split(/\s+/).filter(Boolean);
   if (words.length <= maxWords) return selected;
   return `${words.slice(0, maxWords).join(" ").replace(/[.!?]+$/, "")}…`;
@@ -120,10 +121,11 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
     ),
     [declaredExercise, result.muscleFocus],
   );
-  const issueRegions = Array.from(new Set(
-    presentation.priorityCorrections.flatMap((finding) => finding.observedIssueRegions ?? []),
-  )) as AnatomyRegion[];
-  const hasMuscleFocus = exerciseMuscleFocus !== null || issueRegions.length > 0;
+  const allIssueRegions = deriveObservedIssueRegions(presentation.priorityCorrections) as AnatomyRegion[];
+  const issueRegions = point
+    ? deriveObservedIssueRegions([point.observed.finding]) as AnatomyRegion[]
+    : [];
+  const hasMuscleFocus = exerciseMuscleFocus !== null || allIssueRegions.length > 0;
   const hasPersonalizedSummary = hasMuscleFocus || Boolean(result.coachNote);
   const wholeSetSummary = (
     hasPersonalizedSummary
@@ -169,6 +171,22 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
     }
   };
 
+  const activeCoachingSummary = point
+    ? purpose === "observed"
+      ? normalizeAnalysisText(point.observed.body ?? "")
+      : purpose === "why"
+        ? normalizeAnalysisText(point.why.body ?? point.observed.finding.whyItMatters)
+        : normalizeAnalysisText(point.next.title)
+    : "";
+  const activeCoachingDetail = point
+    ? purpose === "observed"
+      ? normalizeAnalysisText(point.observed.detail ?? "")
+      : purpose === "why"
+        ? normalizeAnalysisText(point.why.detail ?? "")
+        : ""
+    : "";
+  const activeCoachingTestId = purpose === "observed" ? "coaching-what-happened" : purpose === "why" ? "coaching-why-it-matters" : "coaching-what-to-do-next";
+
   if (presentation.status === "unable") {
     return (
       <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ flexGrow: 1, gap: spacing.xl, paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
@@ -209,17 +227,17 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
           <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.2 }]}>{purpose === "observed" ? "WHAT HAPPENED" : purpose === "why" ? "WHY IT MATTERS" : "WHAT TO DO NEXT"}</Text>
           <Text
             selectable
-            testID={purpose === "observed" ? "coaching-what-happened-copy" : purpose === "why" ? "coaching-why-it-matters-copy" : "coaching-what-to-do-next"}
+            testID={`${activeCoachingTestId}${purpose === "next" ? "" : "-copy"}`}
             style={{ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: "700" }}
           >
-            {plainCoachingText(purpose === "observed" ? point.observed.body ?? point.observed.finding.detail : purpose === "why" ? point.why.body ?? point.observed.finding.whyItMatters : point.next.title ?? point.next.body ?? "")}
+            {plainCoachingText(activeCoachingSummary)}
           </Text>
-          {purpose !== "next" && activeFrame.detail ? <Text
+          {activeCoachingDetail ? <Text
             selectable
-            testID={purpose === "observed" ? "coaching-what-happened-detail" : "coaching-why-it-matters-detail"}
+            testID={`${activeCoachingTestId}-detail`}
             style={{ color: colors.textSecondary, fontSize: 15, lineHeight: 22, fontWeight: "400" }}
           >
-            {plainCoachingText(activeFrame.detail)}
+            {plainCoachingText(activeCoachingDetail)}
           </Text> : null}
         </View>
       </View>

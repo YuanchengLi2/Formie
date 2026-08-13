@@ -19,6 +19,13 @@ const WHOLE_VIDEO_PIPELINES = new Set([
   "gemini-whole-video-v73-focused-analyst-flash-lite-writer",
 ]);
 
+function isWholeVideoPipeline(value: unknown): boolean {
+  const version = String(value ?? "");
+  if (WHOLE_VIDEO_PIPELINES.has(version)) return true;
+  const match = version.match(/^gemini-whole-video-v(\d+)(?:-|$)/);
+  return Boolean(match && Number(match[1]) >= 57 && Number(match[1]) <= 68);
+}
+
 function currentResultPayload(session: Record<string, unknown>, result: Record<string, unknown>): AnalysisCandidate {
   const declaration = session.set_declaration ? parseSetDeclaration(session.set_declaration) : null;
   return {
@@ -62,7 +69,7 @@ export function resultPayload(session: Record<string, unknown>, result: Record<s
     return (v49Result ?? null) as AnalysisCandidate | null;
   }
   if (!result) return null;
-  return WHOLE_VIDEO_PIPELINES.has(String(session.pipeline_version ?? ""))
+  return isWholeVideoPipeline(session.pipeline_version)
     ? currentResultPayload(session, result)
     : historicalResultPayload(session, result);
 }

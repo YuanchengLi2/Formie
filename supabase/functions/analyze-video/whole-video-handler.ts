@@ -1,4 +1,5 @@
 import { MAX_ANALYSIS_VIDEO_DURATION_MS } from "../_shared/analysis-settings.ts";
+import { classifyAnalysisFailure, type AnalysisFailureDisposition } from "./failure-disposition.ts";
 
 export type WholeVideoSession = {
   id: string;
@@ -11,6 +12,8 @@ export type WholeVideoSession = {
   durationMs: number | null;
   analysisNextRetryAt: string | null;
   result: Record<string, unknown> | null;
+  analysisRetryCount?: number;
+  hasStoredVideoEvidence?: boolean;
   [key: string]: unknown;
 };
 
@@ -125,7 +128,16 @@ export async function analyzeWholeVideoHandler(request: Request, dependencies: W
     }
     if (session) {
       try {
-        const failedState = await dependencies.markFailed(session.id, code);
+        const disposition = classifyAnalysisFailure({
+          code,
+          providerStatus: stringErrorProperty(error, "providerStatus"),
+          httpStatus: numericErrorProperty(error, "httpStatus") ?? numericErrorProperty(error, "status"),
+          completedStage: session.stage === "finalizing" ? "analyzing" : null,
+          hasStoredVideoEvidence: Boolean(session.hasStoredVideoEvidence),
+          retryCount: session.analysisRetryCount ?? 0,
+          maxRetries: 3,
+        });
+        const failedState = await dependencies.persistFailure(session.id, code, disposition);
         const failedSession = {
           ...session,
           status: failedState.status,

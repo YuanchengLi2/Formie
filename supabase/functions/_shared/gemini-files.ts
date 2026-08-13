@@ -8,6 +8,7 @@ export type GeminiFile = {
   uri: string;
   mimeType: string;
   state: "PROCESSING" | "ACTIVE" | "FAILED";
+  failureReason?: string;
 };
 
 export async function reuseOrUploadGeminiFile(input: {
@@ -33,7 +34,16 @@ function videoMimeType(value: string): string {
 
 async function responseJson(response: Response, message: string): Promise<Record<string, unknown>> {
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
-  if (!response.ok) throw new Error(`${message}: ${response.status}`);
+  if (!response.ok) {
+    const providerError = payload.error && typeof payload.error === "object" && !Array.isArray(payload.error)
+      ? payload.error as Record<string, unknown>
+      : null;
+    const detail = typeof providerError?.message === "string" ? `: ${providerError.message}` : "";
+    throw Object.assign(new Error(`${message}: ${response.status}${detail}`), {
+      httpStatus: response.status,
+      providerStatus: `HTTP_${response.status}`,
+    });
+  }
   return payload;
 }
 
@@ -42,7 +52,11 @@ function parseFile(value: unknown): GeminiFile {
   if (!file || typeof file.name !== "string" || typeof file.uri !== "string") throw new Error("Gemini returned invalid file metadata");
   const state = String(file.state ?? "PROCESSING").toUpperCase();
   if (state !== "PROCESSING" && state !== "ACTIVE" && state !== "FAILED") throw new Error("Gemini returned an unknown file state");
-  return { name: file.name, uri: file.uri, mimeType: typeof file.mimeType === "string" ? file.mimeType : "video/mp4", state };
+  const failure = file.error && typeof file.error === "object" && !Array.isArray(file.error)
+    ? file.error as Record<string, unknown>
+    : null;
+  const failureReason = typeof failure?.message === "string" ? failure.message : undefined;
+  return { name: file.name, uri: file.uri, mimeType: typeof file.mimeType === "string" ? file.mimeType : "video/mp4", state, ...(failureReason ? { failureReason } : {}) };
 }
 
 export function createGeminiFilesClient({ apiKey, fetcher = fetch }: { apiKey: string; fetcher?: Fetcher }) {
@@ -56,7 +70,12 @@ export function createGeminiFilesClient({ apiKey, fetcher = fetch }: { apiKey: s
         headers: { "Content-Type": "application/json", "X-Goog-Upload-Protocol": "resumable", "X-Goog-Upload-Command": "start", "X-Goog-Upload-Header-Content-Length": String(input.contentLength), "X-Goog-Upload-Header-Content-Type": mimeType },
         body: JSON.stringify({ file: { display_name: input.displayName } }),
       });
-      if (!start.ok) throw new Error(`Gemini upload could not start: ${start.status}`);
+      if (!start.ok) {
+        throw Object.assign(new Error(`Gemini upload could not start: ${start.status}`), {
+          httpStatus: start.status,
+          providerStatus: `HTTP_${start.status}`,
+        });
+      }
       const uploadUrl = start.headers.get("x-goog-upload-url");
       if (!uploadUrl) throw new Error("Gemini upload URL is missing");
       const uploaded = await fetcher(uploadUrl, { method: "POST", headers: { "Content-Length": String(input.contentLength), "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize", "Content-Type": mimeType }, body: input.body });

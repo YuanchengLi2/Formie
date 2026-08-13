@@ -67,7 +67,7 @@ export type WholeVideoWriting = {
     whyItMatters: string;
     whyItMattersDetail: string;
     whatToDo: string;
-    successCheck: string;
+    successCheck: string | null;
   }>;
 };
 

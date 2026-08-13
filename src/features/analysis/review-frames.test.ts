@@ -162,7 +162,7 @@ describe("buildReviewFrames", () => {
     expect(point.observed.evidence.visualEvidence).toBe("The same rise repeats.");
   });
 
-  it("uses the personalized tab-specific coaching contract", () => {
+  it("preserves the personalized tab-specific coaching without truncating it", () => {
     const value = resultWithTwoMoments();
     value.priorityCorrections[0].expandedCoaching = {
       summary: "Your shoulders stop moving evenly.",
