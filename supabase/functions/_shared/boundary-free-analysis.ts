@@ -287,21 +287,28 @@ function spreadPrimaryEvidenceAcrossSet(items: BoundaryFreeCoachingItem[]): Boun
 
 function parseMuscleFocus(value: unknown): MuscleFocus {
   const focus = record(value, "muscleFocus");
-  const parseTargets = (raw: unknown, name: "primary" | "secondary") => {
+  const unclassified = focus.unclassified === undefined
+    ? []
+    : stringArray(focus.unclassified, "muscleFocus.unclassified");
+  const parseTargets = (raw: unknown, name: "primary" | "secondary", excludedRegions = new Set<string>()) => {
     if (!Array.isArray(raw)) throw new Error(`muscleFocus.${name} must be an array`);
     const regions = new Set<string>();
-    return raw.map((entry, index) => {
+    return raw.flatMap((entry, index) => {
       const target = record(entry, `muscleFocus.${name}[${index}]`);
       if (!MUSCLE_REGIONS.includes(target.region as typeof MUSCLE_REGIONS[number])) throw new Error(`muscleFocus.${name}[${index}].region is invalid`);
-      if (regions.has(String(target.region))) throw new Error(`muscleFocus.${name} regions must be unique`);
-      regions.add(String(target.region));
-      return { name: text(target.name, `muscleFocus.${name}[${index}].name`), region: target.region as typeof MUSCLE_REGIONS[number] };
+      const targetName = text(target.name, `muscleFocus.${name}[${index}].name`);
+      const region = String(target.region);
+      if (regions.has(region) || excludedRegions.has(region)) {
+        unclassified.push(targetName);
+        return [];
+      }
+      regions.add(region);
+      return [{ name: targetName, region: target.region as typeof MUSCLE_REGIONS[number] }];
     });
   };
   const primary = parseTargets(focus.primary, "primary");
-  const secondary = parseTargets(focus.secondary, "secondary");
-  if (secondary.some((target) => primary.some((primaryTarget) => primaryTarget.region === target.region))) throw new Error("muscleFocus primary and secondary regions must be distinct");
-  return { primary, secondary, unclassified: stringArray(focus.unclassified, "muscleFocus.unclassified") };
+  const secondary = parseTargets(focus.secondary, "secondary", new Set(primary.map((target) => target.region)));
+  return { primary, secondary, unclassified: [...new Set(unclassified)] };
 }
 
 function parseScores(value: unknown, findingIds: Set<string>): MovementScore[] {

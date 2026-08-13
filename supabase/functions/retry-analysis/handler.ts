@@ -2,13 +2,20 @@ export type RetryAnalysisSession = {
   id: string;
   userId: string;
   pipelineVersion: string | null;
+  analysisNextRetryAt?: string | null;
 };
 
 const FIRST_NON_RETRYABLE_WHOLE_VIDEO_VERSION = 56;
+const FIRST_LEASED_RETRYABLE_WHOLE_VIDEO_VERSION = 72;
 
-export function canAutomaticallyRetry(session: RetryAnalysisSession): boolean {
+export function canAutomaticallyRetry(session: RetryAnalysisSession, now = new Date()): boolean {
   const match = session.pipelineVersion?.match(/^gemini-whole-video-v(\d+)(?:-|$)/);
-  return !match || Number(match[1]) < FIRST_NON_RETRYABLE_WHOLE_VIDEO_VERSION;
+  if (!match) return true;
+  const version = Number(match[1]);
+  if (version < FIRST_NON_RETRYABLE_WHOLE_VIDEO_VERSION) return true;
+  if (version < FIRST_LEASED_RETRYABLE_WHOLE_VIDEO_VERSION) return false;
+  const retryAt = session.analysisNextRetryAt ? Date.parse(session.analysisNextRetryAt) : NaN;
+  return Number.isFinite(retryAt) && retryAt <= now.getTime();
 }
 
 export type RetryAnalysisDependencies = {
@@ -33,8 +40,9 @@ export async function retryAnalysisHandler(
   if (request.method !== "POST") return json({ message: "Method not allowed", code: "METHOD_NOT_ALLOWED" }, 405);
   try {
     await dependencies.authenticate(request);
-    const sessions = (await dependencies.findDueSessions(dependencies.now?.() ?? new Date(), 25))
-      .filter(canAutomaticallyRetry);
+    const now = dependencies.now?.() ?? new Date();
+    const sessions = (await dependencies.findDueSessions(now, 25))
+      .filter((session) => canAutomaticallyRetry(session, now));
     let succeeded = 0;
     let failed = 0;
     for (const session of sessions) {

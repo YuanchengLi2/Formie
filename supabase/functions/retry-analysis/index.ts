@@ -1,6 +1,6 @@
 import { createAdminClient } from "../_shared/auth.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
-import { canAutomaticallyRetry, retryAnalysisHandler } from "./handler.ts";
+import { retryAnalysisHandler } from "./handler.ts";
 import { isV49PrimaryRolloutEnabled } from "../_shared/v49-primary-rollout.ts";
 
 function requireScheduledRequest(request: Request): Promise<void> {
@@ -20,7 +20,7 @@ Deno.serve(async (request) => {
     findDueSessions: async (now, limit) => {
       let query = admin
         .from("analysis_sessions")
-        .select("id,user_id,active_v49_run_id,pipeline_version")
+        .select("id,user_id,active_v49_run_id,pipeline_version,analysis_next_retry_at")
         .eq("status", "processing");
       query = primaryV49Enabled
         ? query.not("active_v49_run_id", "is", null)
@@ -38,7 +38,8 @@ Deno.serve(async (request) => {
         id: session.id,
         userId: session.user_id,
         pipelineVersion: session.pipeline_version ?? null,
-      })).filter(canAutomaticallyRetry);
+        analysisNextRetryAt: session.analysis_next_retry_at ?? null,
+      }));
     },
     invokeAnalysis: async (session) => {
       const endpoint = primaryV49Enabled ? "analyze-video-v49" : "analyze-video";

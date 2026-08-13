@@ -3,7 +3,7 @@ import { publishAccessMutation } from "@/features/access/access-events";
 import { File } from "expo-file-system";
 
 import { exerciseFamilies } from "@/features/exercises/exercise-family";
-import { analysisResultSchema, type AnalysisResult } from "./result-schema";
+import type { AnalysisResult } from "./result-schema";
 import { setDeclarationSchema, type SetDeclaration } from "./set-declaration";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -50,7 +50,10 @@ const statusResponseSchema = z.object({
   }).nullable().optional().default(null),
   videoUrl: z.string().url().nullable().optional().default(null),
   setDeclaration: setDeclarationSchema.nullable().optional(),
-  result: analysisResultSchema.nullable(),
+  // The server owns the persisted analysis contract. Do not make a completed
+  // video inaccessible because a nested presentation field is newer than the
+  // client-side schema bundled with the installed app.
+  result: z.unknown().transform((value) => value as AnalysisResult | null),
   retrying: z.boolean().optional(),
   attempt: z.number().int().positive().optional(),
 });
@@ -420,6 +423,10 @@ export async function completeAnalysisUpload(input: RequestContext & {
 
 export async function processAnalysis(input: RequestContext & { sessionId: string; retryDelayMs?: number }): Promise<AnalysisStatusResponse> {
   const transientStatuses = new Set([429, 500, 502, 503, 504, 546]);
+  const serverHasStarted = (response: AnalysisStatusResponse) => (
+    response.status !== "queued"
+    && !(response.status === "processing" && (!response.stage || response.stage === "input_ready"))
+  );
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return await requestJson(
@@ -429,7 +436,9 @@ export async function processAnalysis(input: RequestContext & { sessionId: strin
         statusResponseSchema,
       );
     } catch (error) {
-      if (!(error instanceof AnalysisApiError) || !transientStatuses.has(error.status) || attempt === 2 || input.signal?.aborted) throw error;
+      const transient = error instanceof AnalysisApiError
+        && (transientStatuses.has(error.status) || error.code === "NETWORK_ERROR");
+      if (!transient || attempt === 2 || input.signal?.aborted) throw error;
       await new Promise<void>((resolve, reject) => {
         const onAbort = () => {
           clearTimeout(timeout);
@@ -442,6 +451,12 @@ export async function processAnalysis(input: RequestContext & { sessionId: strin
         }, (input.retryDelayMs ?? 500) * (attempt + 1));
         input.signal?.addEventListener("abort", onAbort, { once: true });
       });
+      try {
+        const durable = await getAnalysisStatus(input);
+        if (serverHasStarted(durable)) return durable;
+      } catch (statusError) {
+        if (input.signal?.aborted) throw statusError;
+      }
     }
   }
   throw new AnalysisApiError("Analysis retry exhausted", 546, "WORKER_RESOURCE_LIMIT");

@@ -127,6 +127,31 @@ describe("analysis API", () => {
     );
   });
 
+  it("returns a saved completed analysis without reparsing its nested result", async () => {
+    const savedResult = {
+      movementScores: [{ label: "A server-authored label that is intentionally longer than an old client display limit" }],
+      muscleFocus: {
+        primary: [
+          { region: "quadriceps", activation: 0.8 },
+          { region: "quadriceps", activation: 0.7 },
+        ],
+      },
+    };
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({
+      sessionId: "saved-session",
+      status: "complete",
+      stage: "complete",
+      result: savedResult,
+    }), { status: 200 }));
+
+    await expect(getAnalysisStatus({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      sessionId: "saved-session",
+    })).resolves.toMatchObject({ result: savedResult });
+  });
+
   it("requests an AI-generated guide by custom exercise name without inventing a catalog ID", async () => {
     const guide = {
       exercise: { catalogExerciseId: null, canonicalName: "Jefferson Curl", family: "hinge" },
@@ -468,7 +493,7 @@ describe("analysis API", () => {
     })).resolves.toMatchObject({ status: "failed", failureCode: "ANALYSIS_FAILED", failureReason: "The movement is outside the frame." });
   });
 
-  it("retries a transient worker resource limit without losing the session", async () => {
+  it("checks durable status after a transient kickoff error instead of starting a duplicate analysis", async () => {
     const fetcher = jest
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ code: "WORKER_RESOURCE_LIMIT", message: "Not enough compute" }), { status: 546 }))
@@ -476,6 +501,10 @@ describe("analysis API", () => {
 
     await expect(processAnalysis({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123", retryDelayMs: 0 })).resolves.toMatchObject({ stage: "analyzing" });
     expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "https://example.supabase.co/functions/v1/analyze-video",
+      "https://example.supabase.co/functions/v1/analysis-status?sessionId=session-123",
+    ]);
   });
 
   it("completes upload with only the original video metadata", async () => {

@@ -52,7 +52,7 @@ describe("retry-analysis worker", () => {
     expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "session-1", userId: "user-1", pipelineVersion: "legacy-retryable" });
   });
 
-  it("never automatically invokes current or future single-call whole-video sessions", async () => {
+  it("resumes leased v72 sessions while leaving older non-durable single-call versions untouched", async () => {
     const deps = dependencies({
       findDueSessions: jest.fn(async () => [
         { id: "single-call", userId: "user-1", pipelineVersion: "gemini-whole-video-v56-single-call-rep-audit" },
@@ -60,14 +60,18 @@ describe("retry-analysis worker", () => {
         { id: "diverse", userId: "user-3", pipelineVersion: "gemini-whole-video-v58-diverse-moments-concise-coaching" },
         { id: "future", userId: "user-4", pipelineVersion: "gemini-whole-video-v59-future-single-call" },
         { id: "legacy", userId: "user-2", pipelineVersion: "gemini-whole-video-v55-single-pass-coaching" },
+        { id: "leased-active", userId: "user-5", pipelineVersion: "gemini-whole-video-v72-leased-direct-ai-coaching", analysisNextRetryAt: null },
+        { id: "leased", userId: "user-6", pipelineVersion: "gemini-whole-video-v72-leased-direct-ai-coaching", analysisNextRetryAt: "2026-08-02T15:59:59.000Z" },
       ]),
     });
 
     const response = await retryAnalysisHandler(new Request("https://example/retry-analysis", { method: "POST" }), deps);
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ processed: 1, succeeded: 1, failed: 0 });
-    expect(deps.invokeAnalysis).toHaveBeenCalledTimes(1);
+    await expect(response.json()).resolves.toEqual({ processed: 2, succeeded: 2, failed: 0 });
+    expect(deps.invokeAnalysis).toHaveBeenCalledTimes(2);
     expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "legacy", userId: "user-2", pipelineVersion: "gemini-whole-video-v55-single-pass-coaching" });
+    expect(deps.invokeAnalysis).not.toHaveBeenCalledWith(expect.objectContaining({ id: "leased-active" }));
+    expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "leased", userId: "user-6", pipelineVersion: "gemini-whole-video-v72-leased-direct-ai-coaching", analysisNextRetryAt: "2026-08-02T15:59:59.000Z" });
   });
 });

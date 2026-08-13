@@ -54,6 +54,17 @@ function failureCode(error: unknown): string {
   return detail ? `ANALYSIS_ERROR_${detail}`.slice(0, 64) : "ANALYSIS_FAILED";
 }
 
+function isRetryableFailure(code: string): boolean {
+  return code === "ANALYSIS_FILE_PROCESSING"
+    || /^GEMINI_HTTP_(?:400|408|409|425|429|5\d\d)$/.test(code)
+    || /^ANALYSIS_CONTRACT_/.test(code)
+    || /^ANALYSIS_(?:STATE|RESULT)_SAVE_FAILED/.test(code)
+    || code === "ANALYSIS_DEADLINE_EXCEEDED"
+    || code === "WRITER_DEADLINE_EXHAUSTED"
+    || code === "ANALYSIS_VIDEO_DOWNLOAD_FAILED"
+    || code === "ANALYSIS_FILE_METADATA_FAILED";
+}
+
 function payload(session: WholeVideoSession, state: WholeVideoPipelineResult) {
   return {
     sessionId: session.id,
@@ -108,7 +119,7 @@ export async function analyzeWholeVideoHandler(request: Request, dependencies: W
         stage: session?.stage ?? "analyzing",
       }), 202);
     }
-    if (code === "ANALYSIS_FILE_PROCESSING" && session && dependencies.markRetryable) {
+    if (isRetryableFailure(code) && session && dependencies.markRetryable) {
       const retryState = await dependencies.markRetryable(session, code);
       return json(payload(session, retryState), 202);
     }

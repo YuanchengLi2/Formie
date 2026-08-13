@@ -55,21 +55,29 @@ describe("whole-video handler failure disposition", () => {
     expect(markFailed).not.toHaveBeenCalled();
   });
 
-  it("returns a terminal failure instead of retry_wait when the single-call pipeline fails", async () => {
-    const deps = dependencies();
+  it("keeps a transient Gemini writer failure in processing for durable retry", async () => {
+    const markRetryable = jest.fn(async () => ({
+      status: "processing",
+      stage: "retry_wait",
+      analysisNextRetryAt: "2026-08-13T02:00:05.000Z",
+    }));
+    const deps = dependencies({
+      advancePipeline: jest.fn(async () => { throw Object.assign(new Error("provider unavailable"), { code: "GEMINI_HTTP_503" }); }),
+      markRetryable,
+    });
     const response = await analyzeWholeVideoHandler(new Request("https://example/analyze-video", {
       method: "POST",
       body: JSON.stringify({ sessionId: "session-1" }),
     }), deps);
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
     await expect(response.json()).resolves.toMatchObject({
       sessionId: "session-1",
-      status: "failed",
-      stage: "failed",
-      failureCode: "ANALYSIS_CONTRACT_INVALID",
-      analysisNextRetryAt: null,
+      status: "processing",
+      stage: "retry_wait",
+      analysisNextRetryAt: "2026-08-13T02:00:05.000Z",
     });
-    expect(deps.markFailed).toHaveBeenCalledWith("session-1", "ANALYSIS_CONTRACT_INVALID");
+    expect(markRetryable).toHaveBeenCalledWith(expect.objectContaining({ id: "session-1" }), "GEMINI_HTTP_503");
+    expect(deps.markFailed).not.toHaveBeenCalled();
   });
 });

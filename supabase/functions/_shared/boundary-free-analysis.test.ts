@@ -305,6 +305,27 @@ describe("clean full-video analysis and coaching contract", () => {
     expect(parsed.coachingItems).toHaveLength(4);
   });
 
+  it("keeps an analysis usable when Gemini repeats a display muscle region", () => {
+    const raw = rawAnalysis(4);
+    raw.muscleFocus = {
+      primary: [
+        { name: "Biceps Brachii", region: "biceps" },
+        { name: "Brachialis", region: "biceps" },
+      ],
+      secondary: [
+        { name: "Forearm Flexors", region: "forearms" },
+        { name: "Brachioradialis", region: "forearms" },
+      ],
+      unclassified: [],
+    };
+
+    expect(parseBoundaryFreeAnalysis(raw, 9_000).muscleFocus).toEqual({
+      primary: [{ name: "Biceps Brachii", region: "biceps" }],
+      secondary: [{ name: "Forearm Flexors", region: "forearms" }],
+      unclassified: ["Brachialis", "Brachioradialis"],
+    });
+  });
+
   it("spreads displayed primary evidence across the valid moments in the set", () => {
     const raw = v56RawAnalysis();
     const sharedMoments = [

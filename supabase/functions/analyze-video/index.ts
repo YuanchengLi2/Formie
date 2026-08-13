@@ -29,7 +29,7 @@ import { analyzeWholeVideoHandler, type WholeVideoSession } from "./whole-video-
 import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v71-direct-ai-coaching";
+const PIPELINE_VERSION = "gemini-whole-video-v72-leased-direct-ai-coaching";
 const ANALYST_MODEL = "gemini-3.6-flash";
 const WRITER_MODEL = "gemini-3.6-flash";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
@@ -436,7 +436,6 @@ Deno.serve(async (request) => {
         finalResult: rawSession.result,
       }, {
         analyzeWholeVideo: async ({ sessionId }) => {
-          await saveSessionStage("analyzing");
           const rawAnalysis = await runStage(sessionId, "analyzing", { kind: "video", durationMs, transport: "file", fps: REQUESTED_ANALYSIS_FPS }, async () => {
             const analysisVideo = await getGeminiVideo();
             await saveSessionStage("analyzing");
@@ -460,17 +459,19 @@ Deno.serve(async (request) => {
           } catch (error) {
             throw analysisContractError(error);
           }
-          await saveSessionStage("finalizing");
-          const timeoutMs = Math.min(20_000, deadline.remainingMs());
-          if (timeoutMs < 1_000) throw Object.assign(new Error("Writer budget exhausted"), { code: "WRITER_DEADLINE_EXHAUSTED" });
-          const writerRequest = buildTextGenerateContentRequest({
-            systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
-            prompt: buildWholeVideoWritingPrompt(parsedAnalysis, declaration),
-            schema: WHOLE_VIDEO_WRITING_SCHEMA,
-            thinkingLevel: WRITER_THINKING_LEVEL,
+          const decision = await runStage(sessionId, "finalizing", { kind: "writer", analysis: parsedAnalysis, declaration: declaration ?? null }, async () => {
+            await saveSessionStage("finalizing");
+            const timeoutMs = Math.min(20_000, deadline.remainingMs());
+            if (timeoutMs < 1_000) throw Object.assign(new Error("Writer budget exhausted"), { code: "WRITER_DEADLINE_EXHAUSTED" });
+            const writerRequest = buildTextGenerateContentRequest({
+              systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
+              prompt: buildWholeVideoWritingPrompt(parsedAnalysis, declaration),
+              schema: WHOLE_VIDEO_WRITING_SCHEMA,
+              thinkingLevel: WRITER_THINKING_LEVEL,
+            });
+            const writing = await generate({ sessionId, stage: "finalizing", modelName: WRITER_MODEL, request: writerRequest, timeoutMs }) as WholeVideoWriting;
+            return { analysis: parsedAnalysis, writing } as unknown as JsonRecord;
           });
-          const writing = await generate({ sessionId, stage: "finalizing", modelName: WRITER_MODEL, request: writerRequest, timeoutMs }) as WholeVideoWriting;
-          const decision = { analysis: parsedAnalysis, writing } as unknown as JsonRecord;
           await saveSessionStage("finalizing", { analysis_draft: decision });
           return decision;
         },
@@ -568,13 +569,22 @@ Deno.serve(async (request) => {
       });
     },
     markRetryable: async (session, code) => {
+      const { data: currentSession, error: currentSessionError } = await admin
+        .from("analysis_sessions")
+        .select("stage,analysis_retry_count")
+        .eq("id", session.id)
+        .single();
+      if (currentSessionError) throw databaseError("ANALYSIS_STATE_SAVE_FAILED", currentSessionError);
       const nextRetryAt = new Date(Date.now() + 5_000).toISOString();
+      const retryStage = typeof currentSession.stage === "string" && ["video_processing", "analyzing", "finalizing"].includes(currentSession.stage)
+        ? currentSession.stage
+        : "video_processing";
       await persistRetryState(session.id, {
         status: "processing",
-        stage: "video_processing",
+        stage: retryStage,
         pipeline_version: PIPELINE_VERSION,
         failure_code: null,
-        analysis_retry_count: Math.max(0, Number(session.analysis_retry_count ?? 0)) + 1,
+        analysis_retry_count: Math.max(0, Number(currentSession.analysis_retry_count ?? 0)) + 1,
         analysis_next_retry_at: nextRetryAt,
         analysis_last_error_code: code,
         updated_at: new Date().toISOString(),
