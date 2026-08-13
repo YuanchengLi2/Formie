@@ -107,6 +107,11 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(prompt).toMatch(/complete video from beginning to end/i);
     expect(prompt).toMatch(/watch.*once/i);
     expect(prompt).toMatch(/every distinct.*evidence-backed.*issue/i);
+    expect(prompt).toMatch(/at least four/i);
+    expect(prompt).toMatch(/fewer than four.*re-examine/i);
+    expect(prompt).toMatch(/smaller.*evidence-backed.*optimization/i);
+    expect(prompt).toMatch(/partial visibility.*does not.*disqualify/i);
+    expect(BOUNDARY_FREE_ANALYSIS_SCHEMA.properties.issues.description).toMatch(/at least four/i);
     expect(prompt).toMatch(/at least one.*evidence moment/i);
     expect(prompt).toMatch(/peakMs.*clearest.*frame/i);
     expect(prompt).toMatch(/visibility/i);
@@ -117,7 +122,7 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(prompt).toMatch(/actual form fault/i);
     expect(prompt).toMatch(/do not count or audit repetitions/i);
     expect(prompt).toMatch(/do not rank.*shortlist|do not.*discard/i);
-    expect(prompt).not.toMatch(/strongest 4|4-6|reach four/i);
+    expect(prompt).not.toMatch(/strongest 4|4-6|at most (?:four|4)|exactly (?:four|4)/i);
     expect(prompt).not.toMatch(/return (?:a )?rep count|provide (?:a )?rep audit|bodyweight squat|squat arm/i);
   });
 

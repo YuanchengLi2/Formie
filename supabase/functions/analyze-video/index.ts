@@ -33,7 +33,7 @@ import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline
 import { writeValidatedCoaching } from "./coaching-writer.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v76-gemini-3-7-all-issues-flash-lite-writer";
+const PIPELINE_VERSION = "gemini-whole-video-v77-gemini-3-7-min-four-all-issues-flash-lite-writer";
 const ANALYST_MODEL = "gemini-3.7-flash";
 const WRITER_MODEL = "gemini-3.1-flash-lite";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
