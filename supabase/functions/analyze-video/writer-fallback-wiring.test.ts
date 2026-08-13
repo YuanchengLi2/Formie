@@ -3,8 +3,8 @@ import { join } from "node:path";
 
 const source = readFileSync(join(__dirname, "index.ts"), "utf8");
 
-describe("v75 declaration-only analyst and Flash Lite writer wiring", () => {
-  it("uses one full-video Gemini 3.6 call followed by one text-only Gemini 3.1 Flash Lite call", () => {
+describe("v76 all-issues Gemini 3.7 analyst and Flash Lite writer wiring", () => {
+  it("uses one full-video Gemini 3.7 call followed by text-only Gemini 3.1 Flash Lite writing", () => {
     expect(source).not.toContain("runShortClipRechecks({");
     expect(source).toContain("buildWholeVideoWritingPrompt");
     expect(source).toContain("buildTextGenerateContentRequest");
@@ -14,12 +14,15 @@ describe("v75 declaration-only analyst and Flash Lite writer wiring", () => {
     expect(source).toContain('runStage(sessionId, "finalizing", { kind: "writer"');
     expect(source).not.toContain("runNonBlockingWriter");
     expect(source).not.toContain("mergeWholeVideoWriting");
-    expect(source).not.toContain("COACHING_WRITER_FALLBACK");
-    expect(source).toContain("as WholeVideoWriting");
-    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v75-declaration-only-8fps-flash-lite-writer"');
-    expect(source).toContain('const ANALYST_MODEL = "gemini-3.6-flash"');
+    expect(source).toContain("writeValidatedCoaching");
+    expect(source).toContain("parseWholeVideoAnalysis");
+    expect(source).toContain("parseWholeVideoWriting");
+    expect(source).toContain("normalizeWholeVideoWriting");
+    expect(source).toContain("buildWholeVideoWritingRepairPrompt");
+    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v76-gemini-3-7-all-issues-flash-lite-writer"');
+    expect(source).toContain('const ANALYST_MODEL = "gemini-3.7-flash"');
     expect(source).toContain('const WRITER_MODEL = "gemini-3.1-flash-lite"');
-    expect(source).not.toContain("parseBoundaryFreeAnalysis");
+    expect(source).not.toContain("limitWholeVideoAnalysis");
     expect(source).not.toContain("analysisContractError");
     expect(source).not.toContain("coaching completer");
     expect(source).not.toContain("runShortClipRechecks");
@@ -40,9 +43,12 @@ describe("v75 declaration-only analyst and Flash Lite writer wiring", () => {
     const writerStage = source.indexOf('runStage(sessionId, "finalizing"');
     expect(analystStage).toBeGreaterThanOrEqual(0);
     expect(analystStage).toBeLessThan(writerStage);
-    expect(source).toContain("limitWholeVideoAnalysis");
+    expect(source).toContain("parseWholeVideoAnalysis");
     expect(source).toContain("rep_timeline: []");
     expect(source).not.toContain("rep_timeline: candidate.repTimeline");
+    expect(source).toContain("hasStoredVideoEvidence: Boolean(storedStage?.output)");
+    expect(source).toContain("analysisRetryCount: Number(session.analysis_retry_count ?? 0)");
+    expect(source).toContain("retry: rawSession.analysisRetryCount ?? 0");
   });
 
   it("claims the analyst lease before publishing the analyzing stage", () => {

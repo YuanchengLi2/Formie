@@ -13,7 +13,9 @@ import {
   buildBoundaryFreeAnalysisPrompt,
   buildWholeVideoWritingRepairPrompt,
   buildWholeVideoWritingPrompt,
-  limitWholeVideoAnalysis,
+  normalizeWholeVideoWriting,
+  parseWholeVideoAnalysis,
+  parseWholeVideoWriting,
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
   WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
   WHOLE_VIDEO_WRITING_SCHEMA,
@@ -31,8 +33,8 @@ import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline
 import { writeValidatedCoaching } from "./coaching-writer.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v75-declaration-only-8fps-flash-lite-writer";
-const ANALYST_MODEL = "gemini-3.6-flash";
+const PIPELINE_VERSION = "gemini-whole-video-v76-gemini-3-7-all-issues-flash-lite-writer";
+const ANALYST_MODEL = "gemini-3.7-flash";
 const WRITER_MODEL = "gemini-3.1-flash-lite";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
 const files = createGeminiFilesClient({ apiKey });
@@ -308,6 +310,8 @@ Deno.serve(async (request) => {
         geminiFileState: session.gemini_file_state ?? null,
         durationMs: session.duration_ms,
         result: resultPayload(session, result),
+        analysisRetryCount: Number(session.analysis_retry_count ?? 0),
+        hasStoredVideoEvidence: Boolean(storedStage?.output),
         analysisDecision: currentPipeline && session.analysis_draft && typeof session.analysis_draft === "object" ? session.analysis_draft : null,
         setDeclaration: declaration,
       } as WholeVideoSession;
@@ -403,16 +407,14 @@ Deno.serve(async (request) => {
               fps: REQUESTED_ANALYSIS_FPS,
                   thinkingLevel: ANALYST_THINKING_LEVEL,
                   mediaResolution: REQUESTED_ANALYSIS_MEDIA_RESOLUTION,
-                  temperature: 0,
                 });
             const raw = await generate({ sessionId, stage: "analyzing", modelName: ANALYST_MODEL, request: requestBody, fps: REQUESTED_ANALYSIS_FPS, timeoutMs: deadline.timeoutFor("analyzing") }) as JsonRecord;
-            return raw as JsonRecord;
+            return parseWholeVideoAnalysis(raw, durationMs) as unknown as JsonRecord;
           });
           // Structured analyst output is already durable in the successful
           // analyzing stage. Writer retries replay this output without video.
-          const structuredAnalysis = rawAnalysis as unknown as WholeVideoAnalysis;
-          const analystIssueCount = structuredAnalysis.issues.length;
-          const analysis = limitWholeVideoAnalysis(structuredAnalysis);
+          const analysis = rawAnalysis as unknown as WholeVideoAnalysis;
+          const analystIssueCount = analysis.issues.length;
           const visibilityLevel = analysis.visibility.notVisible.length > analysis.visibility.clearlyVisible.length
             ? "limited"
             : analysis.visibility.partlyVisible.length > 0 || analysis.visibility.notVisible.length > 0
@@ -426,17 +428,25 @@ Deno.serve(async (request) => {
             analystModel: ANALYST_MODEL,
             writerModel: WRITER_MODEL,
               }));
-              const decision = await runStage(sessionId, "finalizing", { kind: "writer", analysis, declaration: declaration ?? null }, async () => {
+          const decision = await runStage(sessionId, "finalizing", { kind: "writer", retry: rawSession.analysisRetryCount ?? 0, analysis, declaration: declaration ?? null }, async () => {
             await saveSessionStage("finalizing");
-            const timeoutMs = Math.min(20_000, deadline.remainingMs());
-            if (timeoutMs < 1_000) throw Object.assign(new Error("Writer budget exhausted"), { code: "WRITER_DEADLINE_EXHAUSTED" });
-            const writerRequest = buildTextGenerateContentRequest({
-              systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
-                  prompt: buildWholeVideoWritingPrompt(analysis, declaration),
-              schema: WHOLE_VIDEO_WRITING_SCHEMA,
-              thinkingLevel: WRITER_THINKING_LEVEL,
+            const generateWriting = async (prompt: string): Promise<unknown> => {
+              const timeoutMs = Math.min(20_000, deadline.remainingMs());
+              if (timeoutMs < 1_000) throw Object.assign(new Error("Writer budget exhausted"), { code: "WRITER_DEADLINE_EXHAUSTED" });
+              const writerRequest = buildTextGenerateContentRequest({
+                systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
+                prompt,
+                schema: WHOLE_VIDEO_WRITING_SCHEMA,
+                thinkingLevel: WRITER_THINKING_LEVEL,
+              });
+              return generate({ sessionId, stage: "finalizing", modelName: WRITER_MODEL, request: writerRequest, timeoutMs });
+            };
+            const writing = await writeValidatedCoaching({
+              write: () => generateWriting(buildWholeVideoWritingPrompt(analysis, declaration)),
+              repair: ({ rejected, validationError }) => generateWriting(buildWholeVideoWritingRepairPrompt(analysis, declaration, rejected, validationError)),
+              parse: (value) => parseWholeVideoWriting(value, analysis),
+              normalize: (value) => normalizeWholeVideoWriting(value, analysis),
             });
-            const writing = await generate({ sessionId, stage: "finalizing", modelName: WRITER_MODEL, request: writerRequest, timeoutMs }) as WholeVideoWriting;
             return { analysis, writing } as unknown as JsonRecord;
           });
           await saveSessionStage("finalizing", { analysis_draft: decision });

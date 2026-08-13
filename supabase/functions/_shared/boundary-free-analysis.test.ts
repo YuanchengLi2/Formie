@@ -4,8 +4,11 @@ import {
   WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
   boundaryFreeToCandidate,
   buildBoundaryFreeAnalysisPrompt,
+  buildWholeVideoWritingRepairPrompt,
   buildWholeVideoWritingPrompt,
-  limitWholeVideoAnalysis,
+  normalizeWholeVideoWriting,
+  parseWholeVideoAnalysis,
+  parseWholeVideoWriting,
   type WholeVideoAnalysis,
   type WholeVideoWriting,
 } from "./boundary-free-analysis";
@@ -64,10 +67,25 @@ const writing = (source: WholeVideoAnalysis): WholeVideoWriting => ({
 });
 
 describe("focused whole-video analyst and writer contract", () => {
-  it("limits structured analyst output to the first six ranked issues", () => {
-    expect(limitWholeVideoAnalysis(analysis(7)).issues.map((item) => item.id)).toEqual([
-      "issue-1", "issue-2", "issue-3", "issue-4", "issue-5", "issue-6",
+  it("preserves every validated issue and its frame evidence without a count cap", () => {
+    const source = analysis(8);
+    expect(parseWholeVideoAnalysis(source, 20_000)).toEqual(source);
+    expect(parseWholeVideoAnalysis(source, 20_000).issues.map((item) => item.id)).toEqual([
+      "issue-1", "issue-2", "issue-3", "issue-4", "issue-5", "issue-6", "issue-7", "issue-8",
     ]);
+    expect(boundaryFreeToCandidate(source, writing(source)).priorityCorrections.map((item) => item.id)).toEqual(
+      source.issues.map((item) => item.id),
+    );
+  });
+
+  it("rejects duplicate issue identities and invalid frame intervals instead of silently dropping them", () => {
+    const duplicate = analysis(2);
+    duplicate.issues[1].id = duplicate.issues[0].id;
+    expect(() => parseWholeVideoAnalysis(duplicate, 20_000)).toThrow(/unique/i);
+
+    const invalidFrame = analysis(1);
+    invalidFrame.issues[0].evidence[0].peakMs = invalidFrame.issues[0].evidence[0].endMs;
+    expect(() => parseWholeVideoAnalysis(invalidFrame, 20_000)).toThrow(/startMs < peakMs < endMs/i);
   });
 
   it("keeps the analyst schema focused on video understanding, visibility, issues, and inline evidence", () => {
@@ -84,13 +102,13 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(JSON.stringify(schema)).not.toMatch(/minimum|maximum|minItems|maxItems/);
   });
 
-  it("forces four to six issues after one complete-video review without counting reps", () => {
+  it("finds all distinct supported issues and frames after one complete-video review without counting reps", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(12_000);
     expect(prompt).toMatch(/complete video from beginning to end/i);
     expect(prompt).toMatch(/watch.*once/i);
-    expect(prompt).toMatch(/internal candidate list/i);
-    expect(prompt).toMatch(/compare.*importance.*confidence.*usefulness/i);
-    expect(prompt).toMatch(/strongest 4(?:–|-| to )6/i);
+    expect(prompt).toMatch(/every distinct.*evidence-backed.*issue/i);
+    expect(prompt).toMatch(/at least one.*evidence moment/i);
+    expect(prompt).toMatch(/peakMs.*clearest.*frame/i);
     expect(prompt).toMatch(/visibility/i);
     for (const lens of ["setup", "equipment", "contact", "hands", "grip", "body position", "alignment", "posture", "support", "path", "range", "endpoints", "tempo", "control", "balance", "stability", "joint tracking", "left-right", "symmetry", "beginning", "middle", "end"]) {
       expect(prompt.toLowerCase()).toContain(lens);
@@ -98,8 +116,8 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(prompt).toMatch(/outside (?:these|those) suggestions/i);
     expect(prompt).toMatch(/actual form fault/i);
     expect(prompt).toMatch(/do not count or audit repetitions/i);
-    expect(prompt).toMatch(/must return.*4(?:â€“|-| to )6/i);
-    expect(prompt).not.toMatch(/fewer than four|return only the real issues/i);
+    expect(prompt).toMatch(/do not rank.*shortlist|do not.*discard/i);
+    expect(prompt).not.toMatch(/strongest 4|4-6|reach four/i);
     expect(prompt).not.toMatch(/return (?:a )?rep count|provide (?:a )?rep audit|bodyweight squat|squat arm/i);
   });
 
@@ -125,6 +143,30 @@ describe("focused whole-video analyst and writer contract", () => {
         whatHappened: source.issues[0].title,
       },
     });
+  });
+
+  it("requires the Flash Lite writer to cover every analyst issue exactly once in order", () => {
+    const source = analysis(8);
+    const complete = writing(source);
+    expect(parseWholeVideoWriting(complete, source)).toEqual(complete);
+    expect(() => parseWholeVideoWriting({ ...complete, coachingItems: complete.coachingItems.slice(0, 7) }, source)).toThrow(/every analyst issue/i);
+    expect(() => parseWholeVideoWriting({ ...complete, coachingItems: [...complete.coachingItems].reverse() }, source)).toThrow(/same order/i);
+  });
+
+  it("normalizes writer failure into complete coaching without losing analyst issues", () => {
+    const source = analysis(8);
+    const normalized = normalizeWholeVideoWriting(null, source);
+    expect(normalized.coachingItems.map((item) => item.id)).toEqual(source.issues.map((item) => item.id));
+    expect(normalized.movementScores).toHaveLength(4);
+    expect(normalized.muscleFocus).toEqual({ primary: [], secondary: [], unclassified: [] });
+  });
+
+  it("gives repair the rejected output, validation reason, and complete immutable analyst result", () => {
+    const source = analysis(8);
+    const prompt = buildWholeVideoWritingRepairPrompt(source, undefined, { coachingItems: [] }, new Error("missing items"));
+    expect(prompt).toContain("missing items");
+    expect(prompt).toContain("issue-8");
+    expect(prompt).toContain('\"coachingItems\":[]');
   });
 
   it("does not let the writer replace issue titles because the writer schema has no title field", () => {
@@ -176,6 +218,8 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not substitute equipment names/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not describe.*target muscles.*working harder/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/muscle names belong only in muscleFocus/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/every supplied issue/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/same order/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not add an ideal path, direction, or endpoint/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toMatch(/sentence parser|truncate/i);
   });
