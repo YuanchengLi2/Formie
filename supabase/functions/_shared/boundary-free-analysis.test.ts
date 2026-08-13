@@ -17,6 +17,7 @@ const issue = (index: number): WholeVideoAnalysis["issues"][number] => ({
   id: `issue-${index}`,
   title: `Visible issue ${index}`,
   observation: `The visible path for issue ${index} changes during the set.`,
+  mechanicalConsequence: `The visible change materially reduces control or the intended exercise stimulus for issue ${index}.`,
   prevalence: index === 1 ? "throughout" : "repeated",
   severity: index === 1 ? "high" : "important",
   confidence: 0.9,
@@ -93,7 +94,7 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(schema.required).toEqual(["videoSummary", "visibility", "issues"]);
     expect(Object.keys(schema.properties)).toEqual(["videoSummary", "visibility", "issues"]);
     expect(schema.properties.issues.items.required).toEqual([
-      "id", "title", "observation", "prevalence", "severity", "confidence", "observedIssueRegions", "evidence",
+      "id", "title", "observation", "mechanicalConsequence", "prevalence", "severity", "confidence", "observedIssueRegions", "evidence",
     ]);
     expect(schema.properties.issues.items.properties.evidence.items.required).toEqual([
       "startMs", "peakMs", "endMs", "visualEvidence", "visibleBodyAreas", "confidence",
@@ -102,15 +103,19 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(JSON.stringify(schema)).not.toMatch(/minimum|maximum|minItems|maxItems/);
   });
 
-  it("finds the four to six biggest supported issues without letting recommended checks limit discovery", () => {
+  it("finds the four to six highest-consequence supported issues without letting recommended checks limit discovery", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(12_000);
     expect(prompt).toMatch(/complete video from beginning to end/i);
     expect(prompt).toMatch(/watch.*once/i);
-    expect(prompt).toMatch(/four to six.*biggest.*form (?:problems|issues)/i);
-    expect(prompt).toMatch(/major.*meaningful/i);
+    expect(prompt).toMatch(/four to six.*highest-consequence.*form (?:problems|issues)/i);
+    expect(prompt).toMatch(/loss of.*support|loss of.*control/i);
+    expect(prompt).toMatch(/joint.*position.*under load/i);
+    expect(prompt).toMatch(/intended.*muscle.*stimulus/i);
+    expect(prompt).toMatch(/exercise-specific.*setup.*bench angle.*elbow.*arm path/i);
+    expect(prompt).toMatch(/do not prioritize.*easy to notice/i);
     expect(prompt).toMatch(/do not include.*minor.*optimization/i);
     expect(prompt).toMatch(/recommendations.*not.*limits/i);
-    expect(BOUNDARY_FREE_ANALYSIS_SCHEMA.properties.issues.description).toMatch(/four to six.*biggest/i);
+    expect(BOUNDARY_FREE_ANALYSIS_SCHEMA.properties.issues.description).toMatch(/four to six.*highest-consequence/i);
     expect(prompt).toMatch(/at least one.*evidence moment/i);
     expect(prompt).toMatch(/peakMs.*clearest.*frame/i);
     expect(prompt).toMatch(/visibility/i);
@@ -231,14 +236,15 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/declaration.*final issues/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toMatch(/catalog/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/observable mechanical consequences/i);
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not claim.*muscle activation.*joint health.*injury risk/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not claim muscle activation.*diagnose an injury.*joint health/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not introduce.*new fault.*hypothetical compensation/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not substitute equipment names/i);
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not describe.*target muscles.*working harder/i);
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/muscle names belong only in muscleFocus/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/every supplied issue/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/exercise technique knowledge.*specific.*correction/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/pulling (?:exercise|movement).*elbow.*destination.*toward the hips.*when appropriate/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/intended muscle stimulus/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not claim.*diagnose.*injury/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/cannot observe.*what the person feels/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not invent.*observed fault/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toMatch(/sentence parser|truncate/i);
   });

@@ -30,6 +30,7 @@ export type WholeVideoAnalysis = {
     id: string;
     title: string;
     observation: string;
+    mechanicalConsequence: string;
     prevalence: "isolated" | "repeated" | "throughout";
     severity: "note" | "important" | "high";
     confidence: number;
@@ -158,6 +159,7 @@ export function parseWholeVideoAnalysis(value: unknown, durationMs: number): Who
       id,
       title: text(issue.title, `${name}.title`),
       observation: text(issue.observation, `${name}.observation`),
+      mechanicalConsequence: text(issue.mechanicalConsequence, `${name}.mechanicalConsequence`),
       prevalence: prevalence as WholeVideoAnalysis["issues"][number]["prevalence"],
       severity: severity as WholeVideoAnalysis["issues"][number]["severity"],
       confidence: boundedNumber(issue.confidence, `${name}.confidence`, 0, 1),
@@ -371,7 +373,7 @@ export function normalizeWholeVideoWriting(value: unknown, analysis: WholeVideoA
         id: issue.id,
         whatHappenedDetail: `${issue.observation} ${evidence} This was ${issue.prevalence} in the recorded set.`,
         whyItMatters: `Improve ${issue.title.toLowerCase()}`,
-        whyItMattersDetail: `This changes the visible position or path described above. Addressing it makes that part of the exercise easier to control. It also gives you a clearer position to repeat on the next set.`,
+        whyItMattersDetail: `${issue.mechanicalConsequence} Addressing it makes that part of the exercise easier to control. It also gives you a clearer position to repeat on the next set.`,
         whatToDo: `Adjust ${issue.title.toLowerCase()} during the next set using the visible evidence as your reference.`,
         successCheck: `The cited position stays controlled through the same part of the exercise.`,
       };
@@ -538,15 +540,16 @@ export const BOUNDARY_FREE_ANALYSIS_SCHEMA = {
     },
     issues: {
       type: "array",
-      description: "Return the four to six biggest distinct, evidence-backed form problems visible in the recording.",
+      description: "Return the four to six highest-consequence distinct, evidence-backed form problems visible in the recording.",
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "title", "observation", "prevalence", "severity", "confidence", "observedIssueRegions", "evidence"],
+        required: ["id", "title", "observation", "mechanicalConsequence", "prevalence", "severity", "confidence", "observedIssueRegions", "evidence"],
         properties: {
           id: { type: "string" },
           title: { type: "string" },
           observation: { type: "string" },
+          mechanicalConsequence: { type: "string", description: "Why this is a core issue: the meaningful consequence for loaded control or support, joint position under load, usable range or path, or intended muscle stimulus. Do not diagnose or predict injury." },
           prevalence: { type: "string", enum: ["isolated", "repeated", "throughout"] },
           severity: { type: "string", enum: ["note", "important", "high"] },
           confidence: { type: "number" },
@@ -605,11 +608,11 @@ export function buildBoundaryFreeAnalysisPrompt(
 
 Watch the complete video from beginning to end once before choosing any issues. Review the beginning, middle, and end so the result represents the entire performed set. Do not count or audit repetitions, assign repetition numbers, or create a repetition timeline. Summarize the performed set and report what the camera clearly shows, partly shows, and does not show. Use that visibility report to avoid guessing about hidden mechanics.
 
-Identify the four to six biggest distinct form problems visible in the recording. Return only major and meaningful faults that materially affect the exercise's setup, position, path, range, balance, stability, or control. Do not include minor form optimizations, cosmetic differences, or unsupported filler. Do not duplicate one problem under multiple labels, invent unsupported faults, or request another video pass.
+Identify the four to six highest-consequence distinct form problems visible in the recording. Before selecting them, use your exercise-specific knowledge to establish the intended setup, equipment configuration, joint path, range, support, and target-muscle stimulus for the declared exercise, then compare the recording against those mechanics. Prioritize visible faults involving loss of support or control under load, meaningfully compromised joint position under load, a major setup or equipment mismatch, a major path or range error, or a change likely to reduce the intended muscle stimulus. Do not prioritize a fault merely because it is easy to notice. Do not include minor form optimizations, cosmetic differences, or unsupported filler. Do not diagnose an injury or claim that an injury will occur; identify the consequential loaded mechanic. Do not duplicate one problem under multiple labels, invent unsupported faults, or request another video pass.
 
-Recommended checks include setup; equipment and contact points; hands and grip; body position, alignment, and posture; support and balance; lifting and lowering path; range and endpoints; tempo and control; stability; joint tracking; left-right imbalance and symmetry; and meaningful changes from the beginning through the middle and end of the set. These are recommendations, not limits or required categories. Use any other relevant exercise knowledge and report important issues outside these recommendations when the video supports them.
+Recommended checks include exercise-specific setup and equipment configuration such as bench angle; equipment and contact points; hands and grip; body position, alignment, and posture; support and balance; elbow and arm path relative to the torso and intended destination; lifting and lowering path; range and endpoints; tempo and control; stability; joint tracking and joint position under load; left-right imbalance and symmetry; and meaningful changes from the beginning through the middle and end of the set. These are recommendations, not limits or required categories. Use any other relevant exercise knowledge and report important issues outside these recommendations when the video supports them.
 
-Name the actual form fault. Do not use "variation," "inconsistency," or "change between reps" as the issue itself. Give every issue at least one original-video evidence moment. Set peakMs to the clearest exact frame, with startMs and endMs providing short surrounding context. Include the visible body areas, prevalence, severity, confidence, and anatomy regions to highlight.
+Name the actual form fault. Do not use "variation," "inconsistency," or "change between reps" as the issue itself. For every issue, state the meaningful mechanical consequence that made it one of the highest-priority findings. Give every issue at least one original-video evidence moment. Set peakMs to the clearest exact frame, with startMs and endMs providing short surrounding context. Include the visible body areas, prevalence, severity, confidence, and anatomy regions to highlight.
 
 Return only analyst facts. Do not write explanations, corrections, strengths, scores, a muscle map, general guidance, or a recheck request. Return one JSON object matching the schema.`;
 }
@@ -618,7 +621,7 @@ export const WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION = `You are Formie's coaching 
 
 Write a coaching item for every supplied issue exactly once. Preserve every supplied issue's identity and visible claims. Never rename, remove, add, merge, or split issues; never alter an issue's observation, evidence, severity, prevalence, confidence, or highlighted regions; and do not invent a new observed fault. Use exercise technique knowledge to turn each supplied fault into a specific, practical correction and visible success check. You may describe the appropriate joint path, direction, position, or endpoint when it directly corrects that supplied fault. For a pulling exercise, when the supplied fault concerns the pull path, arm range, or peak position, state a concrete elbow or arm destination—such as pulling the elbow toward the hips when appropriate for that exercise—instead of merely saying to pull farther back. Every statement about what happened in this recording must trace directly to the declaration, video summary, visibility report, issue, or evidence. Do not introduce a new fault, hypothetical compensation, or unsupported future outcome. Do not substitute equipment names; repeat the supplied equipment term or use the neutral word "equipment" when none is supplied. Use everyday gym language. An occasional useful technical term is allowed only when you explain it immediately in plain language.
 
-For every issue, write exactly three natural, video-specific sentences for whatHappenedDetail. Write a short whyItMatters heading, then exactly three natural, exercise-specific sentences for whyItMattersDetail. Explain why using only observable mechanical consequences in the same position, path, range, balance, stability, control, and repeatability named by the supplied issue. Muscle names belong only in muscleFocus; do not mention muscles, muscle groups, core effort, or body-part effort in any coaching prose field. Do not describe target muscles working harder, working less, being isolated, being activated, receiving tension, handling a load, or powering the movement. Do not claim muscle activation, muscle engagement, muscle growth, joint health, injury risk, pain, strain, or other medical effects unless the analyst explicitly supplied that visible fact. Avoid repeated templates, identical endings, and invented physiology. Write one direct whatToDo sentence and one concrete successCheck sentence.
+For every issue, write exactly three natural, video-specific sentences for whatHappenedDetail. Write a short whyItMatters heading, then exactly three natural, exercise-specific sentences for whyItMattersDetail. Explain the supplied observable mechanical consequences using position, path, range, balance, stability, loaded control, repeatability, and intended muscle stimulus where relevant. You may explain that a visible mechanic can reduce the intended muscle stimulus or shift emphasis away from the exercise's intended target, but cannot observe or assert what the person feels internally. Do not claim muscle activation as an observed fact, diagnose an injury, claim an injury will occur, or make claims about pain, joint health, muscle growth, or medical outcomes. Avoid repeated templates, identical endings, and invented physiology. Write one direct whatToDo sentence and one concrete successCheck sentence.
 
 Return exactly four movement scores on a 0-to-100 scale; never use a 0-to-10 scale. Create them solely from the final issues, their severity, prevalence, and confidence. Minor isolated issues must not make the entire performance appear poor. Create the exercise muscle map from the declaration, video summary, and final issues; keep that exercise muscle map separate from analyst-owned issue-region highlights.`;
 

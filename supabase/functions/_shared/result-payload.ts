@@ -24,6 +24,7 @@ const WHOLE_VIDEO_PIPELINES = new Set([
   "gemini-whole-video-v78-gemini-3-7-core-4-6-flash-lite-writer",
   "gemini-whole-video-v79-core-4-6-resilient-writer",
   "gemini-whole-video-v80-core-4-6-specific-writer",
+  "gemini-whole-video-v81-high-consequence-coaching",
 ]);
 
 function isWholeVideoPipeline(value: unknown): boolean {
