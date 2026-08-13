@@ -525,7 +525,7 @@ export const BOUNDARY_FREE_ANALYSIS_SCHEMA = {
     },
     issues: {
       type: "array",
-      description: "Return every distinct evidence-backed issue found, including at least four visible corrections or useful form optimizations, with no upper cap.",
+      description: "Return the four to six biggest distinct, evidence-backed form problems visible in the recording.",
       items: {
         type: "object",
         additionalProperties: false,
@@ -592,9 +592,9 @@ export function buildBoundaryFreeAnalysisPrompt(
 
 Watch the complete video from beginning to end once before choosing any issues. Review the beginning, middle, and end so the result represents the entire performed set. Do not count or audit repetitions, assign repetition numbers, or create a repetition timeline. Summarize the performed set and report what the camera clearly shows, partly shows, and does not show. Use that visibility report to avoid guessing about hidden mechanics.
 
-Search broadly before answering and return every distinct evidence-backed form issue you find. Return at least four distinct visible corrections or useful form optimizations. If fewer than four are initially obvious, re-examine the beginning, middle, and end through every recommended search lens and include smaller evidence-backed optimizations that are visible and useful. Partial visibility does not by itself disqualify an issue when the relevant position, path, range, balance, or control remains observable. Do not stop after the first issue. Do not rank issues into a shortlist, discard a supported issue because another issue seems more important, add unsupported filler to meet the minimum, duplicate one problem under multiple labels, invent unsupported faults, or request another video pass.
+Identify the four to six biggest distinct form problems visible in the recording. Return only major and meaningful faults that materially affect the exercise's setup, position, path, range, balance, stability, or control. Do not include minor form optimizations, cosmetic differences, or unsupported filler. Do not duplicate one problem under multiple labels, invent unsupported faults, or request another video pass.
 
-Recommended checks include setup; equipment and contact points; hands and grip; body position, alignment, and posture; support and balance; lifting and lowering path; range and endpoints; tempo and control; stability; joint tracking; left-right imbalance and symmetry; and meaningful changes from the beginning through the middle and end of the set. These are search lenses, not quotas. You may find issues outside these suggestions.
+Recommended checks include setup; equipment and contact points; hands and grip; body position, alignment, and posture; support and balance; lifting and lowering path; range and endpoints; tempo and control; stability; joint tracking; left-right imbalance and symmetry; and meaningful changes from the beginning through the middle and end of the set. These are recommendations, not limits or required categories. Use any other relevant exercise knowledge and report important issues outside these recommendations when the video supports them.
 
 Name the actual form fault. Do not use "variation," "inconsistency," or "change between reps" as the issue itself. Give every issue at least one original-video evidence moment. Set peakMs to the clearest exact frame, with startMs and endMs providing short surrounding context. Include the visible body areas, prevalence, severity, confidence, and anatomy regions to highlight.
 

@@ -102,27 +102,25 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(JSON.stringify(schema)).not.toMatch(/minimum|maximum|minItems|maxItems/);
   });
 
-  it("finds all distinct supported issues and frames after one complete-video review without counting reps", () => {
+  it("finds the four to six biggest supported issues without letting recommended checks limit discovery", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(12_000);
     expect(prompt).toMatch(/complete video from beginning to end/i);
     expect(prompt).toMatch(/watch.*once/i);
-    expect(prompt).toMatch(/every distinct.*evidence-backed.*issue/i);
-    expect(prompt).toMatch(/at least four/i);
-    expect(prompt).toMatch(/fewer than four.*re-examine/i);
-    expect(prompt).toMatch(/smaller.*evidence-backed.*optimization/i);
-    expect(prompt).toMatch(/partial visibility.*does not.*disqualify/i);
-    expect(BOUNDARY_FREE_ANALYSIS_SCHEMA.properties.issues.description).toMatch(/at least four/i);
+    expect(prompt).toMatch(/four to six.*biggest.*form (?:problems|issues)/i);
+    expect(prompt).toMatch(/major.*meaningful/i);
+    expect(prompt).toMatch(/do not include.*minor.*optimization/i);
+    expect(prompt).toMatch(/recommendations.*not.*limits/i);
+    expect(BOUNDARY_FREE_ANALYSIS_SCHEMA.properties.issues.description).toMatch(/four to six.*biggest/i);
     expect(prompt).toMatch(/at least one.*evidence moment/i);
     expect(prompt).toMatch(/peakMs.*clearest.*frame/i);
     expect(prompt).toMatch(/visibility/i);
     for (const lens of ["setup", "equipment", "contact", "hands", "grip", "body position", "alignment", "posture", "support", "path", "range", "endpoints", "tempo", "control", "balance", "stability", "joint tracking", "left-right", "symmetry", "beginning", "middle", "end"]) {
       expect(prompt.toLowerCase()).toContain(lens);
     }
-    expect(prompt).toMatch(/outside (?:these|those) suggestions/i);
+    expect(prompt).toMatch(/outside (?:these|those) (?:recommendations|suggestions)/i);
     expect(prompt).toMatch(/actual form fault/i);
     expect(prompt).toMatch(/do not count or audit repetitions/i);
-    expect(prompt).toMatch(/do not rank.*shortlist|do not.*discard/i);
-    expect(prompt).not.toMatch(/strongest 4|4-6|at most (?:four|4)|exactly (?:four|4)/i);
+    expect(prompt).not.toMatch(/smaller.*optimization/i);
     expect(prompt).not.toMatch(/return (?:a )?rep count|provide (?:a )?rep audit|bodyweight squat|squat arm/i);
   });
 

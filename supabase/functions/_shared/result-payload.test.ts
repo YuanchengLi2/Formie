@@ -399,6 +399,7 @@ describe("resultPayload", () => {
     "gemini-whole-video-v75-declaration-only-8fps-flash-lite-writer",
     "gemini-whole-video-v76-gemini-3-7-all-issues-flash-lite-writer",
     "gemini-whole-video-v77-gemini-3-7-min-four-all-issues-flash-lite-writer",
+    "gemini-whole-video-v78-gemini-3-7-core-4-6-flash-lite-writer",
   ])("returns stored writer scores, muscle focus, and issue regions unchanged for %s", (pipelineVersion) => {
     const movementScores = [
       { id: "path", label: "Path", score: 91, observed: "Visible path", evidenceIds: ["path"] },

@@ -12,7 +12,7 @@ describe("v48 rollback wiring", () => {
     expect(completeUpload).not.toContain("v49-primary-rollout");
     expect(reanalysis).not.toContain("V49_PRIMARY");
     expect(reanalysis).not.toContain("v49-primary-rollout");
-    expect(analyzer).toContain('const PIPELINE_VERSION = "gemini-whole-video-v77-gemini-3-7-min-four-all-issues-flash-lite-writer"');
+    expect(analyzer).toContain('const PIPELINE_VERSION = "gemini-whole-video-v78-gemini-3-7-core-4-6-flash-lite-writer"');
     expect(analyzer).not.toContain('from "./short-clip-recheck.ts"');
     expect(analyzer).not.toContain("runShortClipRechecks");
     expect(analyzer).not.toContain("buildBoundaryFreeRecheckPrompt");

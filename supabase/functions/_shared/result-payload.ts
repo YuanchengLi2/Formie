@@ -21,6 +21,7 @@ const WHOLE_VIDEO_PIPELINES = new Set([
   "gemini-whole-video-v75-declaration-only-8fps-flash-lite-writer",
   "gemini-whole-video-v76-gemini-3-7-all-issues-flash-lite-writer",
   "gemini-whole-video-v77-gemini-3-7-min-four-all-issues-flash-lite-writer",
+  "gemini-whole-video-v78-gemini-3-7-core-4-6-flash-lite-writer",
 ]);
 
 function isWholeVideoPipeline(value: unknown): boolean {
