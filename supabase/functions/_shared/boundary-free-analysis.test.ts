@@ -148,12 +148,12 @@ describe("focused whole-video analyst and writer contract", () => {
     });
   });
 
-  it("requires the Flash Lite writer to cover every analyst issue exactly once in order", () => {
+  it("requires the Flash Lite writer to cover every analyst issue exactly once and restores analyst order", () => {
     const source = analysis(8);
     const complete = writing(source);
     expect(parseWholeVideoWriting(complete, source)).toEqual(complete);
     expect(() => parseWholeVideoWriting({ ...complete, coachingItems: complete.coachingItems.slice(0, 7) }, source)).toThrow(/every analyst issue/i);
-    expect(() => parseWholeVideoWriting({ ...complete, coachingItems: [...complete.coachingItems].reverse() }, source)).toThrow(/same order/i);
+    expect(parseWholeVideoWriting({ ...complete, coachingItems: [...complete.coachingItems].reverse() }, source).coachingItems).toEqual(complete.coachingItems);
   });
 
   it("normalizes writer failure into complete coaching without losing analyst issues", () => {
@@ -162,6 +162,21 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(normalized.coachingItems.map((item) => item.id)).toEqual(source.issues.map((item) => item.id));
     expect(normalized.movementScores).toHaveLength(4);
     expect(normalized.muscleFocus).toEqual({ primary: [], secondary: [], unclassified: [] });
+  });
+
+  it("salvages valid writer prose and muscle mapping when one independent field is malformed", () => {
+    const source = analysis();
+    const complete = writing(source);
+    const normalized = normalizeWholeVideoWriting({
+      ...complete,
+      movementScores: complete.movementScores.slice(0, 3),
+      coachingItems: [...complete.coachingItems].reverse(),
+    }, source);
+    expect(normalized.overallAssessment).toBe(complete.overallAssessment);
+    expect(normalized.coachNote).toBe(complete.coachNote);
+    expect(normalized.coachingItems).toEqual(complete.coachingItems);
+    expect(normalized.muscleFocus).toEqual(complete.muscleFocus);
+    expect(normalized.movementScores).toHaveLength(4);
   });
 
   it("gives repair the rejected output, validation reason, and complete immutable analyst result", () => {
@@ -222,8 +237,9 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not describe.*target muscles.*working harder/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/muscle names belong only in muscleFocus/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/every supplied issue/i);
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/same order/i);
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not add an ideal path, direction, or endpoint/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/exercise technique knowledge.*specific.*correction/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/pulling (?:exercise|movement).*elbow.*destination.*toward the hips.*when appropriate/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not invent.*observed fault/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toMatch(/sentence parser|truncate/i);
   });
 

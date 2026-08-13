@@ -7,7 +7,8 @@ export type CameraZoomPreset = {
 };
 
 function lensContaining(lenses: string[], term: string): string | undefined {
-  return lenses.find((lens) => lens.toLocaleLowerCase().includes(term));
+  const normalizedTerm = term.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "");
+  return lenses.find((lens) => lens.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "").includes(normalizedTerm));
 }
 
 export function resolveCameraZoom(label: CameraZoomLabel, lenses: string[]): { lens: string | undefined; zoom: number } {

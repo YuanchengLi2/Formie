@@ -290,16 +290,14 @@ function parseMuscleFocus(value: unknown): MuscleFocus {
   return { primary, secondary, unclassified: [...new Set(stringArray(focus.unclassified, "writing.muscleFocus.unclassified"))] };
 }
 
-export function parseWholeVideoWriting(value: unknown, analysis: WholeVideoAnalysis): WholeVideoWriting {
-  const writing = record(value, "writing");
-  if (!Array.isArray(writing.coachingItems) || writing.coachingItems.length !== analysis.issues.length) {
+function parseCoachingItems(value: unknown, analysis: WholeVideoAnalysis): WholeVideoWriting["coachingItems"] {
+  if (!Array.isArray(value) || value.length !== analysis.issues.length) {
     throw new Error("writing.coachingItems must cover every analyst issue");
   }
-  const coachingItems = writing.coachingItems.map((rawItem, index) => {
+  const parsed = value.map((rawItem, index) => {
     const name = `writing.coachingItems[${index}]`;
     const item = record(rawItem, name);
     const id = text(item.id, `${name}.id`);
-    if (id !== analysis.issues[index].id) throw new Error("writing.coachingItems must use every analyst issue ID in the same order");
     const successCheck = item.successCheck === null ? null : text(item.successCheck, `${name}.successCheck`);
     return {
       id,
@@ -310,12 +308,21 @@ export function parseWholeVideoWriting(value: unknown, analysis: WholeVideoAnaly
       successCheck,
     };
   });
+  const byId = new Map(parsed.map((item) => [item.id, item]));
+  if (byId.size !== parsed.length || analysis.issues.some((issue) => !byId.has(issue.id))) {
+    throw new Error("writing.coachingItems must use every analyst issue ID exactly once");
+  }
+  return analysis.issues.map((issue) => byId.get(issue.id)!);
+}
+
+export function parseWholeVideoWriting(value: unknown, analysis: WholeVideoAnalysis): WholeVideoWriting {
+  const writing = record(value, "writing");
   return {
     overallAssessment: text(writing.overallAssessment, "writing.overallAssessment"),
     coachNote: text(writing.coachNote, "writing.coachNote"),
     movementScores: parseMovementScores(writing.movementScores, analysis),
     muscleFocus: parseMuscleFocus(writing.muscleFocus),
-    coachingItems,
+    coachingItems: parseCoachingItems(writing.coachingItems, analysis),
   };
 }
 
@@ -339,20 +346,26 @@ function fallbackMovementScores(analysis: WholeVideoAnalysis): MovementScore[] {
 export function normalizeWholeVideoWriting(value: unknown, analysis: WholeVideoAnalysis): WholeVideoWriting {
   let movementScores = fallbackMovementScores(analysis);
   let muscleFocus: MuscleFocus = { primary: [], secondary: [], unclassified: [] };
+  let overallAssessment = analysis.videoSummary;
+  let coachNote = analysis.issues[0] ? `Start with ${analysis.issues[0].title.toLowerCase()} on the next set.` : "Repeat the set with the same controlled setup.";
+  let coachingItems: WholeVideoWriting["coachingItems"] | null = null;
+  let raw: JsonRecord | null = null;
   try {
-    const raw = record(value, "writing");
-    movementScores = parseMovementScores(raw.movementScores, analysis);
-    muscleFocus = parseMuscleFocus(raw.muscleFocus);
-  } catch {
-    // Writer metadata is optional in the last-resort path; analyst facts remain authoritative.
+    raw = record(value, "writing");
+  } catch {}
+  if (raw) {
+    try { overallAssessment = text(raw.overallAssessment, "writing.overallAssessment"); } catch {}
+    try { coachNote = text(raw.coachNote, "writing.coachNote"); } catch {}
+    try { movementScores = parseMovementScores(raw.movementScores, analysis); } catch {}
+    try { muscleFocus = parseMuscleFocus(raw.muscleFocus); } catch {}
+    try { coachingItems = parseCoachingItems(raw.coachingItems, analysis); } catch {}
   }
-  const firstIssue = analysis.issues[0];
   return {
-    overallAssessment: analysis.videoSummary,
-    coachNote: firstIssue ? `Start with ${firstIssue.title.toLowerCase()} on the next set.` : "Repeat the set with the same controlled setup.",
+    overallAssessment,
+    coachNote,
     movementScores,
     muscleFocus,
-    coachingItems: analysis.issues.map((issue) => {
+    coachingItems: coachingItems ?? analysis.issues.map((issue) => {
       const evidence = issue.evidence[0]?.visualEvidence ?? issue.observation;
       return {
         id: issue.id,
@@ -603,7 +616,7 @@ Return only analyst facts. Do not write explanations, corrections, strengths, sc
 
 export const WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION = `You are Formie's coaching writer. Return only JSON matching the schema.
 
-Write a coaching item for every supplied issue, exactly once and in the same order. Preserve every supplied issue's identity and visible claims. Never rename, remove, add, merge, split, or reorder issues; never alter an issue's observation, evidence, severity, prevalence, confidence, or highlighted regions; and never invent a mechanic that is not supported by the analyst. Every factual or causal sentence must trace directly to the declaration, video summary, visibility report, issue, or evidence. Do not introduce a new fault, a hypothetical compensation, or a future outcome that those facts do not supply. Do not add an ideal path, direction, or endpoint unless the supplied facts define it. Do not substitute equipment names; repeat the supplied equipment term or use the neutral word "equipment" when none is supplied. Use everyday gym language. An occasional useful technical term is allowed only when you explain it immediately in plain language.
+Write a coaching item for every supplied issue exactly once. Preserve every supplied issue's identity and visible claims. Never rename, remove, add, merge, or split issues; never alter an issue's observation, evidence, severity, prevalence, confidence, or highlighted regions; and do not invent a new observed fault. Use exercise technique knowledge to turn each supplied fault into a specific, practical correction and visible success check. You may describe the appropriate joint path, direction, position, or endpoint when it directly corrects that supplied fault. For a pulling exercise, when the supplied fault concerns the pull path, arm range, or peak position, state a concrete elbow or arm destination—such as pulling the elbow toward the hips when appropriate for that exercise—instead of merely saying to pull farther back. Every statement about what happened in this recording must trace directly to the declaration, video summary, visibility report, issue, or evidence. Do not introduce a new fault, hypothetical compensation, or unsupported future outcome. Do not substitute equipment names; repeat the supplied equipment term or use the neutral word "equipment" when none is supplied. Use everyday gym language. An occasional useful technical term is allowed only when you explain it immediately in plain language.
 
 For every issue, write exactly three natural, video-specific sentences for whatHappenedDetail. Write a short whyItMatters heading, then exactly three natural, exercise-specific sentences for whyItMattersDetail. Explain why using only observable mechanical consequences in the same position, path, range, balance, stability, control, and repeatability named by the supplied issue. Muscle names belong only in muscleFocus; do not mention muscles, muscle groups, core effort, or body-part effort in any coaching prose field. Do not describe target muscles working harder, working less, being isolated, being activated, receiving tension, handling a load, or powering the movement. Do not claim muscle activation, muscle engagement, muscle growth, joint health, injury risk, pain, strain, or other medical effects unless the analyst explicitly supplied that visible fact. Avoid repeated templates, identical endings, and invented physiology. Write one direct whatToDo sentence and one concrete successCheck sentence.
 
