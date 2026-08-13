@@ -14,7 +14,7 @@ describe("whole-video analysis settings", () => {
   });
 
   it("keeps high reasoning for video facts and uses fast reasoning for the time-bounded prose writer", () => {
-    expect(REQUESTED_ANALYSIS_FPS).toBe(8);
+    expect(REQUESTED_ANALYSIS_FPS).toBe(12);
     expect(REQUESTED_ANALYSIS_MEDIA_RESOLUTION).toBe("MEDIA_RESOLUTION_HIGH");
     expect(ANALYST_THINKING_LEVEL).toBe("high");
     expect(WRITER_THINKING_LEVEL).toBe("low");

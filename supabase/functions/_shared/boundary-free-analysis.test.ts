@@ -6,26 +6,9 @@ import {
   buildBoundaryFreeAnalysisPrompt,
   buildWholeVideoWritingPrompt,
   limitWholeVideoAnalysis,
-  type ExerciseCatalogContext,
   type WholeVideoAnalysis,
   type WholeVideoWriting,
 } from "./boundary-free-analysis";
-
-const catalog: ExerciseCatalogContext = {
-  id: 201,
-  name: "Chest-Supported Dumbbell Row",
-  family: "row",
-  mechanics: {
-    equipmentClass: "dumbbell",
-    movementFamily: "row",
-    support: "chest-supported",
-    trajectory: "free-path",
-    laterality: "bilateral",
-    stance: "standard",
-    grip: "neutral",
-    angle: "incline",
-  },
-};
 
 const issue = (index: number): WholeVideoAnalysis["issues"][number] => ({
   id: `issue-${index}`,
@@ -81,8 +64,7 @@ const writing = (source: WholeVideoAnalysis): WholeVideoWriting => ({
 });
 
 describe("focused whole-video analyst and writer contract", () => {
-  it("limits structured analyst output to the first six ranked issues without rejecting three", () => {
-    expect(limitWholeVideoAnalysis(analysis(3)).issues).toHaveLength(3);
+  it("limits structured analyst output to the first six ranked issues", () => {
     expect(limitWholeVideoAnalysis(analysis(7)).issues.map((item) => item.id)).toEqual([
       "issue-1", "issue-2", "issue-3", "issue-4", "issue-5", "issue-6",
     ]);
@@ -102,37 +84,35 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(JSON.stringify(schema)).not.toMatch(/minimum|maximum|minItems|maxItems/);
   });
 
-  it("asks the analyst to watch once, search broadly, rank candidates, and respect visibility", () => {
-    const prompt = buildBoundaryFreeAnalysisPrompt(12_000, undefined, catalog);
+  it("forces four to six issues after one complete-video review without counting reps", () => {
+    const prompt = buildBoundaryFreeAnalysisPrompt(12_000);
     expect(prompt).toMatch(/complete video from beginning to end/i);
     expect(prompt).toMatch(/watch.*once/i);
     expect(prompt).toMatch(/internal candidate list/i);
     expect(prompt).toMatch(/compare.*importance.*confidence.*usefulness/i);
     expect(prompt).toMatch(/strongest 4(?:–|-| to )6/i);
     expect(prompt).toMatch(/visibility/i);
-    for (const lens of ["hands", "grip", "equipment", "contact", "body", "joint alignment", "support", "path", "range", "control", "balance", "stability", "left-right imbalance"]) {
+    for (const lens of ["setup", "equipment", "contact", "hands", "grip", "body position", "alignment", "posture", "support", "path", "range", "endpoints", "tempo", "control", "balance", "stability", "joint tracking", "left-right", "symmetry", "beginning", "middle", "end"]) {
       expect(prompt.toLowerCase()).toContain(lens);
     }
     expect(prompt).toMatch(/outside (?:these|those) suggestions/i);
     expect(prompt).toMatch(/actual form fault/i);
     expect(prompt).toMatch(/do not count or audit repetitions/i);
+    expect(prompt).toMatch(/must return.*4(?:â€“|-| to )6/i);
+    expect(prompt).not.toMatch(/fewer than four|return only the real issues/i);
     expect(prompt).not.toMatch(/return (?:a )?rep count|provide (?:a )?rep audit|bodyweight squat|squat arm/i);
   });
 
-  it("passes neutral catalog mechanics to both model prompts", () => {
-    const analystPrompt = buildBoundaryFreeAnalysisPrompt(12_000, undefined, catalog);
-    const writerPrompt = buildWholeVideoWritingPrompt(analysis(), undefined, catalog);
-    for (const value of Object.values(catalog.mechanics)) {
-      expect(analystPrompt).toContain(value);
-      expect(writerPrompt).toContain(value);
-    }
-    expect(analystPrompt).toMatch(/context.*not.*required fault/i);
-    expect(writerPrompt).toMatch(/context.*not.*proof/i);
+  it("keeps catalog data out of both model prompts", () => {
+    const analystPrompt = buildBoundaryFreeAnalysisPrompt(12_000);
+    const writerPrompt = buildWholeVideoWritingPrompt(analysis());
+    expect(analystPrompt).not.toMatch(/catalog/i);
+    expect(writerPrompt).not.toMatch(/catalog/i);
   });
 
   it("keeps analyst identity and evidence authoritative during writer assembly", () => {
     const source = analysis();
-    const candidate = boundaryFreeToCandidate(source, writing(source), undefined, { catalog });
+    const candidate = boundaryFreeToCandidate(source, writing(source));
     expect(candidate.priorityCorrections[0]).toMatchObject({
       id: source.issues[0].id,
       title: source.issues[0].title,
@@ -156,7 +136,7 @@ describe("focused whole-video analyst and writer contract", () => {
   it("uses writer scores and muscle focus while keeping issue highlights separate", () => {
     const source = analysis();
     const finalWriting = writing(source);
-    const candidate = boundaryFreeToCandidate(source, finalWriting, undefined, { catalog });
+    const candidate = boundaryFreeToCandidate(source, finalWriting);
     expect(candidate.movementScores).toEqual(finalWriting.movementScores);
     expect(candidate.muscleFocus).toEqual(finalWriting.muscleFocus);
     expect(candidate.priorityCorrections[0].observedIssueRegions).toEqual(["elbows"]);
@@ -176,7 +156,7 @@ describe("focused whole-video analyst and writer contract", () => {
       focusNote: null,
     };
     const source = analysis();
-    const candidate = boundaryFreeToCandidate(source, writing(source), declaration, { catalog });
+    const candidate = boundaryFreeToCandidate(source, writing(source), declaration);
     expect(candidate.setSummary).toMatchObject({ totalReps: 10, consistentReps: null });
     expect(candidate.repTimeline).toEqual([]);
   });
@@ -188,7 +168,8 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/exactly three natural, exercise-specific sentences.*whyItMattersDetail/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/minor isolated issues.*must not make.*entire performance.*poor/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/0-to-100 scale.*never.*0-to-10/i);
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/declaration.*catalog mechanics.*final issues/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/declaration.*final issues/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toMatch(/catalog/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/observable mechanical consequences/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not claim.*muscle activation.*joint health.*injury risk/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not introduce.*new fault.*hypothetical compensation/i);

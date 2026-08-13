@@ -18,12 +18,9 @@ import {
   WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
   WHOLE_VIDEO_WRITING_SCHEMA,
   boundaryFreeToCandidate,
-  type ExerciseCatalogContext,
-  type ExerciseCatalogMechanics,
   type WholeVideoAnalysis,
   type WholeVideoWriting,
 } from "../_shared/boundary-free-analysis.ts";
-import type { ExerciseFamily } from "../_shared/analysis-contract.ts";
 import { resultPayload } from "../_shared/result-payload.ts";
 import { estimatedGeminiCost } from "../_shared/gemini-cost.ts";
 import { parseSetDeclaration } from "../_shared/set-declaration.ts";
@@ -34,7 +31,7 @@ import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline
 import { writeValidatedCoaching } from "./coaching-writer.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v73-focused-analyst-flash-lite-writer";
+const PIPELINE_VERSION = "gemini-whole-video-v74-declaration-only-12fps-flash-lite-writer";
 const ANALYST_MODEL = "gemini-3.6-flash";
 const WRITER_MODEL = "gemini-3.1-flash-lite";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
@@ -88,29 +85,6 @@ function stageRow(data: unknown): JsonRecord | null {
     return first && typeof first === "object" && !Array.isArray(first) ? first as JsonRecord : null;
   }
   return data && typeof data === "object" && !Array.isArray(data) ? data as JsonRecord : null;
-}
-
-const EXERCISE_FAMILIES = new Set<ExerciseFamily>([
-  "curl", "triceps", "press", "overhead-press", "fly", "raise", "row", "pull-down",
-  "squat", "lunge", "hinge", "hip-thrust", "carry", "core", "plank", "other",
-]);
-
-function catalogFamily(value: unknown): ExerciseFamily | undefined {
-  return typeof value === "string" && EXERCISE_FAMILIES.has(value as ExerciseFamily)
-    ? value as ExerciseFamily
-    : undefined;
-}
-
-const CATALOG_MECHANIC_KEYS = [
-  "equipmentClass", "movementFamily", "support", "trajectory",
-  "laterality", "stance", "grip", "angle",
-] as const satisfies readonly (keyof ExerciseCatalogMechanics)[];
-
-function catalogMechanics(value: unknown): ExerciseCatalogMechanics | undefined {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const source = value as Record<string, unknown>;
-  if (CATALOG_MECHANIC_KEYS.some((key) => typeof source[key] !== "string" || !String(source[key]).trim())) return undefined;
-  return Object.fromEntries(CATALOG_MECHANIC_KEYS.map((key) => [key, String(source[key]).trim()])) as ExerciseCatalogMechanics;
 }
 
 Deno.serve(async (request) => {
@@ -322,21 +296,6 @@ Deno.serve(async (request) => {
       if (!session) return null;
       const currentPipeline = session.pipeline_version === PIPELINE_VERSION;
       const declaration = session.set_declaration ? parseSetDeclaration(session.set_declaration) : null;
-      let catalogExerciseContext: ExerciseCatalogContext | undefined;
-      const catalogExerciseId = declaration?.exercise.catalogExerciseId ?? session.exercise_variant_v2_id;
-      if (typeof catalogExerciseId === "number") {
-        const { data: catalog, error: catalogError } = await admin
-          .from("exercise_variants_v2")
-          .select("name,family,mechanics")
-          .eq("id", catalogExerciseId)
-          .maybeSingle();
-        if (catalogError) throw catalogError;
-        const family = catalogFamily(catalog?.family);
-        const mechanics = catalogMechanics(catalog?.mechanics);
-        if (catalog && typeof catalog.name === "string" && catalog.name.trim() && family && mechanics) {
-          catalogExerciseContext = { id: catalogExerciseId, name: catalog.name.trim(), family, mechanics };
-        }
-      }
       return {
         ...session,
         id: session.id,
@@ -354,7 +313,6 @@ Deno.serve(async (request) => {
         durationMs: session.duration_ms,
         result: resultPayload(session, result),
         analysisDecision: currentPipeline && session.analysis_draft && typeof session.analysis_draft === "object" ? session.analysis_draft : null,
-        catalogExerciseContext,
         setDeclaration: declaration,
       } as WholeVideoSession;
     },
@@ -362,7 +320,6 @@ Deno.serve(async (request) => {
       const invocationStartedAt = Date.now();
       const durationMs = rawSession.durationMs!;
       const declaration = rawSession.setDeclaration ? parseSetDeclaration(rawSession.setDeclaration) : undefined;
-      const catalog = rawSession.catalogExerciseContext as ExerciseCatalogContext | undefined;
       const rawDecision = rawSession.analysisDecision && typeof rawSession.analysisDecision === "object" ? rawSession.analysisDecision as JsonRecord : null;
       // One full-video call establishes the evidence. The text-only writer
       // produces the final coaching without another video pass.
@@ -445,7 +402,7 @@ Deno.serve(async (request) => {
             await saveSessionStage("analyzing");
             const requestBody = buildVideoGenerateContentRequest({
               video: analysisVideo,
-                  prompt: buildBoundaryFreeAnalysisPrompt(durationMs, declaration, catalog),
+                  prompt: buildBoundaryFreeAnalysisPrompt(durationMs, declaration),
                   schema: BOUNDARY_FREE_ANALYSIS_SCHEMA,
               fps: REQUESTED_ANALYSIS_FPS,
                   thinkingLevel: ANALYST_THINKING_LEVEL,
@@ -472,15 +429,14 @@ Deno.serve(async (request) => {
             visibilityLevel,
             analystModel: ANALYST_MODEL,
             writerModel: WRITER_MODEL,
-            issueCountBelowFour: analystIssueCount < 4,
-          }));
-          const decision = await runStage(sessionId, "finalizing", { kind: "writer", analysis, declaration: declaration ?? null, catalog: catalog ?? null }, async () => {
+              }));
+              const decision = await runStage(sessionId, "finalizing", { kind: "writer", analysis, declaration: declaration ?? null }, async () => {
             await saveSessionStage("finalizing");
             const timeoutMs = Math.min(20_000, deadline.remainingMs());
             if (timeoutMs < 1_000) throw Object.assign(new Error("Writer budget exhausted"), { code: "WRITER_DEADLINE_EXHAUSTED" });
             const writerRequest = buildTextGenerateContentRequest({
               systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
-              prompt: buildWholeVideoWritingPrompt(analysis, declaration, catalog),
+                  prompt: buildWholeVideoWritingPrompt(analysis, declaration),
               schema: WHOLE_VIDEO_WRITING_SCHEMA,
               thinkingLevel: WRITER_THINKING_LEVEL,
             });
@@ -497,14 +453,7 @@ Deno.serve(async (request) => {
         },
         assembleResult: (decision) => {
               const combined = decision as { analysis: WholeVideoAnalysis; writing: WholeVideoWriting };
-              return boundaryFreeToCandidate(
-                combined.analysis,
-                combined.writing,
-                declaration,
-                {
-                  catalog: rawSession.catalogExerciseContext as ExerciseCatalogContext | undefined,
-                },
-              ) as unknown as JsonRecord;
+                  return boundaryFreeToCandidate(combined.analysis, combined.writing, declaration) as unknown as JsonRecord;
         },
         saveResult: async (sessionId, rawResult) => {
           const candidate = rawResult as unknown as AnalysisCandidate;

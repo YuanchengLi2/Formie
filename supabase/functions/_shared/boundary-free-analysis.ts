@@ -9,24 +9,6 @@ import type {
 } from "./analysis-contract.ts";
 import type { SetDeclaration } from "./set-declaration.ts";
 
-export type ExerciseCatalogMechanics = {
-  equipmentClass: string;
-  movementFamily: string;
-  support: string;
-  trajectory: string;
-  laterality: string;
-  stance: string;
-  grip: string;
-  angle: string;
-};
-
-export type ExerciseCatalogContext = {
-  id: number;
-  name: string;
-  family: ExerciseFamily;
-  mechanics: ExerciseCatalogMechanics;
-};
-
 export type WholeVideoEvidence = {
   startMs: number;
   peakMs: number;
@@ -72,7 +54,6 @@ export type WholeVideoWriting = {
 };
 
 export type BoundaryFreeRecognitionContext = {
-  catalog?: ExerciseCatalogContext;
   exerciseFamily?: ExerciseFamily;
   equipment?: string[];
 };
@@ -187,10 +168,9 @@ export function boundaryFreeToCandidate(
   const analysis = limitWholeVideoAnalysis(rawAnalysis);
   const writtenItems = new Map(writing.coachingItems.map((item) => [item.id, item]));
   const priorityCorrections = analysis.issues.map((issue) => publicFinding(issue, writtenItems.get(issue.id)!));
-  const catalog = recognitionContext.catalog;
-  const exerciseLabel = declaration?.exercise.label ?? catalog?.name ?? "Exercise attempt";
+  const exerciseLabel = declaration?.exercise.label ?? "Exercise attempt";
   const equipment = recognitionContext.equipment
-    ?? (catalog?.mechanics.equipmentClass ? [catalog.mechanics.equipmentClass] : declaration?.load.kind === "bodyweight" ? ["bodyweight"] : []);
+    ?? (declaration?.load.kind === "bodyweight" ? ["bodyweight"] : []);
   const movementScores = writing.movementScores;
   const score = movementScores.length > 0
     ? Math.round(movementScores.reduce((sum, item) => sum + item.score, 0) / movementScores.length)
@@ -216,8 +196,8 @@ export function boundaryFreeToCandidate(
       equipment,
       confidence: declaration ? 1 : 0.8,
       alternatives: [],
-      catalogExerciseId: declaration?.exercise.catalogExerciseId ?? catalog?.id ?? null,
-      exerciseFamily: catalog?.family ?? recognitionContext.exerciseFamily ?? inferExerciseFamily(exerciseLabel),
+      catalogExerciseId: declaration?.exercise.catalogExerciseId ?? null,
+      exerciseFamily: recognitionContext.exerciseFamily ?? inferExerciseFamily(exerciseLabel),
       ...(declaration ? { source: "user_declared" as const } : {}),
     },
     overallAssessment: writing.overallAssessment,
@@ -396,23 +376,17 @@ function declaredSetSummary(declaration?: SetDeclaration): string {
   return `The person declared: ${declaration.exercise.label}, ${amount}, load ${load}${declaration.side ? `, side ${declaration.side}` : ""}${declaration.styles.length > 0 ? `, intentional styles ${declaration.styles.join(", ")}` : ""}${declaration.focusNote ? `, note "${declaration.focusNote}"` : ""}.`;
 }
 
-function catalogSummary(catalog?: ExerciseCatalogContext): string {
-  if (!catalog) return "No catalog mechanics were available.";
-  return `Neutral catalog context: ${catalog.name} (${catalog.family}), mechanics ${JSON.stringify(catalog.mechanics)}. Treat this as factual context, not required fault categories and not proof that any fault occurred.`;
-}
-
 export function buildBoundaryFreeAnalysisPrompt(
   durationMs: number,
   declaration?: SetDeclaration,
-  catalog?: ExerciseCatalogContext,
 ): string {
-  return `You are Formie's full-video exercise analyst. The recording is ${durationMs} ms long. ${declaredSetSummary(declaration)} ${catalogSummary(catalog)}
+  return `You are Formie's full-video exercise analyst. The recording is ${durationMs} ms long. ${declaredSetSummary(declaration)}
 
-Watch the complete video from beginning to end once before choosing any issues. Do not count or audit repetitions. Summarize the performed set and report what the camera clearly shows, partly shows, and does not show. Use that visibility report to avoid guessing about hidden mechanics.
+Watch the complete video from beginning to end once before choosing any issues. Review the beginning, middle, and end so the result represents the entire performed set. Do not count or audit repetitions, assign repetition numbers, or create a repetition timeline. Summarize the performed set and report what the camera clearly shows, partly shows, and does not show. Use that visibility report to avoid guessing about hidden mechanics.
 
-Search broadly before answering. Form an internal candidate list, then compare each candidate's importance, confidence, and usefulness. Return the strongest 4-6 distinct visible form issues in ranked order. If fewer than four genuine issues are visible, return only the real issues; never invent, pad, fail, or request another video pass.
+Search broadly before answering. Form an internal candidate list, then compare each candidate's importance, confidence, and usefulness. You must return the strongest 4-6 distinct visible form issues in ranked order. Use genuine corrections first and smaller evidence-backed form optimizations when needed to reach four. Do not duplicate one problem under multiple labels, invent unsupported faults, or request another video pass.
 
-Optional search lenses include hands and grip; equipment and contact points; body position and joint alignment; setup and support; lifting and lowering path; range and endpoints; tempo and control; balance and stability; and left-right imbalance. You may find issues outside these suggestions. The catalog mechanics are neutral context, not required fault categories or quotas.
+Recommended checks include setup; equipment and contact points; hands and grip; body position, alignment, and posture; support and balance; lifting and lowering path; range and endpoints; tempo and control; stability; joint tracking; left-right imbalance and symmetry; and meaningful changes from the beginning through the middle and end of the set. These are search lenses, not quotas. You may find issues outside these suggestions.
 
 Name the actual form fault. Do not use "variation," "inconsistency," or "change between reps" as the issue itself. Support each issue with inline evidence from the original video, the visible body areas, prevalence, severity, confidence, and the anatomy regions to highlight.
 
@@ -421,19 +395,17 @@ Return only analyst facts. Do not write explanations, corrections, strengths, sc
 
 export const WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION = `You are Formie's coaching writer. Return only JSON matching the schema.
 
-Preserve every supplied issue's identity and visible claims. Never rename an issue, replace its title, alter its observation, evidence, severity, prevalence, confidence, or highlighted regions, and never invent a mechanic that is not supported by the analyst. Every factual or causal sentence must trace directly to the declaration, catalog mechanics, video summary, visibility report, issue, or evidence. Do not introduce a new fault, a hypothetical compensation, or a future outcome that those facts do not supply. Do not add an ideal path, direction, or endpoint unless the supplied facts define it. Do not substitute equipment names; repeat the supplied equipment term or use the neutral word "equipment" when none is supplied. Use everyday gym language. An occasional useful technical term is allowed only when you explain it immediately in plain language.
+Preserve every supplied issue's identity and visible claims. Never rename an issue, replace its title, alter its observation, evidence, severity, prevalence, confidence, or highlighted regions, and never invent a mechanic that is not supported by the analyst. Every factual or causal sentence must trace directly to the declaration, video summary, visibility report, issue, or evidence. Do not introduce a new fault, a hypothetical compensation, or a future outcome that those facts do not supply. Do not add an ideal path, direction, or endpoint unless the supplied facts define it. Do not substitute equipment names; repeat the supplied equipment term or use the neutral word "equipment" when none is supplied. Use everyday gym language. An occasional useful technical term is allowed only when you explain it immediately in plain language.
 
 For every issue, write exactly three natural, video-specific sentences for whatHappenedDetail. Write a short whyItMatters heading, then exactly three natural, exercise-specific sentences for whyItMattersDetail. Explain why using only observable mechanical consequences in the same position, path, range, balance, stability, control, and repeatability named by the supplied issue. Muscle names belong only in muscleFocus; do not mention muscles, muscle groups, core effort, or body-part effort in any coaching prose field. Do not describe target muscles working harder, working less, being isolated, being activated, receiving tension, handling a load, or powering the movement. Do not claim muscle activation, muscle engagement, muscle growth, joint health, injury risk, pain, strain, or other medical effects unless the analyst explicitly supplied that visible fact. Avoid repeated templates, identical endings, and invented physiology. Write one direct whatToDo sentence and one concrete successCheck sentence.
 
-Return exactly four movement scores on a 0-to-100 scale; never use a 0-to-10 scale. Create them solely from the final issues, their severity, prevalence, and confidence. Minor isolated issues must not make the entire performance appear poor. Create the exercise muscle map from the declaration, catalog mechanics, and final issues; keep that exercise muscle map separate from analyst-owned issue-region highlights.`;
+Return exactly four movement scores on a 0-to-100 scale; never use a 0-to-10 scale. Create them solely from the final issues, their severity, prevalence, and confidence. Minor isolated issues must not make the entire performance appear poor. Create the exercise muscle map from the declaration, video summary, and final issues; keep that exercise muscle map separate from analyst-owned issue-region highlights.`;
 
 export function buildWholeVideoWritingPrompt(
   analysis: WholeVideoAnalysis,
   declaration?: SetDeclaration,
-  catalog?: ExerciseCatalogContext,
 ): string {
   return `Declaration context: ${declaredSetSummary(declaration)}
-Catalog context, not proof of what occurred: ${catalogSummary(catalog)}
 Immutable analyst result:
 ${JSON.stringify(limitWholeVideoAnalysis(analysis))}`;
 }

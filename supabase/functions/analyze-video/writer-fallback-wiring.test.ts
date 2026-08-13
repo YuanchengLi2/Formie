@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 const source = readFileSync(join(__dirname, "index.ts"), "utf8");
 
-describe("v73 focused analyst and Flash Lite writer wiring", () => {
+describe("v74 declaration-only analyst and Flash Lite writer wiring", () => {
   it("uses one full-video Gemini 3.6 call followed by one text-only Gemini 3.1 Flash Lite call", () => {
     expect(source).not.toContain("runShortClipRechecks({");
     expect(source).toContain("buildWholeVideoWritingPrompt");
@@ -16,7 +16,7 @@ describe("v73 focused analyst and Flash Lite writer wiring", () => {
     expect(source).not.toContain("mergeWholeVideoWriting");
     expect(source).not.toContain("COACHING_WRITER_FALLBACK");
     expect(source).toContain("as WholeVideoWriting");
-    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v73-focused-analyst-flash-lite-writer"');
+    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v74-declaration-only-12fps-flash-lite-writer"');
     expect(source).toContain('const ANALYST_MODEL = "gemini-3.6-flash"');
     expect(source).toContain('const WRITER_MODEL = "gemini-3.1-flash-lite"');
     expect(source).not.toContain("parseBoundaryFreeAnalysis");
@@ -27,13 +27,12 @@ describe("v73 focused analyst and Flash Lite writer wiring", () => {
     expect(source.match(/buildTextGenerateContentRequest\(/g)).toHaveLength(1);
   });
 
-  it("loads complete neutral catalog mechanics from the declaration ID first", () => {
-    expect(source).toContain("declaration?.exercise.catalogExerciseId ?? session.exercise_variant_v2_id");
-    expect(source).toContain('.select("name,family,mechanics")');
-    for (const key of ["equipmentClass", "movementFamily", "support", "trajectory", "laterality", "stance", "grip", "angle"]) {
-      expect(source).toContain(key);
-    }
-    expect(source).toContain("catalog: rawSession.catalogExerciseContext");
+  it("does not load or pass catalog context to either model", () => {
+    expect(source).not.toContain('from("exercise_variants_v2")');
+    expect(source).not.toContain("catalogExerciseContext");
+    expect(source).not.toContain("ExerciseCatalogContext");
+    expect(source).toContain("buildBoundaryFreeAnalysisPrompt(durationMs, declaration)");
+    expect(source).toContain("buildWholeVideoWritingPrompt(analysis, declaration)");
   });
 
   it("durably reuses raw analyst output before writer finalization and persists no model rep timeline", () => {

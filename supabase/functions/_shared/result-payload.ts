@@ -17,6 +17,7 @@ const WHOLE_VIDEO_PIPELINES = new Set([
   "gemini-whole-video-v56-single-call-rep-audit",
   "gemini-whole-video-v72-leased-direct-ai-coaching",
   "gemini-whole-video-v73-focused-analyst-flash-lite-writer",
+  "gemini-whole-video-v74-declaration-only-12fps-flash-lite-writer",
 ]);
 
 function isWholeVideoPipeline(value: unknown): boolean {
