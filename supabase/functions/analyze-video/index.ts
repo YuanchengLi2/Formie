@@ -13,11 +13,11 @@ import {
   buildBoundaryFreeAnalysisPrompt,
   buildWholeVideoWritingPrompt,
   parseBoundaryFreeAnalysis,
-  mergeWholeVideoWriting,
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
   WHOLE_VIDEO_WRITING_SCHEMA,
   WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
   boundaryFreeToCandidate,
+  type WholeVideoWriting,
 } from "../_shared/boundary-free-analysis.ts";
 import type { ExerciseFamily } from "../_shared/analysis-contract.ts";
 import { resultPayload } from "../_shared/result-payload.ts";
@@ -28,9 +28,8 @@ import { advanceWholeVideoPipeline } from "./whole-video-runner.ts";
 import { analyzeWholeVideoHandler, type WholeVideoSession } from "./whole-video-handler.ts";
 import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
-import { runNonBlockingWriter } from "./nonblocking-writer.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v70-reliable-coaching-and-scores";
+const PIPELINE_VERSION = "gemini-whole-video-v71-direct-ai-coaching";
 const ANALYST_MODEL = "gemini-3.6-flash";
 const WRITER_MODEL = "gemini-3.6-flash";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
@@ -361,8 +360,8 @@ Deno.serve(async (request) => {
       const durationMs = rawSession.durationMs!;
       const declaration = rawSession.setDeclaration ? parseSetDeclaration(rawSession.setDeclaration) : undefined;
       const rawDecision = rawSession.analysisDecision && typeof rawSession.analysisDecision === "object" ? rawSession.analysisDecision as JsonRecord : null;
-          // One full-video call establishes the evidence. The optional text-only
-          // writer can improve copy, but it cannot rewatch or fail the analysis.
+      // One full-video call establishes the evidence. The text-only writer
+      // produces the final coaching without another video pass.
       let analysisVideo: WholeVideoInput | null = null;
       let geminiFileName: string | null = typeof rawSession.geminiFileName === "string" ? rawSession.geminiFileName : null;
       let geminiFile: GeminiFile | null = null;
@@ -462,22 +461,15 @@ Deno.serve(async (request) => {
             throw analysisContractError(error);
           }
           await saveSessionStage("finalizing");
-          const writing = await runNonBlockingWriter({
-            write: async () => {
-              const timeoutMs = Math.min(20_000, deadline.remainingMs());
-              if (timeoutMs < 1_000) throw Object.assign(new Error("Writer budget exhausted"), { code: "WRITER_DEADLINE_EXHAUSTED" });
-              const requestBody = buildTextGenerateContentRequest({
-                systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
-                prompt: buildWholeVideoWritingPrompt(parsedAnalysis, declaration),
-                    schema: WHOLE_VIDEO_WRITING_SCHEMA,
-                    thinkingLevel: WRITER_THINKING_LEVEL,
-                  });
-              return generate({ sessionId, stage: "finalizing", modelName: WRITER_MODEL, request: requestBody, timeoutMs });
-            },
-            merge: (value) => mergeWholeVideoWriting(value, parsedAnalysis),
-            fallback: () => mergeWholeVideoWriting(null, parsedAnalysis),
-            onError: (error) => console.warn(JSON.stringify({ sessionId, code: "COACHING_WRITER_FALLBACK", message: error instanceof Error ? error.message : String(error) })),
+          const timeoutMs = Math.min(20_000, deadline.remainingMs());
+          if (timeoutMs < 1_000) throw Object.assign(new Error("Writer budget exhausted"), { code: "WRITER_DEADLINE_EXHAUSTED" });
+          const writerRequest = buildTextGenerateContentRequest({
+            systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
+            prompt: buildWholeVideoWritingPrompt(parsedAnalysis, declaration),
+            schema: WHOLE_VIDEO_WRITING_SCHEMA,
+            thinkingLevel: WRITER_THINKING_LEVEL,
           });
+          const writing = await generate({ sessionId, stage: "finalizing", modelName: WRITER_MODEL, request: writerRequest, timeoutMs }) as WholeVideoWriting;
           const decision = { analysis: parsedAnalysis, writing } as unknown as JsonRecord;
           await saveSessionStage("finalizing", { analysis_draft: decision });
           return decision;
@@ -488,7 +480,7 @@ Deno.serve(async (request) => {
           });
         },
         assembleResult: (decision) => {
-              const combined = decision as { analysis: ReturnType<typeof parseBoundaryFreeAnalysis>; writing: ReturnType<typeof mergeWholeVideoWriting> };
+              const combined = decision as { analysis: ReturnType<typeof parseBoundaryFreeAnalysis>; writing: WholeVideoWriting };
               return boundaryFreeToCandidate(
                 combined.analysis,
                 declaration,

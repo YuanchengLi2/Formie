@@ -174,13 +174,12 @@ describe("buildReviewFrames", () => {
 
     const point = buildCoachingReviewPoints(value)[0];
 
-    expect(point.observed.body).toBe("Your right shoulder rises before the handle reaches your ribs at the beginning.");
-    expect(point.why.body).toBe("When one shoulder rises first, the handle moves on a tilted path.");
+    expect(point.observed.body).toBe(value.priorityCorrections[0].expandedCoaching.whatHappened);
+    expect(point.why.body).toBe(value.priorityCorrections[0].expandedCoaching.whyItMatters);
     expect(point.next.title).toBe("Start the next rep with both shoulders level.");
     expect(point.next.body).toBeUndefined();
-    expect(point.observed.body).toBe("Your right shoulder rises before the handle reaches your ribs at the beginning.");
-    expect(point.observed.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(1);
-    expect(point.why.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(1);
+    expect(point.observed.body).toContain("near the end");
+    expect(point.why.body).toContain("harder to repeat evenly");
   });
 
   it("keeps the bold lead separate from one-to-three supporting sentences", () => {
@@ -203,7 +202,7 @@ describe("buildReviewFrames", () => {
     expect((point.why as typeof point.why & { detail?: string }).detail).toBe("The final repetitions no longer match the opening path. That makes the set less repeatable.");
   });
 
-  it("renders exactly one bold summary and at most two supporting sentences", () => {
+  it("renders the AI writer's full coaching without sentence truncation", () => {
     const value = resultWithTwoMoments();
     value.priorityCorrections[0].expandedCoaching = {
       summary: "Your shoulders stop moving evenly.",
@@ -216,13 +215,11 @@ describe("buildReviewFrames", () => {
     } as NonNullable<CoachingFinding["expandedCoaching"]> & { whatHappenedDetail: string; whyItMattersDetail: string };
 
     const observed = buildCoachingReviewPoints(value)[0].observed;
-    expect(observed.body?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(1);
-    expect(observed.detail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
-    expect(observed.body).toBe("Your right shoulder rises before the handle reaches your ribs.");
-    expect(observed.detail).toBe("The rise appears on rep 3. Rep 4 repeats the same uneven finish.");
+    expect(observed.body).toBe("Your right shoulder rises before the handle reaches your ribs. This extra lead sentence should not render.");
+    expect(observed.detail).toBe("The rise appears on rep 3. Rep 4 repeats the same uneven finish. The final pull tilts farther. This fourth detail should not render.");
   });
 
-  it("shapes unrestricted writer prose only when presenting each coaching tab", () => {
+  it("does not shape unrestricted writer prose while presenting each coaching tab", () => {
     const value = resultWithTwoMoments();
     value.priorityCorrections[0].expandedCoaching = {
       summary: "Your shoulders stop moving evenly.",
@@ -236,11 +233,11 @@ describe("buildReviewFrames", () => {
 
     const point = buildCoachingReviewPoints(value)[0];
 
-    expect(point.observed.body).toBe("Your right shoulder rises first.");
-    expect(point.observed.detail).toBe("The shoulder lifts near the ribs. Your chest stays supported.");
-    expect(point.why.body).toBe("The asymmetry changes the row's pulling line.");
-    expect(point.why.detail).toBe("The right side finishes higher. The handle no longer stays level.");
-    expect(point.next.title).toBe("Keep both shoulders level as the handle reaches your ribs.");
+    expect(point.observed.body).toBe("Your right shoulder rises first. The handle then tilts.");
+    expect(point.observed.detail).toBe("The shoulder lifts near the ribs. Your chest stays supported. The handle follows the higher side. The camera keeps both shoulders visible.");
+    expect(point.why.body).toBe("The asymmetry changes the row's pulling line. It also changes the finish position.");
+    expect(point.why.detail).toBe("The right side finishes higher. The handle no longer stays level. Your torso must counter the uneven pull. The next row begins from a different position.");
+    expect(point.next.title).toBe("Keep both shoulders level as the handle reaches your ribs. Hold that position through the reversal.");
     expect(point.next.body).toBeUndefined();
   });
 });

@@ -6,7 +6,6 @@ import {
   BOUNDARY_FREE_ANALYSIS_SCHEMA,
   parseBoundaryFreeAnalysis,
   parseRecheckRequest,
-  mergeWholeVideoWriting,
   WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
   type BoundaryFreeAnalysis,
   type WholeVideoWriting,
@@ -428,102 +427,17 @@ describe("clean full-video analysis and coaching contract", () => {
     expect(prompt).toContain("Validated analysis:");
     expect(prompt).toContain('"peakSeconds":5.3');
     expect(prompt).not.toMatch(/"(?:start|peak|end)Ms"/);
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappened must be one short summary sentence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappenedDetail must be exactly two supporting sentences");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMatters must be one short summary sentence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMattersDetail must be exactly two supporting sentences");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatToDo must be exactly one actionable sentence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("specific to this exercise, this set, and the supplied video evidence");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Do not use a reusable sentence template");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Vary sentence openings, order, cadence, and explanation across findings");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("precise coaching language while keeping it easy to understand");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("name the actual form fault rather than the fact that repetitions differ");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("Keep each sentence under 18 words");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("Avoid technical anatomy and biomechanics terms");
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("clear gym coach speaking between sets");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappened is a short bold-title line");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whatHappenedDetail is exactly three sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMatters is a short bold-title line");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMattersDetail is exactly three sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("specific to this exercise, this set, and what is visible in this video");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Write the final display copy yourself");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("exactly two supporting sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("reusable sentence template");
   });
 
-  it("preserves advanced exercise-specific coaching instead of replacing it with a formulaic fallback", () => {
-    const parsed = mergeWholeVideoWriting({
-      ...writing,
-      coachingItems: [{
-        ...writing.coachingItems[0],
-        whatHappenedDetail: "The right scapula elevates as the dumbbell approaches the ribs. Your torso remains supported on the bench. The asymmetry is clearest at the top of the row.",
-        whyItMatters: "Scapular asymmetry compromises force transfer through the upper body.",
-        whyItMattersDetail: "The elevated side changes the pulling line of the chest-supported row. That makes it harder to finish both dumbbells from the same shoulder position. It can also shift more of the correction into your torso.",
-      }],
-    }, analysis);
-
-    expect(parsed.coachingItems[0].whatHappenedDetail).toContain("right scapula elevates");
-    expect(parsed.coachingItems[0].whatHappenedDetail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
-    expect(parsed.coachingItems[0].whyItMatters).toBe("Scapular asymmetry compromises force transfer through the upper body.");
-    expect(parsed.coachingItems[0].whyItMattersDetail).toContain("pulling line of the chest-supported row");
-    expect(parsed.coachingItems[0].whyItMattersDetail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
-  });
-
-  it("shapes writer prose into one headline sentence and two supporting sentences", () => {
-    const unrestricted = {
-      ...writing.coachingItems[0],
-      title: "Depth",
-      whatHappened: "Your right knee moves inward. The shift is clearest at the bottom.",
-      whatHappenedDetail: "The knee crosses inside the foot. Your heel remains planted. The bar stays over the midfoot. The camera keeps the leg visible.",
-      whyItMatters: "This changes how the squat receives the load. The effect continues into the ascent.",
-      whyItMattersDetail: "The inward knee changes the leg's alignment under the bar. Your hip then shifts to keep the bar centered. The ascent starts from an uneven base. That can make the same squat harder to reproduce.",
-      whatToDo: "Drive your right knee over your second toe. Keep that line through the ascent.",
-      successCheck: "Watch the knee stay over the foot. Confirm the hip remains centered.",
-    };
-
-    const parsed = mergeWholeVideoWriting({
-      ...writing,
-      coachingItems: [unrestricted],
-    }, analysis).coachingItems[0];
-
-    expect(parsed).toMatchObject({
-      ...unrestricted,
-      whatHappened: "Your right knee moves inward.",
-      whatHappenedDetail: "The knee crosses inside the foot. Your heel remains planted.",
-      whyItMatters: "This changes how the squat receives the load.",
-      whyItMattersDetail: "The inward knee changes the leg's alignment under the bar. Your hip then shifts to keep the bar centered.",
-    });
-  });
-
-  it("converts leaked millisecond timestamps to readable seconds without rejecting the writing", () => {
-    const parsed = mergeWholeVideoWriting({
-      ...writing,
-      overallAssessment: "The row stays controlled early. The return changes at 3250ms. Slow the final lowering phase.",
-      coachingItems: [{
-        ...writing.coachingItems[0],
-        whatHappened: "Both dumbbells begin dropping faster at 3250ms.",
-        whatHappenedDetail: "The change starts around 3,250 milliseconds. Rep 3 then drops quickly. Rep 4 repeats the faster return.",
-      }],
-    }, analysis);
-
-    expect(parsed.overallAssessment).toContain("3.3 seconds");
-    expect(parsed.coachingItems[0].whatHappened).toContain("3.3 seconds");
-    expect(parsed.coachingItems[0].whatHappenedDetail).toContain("3.3 seconds");
-    expect(JSON.stringify(parsed)).not.toMatch(/milliseconds|\d[\d,]*\s*ms\b/i);
-  });
-
-  it("preserves Flash-Lite's concise impactful headline instead of deriving it from the paragraph", () => {
-    const parsed = mergeWholeVideoWriting(writing, analysis);
-    expect(parsed.coachingItems[0].title).toBe("Slow the late-row return");
-  });
-
-  it("preserves writer headlines without length or line-count rejection", () => {
-    const multiline = mergeWholeVideoWriting({
-      ...writing,
-      coachingItems: [{ ...writing.coachingItems[0], title: "Slow the return\nKeep the dumbbells controlled" }],
-    }, analysis);
-    expect(multiline.coachingItems[0].title).toBe("Slow the return\nKeep the dumbbells controlled");
-
-    const long = mergeWholeVideoWriting({
-      ...writing,
-      coachingItems: [{ ...writing.coachingItems[0], title: "Keep both dumbbells moving through the entire lowering phase with exactly the same controlled speed on every repetition" }],
-    }, analysis);
-    expect(long.coachingItems[0].title).toBe("Keep both dumbbells moving through the entire lowering phase with exactly the same controlled speed on every repetition");
-  });
-
-  it("preserves complete technical and exercise-specific coaching without generic rewriting", () => {
+  it("passes the AI writer's complete coaching to the result without rewriting it", () => {
     const candidate = boundaryFreeToCandidate(analysis, undefined, {}, writing);
     const finding = candidate.priorityCorrections[0];
 
@@ -536,74 +450,5 @@ describe("clean full-video analysis and coaching contract", () => {
       successCheck: writing.coachingItems[0].successCheck,
     });
     expect(finding.actionableCorrection?.instruction).toBe(writing.coachingItems[0].whatToDo);
-  });
-
-  it("keeps exactly two supporting sentences for presentation", () => {
-    const parsed = mergeWholeVideoWriting({
-      ...writing,
-      coachingItems: [{
-        ...writing.coachingItems[0],
-        whatHappenedDetail: "Rep 3 drops quickly after reaching your ribs. Rep 4 repeats the faster lowering phase. The first two rows return more slowly. The final row finishes lowest.",
-      }],
-    }, analysis);
-    expect(parsed.coachingItems[0].whatHappened.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(1);
-    expect(parsed.coachingItems[0].whatHappenedDetail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
-    expect(parsed.coachingItems[0].whatHappenedDetail).toBe("Rep 3 drops quickly after reaching your ribs. Rep 4 repeats the faster lowering phase.");
-  });
-
-  it("keeps actions free-form while shaping What Happened and Why It Matters", () => {
-    const raw = {
-      ...writing,
-      coachingItems: [{ ...writing.coachingItems[0], whatHappened: "One. Two. Three. Four." }],
-    };
-
-    expect(mergeWholeVideoWriting(raw, analysis).coachingItems[0].whatHappened).toBe("One.");
-    expect(mergeWholeVideoWriting({
-      ...writing,
-      coachingItems: [{ ...writing.coachingItems[0], whyItMatters: "The row changes. The visible path changes again." }],
-    }, analysis).coachingItems[0].whyItMatters).toBe("The row changes.");
-    expect(mergeWholeVideoWriting({
-      ...writing,
-      coachingItems: [{ ...writing.coachingItems[0], whatToDo: "Lower both dumbbells for two seconds. Begin only after your arms reach the bottom." }],
-    }, analysis).coachingItems[0].whatToDo).toBe("Lower both dumbbells for two seconds. Begin only after your arms reach the bottom.");
-    expect(mergeWholeVideoWriting({
-      ...writing,
-      coachingItems: [{ ...writing.coachingItems[0], whatHappenedDetail: "" }],
-    }, analysis).coachingItems[0].whatHappenedDetail).toBe("Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase.");
-  });
-
-  it("creates analyst-derived copy when the writer response is unavailable", () => {
-    const parsed = mergeWholeVideoWriting(null, analysis);
-
-    expect(parsed.coachingItems[0]).toMatchObject({
-      id: analysis.coachingItems[0].id,
-      title: analysis.coachingItems[0].topic,
-      whatHappened: analysis.coachingItems[0].observation,
-      whatHappenedDetail: "Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase.",
-      whyItMatters: analysis.coachingItems[0].whyItMatters,
-      whyItMattersDetail: "The late repetitions no longer match the opening pull-and-return rhythm. That makes their path less repeatable.",
-      whatToDo: analysis.coachingItems[0].correctionDirection,
-    });
-    expect(parsed.coachNote.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
-    expect(parsed.overallAssessment.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.length).toBeGreaterThanOrEqual(3);
-  });
-
-  it("accepts short writer sections without replacing them", () => {
-    const parsed = mergeWholeVideoWriting({
-      ...writing,
-      overallAssessment: "The row changes late.",
-      coachNote: "Slow the final rows.",
-      coachingItems: [{
-        ...writing.coachingItems[0],
-        whatHappenedDetail: "Rep 3 drops quickly. Rep 4 repeats it.",
-        whyItMattersDetail: "The late path changes.",
-      }],
-    }, analysis);
-    const item = parsed.coachingItems[0];
-
-    expect(item.whatHappenedDetail.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
-    expect(item.whyItMattersDetail).toBe("The late path changes. The late repetitions no longer match the opening pull-and-return rhythm.");
-    expect(parsed.coachNote).toBe("Slow the final rows.");
-    expect(parsed.overallAssessment).toBe("The row changes late.");
   });
 });

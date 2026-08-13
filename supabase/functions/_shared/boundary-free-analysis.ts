@@ -93,9 +93,9 @@ export type WholeVideoWriting = {
     id: string;
     title: string;
     whatHappened: string;
-    whatHappenedDetail?: string;
+    whatHappenedDetail: string;
     whyItMatters: string;
-    whyItMattersDetail?: string;
+    whyItMattersDetail: string;
     whatToDo: string;
     successCheck: string;
   }>;
@@ -105,16 +105,6 @@ export type WholeVideoWriting = {
 const ANATOMY_REGIONS = ["chest", "shoulders", "upper_back", "lats", "upper_arms", "elbows", "forearms", "wrists", "torso", "lower_back", "hips", "glutes", "quads", "hamstrings", "adductors", "knees", "calves", "ankles"] as const satisfies readonly AnatomyRegion[];
 const MUSCLE_REGIONS = ["chest", "front_shoulders", "rear_shoulders", "upper_back", "lats", "biceps", "triceps", "forearms", "abs", "obliques", "lower_back", "glutes", "quads", "hamstrings", "adductors", "calves"] as const;
 const TOPIC_NORMALIZATION = /[^a-z0-9]+/g;
-
-function sentenceParts(value: string): string[] {
-  const decimalToken = "__FORMIE_DECIMAL_POINT__";
-  const protectedValue = value.replace(/(?<=\d)\.(?=\d)/g, decimalToken);
-  return (protectedValue.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [])
-    .map((sentence) => sentence.trim())
-    .filter(Boolean)
-    .map((sentence) => sentence.replaceAll(decimalToken, "."))
-    .map((sentence) => /[.!?]$/.test(sentence) ? sentence : `${sentence}.`);
-}
 
 function secondsFromMilliseconds(milliseconds: number): number {
   return Number((milliseconds / 1_000).toFixed(milliseconds >= 1_000 ? 1 : 2));
@@ -127,33 +117,6 @@ export function humanizeCoachingTimeUnits(value: string): string {
     const seconds = secondsFromMilliseconds(milliseconds);
     return `${seconds} ${seconds === 1 ? "second" : "seconds"}`;
   });
-}
-
-function analystSupportingParagraph(primary: string, related: string[], maximum = 3): string {
-  const sentences = [...new Set([primary, ...related].flatMap(sentenceParts))];
-  return sentences.slice(0, maximum).join(" ");
-}
-
-function firstSentence(value: string, fallback: string): string {
-  return sentenceParts(value)[0] ?? fallback;
-}
-
-function overallAssessmentFallback(analysis: BoundaryFreeAnalysis): string {
-  const firstFinding = analysis.coachingItems[0];
-  return [
-    firstSentence(analysis.videoUnderstanding.recordingSummary, "The full exercise set was reviewed."),
-    firstSentence(analysis.videoUnderstanding.changesAcrossVideo, analysis.videoUnderstanding.exerciseSummary),
-    firstSentence(firstFinding?.observation ?? analysis.videoUnderstanding.exerciseSummary, "The clearest visible change is described in the coaching below."),
-  ].join(" ");
-}
-
-function coachNoteFallback(analysis: BoundaryFreeAnalysis): string {
-  const firstFinding = analysis.coachingItems[0];
-  return [
-    firstSentence(firstFinding?.observation ?? analysis.videoUnderstanding.recordingSummary, "The full exercise set was reviewed."),
-    firstSentence(firstFinding?.whyItMatters ?? analysis.videoUnderstanding.changesAcrossVideo, "This affects how repeatable the movement looks."),
-    firstSentence(firstFinding?.correctionDirection ?? analysis.videoUnderstanding.exerciseSummary, "Repeat the movement with the clearest visible correction."),
-  ].join(" ");
 }
 
 function inferExerciseFamily(label: string): ExerciseFamily {
@@ -392,107 +355,6 @@ function inferObservedIssueRegions(values: string[]): AnatomyRegion[] {
     [/\b(?:ankle|heel|foot|feet)\b/, "ankles"],
   ];
   return [...new Set(matches.filter(([pattern]) => pattern.test(combined)).map(([, region]) => region))];
-}
-
-export function mergeWholeVideoWriting(value: unknown, analysis: BoundaryFreeAnalysis): WholeVideoWriting {
-  // The video analyst is the source of truth. A writer response is a
-  // presentation enhancement. Merge any non-empty writer text as-is; writer
-  // wording never invalidates or discards an otherwise valid visual analysis.
-  const result = value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
-  const findingIds = new Set(analysis.coachingItems.map((item) => item.id));
-  const strengthIds = new Set(analysis.strengths.map((item) => item.id));
-  const byId = (raw: unknown, expectedIds: Set<string>): Map<string, JsonRecord> => {
-    if (!Array.isArray(raw)) return new Map();
-    const entries = new Map<string, JsonRecord>();
-    raw.forEach((entry) => {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return;
-      const item = entry as JsonRecord;
-      if (typeof item.id !== "string" || !expectedIds.has(item.id) || entries.has(item.id)) return;
-      entries.set(item.id, item);
-    });
-    return entries;
-  };
-  const writerCopy = (value: unknown, fallback: string): string => (
-    humanizeCoachingTimeUnits(typeof value === "string" && value.trim() ? value.trim() : fallback)
-  );
-  const threeSentenceSection = (
-    summaryValue: unknown,
-    detailValue: unknown,
-    fallbackSummary: string,
-    supportingFacts: string[],
-  ): { summary: string; detail: string } => {
-    const summary = firstSentence(writerCopy(summaryValue, fallbackSummary), firstSentence(fallbackSummary, fallbackSummary));
-    const normalizedSummary = summary.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-    const support = [...new Set([
-      ...(typeof detailValue === "string" ? sentenceParts(humanizeCoachingTimeUnits(detailValue)) : []),
-      ...supportingFacts.flatMap((fact) => sentenceParts(humanizeCoachingTimeUnits(fact))),
-    ])].filter((sentence) => sentence.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() !== normalizedSummary);
-    return { summary, detail: support.slice(0, 2).join(" ") };
-  };
-  const rawCoachingById = byId(result.coachingItems, findingIds);
-  const coachingItems = analysis.coachingItems.map((source) => {
-    const item = rawCoachingById.get(source.id);
-    const whatHappenedFallback = analystSupportingParagraph(
-      source.observationDetails,
-      source.evidence.map((moment) => moment.visualEvidence),
-    );
-    const whyItMattersFallback = analystSupportingParagraph(
-      source.whyDetails,
-      [source.observationDetails, ...source.evidence.map((moment) => moment.visualEvidence)],
-    );
-    const happened = threeSentenceSection(item?.whatHappened, item?.whatHappenedDetail, source.observation, [
-      whatHappenedFallback,
-      source.observationDetails,
-      ...source.evidence.map((moment) => moment.visualEvidence),
-    ]);
-    const matters = threeSentenceSection(item?.whyItMatters, item?.whyItMattersDetail, source.whyItMatters, [
-      whyItMattersFallback,
-      source.whyDetails,
-      source.observationDetails,
-      ...source.evidence.map((moment) => moment.visualEvidence),
-    ]);
-    const whatToDo = writerCopy(item?.whatToDo, source.correctionDirection);
-    const successCheck = writerCopy(item?.successCheck, source.correctionDirection);
-    return {
-      id: source.id,
-      title: writerCopy(item?.title, source.topic),
-      whatHappened: happened.summary,
-      whatHappenedDetail: happened.detail,
-      whyItMatters: matters.summary,
-      whyItMattersDetail: matters.detail,
-      whatToDo,
-      successCheck,
-    };
-  });
-  const rawStrengthsById = byId(result.strengths, strengthIds);
-  const strengths = analysis.strengths.map((source) => {
-    const item = rawStrengthsById.get(source.id);
-    return {
-      id: source.id,
-      title: humanizeCoachingTimeUnits(typeof item?.title === "string" && item.title.trim() ? item.title.trim() : source.topic),
-      detail: humanizeCoachingTimeUnits(typeof item?.detail === "string" && item.detail.trim() ? item.detail.trim() : source.observation),
-    };
-  });
-  const validOverallAssessment = typeof result.overallAssessment === "string" && result.overallAssessment.trim() ? result.overallAssessment.trim() : null;
-  const validCoachNote = typeof result.coachNote === "string" && result.coachNote.trim() ? result.coachNote.trim() : null;
-  const fallbackOverallAssessment = overallAssessmentFallback(analysis);
-  const fallbackCoachNote = coachNoteFallback(analysis);
-  let movementScores: MovementScore[] = analysis.movementScores;
-  try {
-    movementScores = parseScores(result.movementScores, findingIds).map((score, index) => ({
-      ...score,
-      observed: humanizeCoachingTimeUnits(score.observed || analysis.movementScores[index]?.observed || analysis.videoUnderstanding.exerciseSummary),
-    }));
-  } catch {
-    movementScores = analysis.movementScores;
-  }
-  return {
-    overallAssessment: humanizeCoachingTimeUnits(validOverallAssessment ?? fallbackOverallAssessment),
-    coachNote: humanizeCoachingTimeUnits(validCoachNote ?? fallbackCoachNote),
-    movementScores,
-    coachingItems,
-    strengths,
-  };
 }
 
 export function parseBoundaryFreeAnalysis(value: unknown, durationMs: number): BoundaryFreeAnalysis {
@@ -860,8 +722,6 @@ export const WHOLE_VIDEO_WRITING_SCHEMA = {
     movementScores: { type: "array", minItems: 4, maxItems: 4, items: writtenScoreSchema },
     coachingItems: {
       type: "array",
-      minItems: 4,
-      maxItems: 6,
       items: {
         type: "object",
         additionalProperties: false,
@@ -884,23 +744,11 @@ export const WHOLE_VIDEO_WRITING_SCHEMA = {
   },
 } as const;
 
-export const WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION = `You are Formie's coaching writer. Turn the validated full-video analysis into clear, useful coaching. Return only JSON matching the schema.
+export const WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION = `You are Formie's coaching writer. Write clear, natural coaching from the validated analysis and return only JSON matching the schema.
 
-The analyst already watched the complete video and established the issues, evidence, timestamps, exercise, and set facts. Keep every finding and strength ID unchanged. Do not add, remove, merge, rename, or reinterpret findings, and do not invent facts that are absent from the analyst record.
+Write the final display copy yourself. Keep the supplied issue and strength IDs and use only facts supported by the analysis. Make every response specific to this exercise, this set, and what is visible in this video. Use precise coaching language that is easy to understand.
 
-Make every section specific to this exercise, this set, and the supplied video evidence. Use precise coaching language while keeping it easy to understand. Sound natural and independently written for each issue. Do not use a reusable sentence template, repeat the same ending across findings, or fall back to generic advice. Vary sentence openings, order, cadence, and explanation across findings so the required length never produces repeated three-sentence patterns.
-
-For every title and coaching section, name the actual form fault rather than the fact that repetitions differ. A comparison may explain when the fault appears, but words such as consistency, inconsistency, variation, or change must not replace the specific body, equipment, path, range, balance, or control problem.
-
-For each finding:
-- title is only the short issue title used to identify the finding. It is not the coaching text.
-- whatHappened must be one short summary sentence for the bold white line and must describe the exact movement visible in this video.
-- whatHappenedDetail must be exactly two supporting sentences explaining what actually occurred in this set. Together with the bold summary, the complete What Happened section is exactly three sentences.
-- whyItMatters must be one short summary sentence for the bold white line and must state the consequence of this video's specific form issue.
-- whyItMattersDetail must be exactly two supporting sentences explaining why this exact issue matters for this exercise. Together with the bold summary, the complete Why It Matters section is exactly three sentences.
-- whatToDo must be exactly one actionable sentence for the bold white line, telling this person what to change based on the observed video evidence.
-
-Use the writer to improve clarity and specificity, not to change the analysis. Write the overall assessment, coach note, strengths, and four scores naturally from the same validated facts.`;
+For each issue, whatHappened is a short bold-title line and whatHappenedDetail is exactly three sentences explaining what happened in this video. whyItMatters is a short bold-title line and whyItMattersDetail is exactly three sentences explaining why that specific form issue matters for this exercise. whatToDo is one direct sentence telling the person what to do next. Use seconds rather than milliseconds.`;
 
 export function buildWholeVideoWritingPrompt(analysis: BoundaryFreeAnalysis, declaration?: SetDeclaration): string {
   const { viewNotes: _viewNotes, ...videoUnderstanding } = analysis.videoUnderstanding;

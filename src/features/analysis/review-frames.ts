@@ -25,17 +25,9 @@ export type CoachingReviewPoint = {
   next: ReviewFrame;
 };
 
-function compactParagraph(parts: (string | null | undefined)[], sentenceLimit = 4): string | undefined {
-  const combined = [...new Set(parts.map((part) => part?.trim()).filter((part): part is string => Boolean(part)))].join(" ");
-  if (!combined) return undefined;
-  const sentences = combined.match(/[^.!?]+[.!?]+|[^.!?]+$/g)?.map((sentence) => sentence.trim()).filter(Boolean) ?? [combined];
-  return sentences.slice(0, sentenceLimit).join(" ");
-}
-
-function coachingSentence(value: string | null | undefined): string | null {
+function coachingCopy(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim();
-  if (!trimmed) return null;
-  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+  return trimmed || undefined;
 }
 
 function frameFor(
@@ -91,8 +83,8 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       evidence,
       evidenceIndex,
       finding.title,
-      compactParagraph([expanded?.whatHappened?.trim() || finding.detail], 1),
-      compactParagraph([expanded?.whatHappenedDetail], 2),
+      coachingCopy(expanded?.whatHappened || finding.detail),
+      coachingCopy(expanded?.whatHappenedDetail),
       finding.id,
     );
     const why = frameFor(
@@ -101,8 +93,8 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       evidence,
       evidenceIndex,
       finding.title,
-      compactParagraph([expanded?.whyItMatters?.trim() || finding.whyItMatters], 1),
-      compactParagraph([expanded?.whyItMattersDetail], 2),
+      coachingCopy(expanded?.whyItMatters || finding.whyItMatters),
+      coachingCopy(expanded?.whyItMattersDetail),
       finding.id,
     );
     const next = frameFor(
@@ -110,7 +102,7 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       finding,
       evidence,
       evidenceIndex,
-      compactParagraph([expanded?.whatToDo ?? action?.instruction ?? finding.correction ?? finding.cue ?? finding.title], 1) ?? finding.title,
+      coachingCopy(expanded?.whatToDo ?? action?.instruction ?? finding.correction ?? finding.cue ?? finding.title) ?? finding.title,
       undefined,
       undefined,
     );
@@ -119,7 +111,7 @@ export function buildCoachingReviewPoints(result: AnalysisResult): CoachingRevie
       why.body,
       next.title,
       next.body,
-    ].map(coachingSentence).filter((value): value is string => Boolean(value)).slice(0, 4).join(" ");
+    ].filter((value): value is string => Boolean(value)).join(" ");
     return { id: finding.id, kind, paragraph, observed, why, next };
   });
 }
