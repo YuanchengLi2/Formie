@@ -8,7 +8,7 @@ import {
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { corsHeaders, preflight } from "../_shared/cors.ts";
 import { buildTextGenerateContentRequest, buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
-import { createGeminiFilesClient, reuseOrUploadGeminiFile, type GeminiFile } from "../_shared/gemini-files.ts";
+import { createGeminiFilesClient, reuseOrUploadGeminiFile, waitForGeminiFile, type GeminiFile } from "../_shared/gemini-files.ts";
 import {
   buildBoundaryFreeAnalysisPrompt,
   buildWholeVideoWritingRepairPrompt,
@@ -31,7 +31,7 @@ import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline
 import { writeValidatedCoaching } from "./coaching-writer.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v74-declaration-only-12fps-flash-lite-writer";
+const PIPELINE_VERSION = "gemini-whole-video-v75-declaration-only-8fps-flash-lite-writer";
 const ANALYST_MODEL = "gemini-3.6-flash";
 const WRITER_MODEL = "gemini-3.1-flash-lite";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
@@ -259,11 +259,7 @@ Deno.serve(async (request) => {
       // Gemini file activation frequently takes longer than six seconds. Keep
       // the accepted upload alive long enough for the normal case, then hand
       // unusually slow activation to the durable retry worker below.
-      for (const delayMs of [250, 500, 1_000, 2_000, 4_000, 8_000, 12_000]) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-        file = await files.getFile(file.name);
-        delayMs = Math.min(delayMs === 0 ? 250 : delayMs * 2, 5_000);
-      }
+      file = await waitForGeminiFile({ file, getFile: (name) => files.getFile(name) });
     }
     if (file.state === "FAILED") throw Object.assign(new Error(file.failureReason || "Gemini could not process the uploaded video"), { code: "GEMINI_FILE_FAILED", providerStatus: "FAILED" });
     if (file.state !== "ACTIVE") throw Object.assign(new Error("The uploaded video is still processing"), { code: "ANALYSIS_FILE_PROCESSING" });
@@ -554,7 +550,7 @@ Deno.serve(async (request) => {
       });
       return { status: "processing", stage: "retry_wait", analysisNextRetryAt: nextRetryAt };
     },
-    markFailed: async (sessionId, code) => {
+    persistFailure: async (sessionId, code, disposition) => {
       const { data: retryState, error: retryStateError } = await admin
         .from("analysis_sessions")
         .select("status,gemini_file_name,analysis_retry_count")

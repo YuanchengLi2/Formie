@@ -1,6 +1,6 @@
 export const MIN_ANALYSIS_VIDEO_DURATION_MS = 3_000;
 export const MAX_ANALYSIS_VIDEO_DURATION_MS = 15_000;
-export const REQUESTED_ANALYSIS_FPS = 12;
+export const REQUESTED_ANALYSIS_FPS = 8;
 export const REQUESTED_ANALYSIS_MEDIA_RESOLUTION = "MEDIA_RESOLUTION_HIGH" as const;
 export const ANALYST_THINKING_LEVEL = "high" as const;
 export const WRITER_THINKING_LEVEL = "low" as const;

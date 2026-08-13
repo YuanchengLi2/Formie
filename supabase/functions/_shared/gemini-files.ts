@@ -25,6 +25,22 @@ export async function reuseOrUploadGeminiFile(input: {
   }
 }
 
+export async function waitForGeminiFile(input: {
+  file: GeminiFile;
+  getFile: (name: string) => Promise<GeminiFile>;
+  wait?: (delayMs: number) => Promise<void>;
+  delaysMs?: number[];
+}): Promise<GeminiFile> {
+  let file = input.file;
+  const wait = input.wait ?? ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
+  for (const delayMs of input.delaysMs ?? [250, 500, 1_000, 2_000, 4_000, 8_000, 12_000]) {
+    if (file.state !== "PROCESSING") break;
+    await wait(delayMs);
+    file = await input.getFile(file.name);
+  }
+  return file;
+}
+
 function videoMimeType(value: string): string {
   const normalized = value.toLowerCase();
   if (normalized.includes("quicktime") || normalized.includes("mov")) return "video/quicktime";

@@ -28,7 +28,7 @@ export type WholeVideoHandlerDependencies = {
   authenticate: (request: Request) => Promise<string>;
   loadSession: (sessionId: string, userId: string) => Promise<WholeVideoSession | null>;
   advancePipeline: (session: WholeVideoSession) => Promise<WholeVideoPipelineResult>;
-  markFailed: (sessionId: string, code: string) => Promise<WholeVideoPipelineResult>;
+  persistFailure: (sessionId: string, code: string, disposition: AnalysisFailureDisposition) => Promise<WholeVideoPipelineResult>;
   markRetryable?: (session: WholeVideoSession, code: string) => Promise<WholeVideoPipelineResult>;
   now?: () => Date;
 };

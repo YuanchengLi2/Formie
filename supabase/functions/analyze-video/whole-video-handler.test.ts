@@ -35,11 +35,9 @@ describe("whole-video handler failure disposition", () => {
       stage: "retry_wait",
       analysisNextRetryAt: "2026-08-12T23:00:05.000Z",
     }));
-    const markFailed = jest.fn(async () => ({ status: "failed", stage: "failed" }));
     const deps = dependencies({
       advancePipeline: jest.fn(async () => { throw Object.assign(new Error("still processing"), { code: "ANALYSIS_FILE_PROCESSING" }); }),
       markRetryable,
-      markFailed,
     });
     const response = await analyzeWholeVideoHandler(new Request("https://example/analyze-video", {
       method: "POST",
@@ -54,7 +52,7 @@ describe("whole-video handler failure disposition", () => {
       analysisNextRetryAt: "2026-08-12T23:00:05.000Z",
     });
     expect(markRetryable).toHaveBeenCalledWith(expect.objectContaining({ id: "session-1" }), "ANALYSIS_FILE_PROCESSING");
-    expect(markFailed).not.toHaveBeenCalled();
+    expect(deps.persistFailure).not.toHaveBeenCalled();
   });
 
   it("keeps a transient Gemini writer failure in processing for durable retry", async () => {
@@ -80,6 +78,6 @@ describe("whole-video handler failure disposition", () => {
       analysisNextRetryAt: "2026-08-13T02:00:05.000Z",
     });
     expect(markRetryable).toHaveBeenCalledWith(expect.objectContaining({ id: "session-1" }), "GEMINI_HTTP_503");
-    expect(deps.markFailed).not.toHaveBeenCalled();
+    expect(deps.persistFailure).not.toHaveBeenCalled();
   });
 });

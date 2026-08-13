@@ -1,4 +1,4 @@
-import { createGeminiFilesClient, reuseOrUploadGeminiFile } from "./gemini-files";
+import { createGeminiFilesClient, reuseOrUploadGeminiFile, waitForGeminiFile } from "./gemini-files";
 
 describe("Gemini Files client", () => {
   it("uploads, polls, and deletes a video without analysis behavior", async () => {
@@ -34,6 +34,20 @@ describe("Gemini Files client", () => {
       upload,
     })).rejects.toThrow("503");
     expect(upload).not.toHaveBeenCalled();
+  });
+
+  it("polls a processing file until it becomes active without crashing or polling again", async () => {
+    const active = { name: "files/one", uri: "https://files.example/one", mimeType: "video/mp4", state: "ACTIVE" as const };
+    const getFile = jest.fn(async () => active);
+    const wait = jest.fn(async () => undefined);
+    await expect(waitForGeminiFile({
+      file: { ...active, state: "PROCESSING" },
+      getFile,
+      wait,
+      delaysMs: [250, 500],
+    })).resolves.toEqual(active);
+    expect(wait).toHaveBeenCalledTimes(1);
+    expect(getFile).toHaveBeenCalledTimes(1);
   });
 
   it("preserves provider HTTP status and file failure detail for retry disposition", async () => {
