@@ -454,6 +454,9 @@ describe("clean full-video analysis and coaching contract", () => {
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("whyItMattersDetail is exactly three sentences");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("specific to this exercise, this set, and what is visible in this video");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Write the final display copy yourself");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Use mostly everyday gym language and short sentences");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("If a technical term is useful, explain it immediately in plain words");
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toContain("Do not stack technical terms");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("exactly two supporting sentences");
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toContain("reusable sentence template");
   });
