@@ -306,23 +306,21 @@ describe("ResultsScreen", () => {
     expect(screen.getByLabelText("Rotatable anatomy model")).toBeTruthy();
     expect(screen.getByLabelText("Rotate anatomy")).toBeTruthy();
     expect(screen.queryByLabelText("Zoom out anatomy")).toBeNull();
-    expect(screen.getByLabelText("Target Muscles").props.accessibilityState).toEqual({ selected: true });
-    expect(screen.queryByTestId("anatomy-issue-shoulders")).toBeNull();
+    expect(screen.getByLabelText("Your Form").props.accessibilityState).toEqual({ selected: true });
+    expect(screen.queryByTestId("anatomy-target-chest")).toBeNull();
+    expect(screen.getByTestId("anatomy-issue-shoulders")).toBeTruthy();
     expect(screen.getByText("Target Muscles")).toBeTruthy();
     expect(screen.getByText("Your Form")).toBeTruthy();
-    expect(screen.queryByText("Observed issue areas")).toBeNull();
+    expect(screen.getByText("Observed issue areas")).toBeTruthy();
     expect(screen.queryByText(/never claims actual muscle activation/i)).toBeNull();
     expect(screen.getByTestId("anatomy-gesture-surface")).toBeTruthy();
-    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(false);
+    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(true);
+    await fireEvent.press(screen.getByLabelText("Target Muscles"));
     expect(screen.getByTestId("anatomy-target-lats")).toBeTruthy();
     expect(screen.getByTestId("anatomy-target-upper_back")).toBeTruthy();
     expect(screen.getByTestId("anatomy-secondary-biceps")).toBeTruthy();
     expect(screen.getByText("Primary muscles")).toBeTruthy();
     expect(screen.getByText("Supporting muscles")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Your Form"));
-    expect(screen.getByTestId("anatomy-issue-shoulders")).toBeTruthy();
-    expect(screen.getByText("Observed issue areas")).toBeTruthy();
-    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(true);
   });
 
   it("highlights only the currently selected coaching issue on the form map", async () => {

@@ -1,6 +1,7 @@
 export type RetryAnalysisSession = {
   id: string;
   userId: string;
+  activeV49RunId?: string | null;
   pipelineVersion: string | null;
   analysisNextRetryAt?: string | null;
 };

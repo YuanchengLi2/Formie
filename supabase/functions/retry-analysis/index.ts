@@ -30,10 +30,11 @@ Deno.serve(async (request) => {
         .order("analysis_next_retry_at", { ascending: true })
         .limit(limit);
       if (error) throw error;
-      return (data ?? []).map((session) => ({
-        id: session.id,
-        userId: session.user_id,
-        pipelineVersion: session.pipeline_version ?? null,
+          return (data ?? []).map((session) => ({
+            id: session.id,
+            userId: session.user_id,
+            activeV49RunId: session.active_v49_run_id ?? null,
+            pipelineVersion: session.pipeline_version ?? null,
         analysisNextRetryAt: session.analysis_next_retry_at ?? null,
       }));
     },

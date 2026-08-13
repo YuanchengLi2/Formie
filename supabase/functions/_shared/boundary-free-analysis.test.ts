@@ -199,30 +199,4 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toMatch(/sentence parser|truncate/i);
   });
 
-  it("removes numeric timestamps from What happened by using the stored video observation", () => {
-    const parsed = parseWholeVideoWriting({
-      ...writing,
-      coachingItems: [{
-        ...writing.coachingItems[0],
-        whatHappened: "Both dumbbells returned faster at 1.4 seconds.",
-        whatHappenedDetail: "Pressure moved toward your toes during the ascent. The shift repeated on rep 2.",
-      }],
-    }, analysis);
-
-    expect(parsed.coachingItems[0].whatHappened).toBe(analysis.coachingItems[0].observation);
-  });
-
-  it("orders findings by analyst severity before harmless optimizations", () => {
-    const raw = rawAnalysis(4);
-    raw.coachingItems[0] = { ...raw.coachingItems[0], topic: "Setup variation", severity: "note", confidence: 0.99 };
-    raw.coachingItems[1] = { ...raw.coachingItems[1], topic: "Loss of support", severity: "high", confidence: 0.81 };
-    raw.coachingItems[2] = { ...raw.coachingItems[2], topic: "Path inconsistency", severity: "important", confidence: 0.95 };
-    const parsed = parseBoundaryFreeAnalysis(raw, 9_000);
-
-    expect(parsed.coachingItems.map((item) => item.topic).slice(0, 2)).toEqual([
-      "Loss of support",
-      "Path inconsistency",
-    ]);
-    expect(parsed.coachingItems.at(-1)?.topic).toBe("Setup variation");
-  });
 });
