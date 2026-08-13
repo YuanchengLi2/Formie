@@ -27,6 +27,34 @@ function dependencies(overrides: Partial<WholeVideoHandlerDependencies> = {}): W
 }
 
 describe("whole-video handler failure disposition", () => {
+  it("keeps a slow Gemini file activation in processing for durable retry", async () => {
+    const markRetryable = jest.fn(async () => ({
+      status: "processing",
+      stage: "retry_wait",
+      analysisNextRetryAt: "2026-08-12T23:00:05.000Z",
+    }));
+    const markFailed = jest.fn(async () => ({ status: "failed", stage: "failed" }));
+    const deps = dependencies({
+      advancePipeline: jest.fn(async () => { throw Object.assign(new Error("still processing"), { code: "ANALYSIS_FILE_PROCESSING" }); }),
+      markRetryable,
+      markFailed,
+    });
+    const response = await analyzeWholeVideoHandler(new Request("https://example/analyze-video", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: "session-1" }),
+    }), deps);
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      sessionId: "session-1",
+      status: "processing",
+      stage: "retry_wait",
+      analysisNextRetryAt: "2026-08-12T23:00:05.000Z",
+    });
+    expect(markRetryable).toHaveBeenCalledWith(expect.objectContaining({ id: "session-1" }), "ANALYSIS_FILE_PROCESSING");
+    expect(markFailed).not.toHaveBeenCalled();
+  });
+
   it("returns a terminal failure instead of retry_wait when the single-call pipeline fails", async () => {
     const deps = dependencies();
     const response = await analyzeWholeVideoHandler(new Request("https://example/analyze-video", {

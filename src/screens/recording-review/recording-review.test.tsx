@@ -66,7 +66,8 @@ describe("RecordingReviewScreen", () => {
     expect(screen.getByText("Phone level")).toBeTruthy();
     expect(screen.getByText("Good lighting")).toBeTruthy();
     expect(screen.getByText("1 analysis will be used")).toBeTruthy();
-    expect(screen.getByText("9 remaining this month")).toBeTruthy();
+    expect(screen.getByText("10 available now · charged only after completion")).toBeTruthy();
+    expect(screen.getByTestId("recording-review-scroll").props.nestedScrollEnabled).toBe(true);
     expect(screen.queryByText("FINAL CHECK")).toBeNull();
     expect(screen.queryByText("Is this recording ready?")).toBeNull();
     expect(screen.getByTestId("recording-review-checklist").props.style).toEqual(expect.objectContaining({ borderRadius: 16 }));
@@ -90,7 +91,7 @@ describe("RecordingReviewScreen", () => {
       />,
     );
 
-    expect(screen.getByText("Balance updates after submission")).toBeTruthy();
+    expect(screen.getByText("Balance updates after a completed analysis")).toBeTruthy();
     expect(screen.queryByText(/remaining this month/)).toBeNull();
   });
 });

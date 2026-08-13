@@ -30,8 +30,8 @@ export function RecordingReviewScreen({
   onRetake,
 }: RecordingReviewScreenProps) {
   const insets = useSafeAreaInsets();
-  const projectedRemaining = typeof analysisRemaining === "number" && Number.isFinite(analysisRemaining)
-    ? Math.max(0, Math.floor(analysisRemaining) - 1)
+  const currentRemaining = typeof analysisRemaining === "number" && Number.isFinite(analysisRemaining)
+    ? Math.max(0, Math.floor(analysisRemaining))
     : null;
 
   return (
@@ -39,7 +39,9 @@ export function RecordingReviewScreen({
       alwaysBounceVertical={false}
       bounces={false}
       contentInsetAdjustmentBehavior="never"
-      contentContainerStyle={{ paddingBottom: insets.bottom + 18 }}
+      contentContainerStyle={{ flexGrow: 1, paddingBottom: insets.bottom + 28 }}
+      nestedScrollEnabled
+      showsVerticalScrollIndicator
       style={{ flex: 1, backgroundColor: colors.cameraBlack }}
       testID="recording-review-scroll"
     >
@@ -101,7 +103,7 @@ export function RecordingReviewScreen({
           <View style={{ flex: 1, gap: 1 }}>
             <Text selectable style={[typography.heading, { color: colors.text, fontSize: 16, lineHeight: 21 }]}>1 analysis will be used</Text>
             <Text selectable style={[typography.body, { color: colors.textSecondary, fontSize: 13, lineHeight: 18, fontVariant: ["tabular-nums"] }]}>
-              {projectedRemaining === null ? "Balance updates after submission" : `${projectedRemaining} remaining this month`}
+              {currentRemaining === null ? "Balance updates after a completed analysis" : `${currentRemaining} available now · charged only after completion`}
             </Text>
           </View>
         </View>

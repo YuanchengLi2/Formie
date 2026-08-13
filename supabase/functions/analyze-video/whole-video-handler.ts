@@ -18,6 +18,7 @@ export type WholeVideoPipelineResult = {
   status: string;
   stage: string;
   result?: Record<string, unknown>;
+  analysisNextRetryAt?: string | null;
 };
 
 export type WholeVideoHandlerDependencies = {
@@ -25,6 +26,7 @@ export type WholeVideoHandlerDependencies = {
   loadSession: (sessionId: string, userId: string) => Promise<WholeVideoSession | null>;
   advancePipeline: (session: WholeVideoSession) => Promise<WholeVideoPipelineResult>;
   markFailed: (sessionId: string, code: string) => Promise<WholeVideoPipelineResult>;
+  markRetryable?: (session: WholeVideoSession, code: string) => Promise<WholeVideoPipelineResult>;
   now?: () => Date;
 };
 
@@ -58,7 +60,7 @@ function payload(session: WholeVideoSession, state: WholeVideoPipelineResult) {
     status: state.status,
     stage: state.stage,
     failureCode: state.status === "failed" ? session.failureCode : null,
-    analysisNextRetryAt: session.analysisNextRetryAt ?? null,
+    analysisNextRetryAt: state.analysisNextRetryAt ?? session.analysisNextRetryAt ?? null,
     durationMs: session.durationMs,
     videoUrl: null,
     setDeclaration: session.setDeclaration ?? null,
@@ -105,6 +107,10 @@ export async function analyzeWholeVideoHandler(request: Request, dependencies: W
         status: "processing",
         stage: session?.stage ?? "analyzing",
       }), 202);
+    }
+    if (code === "ANALYSIS_FILE_PROCESSING" && session && dependencies.markRetryable) {
+      const retryState = await dependencies.markRetryable(session, code);
+      return json(payload(session, retryState), 202);
     }
     if (session) {
       try {

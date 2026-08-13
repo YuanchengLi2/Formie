@@ -211,7 +211,7 @@ describe("clean full-video analysis and coaching contract", () => {
     expect(schema.properties.videoUnderstanding.properties).not.toHaveProperty("end");
     expect(schema.properties).not.toHaveProperty("strengths");
     expect(schema.properties).not.toHaveProperty("recheckRequest");
-    expect(coachingItem.properties).not.toHaveProperty("observedIssueRegions");
+    expect(coachingItem.properties.observedIssueRegions).toEqual(expect.objectContaining({ type: "array" }));
   });
 
   it("removes a claimed repetition that has no matching evidence moment", () => {
@@ -219,6 +219,21 @@ describe("clean full-video analysis and coaching contract", () => {
     raw.coachingItems[0].affectedRepNumbers = [1, 3];
 
     expect(parseBoundaryFreeAnalysis(raw, 9_000).coachingItems[0].affectedRepNumbers).toEqual([1]);
+  });
+
+  it("normalizes an unambiguous 0-to-10 provider score response to 0-to-100", () => {
+    const raw = v56RawAnalysis();
+    raw.movementScores.forEach((score: { score: number }, index: number) => { score.score = [5.8, 6.2, 5.5, 5.7][index]; });
+
+    expect(parseBoundaryFreeAnalysis(raw, 9_000).movementScores.map((score) => score.score)).toEqual([58, 62, 55, 57]);
+  });
+
+  it("infers issue anatomy regions from visible evidence when the provider omits them", () => {
+    const raw = v56RawAnalysis();
+    raw.coachingItems[0].observedIssueRegions = undefined;
+    raw.evidenceSelections[0].moments[0].visibleBodyAreas = ["right_shoulder", "right_arm"];
+
+    expect(parseBoundaryFreeAnalysis(raw, 9_000).coachingItems[0].observedIssueRegions).toEqual(expect.arrayContaining(["shoulders", "upper_arms"]));
   });
 
   it("keeps all four findings when evidence omits optional repetition numbers", () => {
@@ -440,13 +455,13 @@ describe("clean full-video analysis and coaching contract", () => {
     }, analysis);
 
     expect(parsed.coachingItems[0].whatHappenedDetail).toContain("right scapula elevates");
-    expect(parsed.coachingItems[0].whatHappenedDetail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
+    expect(parsed.coachingItems[0].whatHappenedDetail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
     expect(parsed.coachingItems[0].whyItMatters).toBe("Scapular asymmetry compromises force transfer through the upper body.");
     expect(parsed.coachingItems[0].whyItMattersDetail).toContain("pulling line of the chest-supported row");
-    expect(parsed.coachingItems[0].whyItMattersDetail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
+    expect(parsed.coachingItems[0].whyItMattersDetail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
   });
 
-  it("accepts writer prose without rejecting or rewriting its sentence counts or headline length", () => {
+  it("shapes writer prose into one headline sentence and two supporting sentences", () => {
     const unrestricted = {
       ...writing.coachingItems[0],
       title: "Depth",
@@ -463,7 +478,13 @@ describe("clean full-video analysis and coaching contract", () => {
       coachingItems: [unrestricted],
     }, analysis).coachingItems[0];
 
-    expect(parsed).toMatchObject(unrestricted);
+    expect(parsed).toMatchObject({
+      ...unrestricted,
+      whatHappened: "Your right knee moves inward.",
+      whatHappenedDetail: "The knee crosses inside the foot. Your heel remains planted.",
+      whyItMatters: "This changes how the squat receives the load.",
+      whyItMattersDetail: "The inward knee changes the leg's alignment under the bar. Your hip then shifts to keep the bar centered.",
+    });
   });
 
   it("converts leaked millisecond timestamps to readable seconds without rejecting the writing", () => {
@@ -517,7 +538,7 @@ describe("clean full-video analysis and coaching contract", () => {
     expect(finding.actionableCorrection?.instruction).toBe(writing.coachingItems[0].whatToDo);
   });
 
-  it("preserves all supporting sentences for presentation to shape", () => {
+  it("keeps exactly two supporting sentences for presentation", () => {
     const parsed = mergeWholeVideoWriting({
       ...writing,
       coachingItems: [{
@@ -526,21 +547,21 @@ describe("clean full-video analysis and coaching contract", () => {
       }],
     }, analysis);
     expect(parsed.coachingItems[0].whatHappened.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(1);
-    expect(parsed.coachingItems[0].whatHappenedDetail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(4);
-    expect(parsed.coachingItems[0].whatHappenedDetail).toBe("Rep 3 drops quickly after reaching your ribs. Rep 4 repeats the faster lowering phase. The first two rows return more slowly. The final row finishes lowest.");
+    expect(parsed.coachingItems[0].whatHappenedDetail?.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
+    expect(parsed.coachingItems[0].whatHappenedDetail).toBe("Rep 3 drops quickly after reaching your ribs. Rep 4 repeats the faster lowering phase.");
   });
 
-  it("accepts writer fields regardless of sentence count and falls back only when text is absent", () => {
+  it("keeps actions free-form while shaping What Happened and Why It Matters", () => {
     const raw = {
       ...writing,
       coachingItems: [{ ...writing.coachingItems[0], whatHappened: "One. Two. Three. Four." }],
     };
 
-    expect(mergeWholeVideoWriting(raw, analysis).coachingItems[0].whatHappened).toBe("One. Two. Three. Four.");
+    expect(mergeWholeVideoWriting(raw, analysis).coachingItems[0].whatHappened).toBe("One.");
     expect(mergeWholeVideoWriting({
       ...writing,
       coachingItems: [{ ...writing.coachingItems[0], whyItMatters: "The row changes. The visible path changes again." }],
-    }, analysis).coachingItems[0].whyItMatters).toBe("The row changes. The visible path changes again.");
+    }, analysis).coachingItems[0].whyItMatters).toBe("The row changes.");
     expect(mergeWholeVideoWriting({
       ...writing,
       coachingItems: [{ ...writing.coachingItems[0], whatToDo: "Lower both dumbbells for two seconds. Begin only after your arms reach the bottom." }],
@@ -548,7 +569,7 @@ describe("clean full-video analysis and coaching contract", () => {
     expect(mergeWholeVideoWriting({
       ...writing,
       coachingItems: [{ ...writing.coachingItems[0], whatHappenedDetail: "" }],
-    }, analysis).coachingItems[0].whatHappenedDetail).toBe("Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase. The opening two repetitions lower more slowly.");
+    }, analysis).coachingItems[0].whatHappenedDetail).toBe("Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase.");
   });
 
   it("creates analyst-derived copy when the writer response is unavailable", () => {
@@ -558,9 +579,9 @@ describe("clean full-video analysis and coaching contract", () => {
       id: analysis.coachingItems[0].id,
       title: analysis.coachingItems[0].topic,
       whatHappened: analysis.coachingItems[0].observation,
-      whatHappenedDetail: "Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase. The opening two repetitions lower more slowly.",
+      whatHappenedDetail: "Rep 3 drops faster from the ribs to the bottom. Rep 4 repeats that faster lowering phase.",
       whyItMatters: analysis.coachingItems[0].whyItMatters,
-      whyItMattersDetail: "The late repetitions no longer match the opening pull-and-return rhythm. That makes their path less repeatable. Rep 3 drops faster from the ribs to the bottom.",
+      whyItMattersDetail: "The late repetitions no longer match the opening pull-and-return rhythm. That makes their path less repeatable.",
       whatToDo: analysis.coachingItems[0].correctionDirection,
     });
     expect(parsed.coachNote.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(3);
@@ -581,7 +602,7 @@ describe("clean full-video analysis and coaching contract", () => {
     const item = parsed.coachingItems[0];
 
     expect(item.whatHappenedDetail.match(/[^.!?]+[.!?]+|[^.!?]+$/g)).toHaveLength(2);
-    expect(item.whyItMattersDetail).toBe("The late path changes.");
+    expect(item.whyItMattersDetail).toBe("The late path changes. The late repetitions no longer match the opening pull-and-return rhythm.");
     expect(parsed.coachNote).toBe("Slow the final rows.");
     expect(parsed.overallAssessment).toBe("The row changes late.");
   });

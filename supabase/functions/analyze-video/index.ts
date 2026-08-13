@@ -30,7 +30,7 @@ import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 import { runNonBlockingWriter } from "./nonblocking-writer.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v69-natural-three-sentence-coaching";
+const PIPELINE_VERSION = "gemini-whole-video-v70-reliable-coaching-and-scores";
 const ANALYST_MODEL = "gemini-3.6-flash";
 const WRITER_MODEL = "gemini-3.6-flash";
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
@@ -278,7 +278,10 @@ Deno.serve(async (request) => {
         updated_at: new Date().toISOString(),
       }).eq("id", session.id);
       if (processingError) throw Object.assign(processingError, { code: "ANALYSIS_FILE_METADATA_FAILED" });
-      for (const delayMs of [150, 350, 750, 1_500, 3_000]) {
+      // Gemini file activation frequently takes longer than six seconds. Keep
+      // the accepted upload alive long enough for the normal case, then hand
+      // unusually slow activation to the durable retry worker below.
+      for (const delayMs of [250, 500, 1_000, 2_000, 4_000, 8_000, 12_000]) {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         file = await files.getFile(file.name);
         if (file.state !== "PROCESSING") break;
@@ -571,6 +574,20 @@ Deno.serve(async (request) => {
           }
         },
       });
+    },
+    markRetryable: async (session, code) => {
+      const nextRetryAt = new Date(Date.now() + 5_000).toISOString();
+      await persistRetryState(session.id, {
+        status: "processing",
+        stage: "video_processing",
+        pipeline_version: PIPELINE_VERSION,
+        failure_code: null,
+        analysis_retry_count: Math.max(0, Number(session.analysis_retry_count ?? 0)) + 1,
+        analysis_next_retry_at: nextRetryAt,
+        analysis_last_error_code: code,
+        updated_at: new Date().toISOString(),
+      });
+      return { status: "processing", stage: "retry_wait", analysisNextRetryAt: nextRetryAt };
     },
     markFailed: async (sessionId, code) => {
       const { data: retryState, error: retryStateError } = await admin

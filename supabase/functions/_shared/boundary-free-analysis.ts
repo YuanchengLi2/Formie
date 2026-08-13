@@ -107,9 +107,12 @@ const MUSCLE_REGIONS = ["chest", "front_shoulders", "rear_shoulders", "upper_bac
 const TOPIC_NORMALIZATION = /[^a-z0-9]+/g;
 
 function sentenceParts(value: string): string[] {
-  return (value.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [])
+  const decimalToken = "__FORMIE_DECIMAL_POINT__";
+  const protectedValue = value.replace(/(?<=\d)\.(?=\d)/g, decimalToken);
+  return (protectedValue.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [])
     .map((sentence) => sentence.trim())
     .filter(Boolean)
+    .map((sentence) => sentence.replaceAll(decimalToken, "."))
     .map((sentence) => /[.!?]$/.test(sentence) ? sentence : `${sentence}.`);
 }
 
@@ -341,6 +344,11 @@ function parseMuscleFocus(value: unknown): MuscleFocus {
 function parseScores(value: unknown, findingIds: Set<string>): MovementScore[] {
   if (!Array.isArray(value)) throw new Error("movementScores must be an array");
   if (value.length !== 4) throw new Error("movementScores must contain exactly four scores");
+  const rawScores = value.map((raw, index) => boundedNumber(record(raw, `movementScores[${index}]`).score, `movementScores[${index}].score`, 0, 100));
+  // Gemini occasionally answers on a 0-10 scale even though the public score
+  // contract is 0-100. If every score is <= 10, normalize the response as one
+  // unit instead of displaying values such as 5 or 6 out of 100.
+  const scale = rawScores.every((score) => score <= 10) ? 10 : 1;
   const ids = new Set<string>();
   const labels = new Set<string>();
   return value.map((raw, index) => {
@@ -354,11 +362,36 @@ function parseScores(value: unknown, findingIds: Set<string>): MovementScore[] {
     return {
       id,
       label,
-      score: boundedNumber(item.score, `movementScores[${index}].score`, 0, 100),
+      score: rawScores[index] * scale,
       observed: text(item.observed, `movementScores[${index}].observed`),
       evidenceIds: Array.isArray(item.evidenceIds) ? [...new Set(item.evidenceIds.filter((id): id is string => typeof id === "string" && findingIds.has(id)))] : [],
     };
   });
+}
+
+function inferObservedIssueRegions(values: string[]): AnatomyRegion[] {
+  const combined = values.join(" ").toLowerCase().replaceAll("_", " ");
+  const matches: Array<[RegExp, AnatomyRegion]> = [
+    [/\b(?:hand|grip|wrist|knuckle)\b/, "wrists"],
+    [/\bforearm\b/, "forearms"],
+    [/\belbow\b/, "elbows"],
+    [/\b(?:upper arm|bicep|tricep|arm)\b/, "upper_arms"],
+    [/\b(?:shoulder|delt)\b/, "shoulders"],
+    [/\b(?:upper back|thoracic|scapula|trap)\b/, "upper_back"],
+    [/\blat\b/, "lats"],
+    [/\b(?:chest|sternum)\b/, "chest"],
+    [/\b(?:torso|trunk|core|rib)\b/, "torso"],
+    [/\b(?:lower back|lumbar)\b/, "lower_back"],
+    [/\b(?:hip|pelvis)\b/, "hips"],
+    [/\bglute\b/, "glutes"],
+    [/\b(?:quad|thigh)\b/, "quads"],
+    [/\bhamstring\b/, "hamstrings"],
+    [/\b(?:adductor|inner thigh)\b/, "adductors"],
+    [/\bknee\b/, "knees"],
+    [/\b(?:calf|calves)\b/, "calves"],
+    [/\b(?:ankle|heel|foot|feet)\b/, "ankles"],
+  ];
+  return [...new Set(matches.filter(([pattern]) => pattern.test(combined)).map(([, region]) => region))];
 }
 
 export function mergeWholeVideoWriting(value: unknown, analysis: BoundaryFreeAnalysis): WholeVideoWriting {
@@ -382,6 +415,20 @@ export function mergeWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
   const writerCopy = (value: unknown, fallback: string): string => (
     humanizeCoachingTimeUnits(typeof value === "string" && value.trim() ? value.trim() : fallback)
   );
+  const threeSentenceSection = (
+    summaryValue: unknown,
+    detailValue: unknown,
+    fallbackSummary: string,
+    supportingFacts: string[],
+  ): { summary: string; detail: string } => {
+    const summary = firstSentence(writerCopy(summaryValue, fallbackSummary), firstSentence(fallbackSummary, fallbackSummary));
+    const normalizedSummary = summary.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const support = [...new Set([
+      ...(typeof detailValue === "string" ? sentenceParts(humanizeCoachingTimeUnits(detailValue)) : []),
+      ...supportingFacts.flatMap((fact) => sentenceParts(humanizeCoachingTimeUnits(fact))),
+    ])].filter((sentence) => sentence.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() !== normalizedSummary);
+    return { summary, detail: support.slice(0, 2).join(" ") };
+  };
   const rawCoachingById = byId(result.coachingItems, findingIds);
   const coachingItems = analysis.coachingItems.map((source) => {
     const item = rawCoachingById.get(source.id);
@@ -393,19 +440,26 @@ export function mergeWholeVideoWriting(value: unknown, analysis: BoundaryFreeAna
       source.whyDetails,
       [source.observationDetails, ...source.evidence.map((moment) => moment.visualEvidence)],
     );
-    const whatHappened = writerCopy(item?.whatHappened, source.observation);
-    const whatHappenedDetail = writerCopy(item?.whatHappenedDetail, whatHappenedFallback);
-    const whyItMatters = writerCopy(item?.whyItMatters, source.whyItMatters);
-    const whyItMattersDetail = writerCopy(item?.whyItMattersDetail, whyItMattersFallback);
+    const happened = threeSentenceSection(item?.whatHappened, item?.whatHappenedDetail, source.observation, [
+      whatHappenedFallback,
+      source.observationDetails,
+      ...source.evidence.map((moment) => moment.visualEvidence),
+    ]);
+    const matters = threeSentenceSection(item?.whyItMatters, item?.whyItMattersDetail, source.whyItMatters, [
+      whyItMattersFallback,
+      source.whyDetails,
+      source.observationDetails,
+      ...source.evidence.map((moment) => moment.visualEvidence),
+    ]);
     const whatToDo = writerCopy(item?.whatToDo, source.correctionDirection);
     const successCheck = writerCopy(item?.successCheck, source.correctionDirection);
     return {
       id: source.id,
       title: writerCopy(item?.title, source.topic),
-      whatHappened,
-      whatHappenedDetail,
-      whyItMatters,
-      whyItMattersDetail,
+      whatHappened: happened.summary,
+      whatHappenedDetail: happened.detail,
+      whyItMatters: matters.summary,
+      whyItMattersDetail: matters.detail,
       whatToDo,
       successCheck,
     };
@@ -544,6 +598,14 @@ export function parseBoundaryFreeAnalysis(value: unknown, durationMs: number): B
     const supportedRepNumbers = item.affectedRepNumbers.filter((repNumber) => evidenceReps.has(repNumber));
     return {
       ...item,
+      observedIssueRegions: item.observedIssueRegions.length > 0
+        ? item.observedIssueRegions
+        : inferObservedIssueRegions([
+          item.topic,
+          item.observation,
+          item.observationDetails,
+          ...evidence.flatMap((moment) => [moment.visualEvidence, ...moment.visibleBodyAreas]),
+        ]),
       affectedRepNumbers: evidenceReps.size === 0
         ? item.affectedRepNumbers
         : supportedRepNumbers.length > 0 ? supportedRepNumbers : [...evidenceReps],
@@ -880,7 +942,7 @@ export const BOUNDARY_FREE_ANALYSIS_SCHEMA = {
     videoUnderstanding: { type: "object", additionalProperties: false, required: ["recordingSummary", "exerciseSummary", "visibleSequence", "changesAcrossVideo", "setupEquipmentAndSurroundings", "observedRepCount", "repAudit"], properties: { recordingSummary: { type: "string" }, exerciseSummary: { type: "string" }, visibleSequence: { type: "string" }, changesAcrossVideo: { type: "string" }, setupEquipmentAndSurroundings: { type: "string" }, observedRepCount: { type: "integer", minimum: 1 }, repAudit: { type: "array", minItems: 1, maxItems: 30, items: { type: "object", additionalProperties: false, required: ["repNumber", "startMs", "peakMs", "endMs", "visualSummary"], properties: { repNumber: { type: "integer", minimum: 1 }, startMs: { type: "integer", minimum: 0 }, peakMs: { type: "integer", minimum: 0 }, endMs: { type: "integer", minimum: 0 }, visualSummary: { type: "string" } } } } } },
     movementScores: { type: "array", minItems: 4, maxItems: 4, items: { type: "object", additionalProperties: false, required: ["id", "label", "score", "observed", "evidenceIds"], properties: { id: { type: "string" }, label: { type: "string" }, score: { type: "number", minimum: 0, maximum: 100 }, observed: { type: "string" }, evidenceIds: { type: "array", items: { type: "string" } } } } },
     muscleFocus: { type: "object", additionalProperties: false, required: ["primary", "secondary", "unclassified"], properties: { primary: { type: "array", items: { type: "object", additionalProperties: false, required: ["name", "region"], properties: { name: { type: "string" }, region: { type: "string", enum: MUSCLE_REGIONS } } } }, secondary: { type: "array", items: { type: "object", additionalProperties: false, required: ["name", "region"], properties: { name: { type: "string" }, region: { type: "string", enum: MUSCLE_REGIONS } } } }, unclassified: { type: "array", items: { type: "string" } } } },
-     coachingItems: { type: "array", minItems: 4, items: { type: "object", additionalProperties: false, required: ["id", "topic", "observation", "observationDetails", "whyItMatters", "whyDetails", "correctionDirection", "affectedRepNumbers", "severity", "confidence"], properties: { id: { type: "string" }, topic: { type: "string" }, observation: { type: "string" }, observationDetails: { type: "string" }, whyItMatters: { type: "string" }, whyDetails: { type: "string" }, correctionDirection: { type: "string" }, affectedRepNumbers: { type: "array", minItems: 1, uniqueItems: true, items: { type: "integer", minimum: 1 } }, severity: { type: "string", enum: ["high", "important", "note"] }, confidence: { type: "number", minimum: 0, maximum: 1 } } } },
+     coachingItems: { type: "array", minItems: 4, items: { type: "object", additionalProperties: false, required: ["id", "topic", "observation", "observationDetails", "whyItMatters", "whyDetails", "correctionDirection", "affectedRepNumbers", "severity", "confidence", "observedIssueRegions"], properties: { id: { type: "string" }, topic: { type: "string" }, observation: { type: "string" }, observationDetails: { type: "string" }, whyItMatters: { type: "string" }, whyDetails: { type: "string" }, correctionDirection: { type: "string" }, affectedRepNumbers: { type: "array", minItems: 1, uniqueItems: true, items: { type: "integer", minimum: 1 } }, severity: { type: "string", enum: ["high", "important", "note"] }, confidence: { type: "number", minimum: 0, maximum: 1 }, observedIssueRegions: { type: "array", items: { type: "string", enum: ANATOMY_REGIONS } } } } },
     evidenceSelections: { type: "array", items: { type: "object", additionalProperties: false, required: ["findingId", "moments"], properties: { findingId: { type: "string" }, primaryEvidenceIndex: { type: "integer", minimum: 0 }, moments: { type: "array", minItems: 1, items: evidenceSchema } } } },
   },
 } as const;
@@ -907,7 +969,7 @@ Recommended checks include hands and grip; equipment and contact points; body po
 
 Return four to six distinct form issues, ordered by usefulness and importance. Use genuine corrections first and smaller evidence-backed form optimizations when needed to reach four. Do not duplicate one problem under multiple labels. Every issue must be specific to the declared exercise and supported by visible evidence from the original recording, with affectedRepNumbers and a matching evidence selection.
 
-Return the analyst facts and recommendations without trying to polish the final display copy. Pass the resulting evidence-backed issue record to the coaching writer. Also return the exercise-specific muscle focus, genuine strengths, and exactly four movement scores that agree with the observed form.
+Return the analyst facts and recommendations without trying to polish the final display copy. For each issue, return observedIssueRegions using the anatomy regions allowed by the schema so Your Form can highlight the affected area. Pass the resulting evidence-backed issue record to the coaching writer. Also return the exercise-specific muscle focus, genuine strengths, and exactly four movement scores on a 0-to-100 scale that agree with the observed form; never use a 0-to-10 scale.
 
 This is the only video-analysis pass. Resolve the analysis from the complete recording and Always set recheckRequest to null. Return one JSON object matching the schema.`;
 }

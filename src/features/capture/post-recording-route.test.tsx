@@ -218,7 +218,7 @@ describe("post-recording route invariants", () => {
     expect(screen.getByText("Review Recording")).toBeTruthy();
     expect(screen.getByLabelText("Recorded set preview")).toBeTruthy();
     expect(screen.getByText("1 analysis will be used")).toBeTruthy();
-    expect(screen.getByText("9 remaining this month")).toBeTruthy();
+    expect(screen.getByText("10 available now · charged only after completion")).toBeTruthy();
     expect(screen.getByText("Full body visible")).toBeTruthy();
     expect(screen.getByText("Good lighting")).toBeTruthy();
     expect(screen.queryByText("FINAL CHECK")).toBeNull();
