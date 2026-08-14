@@ -8,7 +8,7 @@ jobs:
     name: Add Build 48 to Formie Public Beta
     type: testflight
     params:
-      build_id: 606cad2a-6114-4200-ac90-7d99fcbfb08d
+      asc_build_id: 61f54dde-c2e9-4a37-a8a9-5fffd2af217f
       external_groups:
         - Formie Public Beta
       submit_beta_review: true
