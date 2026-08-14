@@ -11,4 +11,5 @@ jobs:
       asc_build_id: 61f54dde-c2e9-4a37-a8a9-5fffd2af217f
       external_groups:
         - Formie Public Beta
+      changelog: Build 48 improves coaching clarity and score realism, spreads evidence across the full video, fixes video close and camera zoom controls, and removes the subscription-screen circle logos.
       submit_beta_review: true
