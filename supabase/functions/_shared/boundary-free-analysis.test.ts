@@ -110,10 +110,12 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(prompt).toMatch(/complete video from beginning to end/i);
     expect(prompt).toMatch(/watch.*once/i);
     expect(prompt).toMatch(/four to six.*highest-consequence.*form (?:problems|issues)/i);
-    expect(prompt).toMatch(/loss of.*support|loss of.*control/i);
+    expect(prompt).toMatch(/support or control under load/i);
     expect(prompt).toMatch(/joint.*position.*under load/i);
     expect(prompt).toMatch(/intended.*muscle.*stimulus/i);
-    expect(prompt).toMatch(/exercise-specific.*setup.*bench angle.*elbow.*arm path/i);
+    expect(prompt).toMatch(/prioritize.*meaningful consequence.*not.*category/i);
+    expect(prompt).toMatch(/valid variations/i);
+    expect(prompt).not.toMatch(/bench angle|elbow.*arm path|correct setup/i);
     expect(prompt).toMatch(/do not prioritize.*easy to notice/i);
     expect(prompt).toMatch(/do not include.*minor.*optimization/i);
     expect(prompt).toMatch(/recommendations.*not.*limits/i);
