@@ -289,9 +289,10 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(candidate.repTimeline).toEqual([]);
   });
 
-  it("instructs Flash Lite to write specific three-sentence coaching without a sentence parser", () => {
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/beginner.*short sentences.*common words/i);
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/rewrite technical analyst terms.*plain language.*cervical.*scapular/i);
+  it("instructs Flash Lite to write full simple coaching without forcing terse sentences", () => {
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/use everyday gym language/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/technical term.*explain.*plain language/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toMatch(/short sentences/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/exactly three natural, video-specific sentences.*whatHappenedDetail/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/whatHappened heading.*what the camera shows/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/headings.*must.*distinct.*issue title/i);
