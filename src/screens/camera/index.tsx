@@ -15,7 +15,7 @@ import { recordedDurationFromCapture } from "@/features/capture/countdown";
 import { deviceVideoStore } from "@/features/capture/device-video-store";
 import type { RecordedSet } from "@/features/capture/types";
 import { captureVideoSettings } from "@/features/capture/video-settings";
-import { cameraZoomPresets, pinchZoom, resolveCameraZoom, type CameraZoomLabel } from "@/features/capture/camera-zoom";
+import { cameraZoomPresets, pinchMagnification, resolveCameraMagnification, type CameraZoomLabel } from "@/features/capture/camera-zoom";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
@@ -39,8 +39,9 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const [availableLenses, setAvailableLenses] = useState<string[]>([]);
   const [selectedLens, setSelectedLens] = useState<string | undefined>();
   const [activeZoomLabel, setActiveZoomLabel] = useState<CameraZoomLabel | null>("1x");
-  const zoomRef = useRef(0);
-  const pinchStartZoomRef = useRef(0);
+  const [magnification, setMagnification] = useState(1);
+  const magnificationRef = useRef(1);
+  const pinchStartMagnificationRef = useRef(1);
   const exitRequestedRef = useRef(false);
   const requestedStopAtRef = useRef<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -134,20 +135,21 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     });
   }, [dispatch, phase, previousSessionId, router]);
 
-  const setCameraZoom = useCallback((nextZoom: number) => {
-    zoomRef.current = nextZoom;
-    setZoom(nextZoom);
-  }, []);
+  const setCameraMagnification = useCallback((nextMagnification: number, lenses = availableLenses) => {
+    const resolved = resolveCameraMagnification(nextMagnification, lenses);
+    magnificationRef.current = resolved.magnification;
+    setMagnification(resolved.magnification);
+    setSelectedLens(resolved.lens);
+    setZoom(resolved.zoom);
+  }, [availableLenses]);
 
   const applyAvailableLenses = useCallback((lenses: string[]) => {
     setAvailableLenses(lenses);
     if (selectedLens === undefined) {
-      const preset = resolveCameraZoom("1x", lenses);
-      setSelectedLens(preset.lens);
       setActiveZoomLabel("1x");
-      setCameraZoom(preset.zoom);
+      setCameraMagnification(1, lenses);
     }
-  }, [selectedLens, setCameraZoom]);
+  }, [selectedLens, setCameraMagnification]);
 
   const discoverAvailableLenses = useCallback(async () => {
     try {
@@ -162,13 +164,14 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     () => Gesture.Pinch()
       .runOnJS(true)
       .onBegin(() => {
-        pinchStartZoomRef.current = zoomRef.current;
+        pinchStartMagnificationRef.current = magnificationRef.current;
       })
       .onUpdate((event) => {
         setActiveZoomLabel(null);
-        setCameraZoom(pinchZoom(pinchStartZoomRef.current, event.scale));
+        const hasUltraWide = cameraZoomPresets(availableLenses).some((preset) => preset.label === "0.5x");
+        setCameraMagnification(pinchMagnification(pinchStartMagnificationRef.current, event.scale, hasUltraWide));
       }),
-    [setCameraZoom],
+    [availableLenses, setCameraMagnification],
   );
 
   if (permission && !permission.granted) {
@@ -191,26 +194,25 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cameraBlack }}>
-      <CameraView
-        ref={cameraRef}
-        accessibilityLabel="Camera preview"
-        active
-        enableTorch={torch}
-        facing={facing}
-        mirror={facing === "front"}
-        mode="video"
-        mute
-        onAvailableLensesChanged={({ lenses }) => applyAvailableLenses(lenses)}
-        onCameraReady={() => void discoverAvailableLenses()}
-        selectedLens={selectedLens}
-        style={{ flex: 1 }}
-        videoBitrate={captureVideoSettings.bitrate}
-        videoQuality={captureVideoSettings.quality}
-        videoStabilizationMode="auto"
-        zoom={zoom}
-      />
       <GestureDetector gesture={pinchGesture}>
-        <View accessibilityLabel="Pinch camera preview in or out" collapsable={false} style={{ position: "absolute", inset: 0 }} />
+        <CameraView
+          ref={cameraRef}
+          accessibilityLabel="Camera preview"
+          active
+          enableTorch={torch}
+          facing={facing}
+          mirror={facing === "front"}
+          mode="video"
+          mute
+          onAvailableLensesChanged={({ lenses }) => applyAvailableLenses(lenses)}
+          onCameraReady={() => void discoverAvailableLenses()}
+          selectedLens={selectedLens}
+          style={{ flex: 1 }}
+          videoBitrate={captureVideoSettings.bitrate}
+          videoQuality={captureVideoSettings.quality}
+          videoStabilizationMode="auto"
+          zoom={zoom}
+        />
       </GestureDetector>
 
       <View pointerEvents="box-none" style={{ position: "absolute", top: insets.top + spacing.md, left: spacing.lg, right: spacing.lg, flexDirection: "row", justifyContent: "space-between" }}>
@@ -231,7 +233,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
             setAvailableLenses([]);
             setSelectedLens(undefined);
             setActiveZoomLabel("1x");
-            setCameraZoom(0);
+            setCameraMagnification(1, []);
           }} style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)" }}>
             <Text selectable style={{ color: colors.text, fontSize: 18 }}>↻</Text>
           </Pressable>
@@ -255,20 +257,16 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         }}
         onRetryUpload={() => undefined}
         onDiscardRecording={discardRecording}
-        zoomed={zoom > 0.005}
+        zoomed={Math.abs(magnification - 1) > 0.01}
         zoomPresets={cameraZoomPresets(availableLenses).map((preset) => preset.label)}
         activeZoomLabel={activeZoomLabel}
         onSelectZoom={(label) => {
-          const preset = resolveCameraZoom(label, availableLenses);
-          setSelectedLens(preset.lens);
           setActiveZoomLabel(label);
-          setCameraZoom(preset.zoom);
+          setCameraMagnification(Number.parseFloat(label));
         }}
         onResetZoom={() => {
-          const preset = resolveCameraZoom("1x", availableLenses);
-          setSelectedLens(preset.lens);
           setActiveZoomLabel("1x");
-          setCameraZoom(preset.zoom);
+          setCameraMagnification(1);
         }}
         topInset={insets.top}
         bottomInset={insets.bottom}

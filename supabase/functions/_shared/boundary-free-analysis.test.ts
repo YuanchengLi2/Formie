@@ -47,10 +47,10 @@ const writing = (source: WholeVideoAnalysis): WholeVideoWriting => ({
   overallAssessment: "The support stays steady, while the pulling path needs attention.",
   coachNote: "Match the dumbbell path on the next set.",
   movementScores: [
-    { id: "path", label: "Pulling Path", score: 72, observed: "The path changes visibly.", evidenceIds: ["issue-1"] },
-    { id: "support", label: "Body Support", score: 88, observed: "The torso stays supported.", evidenceIds: [] },
-    { id: "alignment", label: "Joint Alignment", score: 76, observed: "The elbows finish unevenly.", evidenceIds: ["issue-2"] },
-    { id: "control", label: "Control", score: 81, observed: "The lowering remains controlled.", evidenceIds: [] },
+    { id: "path", label: "Pulling Path", observed: "The path changes visibly.", evidenceIds: ["issue-1"] },
+    { id: "support", label: "Body Support", observed: "The torso stays supported.", evidenceIds: [] },
+    { id: "alignment", label: "Joint Alignment", observed: "The elbows finish unevenly.", evidenceIds: ["issue-2"] },
+    { id: "control", label: "Control", observed: "The lowering remains controlled.", evidenceIds: [] },
   ],
   muscleFocus: {
     primary: [{ name: "Latissimus dorsi", region: "lats" }],
@@ -59,6 +59,7 @@ const writing = (source: WholeVideoAnalysis): WholeVideoWriting => ({
   },
   coachingItems: source.issues.map((item) => ({
     id: item.id,
+    title: `Fix issue ${item.id.replace("issue-", "")}`,
     whatHappened: `The pulling path changes at issue ${item.id.replace("issue-", "")}`,
     whatHappenedDetail: `The camera shows ${item.title.toLowerCase()}. It appears at the cited moment. The same visible fault guides this coaching.`,
     whyItMatters: "Keep the pull repeatable",
@@ -118,6 +119,8 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(prompt).toMatch(/recommendations.*not.*limits/i);
     expect(BOUNDARY_FREE_ANALYSIS_SCHEMA.properties.issues.description).toMatch(/four to six.*highest-consequence/i);
     expect(prompt).toMatch(/at least one.*evidence moment/i);
+    expect(prompt).toMatch(/repeated or throughout issue.*two meaningfully separated evidence moments/i);
+    expect(prompt).toMatch(/beginning, middle, and end.*never invent or move a timestamp/i);
     expect(prompt).toMatch(/peakMs.*clearest.*frame/i);
     expect(prompt).toMatch(/visibility/i);
     for (const lens of ["setup", "equipment", "contact", "hands", "grip", "body position", "alignment", "posture", "support", "path", "range", "endpoints", "tempo", "control", "balance", "stability", "joint tracking", "left-right", "symmetry", "beginning", "middle", "end"]) {
@@ -142,13 +145,13 @@ describe("focused whole-video analyst and writer contract", () => {
     const candidate = boundaryFreeToCandidate(source, writing(source));
     expect(candidate.priorityCorrections[0]).toMatchObject({
       id: source.issues[0].id,
-      title: source.issues[0].title,
+      title: writing(source).coachingItems[0].title,
       detail: writing(source).coachingItems[0].whatHappenedDetail,
       severity: source.issues[0].severity,
       observedIssueRegions: source.issues[0].observedIssueRegions,
       evidence: [{ visualEvidence: source.issues[0].evidence[0].visualEvidence }],
       expandedCoaching: {
-        summary: source.issues[0].title,
+        summary: writing(source).coachingItems[0].title,
         whatHappened: writing(source).coachingItems[0].whatHappened,
       },
     });
@@ -195,10 +198,11 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(prompt).toContain('\"coachingItems\":[]');
   });
 
-  it("keeps analyst issue titles immutable while requiring a distinct writer-generated observation heading", () => {
+  it("keeps analyst facts immutable while publishing a simple writer-generated issue title", () => {
     const itemProperties = (WHOLE_VIDEO_WRITING_SCHEMA as any).properties.coachingItems.items.properties;
-    expect(itemProperties).not.toHaveProperty("title");
+    expect(itemProperties).toHaveProperty("title");
     expect(itemProperties).toHaveProperty("whatHappened");
+    expect((WHOLE_VIDEO_WRITING_SCHEMA as any).properties.coachingItems.items.required).toContain("title");
     expect((WHOLE_VIDEO_WRITING_SCHEMA as any).properties.coachingItems.items.required).toContain("whatHappened");
   });
 
@@ -213,17 +217,36 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(() => parseWholeVideoWriting(repeatedSectionHeading, source)).toThrow(/section headings.*distinct/i);
   });
 
-  it("uses writer scores and muscle focus while keeping issue highlights separate", () => {
+  it("calibrates numeric scores from validated issue impact instead of trusting arbitrary writer numbers", () => {
     const source = analysis();
     const finalWriting = writing(source);
     const candidate = boundaryFreeToCandidate(source, finalWriting);
-    expect(candidate.movementScores).toEqual(finalWriting.movementScores);
+    expect(candidate.movementScores?.map((item) => item.score)).toEqual([86, 96, 92, 96]);
+    expect(candidate.score).toBe(93);
     expect(candidate.muscleFocus).toEqual(finalWriting.muscleFocus);
     expect(candidate.priorityCorrections[0].observedIssueRegions).toEqual(["elbows"]);
     expect(candidate.muscleFocus.primary[0].region).toBe("lats");
     expect(candidate.didWell).toEqual([]);
     expect(candidate.coachingCues).toEqual([]);
     expect(candidate.repTimeline).toEqual([]);
+  });
+
+  it("does not spend writer output on numeric scores that the app calculates locally", () => {
+    const movementItem = (WHOLE_VIDEO_WRITING_SCHEMA as any).properties.movementScores.items;
+    expect(movementItem.required).not.toContain("score");
+    expect(movementItem.properties).not.toHaveProperty("score");
+  });
+
+  it("chooses real evidence moments that represent more of the video when issues provide alternatives", () => {
+    const source = analysis(3);
+    source.issues[0].evidence.push({ ...source.issues[0].evidence[0], startMs: 1_500, peakMs: 1_800, endMs: 2_100 });
+    source.issues[1].evidence.push({ ...source.issues[1].evidence[0], startMs: 8_000, peakMs: 8_300, endMs: 8_600 });
+    source.issues[2].evidence.push({ ...source.issues[2].evidence[0], startMs: 5_000, peakMs: 5_300, endMs: 5_600 });
+
+    const candidate = boundaryFreeToCandidate(source, writing(source));
+
+    expect(candidate.priorityCorrections.map((item) => item.primaryEvidenceIndex)).toEqual([0, 1, 1]);
+    expect(candidate.priorityCorrections.map((item) => item.evidence[item.primaryEvidenceIndex!].peakMs)).toEqual([1_300, 8_300, 5_300]);
   });
 
   it("keeps only declared repetitions in the set summary", () => {
@@ -242,14 +265,13 @@ describe("focused whole-video analyst and writer contract", () => {
   });
 
   it("instructs Flash Lite to write specific three-sentence coaching without a sentence parser", () => {
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/everyday gym language/i);
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/technical terms?.*explain/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/beginner.*short sentences.*common words/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/rewrite technical analyst terms.*plain language.*cervical.*scapular/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/exactly three natural, video-specific sentences.*whatHappenedDetail/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/whatHappened heading.*what the camera shows/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/headings.*must.*distinct.*issue title/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/exactly three natural, exercise-specific sentences.*whyItMattersDetail/i);
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/minor isolated issues.*must not make.*entire performance.*poor/i);
-    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/0-to-100 scale.*never.*0-to-10/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not calculate numeric scores.*app applies one consistent.*rubric locally/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/declaration.*final issues/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toMatch(/catalog/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/observable mechanical consequences/i);

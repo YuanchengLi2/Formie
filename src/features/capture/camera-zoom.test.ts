@@ -1,4 +1,4 @@
-import { cameraZoomPresets, pinchZoom, resolveCameraZoom, zoomDisplayLabel } from "./camera-zoom";
+import { cameraZoomPresets, pinchMagnification, pinchZoom, resolveCameraMagnification, resolveCameraZoom, zoomDisplayLabel } from "./camera-zoom";
 
 describe("camera zoom", () => {
   it("always offers 1x and 2x and adds 0.5x when an ultrawide lens exists", () => {
@@ -20,5 +20,17 @@ describe("camera zoom", () => {
     expect(pinchZoom(0.35, 3)).toBe(0.36);
     expect(zoomDisplayLabel(0)).toBe("1.0x");
     expect(zoomDisplayLabel(0.12)).toBe("2.0x");
+  });
+
+  it("uses one continuous iPhone-style magnification for presets and pinch", () => {
+    const lenses = ["wideAngleCamera", "ultraWideCamera"];
+
+    expect(resolveCameraMagnification(0.5, lenses)).toEqual({ lens: "ultraWideCamera", magnification: 0.5, zoom: 0 });
+    expect(resolveCameraMagnification(1, lenses)).toEqual({ lens: "wideAngleCamera", magnification: 1, zoom: 0 });
+    expect(resolveCameraMagnification(2, lenses)).toEqual({ lens: "wideAngleCamera", magnification: 2, zoom: 0.12 });
+    expect(pinchMagnification(1, 0.5, true)).toBe(0.5);
+    expect(pinchMagnification(0.5, 4, true)).toBe(2);
+    expect(pinchMagnification(1, 0.25, false)).toBe(1);
+    expect(pinchMagnification(2, 3, true)).toBe(4);
   });
 });

@@ -4,6 +4,8 @@ import { act, fireEvent, render } from "@testing-library/react-native";
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
 const mockGetAvailableLensesAsync = jest.fn<Promise<string[]>, []>();
+let mockPinchBegin: (() => void) | undefined;
+let mockPinchUpdate: ((event: { scale: number }) => void) | undefined;
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ back: mockBack, replace: mockReplace }),
@@ -34,7 +36,11 @@ jest.mock("react-native-safe-area-context", () => ({
 
 jest.mock("react-native-gesture-handler", () => {
   const { View } = require("react-native");
-  const pinch = { runOnJS: () => pinch, onBegin: () => pinch, onUpdate: () => pinch };
+  const pinch = {
+    runOnJS: () => pinch,
+    onBegin: (callback: () => void) => { mockPinchBegin = callback; return pinch; },
+    onUpdate: (callback: (event: { scale: number }) => void) => { mockPinchUpdate = callback; return pinch; },
+  };
   return { Gesture: { Pinch: () => pinch }, GestureDetector: View };
 });
 
@@ -57,6 +63,8 @@ describe("CameraScreen capture lifecycle", () => {
     mockBack.mockClear();
     mockReplace.mockClear();
     mockGetAvailableLensesAsync.mockReset();
+    mockPinchBegin = undefined;
+    mockPinchUpdate = undefined;
     (analysisUploadCoordinator.reset as jest.Mock).mockClear();
     useCaptureStore.getState().dispatch({ type: "reset" });
     useCaptureStore.getState().dispatch({
@@ -151,6 +159,19 @@ describe("CameraScreen capture lifecycle", () => {
     await fireEvent.press(screen.getByLabelText("Camera zoom 0.5x"));
 
     expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("builtInUltraWideCamera");
+  });
+
+  it("lets a pinch cross from 1x onto the ultrawide camera", async () => {
+    const screen = await render(<CameraScreen />);
+    await act(async () => screen.getByLabelText("Camera preview").props.onAvailableLensesChanged({ lenses: ["wideAngleCamera", "ultraWideCamera"] }));
+
+    await act(async () => {
+      mockPinchBegin?.();
+      mockPinchUpdate?.({ scale: 0.5 });
+    });
+
+    expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("ultraWideCamera");
+    expect(screen.getByLabelText("Camera preview").props.zoom).toBe(0);
   });
 
   it("does not offer 0.5x when the active camera has no ultrawide lens", async () => {

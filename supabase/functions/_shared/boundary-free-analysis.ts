@@ -42,10 +42,11 @@ export type WholeVideoAnalysis = {
 export type WholeVideoWriting = {
   overallAssessment: string;
   coachNote: string;
-  movementScores: MovementScore[];
+  movementScores: Array<Omit<MovementScore, "score">>;
   muscleFocus: MuscleFocus;
   coachingItems: Array<{
     id: string;
+    title: string;
     whatHappened: string;
     whatHappenedDetail: string;
     whyItMatters: string;
@@ -219,7 +220,7 @@ function publicFinding(
     id: issue.id,
     coachingType: "correction",
     coachingArea: coachingArea(issue),
-    title: issue.title,
+    title: writing.title,
     detail: whatHappenedDetail,
     whyItMatters,
     correction: whatToDo,
@@ -231,7 +232,7 @@ function publicFinding(
       applyWhen: "On the next set at the cited moment.",
     },
     expandedCoaching: {
-      summary: issue.title,
+      summary: writing.title,
       whatHappened,
       whatHappenedDetail,
       whyItMatters,
@@ -265,7 +266,6 @@ function parseMovementScores(value: unknown, analysis: WholeVideoAnalysis): Move
     return {
       id,
       label,
-      score: boundedNumber(score.score, `${name}.score`, 0, 100),
       observed: text(score.observed, `${name}.observed`),
       evidenceIds,
     };
@@ -305,6 +305,7 @@ function parseCoachingItems(value: unknown, analysis: WholeVideoAnalysis): Whole
     const successCheck = item.successCheck === null ? null : text(item.successCheck, `${name}.successCheck`);
     return {
       id,
+      title: text(item.title, `${name}.title`),
       whatHappened: text(item.whatHappened, `${name}.whatHappened`),
       whatHappenedDetail: text(item.whatHappenedDetail, `${name}.whatHappenedDetail`),
       whyItMatters: text(item.whyItMatters, `${name}.whyItMatters`),
@@ -350,20 +351,28 @@ export function parseWholeVideoWriting(value: unknown, analysis: WholeVideoAnaly
 }
 
 function fallbackMovementScores(analysis: WholeVideoAnalysis): MovementScore[] {
-  const prevalenceWeight = { isolated: 0.6, repeated: 1, throughout: 1.25 } as const;
-  const severityWeight = { note: 4, important: 9, high: 15 } as const;
-  const penalty = analysis.issues.reduce(
-    (sum, issue) => sum + severityWeight[issue.severity] * prevalenceWeight[issue.prevalence] * issue.confidence,
-    0,
-  );
-  const base = Math.max(35, Math.min(96, Math.round(96 - penalty)));
   const evidenceIds = analysis.issues.map((issue) => issue.id);
-  return [
-    { id: "overall-form", label: "Overall Form", score: base, observed: "Based on all visible form issues from the complete set.", evidenceIds },
-    { id: "movement-path", label: "Movement Path", score: base, observed: "Based on the visible paths and positions cited by the analyst.", evidenceIds },
-    { id: "control", label: "Control", score: base, observed: "Based on the visible control and stability issues cited by the analyst.", evidenceIds },
-    { id: "repeatability", label: "Repeatability", score: base, observed: "Based on issue prevalence across the complete set.", evidenceIds },
-  ];
+  return calibrateMovementScores([
+    { id: "overall-form", label: "Overall Form", observed: "Based on all visible form issues from the complete set.", evidenceIds },
+    { id: "movement-path", label: "Movement Path", observed: "Based on the visible paths and positions cited by the analyst.", evidenceIds },
+    { id: "control", label: "Control", observed: "Based on the visible control and stability issues cited by the analyst.", evidenceIds },
+    { id: "repeatability", label: "Repeatability", observed: "Based on issue prevalence across the complete set.", evidenceIds },
+  ], analysis);
+}
+
+function calibrateMovementScores(scores: Array<Omit<MovementScore, "score">>, analysis: WholeVideoAnalysis): MovementScore[] {
+  const byId = new Map(analysis.issues.map((issue) => [issue.id, issue]));
+  const prevalenceWeight = { isolated: 0.5, repeated: 1, throughout: 1.35 } as const;
+  const severityWeight = { note: 1.5, important: 4, high: 8 } as const;
+  return scores.map((movementScore) => {
+    const penalty = movementScore.evidenceIds.reduce((sum, issueId) => {
+      const issue = byId.get(issueId);
+      return issue
+        ? sum + severityWeight[issue.severity] * prevalenceWeight[issue.prevalence] * issue.confidence
+        : sum;
+    }, 0);
+    return { ...movementScore, score: Math.max(45, Math.min(96, Math.round(96 - penalty))) };
+  });
 }
 
 export function normalizeWholeVideoWriting(value: unknown, analysis: WholeVideoAnalysis): WholeVideoWriting {
@@ -392,6 +401,7 @@ export function normalizeWholeVideoWriting(value: unknown, analysis: WholeVideoA
       const evidence = issue.evidence[0]?.visualEvidence ?? issue.observation;
       return {
         id: issue.id,
+        title: headingFromFact(issue.observation),
         whatHappened: headingFromFact(issue.observation),
         whatHappenedDetail: `${issue.observation} ${evidence} This was ${issue.prevalence} in the recorded set.`,
         whyItMatters: headingFromFact(issue.mechanicalConsequence),
@@ -411,11 +421,32 @@ export function boundaryFreeToCandidate(
 ): AnalysisCandidate & { analysisBasis: "observed"; viewNotes: string[]; generalGuidance: string[] } {
   const analysis = rawAnalysis;
   const writtenItems = new Map(writing.coachingItems.map((item) => [item.id, item]));
-  const priorityCorrections = analysis.issues.map((issue) => publicFinding(issue, writtenItems.get(issue.id)!));
+  const selectedPeaks: number[] = [];
+  const priorityCorrections = analysis.issues.map((issue) => {
+    const finding = publicFinding(issue, writtenItems.get(issue.id)!);
+    let selectedIndex = 0;
+    let selectedDistance = -1;
+    let selectedConfidence = -1;
+    finding.evidence.forEach((moment, index) => {
+      const peak = moment.peakMs ?? moment.startMs;
+      const distance = selectedPeaks.length === 0
+        ? 0
+        : Math.min(...selectedPeaks.map((selectedPeak) => Math.abs(peak - selectedPeak)));
+      const confidence = moment.confidence ?? 0;
+      if (distance > selectedDistance || (distance === selectedDistance && confidence > selectedConfidence)) {
+        selectedIndex = index;
+        selectedDistance = distance;
+        selectedConfidence = confidence;
+      }
+    });
+    finding.primaryEvidenceIndex = finding.evidence.length > 0 ? selectedIndex : undefined;
+    if (finding.evidence[selectedIndex]) selectedPeaks.push(finding.evidence[selectedIndex].peakMs ?? finding.evidence[selectedIndex].startMs);
+    return finding;
+  });
   const exerciseLabel = declaration?.exercise.label ?? "Exercise attempt";
   const equipment = recognitionContext.equipment
     ?? (declaration?.load.kind === "bodyweight" ? ["bodyweight"] : []);
-  const movementScores = writing.movementScores;
+  const movementScores = calibrateMovementScores(writing.movementScores, analysis);
   const score = movementScores.length > 0
     ? Math.round(movementScores.reduce((sum, item) => sum + item.score, 0) / movementScores.length)
     : null;
@@ -506,11 +537,10 @@ const evidenceSchema = {
 const movementScoreSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["id", "label", "score", "observed", "evidenceIds"],
+  required: ["id", "label", "observed", "evidenceIds"],
   properties: {
     id: { type: "string" },
     label: { type: "string" },
-    score: { type: "number" },
     observed: { type: "string" },
     evidenceIds: { type: "array", items: { type: "string" } },
   },
@@ -597,9 +627,10 @@ export const WHOLE_VIDEO_WRITING_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "whatHappened", "whatHappenedDetail", "whyItMatters", "whyItMattersDetail", "whatToDo", "successCheck"],
+        required: ["id", "title", "whatHappened", "whatHappenedDetail", "whyItMatters", "whyItMattersDetail", "whatToDo", "successCheck"],
         properties: {
           id: { type: "string" },
+          title: { type: "string", description: "A short, plain-language name for the issue that a beginner can understand." },
           whatHappened: { type: "string", description: "A concise, video-specific observation heading that describes what the camera shows. It must not repeat the issue title." },
           whatHappenedDetail: { type: "string" },
           whyItMatters: { type: "string", description: "A concise consequence heading that states the meaningful effect on the exercise. It must differ from the issue title and whatHappened heading." },
@@ -635,18 +666,18 @@ Identify the four to six highest-consequence distinct form problems visible in t
 
 Recommended checks include exercise-specific setup and equipment configuration such as bench angle; equipment and contact points; hands and grip; body position, alignment, and posture; support and balance; elbow and arm path relative to the torso and intended destination; lifting and lowering path; range and endpoints; tempo and control; stability; joint tracking and joint position under load; left-right imbalance and symmetry; and meaningful changes from the beginning through the middle and end of the set. These are recommendations, not limits or required categories. Use any other relevant exercise knowledge and report important issues outside these recommendations when the video supports them.
 
-Name the actual form fault. Do not use "variation," "inconsistency," or "change between reps" as the issue itself. For every issue, state the meaningful mechanical consequence that made it one of the highest-priority findings. Give every issue at least one original-video evidence moment. Set peakMs to the clearest exact frame, with startMs and endMs providing short surrounding context. Include the visible body areas, prevalence, severity, confidence, and anatomy regions to highlight.
+Name the actual form fault. Do not use "variation," "inconsistency," or "change between reps" as the issue itself. For every issue, state the meaningful mechanical consequence that made it one of the highest-priority findings. Give every issue at least one original-video evidence moment. For a repeated or throughout issue, include two meaningfully separated evidence moments when the video clearly supports them. Across the report, use supported evidence from the beginning, middle, and end when the selected problems appear there; never invent or move a timestamp merely to spread frames out. Set peakMs to the clearest exact frame, with startMs and endMs providing short surrounding context. Include the visible body areas, prevalence, severity, confidence, and anatomy regions to highlight.
 
 Return only analyst facts. Do not write explanations, corrections, strengths, scores, a muscle map, general guidance, or a recheck request. Return one JSON object matching the schema.`;
 }
 
 export const WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION = `You are Formie's coaching writer. Return only JSON matching the schema.
 
-Write a coaching item for every supplied issue exactly once. Preserve every supplied issue's identity and visible claims. Never rename, remove, add, merge, or split issues; never alter an issue's observation, evidence, severity, prevalence, confidence, or highlighted regions; and do not invent a new observed fault. Use exercise technique knowledge to turn each supplied fault into a specific, practical correction and visible success check. You may describe the appropriate joint path, direction, position, or endpoint when it directly corrects that supplied fault. For a pulling exercise, when the supplied fault concerns the pull path, arm range, or peak position, state a concrete elbow or arm destination—such as pulling the elbow toward the hips when appropriate for that exercise—instead of merely saying to pull farther back. Every statement about what happened in this recording must trace directly to the declaration, video summary, visibility report, issue, or evidence. Do not introduce a new fault, hypothetical compensation, or unsupported future outcome. Do not substitute equipment names; repeat the supplied equipment term or use the neutral word "equipment" when none is supplied. Use everyday gym language. An occasional useful technical term is allowed only when you explain it immediately in plain language.
+Write a coaching item for every supplied issue exactly once. Preserve every supplied issue's identity and visible claims. Never remove, add, merge, or split issues; never alter an issue's observation, evidence, severity, prevalence, confidence, or highlighted regions; and do not invent a new observed fault. Give each issue a short title in plain, beginner-friendly gym language. Use exercise technique knowledge to turn each supplied fault into a specific, practical correction and visible success check. You may describe the appropriate joint path, direction, position, or endpoint when it directly corrects that supplied fault. For a pulling exercise, when the supplied fault concerns the pull path, arm range, or peak position, state a concrete elbow or arm destination—such as pulling the elbow toward the hips when appropriate for that exercise—instead of merely saying to pull farther back. Every statement about what happened in this recording must trace directly to the declaration, video summary, visibility report, issue, or evidence. Do not introduce a new fault, hypothetical compensation, or unsupported future outcome. Do not substitute equipment names; repeat the supplied equipment term or use the neutral word "equipment" when none is supplied. Write for a beginner using short sentences and common words. Rewrite technical analyst terms in plain language instead of showing jargon such as cervical, scapular, eccentric, concentric, asymmetry, or thoracic. Keep necessary body-part names simple.
 
 For every issue, write a short whatHappened heading that describes what the camera shows, then exactly three natural, video-specific sentences for whatHappenedDetail. Write a short whyItMatters heading that names the meaningful exercise consequence, then exactly three natural, exercise-specific sentences for whyItMattersDetail. These two section headings must be dynamically written for their own content, distinct from each other, and distinct from the issue title; never copy or lightly rephrase the issue title into either heading. Explain the supplied observable mechanical consequences using position, path, range, balance, stability, loaded control, repeatability, and intended muscle stimulus where relevant. You may explain that a visible mechanic can reduce the intended muscle stimulus or shift emphasis away from the exercise's intended target, but cannot observe or assert what the person feels internally. Do not claim muscle activation as an observed fact, diagnose an injury, claim an injury will occur, or make claims about pain, joint health, muscle growth, or medical outcomes. Avoid repeated templates, identical endings, and invented physiology. Write one direct whatToDo sentence and one concrete successCheck sentence.
 
-Return exactly four movement scores on a 0-to-100 scale; never use a 0-to-10 scale. Create them solely from the final issues, their severity, prevalence, and confidence. Minor isolated issues must not make the entire performance appear poor. Create the exercise muscle map from the declaration, video summary, and final issues; keep that exercise muscle map separate from analyst-owned issue-region highlights.`;
+Return exactly four useful movement score categories with plain labels, short observations, and the analyst issue IDs that affect each category. Do not calculate numeric scores; the app applies one consistent severity, prevalence, and confidence rubric locally so identical form receives identical numbers. Create the exercise muscle map from the declaration, video summary, and final issues; keep that exercise muscle map separate from analyst-owned issue-region highlights.`;
 
 export function buildWholeVideoWritingPrompt(
   analysis: WholeVideoAnalysis,
@@ -666,7 +697,7 @@ export function buildWholeVideoWritingRepairPrompt(
   const reason = validationError instanceof Error ? validationError.message : String(validationError);
   return `${buildWholeVideoWritingPrompt(analysis, declaration)}
 
-The previous writer JSON was rejected. Rewrite the complete JSON from the immutable analyst result. Include every issue exactly once in the same order and repair only writing or structure. Do not add, remove, merge, split, rename, or reinterpret any issue or evidence.
+The previous writer JSON was rejected. Rewrite the complete JSON from the immutable analyst result. Include every issue exactly once in the same order and repair only writing or structure. Do not add, remove, merge, split, or reinterpret any analyst issue or evidence, and keep every issue ID unchanged.
 Validation issue: ${reason}
 Rejected writer JSON:
 ${JSON.stringify(rejectedWriting)}`;

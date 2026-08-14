@@ -4,7 +4,6 @@ import { act, fireEvent, render } from "@testing-library/react-native";
 
 const mockPlay = jest.fn();
 const mockPause = jest.fn();
-const mockEnterFullscreen = jest.fn();
 const mockListeners: Record<string, (event: Record<string, unknown>) => void> = {};
 let mockCurrentTime = 0;
 
@@ -13,7 +12,7 @@ jest.mock("expo-video", () => {
   const { View } = jest.requireActual<typeof import("react-native")>("react-native");
   return {
     VideoView: ReactRuntime.forwardRef((props: Record<string, unknown>, ref) => {
-      ReactRuntime.useImperativeHandle(ref, () => ({ enterFullscreen: mockEnterFullscreen }));
+      ReactRuntime.useImperativeHandle(ref, () => ({}));
       return <View {...props} />;
     }),
     useVideoPlayer: (_source: string, setup?: (player: Record<string, unknown>) => void) => {
@@ -54,7 +53,6 @@ describe("ReferenceVideoControls", () => {
   beforeEach(() => {
     mockPlay.mockClear();
     mockPause.mockClear();
-    mockEnterFullscreen.mockClear();
     mockCurrentTime = 0;
     Object.keys(mockListeners).forEach((key) => delete mockListeners[key]);
   });
@@ -69,7 +67,7 @@ describe("ReferenceVideoControls", () => {
     expect(formatPlaybackTime(seconds)).toBe(expected);
   });
 
-  it("drives real playback state, clamped seeking, and fullscreen from the reference controls", async () => {
+  it("drives real playback state, clamped seeking, and an explicitly dismissible fullscreen view", async () => {
     const screen = await render(<ReferenceVideoControls localVideoUri="file:///set.mp4" />);
 
     expect(screen.getByLabelText("Recorded set preview").props.nativeControls).toBe(false);
@@ -89,6 +87,8 @@ describe("ReferenceVideoControls", () => {
     expect(mockCurrentTime).toBe(18);
 
     await fireEvent.press(screen.getByLabelText("View recording fullscreen"));
-    expect(mockEnterFullscreen).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Fullscreen recording preview")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Close fullscreen recording"));
+    expect(screen.queryByLabelText("Fullscreen recording preview")).toBeNull();
   });
 });

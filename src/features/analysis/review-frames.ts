@@ -1,5 +1,4 @@
 import type { AnalysisResult, CoachingFinding, EvidenceMoment } from "./result-schema";
-import { normalizeAnalysisText } from "./sentences";
 
 export type ReviewPurpose = "observed" | "why" | "next";
 

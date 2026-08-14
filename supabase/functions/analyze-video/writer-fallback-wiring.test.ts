@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 const source = readFileSync(join(__dirname, "index.ts"), "utf8");
 
-describe("v82 dynamic-heading Gemini 3.7 analyst and specific resilient Flash Lite writer wiring", () => {
+describe("v83 simple-language calibrated whole-video coaching wiring", () => {
   it("uses one full-video Gemini 3.7 call followed by text-only Gemini 3.1 Flash Lite writing", () => {
     expect(source).not.toContain("runShortClipRechecks({");
     expect(source).toContain("buildWholeVideoWritingPrompt");
@@ -19,7 +19,7 @@ describe("v82 dynamic-heading Gemini 3.7 analyst and specific resilient Flash Li
     expect(source).toContain("parseWholeVideoWriting");
     expect(source).toContain("normalizeWholeVideoWriting");
     expect(source).toContain("buildWholeVideoWritingRepairPrompt");
-    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v82-dynamic-section-headings"');
+    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v83-simple-calibrated-coaching"');
     expect(source).toContain('const ANALYST_MODEL = "gemini-3.7-flash"');
     expect(source).toContain('const WRITER_MODEL = "gemini-3.1-flash-lite"');
     expect(source).not.toContain("limitWholeVideoAnalysis");

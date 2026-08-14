@@ -1,6 +1,7 @@
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, Text, View, type LayoutChangeEvent } from "react-native";
+import { Modal, Pressable, Text, View, type LayoutChangeEvent } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CaptureReferenceIcon } from "@/components/capture-reference-icon";
 import { colors } from "@/theme/colors";
@@ -22,12 +23,12 @@ export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControls
     created.loop = true;
     created.timeUpdateEventInterval = 0.25;
   });
-  const videoRef = useRef<VideoView>(null);
   const timelineWidthRef = useRef(1);
   const [playing, setPlaying] = useState(player.playing);
   const [currentTime, setCurrentTime] = useState(player.currentTime);
   const [duration, setDuration] = useState(player.duration);
   const [error, setError] = useState<string | null>(null);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
 
   useEffect(() => {
     const playingSubscription = player.addListener("playingChange", ({ isPlaying }) => setPlaying(isPlaying));
@@ -62,15 +63,13 @@ export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControls
   const safeDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
   const progress = safeDuration > 0 ? Math.max(0, Math.min(1, currentTime / safeDuration)) : 0;
 
-  return (
+  return (<>
     <View style={{ overflow: "hidden", aspectRatio: 16 / 10, borderRadius: radii.lg, borderCurve: "continuous", borderWidth: 1, borderColor: "#3A3A3A", backgroundColor: colors.cameraBlack }}>
       <VideoView
         accessibilityLabel="Recorded set preview"
         contentFit="contain"
-        fullscreenOptions={{ enable: true }}
         nativeControls={false}
         player={player}
-        ref={videoRef}
         style={{ width: "100%", height: "100%", backgroundColor: colors.cameraBlack }}
       />
 
@@ -121,12 +120,32 @@ export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControls
           accessibilityLabel="View recording fullscreen"
           accessibilityRole="button"
           hitSlop={8}
-          onPress={() => void videoRef.current?.enterFullscreen()}
+          onPress={() => setFullscreenOpen(true)}
           style={{ width: 22, height: 30, alignItems: "center", justifyContent: "center" }}
         >
           <CaptureReferenceIcon name="fullscreen" color={colors.text} size={20} />
         </Pressable>
       </View>
     </View>
-  );
+    <Modal animationType="fade" onRequestClose={() => setFullscreenOpen(false)} presentationStyle="fullScreen" visible={fullscreenOpen}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.cameraBlack }}>
+        <VideoView
+          accessibilityLabel="Fullscreen recording preview"
+          contentFit="contain"
+          nativeControls
+          player={player}
+          style={{ flex: 1, backgroundColor: colors.cameraBlack }}
+        />
+        <Pressable
+          accessibilityLabel="Close fullscreen recording"
+          accessibilityRole="button"
+          hitSlop={12}
+          onPress={() => setFullscreenOpen(false)}
+          style={{ position: "absolute", top: 14, left: 14, width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 22, backgroundColor: "rgba(8,8,8,0.78)" }}
+        >
+          <Text style={{ color: colors.text, fontSize: 28, lineHeight: 30 }}>×</Text>
+        </Pressable>
+      </SafeAreaView>
+    </Modal>
+  </>);
 }

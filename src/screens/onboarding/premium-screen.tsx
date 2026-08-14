@@ -16,7 +16,7 @@ export type PremiumScreenProps = {
   onRetrySync?: () => void;
 };
 
-const referencePaywall = require("../../../assets/production/paywall/reference/paywall-reference-no-social-proof.png");
+const referencePaywall = require("../../../assets/production/paywall/reference/paywall-reference-no-icons-852x1846.png");
 const goldGradient = require("../../../assets/production/onboarding/gold-gradient.png");
 
 const PAYWALL_SOURCE_WIDTH = 852;
