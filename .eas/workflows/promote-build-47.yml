@@ -1,0 +1,15 @@
+name: Promote Formie Build 47 to Public Beta
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  distribute_build_47:
+    name: Submit Build 47 for Beta App Review
+    type: testflight
+    params:
+      asc_build_id: 2ab6866c-ff8d-483d-8afb-768a56f6e3fc
+      external_groups:
+        - Formie Public Beta
+      changelog: Build 47 includes the latest Formie coaching, camera zoom, and reliability updates for public beta testing.
+      submit_beta_review: true
