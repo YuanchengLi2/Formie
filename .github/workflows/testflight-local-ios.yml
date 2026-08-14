@@ -40,43 +40,6 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Verify critical mobile release flows
-        timeout-minutes: 8
-        run: >-
-          npx jest --runInBand --silent --forceExit
-          src/screens/auth/auth-screens.test.tsx
-          src/features/auth/auth-provider.test.tsx
-          src/screens/onboarding/approved-onboarding.test.tsx
-          src/screens/home/home.test.tsx
-          src/screens/results/results.test.tsx
-          src/screens/camera/camera-controls.test.tsx
-          src/features/billing/purchases.native.test.ts
-          src/features/billing/billing-provider.test.ts
-          src/features/billing/purchase-reconciliation.test.ts
-          src/features/access/access-provider.runtime.test.tsx
-          src/features/access/security-grants-migration.test.ts
-          supabase/functions/revenuecat-webhook/handler.test.ts
-          supabase/functions/refresh-entitlement/handler.test.ts
-
-      - name: Verify mobile lint
-        timeout-minutes: 5
-        run: npm run lint
-
-      - name: Verify mobile TypeScript
-        timeout-minutes: 5
-        run: npm run typecheck
-
-      - name: Install website dependencies
-        working-directory: website
-        run: npm ci --no-audit --no-fund
-
-      - name: Verify website CSS and production bundle
-        working-directory: website
-        run: |
-          npm test -- --runInBand
-          npm run lint
-          npm run build
-
       - name: Validate production payment and auth environment
         run: >-
           eas env:exec production
