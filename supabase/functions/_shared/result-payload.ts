@@ -27,6 +27,7 @@ const WHOLE_VIDEO_PIPELINES = new Set([
   "gemini-whole-video-v81-high-consequence-coaching",
   "gemini-whole-video-v82-dynamic-section-headings",
   "gemini-whole-video-v83-simple-calibrated-coaching",
+  "gemini-whole-video-v84-short-issue-titles",
 ]);
 
 function isWholeVideoPipeline(value: unknown): boolean {

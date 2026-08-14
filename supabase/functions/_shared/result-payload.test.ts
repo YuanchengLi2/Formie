@@ -404,6 +404,7 @@ describe("resultPayload", () => {
       "gemini-whole-video-v80-core-4-6-specific-writer",
       "gemini-whole-video-v81-high-consequence-coaching",
       "gemini-whole-video-v83-simple-calibrated-coaching",
+      "gemini-whole-video-v84-short-issue-titles",
   ])("returns stored writer scores, muscle focus, and issue regions unchanged for %s", (pipelineVersion) => {
     const movementScores = [
       { id: "path", label: "Path", score: 91, observed: "Visible path", evidenceIds: ["path"] },

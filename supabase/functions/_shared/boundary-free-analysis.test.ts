@@ -215,6 +215,31 @@ describe("focused whole-video analyst and writer contract", () => {
     const repeatedSectionHeading = writing(source);
     repeatedSectionHeading.coachingItems[0].whyItMatters = repeatedSectionHeading.coachingItems[0].whatHappened;
     expect(() => parseWholeVideoWriting(repeatedSectionHeading, source)).toThrow(/section headings.*distinct/i);
+
+    const repeatedDisplayedTitle = writing(source);
+    repeatedDisplayedTitle.coachingItems[0].whatHappened = repeatedDisplayedTitle.coachingItems[0].title;
+    expect(() => parseWholeVideoWriting(repeatedDisplayedTitle, source)).toThrow(/whatHappened.*displayed title/i);
+  });
+
+  it("rejects explanation prose in the short issue title field", () => {
+    const source = analysis();
+    const proseTitle = writing(source);
+    proseTitle.coachingItems[0].title = "Your elbow moves too high during the pull, which changes where the weight finishes.";
+
+    expect(() => parseWholeVideoWriting(proseTitle, source)).toThrow(/title.*short label/i);
+  });
+
+  it("repairs a prose-like title locally without discarding valid writer coaching", () => {
+    const source = analysis();
+    source.issues[0].title = "Elbow path too high";
+    const proseTitle = writing(source);
+    proseTitle.coachingItems[0].title = "Your elbow moves too high during the pull, which changes where the weight finishes.";
+
+    const normalized = normalizeWholeVideoWriting(proseTitle, source);
+
+    expect(normalized.coachingItems[0].title).toBe("Elbow path too high");
+    expect(normalized.coachingItems[0].whatHappenedDetail).toBe(proseTitle.coachingItems[0].whatHappenedDetail);
+    expect(normalized.coachingItems.slice(1)).toEqual(proseTitle.coachingItems.slice(1));
   });
 
   it("calibrates numeric scores from validated issue impact instead of trusting arbitrary writer numbers", () => {

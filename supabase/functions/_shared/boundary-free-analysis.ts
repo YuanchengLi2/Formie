@@ -294,18 +294,48 @@ function parseMuscleFocus(value: unknown): MuscleFocus {
   return { primary, secondary, unclassified: [...new Set(stringArray(focus.unclassified, "writing.muscleFocus.unclassified"))] };
 }
 
-function parseCoachingItems(value: unknown, analysis: WholeVideoAnalysis): WholeVideoWriting["coachingItems"] {
+function shortIssueTitle(value: unknown, name: string): string {
+  const title = text(value, name);
+  const wordCount = title.split(/\s+/).length;
+  if (wordCount > 7 || title.length > 56 || /[\r\n.!?;,]/.test(title)) {
+    throw new Error(`${name} must be a short label of no more than seven words, not explanation text`);
+  }
+  return title;
+}
+
+function fallbackIssueTitle(value: string): string {
+  const firstThought = value.trim().split(/[\r\n.!?;,]/, 1)[0]?.trim() || value.trim();
+  const words = firstThought.split(/\s+/).slice(0, 7);
+  while (words.length > 1 && /^(?:a|an|and|because|during|for|of|or|the|to|when|where|which|with)$/i.test(words.at(-1)!)) {
+    words.pop();
+  }
+  return words.join(" ").replace(/[^a-z0-9')-]+$/i, "") || "Form issue";
+}
+
+function parseCoachingItems(
+  value: unknown,
+  analysis: WholeVideoAnalysis,
+  normalizeInvalidTitles = false,
+): WholeVideoWriting["coachingItems"] {
   if (!Array.isArray(value) || value.length !== analysis.issues.length) {
     throw new Error("writing.coachingItems must cover every analyst issue");
   }
+  const analystIssues = new Map(analysis.issues.map((issue) => [issue.id, issue]));
   const parsed = value.map((rawItem, index) => {
     const name = `writing.coachingItems[${index}]`;
     const item = record(rawItem, name);
     const id = text(item.id, `${name}.id`);
     const successCheck = item.successCheck === null ? null : text(item.successCheck, `${name}.successCheck`);
+    let title: string;
+    try {
+      title = shortIssueTitle(item.title, `${name}.title`);
+    } catch (error) {
+      if (!normalizeInvalidTitles) throw error;
+      title = fallbackIssueTitle(analystIssues.get(id)?.title ?? text(item.title, `${name}.title`));
+    }
     return {
       id,
-      title: text(item.title, `${name}.title`),
+      title,
       whatHappened: text(item.whatHappened, `${name}.whatHappened`),
       whatHappenedDetail: text(item.whatHappenedDetail, `${name}.whatHappenedDetail`),
       whyItMatters: text(item.whyItMatters, `${name}.whyItMatters`),
@@ -321,9 +351,11 @@ function parseCoachingItems(value: unknown, analysis: WholeVideoAnalysis): Whole
   return analysis.issues.map((issue) => {
     const item = byId.get(issue.id)!;
     const issueTitle = headingKey(issue.title);
+    const displayedTitle = headingKey(item.title);
     const whatHappened = headingKey(item.whatHappened);
     const whyItMatters = headingKey(item.whyItMatters);
     if (whatHappened === issueTitle) throw new Error(`writing.coachingItems[${issue.id}].whatHappened must not repeat the issue title`);
+    if (whatHappened === displayedTitle) throw new Error(`writing.coachingItems[${issue.id}].whatHappened must not repeat the displayed title`);
     if (whyItMatters === issueTitle) throw new Error(`writing.coachingItems[${issue.id}].whyItMatters must not repeat the issue title`);
     if (whatHappened === whyItMatters) throw new Error(`writing.coachingItems[${issue.id}] section headings must be distinct`);
     return item;
@@ -390,7 +422,7 @@ export function normalizeWholeVideoWriting(value: unknown, analysis: WholeVideoA
     try { coachNote = text(raw.coachNote, "writing.coachNote"); } catch {}
     try { movementScores = parseMovementScores(raw.movementScores, analysis); } catch {}
     try { muscleFocus = parseMuscleFocus(raw.muscleFocus); } catch {}
-    try { coachingItems = parseCoachingItems(raw.coachingItems, analysis); } catch {}
+    try { coachingItems = parseCoachingItems(raw.coachingItems, analysis, true); } catch {}
   }
   return {
     overallAssessment,
@@ -401,7 +433,7 @@ export function normalizeWholeVideoWriting(value: unknown, analysis: WholeVideoA
       const evidence = issue.evidence[0]?.visualEvidence ?? issue.observation;
       return {
         id: issue.id,
-        title: headingFromFact(issue.observation),
+        title: fallbackIssueTitle(issue.title),
         whatHappened: headingFromFact(issue.observation),
         whatHappenedDetail: `${issue.observation} ${evidence} This was ${issue.prevalence} in the recorded set.`,
         whyItMatters: headingFromFact(issue.mechanicalConsequence),
@@ -630,7 +662,7 @@ export const WHOLE_VIDEO_WRITING_SCHEMA = {
         required: ["id", "title", "whatHappened", "whatHappenedDetail", "whyItMatters", "whyItMattersDetail", "whatToDo", "successCheck"],
         properties: {
           id: { type: "string" },
-          title: { type: "string", description: "A short, plain-language name for the issue that a beginner can understand." },
+          title: { type: "string", description: "A plain-language issue label of no more than seven words. Use a name, not a sentence or explanation, and do not end it with punctuation." },
           whatHappened: { type: "string", description: "A concise, video-specific observation heading that describes what the camera shows. It must not repeat the issue title." },
           whatHappenedDetail: { type: "string" },
           whyItMatters: { type: "string", description: "A concise consequence heading that states the meaningful effect on the exercise. It must differ from the issue title and whatHappened heading." },
@@ -673,7 +705,7 @@ Return only analyst facts. Do not write explanations, corrections, strengths, sc
 
 export const WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION = `You are Formie's coaching writer. Return only JSON matching the schema.
 
-Write a coaching item for every supplied issue exactly once. Preserve every supplied issue's identity and visible claims. Never remove, add, merge, or split issues; never alter an issue's observation, evidence, severity, prevalence, confidence, or highlighted regions; and do not invent a new observed fault. Give each issue a short title in plain, beginner-friendly gym language. Use exercise technique knowledge to turn each supplied fault into a specific, practical correction and visible success check. You may describe the appropriate joint path, direction, position, or endpoint when it directly corrects that supplied fault. For a pulling exercise, when the supplied fault concerns the pull path, arm range, or peak position, state a concrete elbow or arm destination—such as pulling the elbow toward the hips when appropriate for that exercise—instead of merely saying to pull farther back. Every statement about what happened in this recording must trace directly to the declaration, video summary, visibility report, issue, or evidence. Do not introduce a new fault, hypothetical compensation, or unsupported future outcome. Do not substitute equipment names; repeat the supplied equipment term or use the neutral word "equipment" when none is supplied. Write for a beginner using short sentences and common words. Rewrite technical analyst terms in plain language instead of showing jargon such as cervical, scapular, eccentric, concentric, asymmetry, or thoracic. Keep necessary body-part names simple.
+Write a coaching item for every supplied issue exactly once. Preserve every supplied issue's identity and visible claims. Never remove, add, merge, or split issues; never alter an issue's observation, evidence, severity, prevalence, confidence, or highlighted regions; and do not invent a new observed fault. Give each issue a plain, beginner-friendly title of no more than seven words. The title must name the issue like a label, not state a complete sentence, copy explanation text, or end with punctuation. Use exercise technique knowledge to turn each supplied fault into a specific, practical correction and visible success check. You may describe the appropriate joint path, direction, position, or endpoint when it directly corrects that supplied fault. For a pulling exercise, when the supplied fault concerns the pull path, arm range, or peak position, state a concrete elbow or arm destination—such as pulling the elbow toward the hips when appropriate for that exercise—instead of merely saying to pull farther back. Every statement about what happened in this recording must trace directly to the declaration, video summary, visibility report, issue, or evidence. Do not introduce a new fault, hypothetical compensation, or unsupported future outcome. Do not substitute equipment names; repeat the supplied equipment term or use the neutral word "equipment" when none is supplied. Write for a beginner using short sentences and common words. Rewrite technical analyst terms in plain language instead of showing jargon such as cervical, scapular, eccentric, concentric, asymmetry, or thoracic. Keep necessary body-part names simple.
 
 For every issue, write a short whatHappened heading that describes what the camera shows, then exactly three natural, video-specific sentences for whatHappenedDetail. Write a short whyItMatters heading that names the meaningful exercise consequence, then exactly three natural, exercise-specific sentences for whyItMattersDetail. These two section headings must be dynamically written for their own content, distinct from each other, and distinct from the issue title; never copy or lightly rephrase the issue title into either heading. Explain the supplied observable mechanical consequences using position, path, range, balance, stability, loaded control, repeatability, and intended muscle stimulus where relevant. You may explain that a visible mechanic can reduce the intended muscle stimulus or shift emphasis away from the exercise's intended target, but cannot observe or assert what the person feels internally. Do not claim muscle activation as an observed fact, diagnose an injury, claim an injury will occur, or make claims about pain, joint health, muscle growth, or medical outcomes. Avoid repeated templates, identical endings, and invented physiology. Write one direct whatToDo sentence and one concrete successCheck sentence.
 
