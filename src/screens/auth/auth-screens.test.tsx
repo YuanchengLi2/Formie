@@ -1,7 +1,7 @@
 import { fireEvent, render } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { AccountAccessScreen } from "@/components/account-access-screen";
+import { AccountAccessScreen, isCompactAccountAccessLayout } from "@/components/account-access-screen";
 import { SocialLoginScreen } from ".";
 
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };
@@ -89,5 +89,10 @@ describe("account access screens", () => {
     expect(screen.getByText(/I agree to Formie's Terms of Use and Privacy Policy/)).toBeTruthy();
     expect(screen.getByText(/Send me tips, new features/)).toBeTruthy();
     expect(screen.queryByLabelText("Formie")).toBeNull();
+  });
+
+  it("uses compact spacing on short and narrow phones", () => {
+    expect(isCompactAccountAccessLayout(568, 320, 20, 0)).toBe(true);
+    expect(isCompactAccountAccessLayout(844, 390, 47, 34)).toBe(false);
   });
 });

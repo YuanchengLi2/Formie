@@ -1,12 +1,16 @@
 import { StatusBar } from "expo-status-bar";
 import { useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SocialProviderButtons } from "@/components/social-provider-buttons";
 import type { SocialProvider } from "@/features/auth/auth-service";
 
 type AccountAccessMode = "login" | "onboarding";
+
+export function isCompactAccountAccessLayout(height: number, width: number, topInset = 0, bottomInset = 0) {
+  return height - topInset - bottomInset < 660 || width < 360;
+}
 
 function ConsentRow({ label, checked, onPress, children }: { label: string; checked: boolean; onPress: () => void; children: ReactNode }) {
   return <View style={styles.consentRow}>
@@ -31,6 +35,8 @@ export function AccountAccessScreen({ mode = "login", onOAuth, onEmail, onCreate
   error?: string | null;
 }) {
   const insets = useSafeAreaInsets();
+  const { height, width } = useWindowDimensions();
+  const compact = isCompactAccountAccessLayout(height, width, insets.top, insets.bottom);
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const disabled = busy || busyProvider !== null || (mode === "onboarding" && !legalAccepted);
@@ -39,13 +45,13 @@ export function AccountAccessScreen({ mode = "login", onOAuth, onEmail, onCreate
   return <View testID="social-account-access" style={styles.screen}>
     <StatusBar style="light" />
     <View style={[styles.safeTop, { height: Math.max(insets.top, 12) }]} />
-    <ScrollView testID="account-access-scroll" contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 24) }]} showsVerticalScrollIndicator={false}>
+    <ScrollView testID="account-access-scroll" contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, compact && styles.contentCompact, { paddingBottom: Math.max(insets.bottom, 24) }]} showsVerticalScrollIndicator={false}>
       <View testID="account-access-top-row" style={styles.topRow}>
         {onBack ? <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={styles.back}><Text style={styles.backGlyph}>‹</Text></Pressable> : <View style={styles.back} />}
         <View testID="account-access-gold-bar" style={styles.progressBar} />
       </View>
-      <View style={styles.hero}><Text style={styles.title}>{title}</Text></View>
-      <View testID="account-access-actions" style={styles.actions}>
+      <View style={styles.hero}><Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text></View>
+      <View testID="account-access-actions" style={[styles.actions, compact && styles.actionsCompact]}>
         <SocialProviderButtons mode={mode} disabled={disabled} busyProvider={busyProvider} onOAuth={onOAuth} onEmail={onEmail} />
         {busy && !busyProvider ? <View style={styles.busy}><ActivityIndicator color="#E5AD32" /><Text style={styles.busyText}>Connecting…</Text></View> : null}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
@@ -65,11 +71,14 @@ const styles = StyleSheet.create({
   topRow: { width: "100%", minHeight: 36, flexDirection: "row", alignItems: "center", gap: 14 },
   progressBar: { flex: 1, height: 3, backgroundColor: "#E5AD32", marginRight: 8 },
   content: { flexGrow: 1, width: "100%", maxWidth: 520, alignSelf: "center", justifyContent: "flex-start", paddingHorizontal: 20, paddingTop: 14 },
+  contentCompact: { paddingHorizontal: 16, paddingTop: 8 },
   back: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#111110", borderWidth: 1, borderColor: "#E5AD32" },
   backGlyph: { color: "#E5AD32", fontSize: 30, lineHeight: 32 },
   hero: { alignItems: "flex-start" },
   title: { color: "#F5F4F0", fontSize: 34, lineHeight: 40, fontWeight: "800", letterSpacing: -1.1, textAlign: "left", marginTop: 12 },
+  titleCompact: { fontSize: 30, lineHeight: 36 },
   actions: { width: "100%", maxWidth: 296, alignSelf: "center", gap: 20, marginTop: 116 },
+  actionsCompact: { marginTop: 48 },
   busy: { minHeight: 28, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   busyText: { color: "#D8D3C8", fontSize: 14 },
   error: { color: "#FF8A82", fontSize: 14, lineHeight: 20, fontWeight: "600", textAlign: "center" },
