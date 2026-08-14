@@ -312,6 +312,20 @@ function fallbackIssueTitle(value: string): string {
   return words.join(" ").replace(/[^a-z0-9')-]+$/i, "") || "Form issue";
 }
 
+function shortSectionHeading(value: unknown, name: string): string {
+  const heading = text(value, name);
+  const wordCount = heading.split(/\s+/).length;
+  if (wordCount > 10 || heading.length > 72 || /[\r\n.!?;]/.test(heading)) {
+    throw new Error(`${name} must be a short heading of no more than ten words, not body text`);
+  }
+  return heading;
+}
+
+function fallbackSectionHeading(value: string): string {
+  const withoutLeadingArticle = value.trim().replace(/^(?:the|your)\s+/i, "");
+  return fallbackIssueTitle(withoutLeadingArticle).replace(/^./, (character) => character.toUpperCase());
+}
+
 function parseCoachingItems(
   value: unknown,
   analysis: WholeVideoAnalysis,
@@ -325,20 +339,35 @@ function parseCoachingItems(
     const name = `writing.coachingItems[${index}]`;
     const item = record(rawItem, name);
     const id = text(item.id, `${name}.id`);
+    const analystIssue = analystIssues.get(id);
     const successCheck = item.successCheck === null ? null : text(item.successCheck, `${name}.successCheck`);
     let title: string;
     try {
       title = shortIssueTitle(item.title, `${name}.title`);
     } catch (error) {
       if (!normalizeInvalidTitles) throw error;
-      title = fallbackIssueTitle(analystIssues.get(id)?.title ?? text(item.title, `${name}.title`));
+      title = fallbackIssueTitle(analystIssue?.title ?? text(item.title, `${name}.title`));
+    }
+    let whatHappened: string;
+    try {
+      whatHappened = shortSectionHeading(item.whatHappened, `${name}.whatHappened`);
+    } catch (error) {
+      if (!normalizeInvalidTitles) throw error;
+      whatHappened = fallbackSectionHeading(analystIssue?.observation ?? text(item.whatHappened, `${name}.whatHappened`));
+    }
+    let whyItMatters: string;
+    try {
+      whyItMatters = shortSectionHeading(item.whyItMatters, `${name}.whyItMatters`);
+    } catch (error) {
+      if (!normalizeInvalidTitles) throw error;
+      whyItMatters = fallbackSectionHeading(analystIssue?.mechanicalConsequence ?? text(item.whyItMatters, `${name}.whyItMatters`));
     }
     return {
       id,
       title,
-      whatHappened: text(item.whatHappened, `${name}.whatHappened`),
+      whatHappened,
       whatHappenedDetail: text(item.whatHappenedDetail, `${name}.whatHappenedDetail`),
-      whyItMatters: text(item.whyItMatters, `${name}.whyItMatters`),
+      whyItMatters,
       whyItMattersDetail: text(item.whyItMattersDetail, `${name}.whyItMattersDetail`),
       whatToDo: text(item.whatToDo, `${name}.whatToDo`),
       successCheck,
@@ -364,11 +393,6 @@ function parseCoachingItems(
 
 function headingKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function headingFromFact(value: string): string {
-  const firstThought = value.trim().split(/[.;!?]/, 1)[0]?.trim() || value.trim();
-  return firstThought.replace(/^(?:the|your)\s+/i, "").replace(/^./, (character) => character.toUpperCase());
 }
 
 export function parseWholeVideoWriting(value: unknown, analysis: WholeVideoAnalysis): WholeVideoWriting {
@@ -434,9 +458,9 @@ export function normalizeWholeVideoWriting(value: unknown, analysis: WholeVideoA
       return {
         id: issue.id,
         title: fallbackIssueTitle(issue.title),
-        whatHappened: headingFromFact(issue.observation),
+        whatHappened: fallbackSectionHeading(issue.observation),
         whatHappenedDetail: `${issue.observation} ${evidence} This was ${issue.prevalence} in the recorded set.`,
-        whyItMatters: headingFromFact(issue.mechanicalConsequence),
+        whyItMatters: fallbackSectionHeading(issue.mechanicalConsequence),
         whyItMattersDetail: `${issue.mechanicalConsequence} Addressing it makes that part of the exercise easier to control. It also gives you a clearer position to repeat on the next set.`,
         whatToDo: `Adjust ${issue.title.toLowerCase()} during the next set using the visible evidence as your reference.`,
         successCheck: `The cited position stays controlled through the same part of the exercise.`,
@@ -663,9 +687,9 @@ export const WHOLE_VIDEO_WRITING_SCHEMA = {
         properties: {
           id: { type: "string" },
           title: { type: "string", description: "A plain-language issue label of no more than seven words. Use a name, not a sentence or explanation, and do not end it with punctuation." },
-          whatHappened: { type: "string", description: "A concise, video-specific observation heading that describes what the camera shows. It must not repeat the issue title." },
+          whatHappened: { type: "string", description: "A video-specific observation heading of no more than ten words. Use a title, not a sentence or body text, and do not end it with punctuation. It must not repeat the issue title." },
           whatHappenedDetail: { type: "string" },
-          whyItMatters: { type: "string", description: "A concise consequence heading that states the meaningful effect on the exercise. It must differ from the issue title and whatHappened heading." },
+          whyItMatters: { type: "string", description: "A consequence heading of no more than ten words. Use a title, not a sentence or body text, and do not end it with punctuation. It must differ from the issue title and whatHappened heading." },
           whyItMattersDetail: { type: "string" },
           whatToDo: { type: "string" },
           successCheck: { type: "string" },
@@ -698,6 +722,8 @@ Identify the four to six highest-consequence distinct form problems visible in t
 
 Recommended checks include setup; equipment configuration and contact points; hands and grip; body position, alignment, and posture; support and balance; movement path; range and endpoints; tempo and control; stability; joint tracking and joint position under load; left-right imbalance and symmetry; and meaningful changes from the beginning through the middle and end of the set. These are recommendations, not limits or required categories. Use any other relevant exercise knowledge and report important issues outside these recommendations when the video supports them.
 
+A brief head or gaze turn toward the camera is not a form issue by itself. Ignore camera-checking unless it visibly changes the person's loaded position, balance, movement path, or control.
+
 Name the actual form fault. Do not use "variation," "inconsistency," or "change between reps" as the issue itself. For every issue, state the meaningful mechanical consequence that made it one of the highest-priority findings. Give every issue at least one original-video evidence moment. For a repeated or throughout issue, include two meaningfully separated evidence moments when the video clearly supports them. Across the report, use supported evidence from the beginning, middle, and end when the selected problems appear there; never invent or move a timestamp merely to spread frames out. Set peakMs to the clearest exact frame, with startMs and endMs providing short surrounding context. Include the visible body areas, prevalence, severity, confidence, and anatomy regions to highlight.
 
 Return only analyst facts. Do not write explanations, corrections, strengths, scores, a muscle map, general guidance, or a recheck request. Return one JSON object matching the schema.`;
@@ -707,7 +733,7 @@ export const WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION = `You are Formie's coaching 
 
 Write a coaching item for every supplied issue exactly once. Preserve every supplied issue's identity and visible claims. Never remove, add, merge, or split issues; never alter an issue's observation, evidence, severity, prevalence, confidence, or highlighted regions; and do not invent a new observed fault. Give each issue a plain, beginner-friendly title of no more than seven words. The title must name the issue like a label, not state a complete sentence, copy explanation text, or end with punctuation. Use exercise technique knowledge to turn each supplied fault into a specific, practical correction and visible success check. You may describe the appropriate joint path, direction, position, or endpoint when it directly corrects that supplied fault. For a pulling exercise, when the supplied fault concerns the pull path, arm range, or peak position, state a concrete elbow or arm destination—such as pulling the elbow toward the hips when appropriate for that exercise—instead of merely saying to pull farther back. Every statement about what happened in this recording must trace directly to the declaration, video summary, visibility report, issue, or evidence. Do not introduce a new fault, hypothetical compensation, or unsupported future outcome. Do not substitute equipment names; repeat the supplied equipment term or use the neutral word "equipment" when none is supplied. Use everyday gym language. An occasional useful technical term is allowed only when you explain it immediately in plain language.
 
-For every issue, write a short whatHappened heading that describes what the camera shows, then exactly three natural, video-specific sentences for whatHappenedDetail. Write a short whyItMatters heading that names the meaningful exercise consequence, then exactly three natural, exercise-specific sentences for whyItMattersDetail. These two section headings must be dynamically written for their own content, distinct from each other, and distinct from the issue title; never copy or lightly rephrase the issue title into either heading. Explain the supplied observable mechanical consequences using position, path, range, balance, stability, loaded control, repeatability, and intended muscle stimulus where relevant. You may explain that a visible mechanic can reduce the intended muscle stimulus or shift emphasis away from the exercise's intended target, but cannot observe or assert what the person feels internally. Do not claim muscle activation as an observed fact, diagnose an injury, claim an injury will occur, or make claims about pain, joint health, muscle growth, or medical outcomes. Avoid repeated templates, identical endings, and invented physiology. Write one direct whatToDo sentence and one concrete successCheck sentence.
+For every issue, write a short whatHappened heading that describes what the camera shows, then exactly three natural, video-specific sentences for whatHappenedDetail. Write a short whyItMatters heading that names the meaningful exercise consequence, then exactly three natural, exercise-specific sentences for whyItMattersDetail. Every section heading must be no more than ten words and must be a title, not a sentence, explanation, or body paragraph. These two section headings must be dynamically written for their own content, distinct from each other, and distinct from the issue title; never copy or lightly rephrase the issue title into either heading. Explain the supplied observable mechanical consequences using position, path, range, balance, stability, loaded control, repeatability, and intended muscle stimulus where relevant. You may explain that a visible mechanic can reduce the intended muscle stimulus or shift emphasis away from the exercise's intended target, but cannot observe or assert what the person feels internally. Do not claim muscle activation as an observed fact, diagnose an injury, claim an injury will occur, or make claims about pain, joint health, muscle growth, or medical outcomes. Avoid repeated templates, identical endings, and invented physiology. Write one direct whatToDo sentence and one concrete successCheck sentence.
 
 Return exactly four useful movement score categories with plain labels, short observations, and the analyst issue IDs that affect each category. Do not calculate numeric scores; the app applies one consistent severity, prevalence, and confidence rubric locally so identical form receives identical numbers. Create the exercise muscle map from the declaration, video summary, and final issues; keep that exercise muscle map separate from analyst-owned issue-region highlights.`;
 

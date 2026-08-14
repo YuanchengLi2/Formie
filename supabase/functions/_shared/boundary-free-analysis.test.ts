@@ -119,6 +119,7 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(prompt).toMatch(/do not prioritize.*easy to notice/i);
     expect(prompt).toMatch(/do not include.*minor.*optimization/i);
     expect(prompt).toMatch(/recommendations.*not.*limits/i);
+    expect(prompt).toMatch(/head or gaze.*toward the camera.*not.*form issue.*unless.*position.*balance.*path.*control/i);
     expect(BOUNDARY_FREE_ANALYSIS_SCHEMA.properties.issues.description).toMatch(/four to six.*highest-consequence/i);
     expect(prompt).toMatch(/at least one.*evidence moment/i);
     expect(prompt).toMatch(/repeated or throughout issue.*two meaningfully separated evidence moments/i);
@@ -223,6 +224,26 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(() => parseWholeVideoWriting(repeatedDisplayedTitle, source)).toThrow(/whatHappened.*displayed title/i);
   });
 
+  it("rejects body prose in section heading fields", () => {
+    const source = analysis();
+    const proseHeading = writing(source);
+    proseHeading.coachingItems[0].whatHappened = "Your lowering speed changes through the middle of the set. This makes the movement harder to repeat consistently.";
+
+    expect(() => parseWholeVideoWriting(proseHeading, source)).toThrow(/whatHappened.*short heading/i);
+  });
+
+  it("repairs a prose-like section heading without discarding its body copy", () => {
+    const source = analysis();
+    const proseHeading = writing(source);
+    proseHeading.coachingItems[0].whatHappened = "Your lowering speed changes through the middle of the set. This makes the movement harder to repeat consistently.";
+
+    const normalized = normalizeWholeVideoWriting(proseHeading, source);
+
+    expect(normalized.coachingItems[0].whatHappened).toBe("Visible path for issue 1 changes");
+    expect(normalized.coachingItems[0].whatHappenedDetail).toBe(proseHeading.coachingItems[0].whatHappenedDetail);
+    expect(normalized.coachingItems[0].whyItMattersDetail).toBe(proseHeading.coachingItems[0].whyItMattersDetail);
+  });
+
   it("rejects explanation prose in the short issue title field", () => {
     const source = analysis();
     const proseTitle = writing(source);
@@ -297,6 +318,7 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).not.toMatch(/short sentences/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/exactly three natural, video-specific sentences.*whatHappenedDetail/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/whatHappened heading.*what the camera shows/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/section heading.*no more than ten words.*not.*body/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/headings.*must.*distinct.*issue title/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/exactly three natural, exercise-specific sentences.*whyItMattersDetail/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/do not calculate numeric scores.*app applies one consistent.*rubric locally/i);
