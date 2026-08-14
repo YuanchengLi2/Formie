@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - codex/fix-analysis-billing-v70
+      - codex/ios-3d-tracking-scoring
     paths:
       - .github/workflows/testflight-local-ios.yml
 
@@ -38,7 +38,30 @@ jobs:
           packager: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify mobile flows and presentation
+        run: |
+          npm test -- --runInBand --silent
+          npm run lint
+          npm run typecheck
+
+      - name: Install website dependencies
+        working-directory: website
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify website CSS and production bundle
+        working-directory: website
+        run: |
+          npm test -- --runInBand
+          npm run lint
+          npm run build
+
+      - name: Validate production payment and auth environment
+        run: >-
+          eas env:exec production
+          'node -e "const checks=[/^appl_/.test(String(process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_KEY)),Boolean(process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID),Boolean(process.env.EXPO_PUBLIC_REVENUECAT_PRODUCT_ID),Boolean(process.env.EXPO_PUBLIC_REVENUECAT_OFFERING_ID),Boolean(process.env.EXPO_PUBLIC_SUPABASE_URL),Boolean(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY)];if(checks.some((value)=>!value))process.exit(1)"'
+          --non-interactive
 
       - name: Build signed IPA on GitHub macOS
         run: eas build --platform ios --profile production --local --non-interactive --output ./Formie.ipa
