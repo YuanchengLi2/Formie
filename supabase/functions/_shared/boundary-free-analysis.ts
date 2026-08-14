@@ -46,6 +46,7 @@ export type WholeVideoWriting = {
   muscleFocus: MuscleFocus;
   coachingItems: Array<{
     id: string;
+    whatHappened: string;
     whatHappenedDetail: string;
     whyItMatters: string;
     whyItMattersDetail: string;
@@ -207,6 +208,7 @@ function publicFinding(
   issue: WholeVideoAnalysis["issues"][number],
   writing: WholeVideoWriting["coachingItems"][number],
 ): CoachingFinding {
+  const whatHappened = writing.whatHappened;
   const whatHappenedDetail = writing.whatHappenedDetail;
   const whyItMatters = writing.whyItMatters;
   const whyItMattersDetail = writing.whyItMattersDetail;
@@ -230,7 +232,7 @@ function publicFinding(
     },
     expandedCoaching: {
       summary: issue.title,
-      whatHappened: issue.title,
+      whatHappened,
       whatHappenedDetail,
       whyItMatters,
       whyItMattersDetail,
@@ -303,6 +305,7 @@ function parseCoachingItems(value: unknown, analysis: WholeVideoAnalysis): Whole
     const successCheck = item.successCheck === null ? null : text(item.successCheck, `${name}.successCheck`);
     return {
       id,
+      whatHappened: text(item.whatHappened, `${name}.whatHappened`),
       whatHappenedDetail: text(item.whatHappenedDetail, `${name}.whatHappenedDetail`),
       whyItMatters: text(item.whyItMatters, `${name}.whyItMatters`),
       whyItMattersDetail: text(item.whyItMattersDetail, `${name}.whyItMattersDetail`),
@@ -314,7 +317,25 @@ function parseCoachingItems(value: unknown, analysis: WholeVideoAnalysis): Whole
   if (byId.size !== parsed.length || analysis.issues.some((issue) => !byId.has(issue.id))) {
     throw new Error("writing.coachingItems must use every analyst issue ID exactly once");
   }
-  return analysis.issues.map((issue) => byId.get(issue.id)!);
+  return analysis.issues.map((issue) => {
+    const item = byId.get(issue.id)!;
+    const issueTitle = headingKey(issue.title);
+    const whatHappened = headingKey(item.whatHappened);
+    const whyItMatters = headingKey(item.whyItMatters);
+    if (whatHappened === issueTitle) throw new Error(`writing.coachingItems[${issue.id}].whatHappened must not repeat the issue title`);
+    if (whyItMatters === issueTitle) throw new Error(`writing.coachingItems[${issue.id}].whyItMatters must not repeat the issue title`);
+    if (whatHappened === whyItMatters) throw new Error(`writing.coachingItems[${issue.id}] section headings must be distinct`);
+    return item;
+  });
+}
+
+function headingKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function headingFromFact(value: string): string {
+  const firstThought = value.trim().split(/[.;!?]/, 1)[0]?.trim() || value.trim();
+  return firstThought.replace(/^(?:the|your)\s+/i, "").replace(/^./, (character) => character.toUpperCase());
 }
 
 export function parseWholeVideoWriting(value: unknown, analysis: WholeVideoAnalysis): WholeVideoWriting {
@@ -371,8 +392,9 @@ export function normalizeWholeVideoWriting(value: unknown, analysis: WholeVideoA
       const evidence = issue.evidence[0]?.visualEvidence ?? issue.observation;
       return {
         id: issue.id,
+        whatHappened: headingFromFact(issue.observation),
         whatHappenedDetail: `${issue.observation} ${evidence} This was ${issue.prevalence} in the recorded set.`,
-        whyItMatters: `Improve ${issue.title.toLowerCase()}`,
+        whyItMatters: headingFromFact(issue.mechanicalConsequence),
         whyItMattersDetail: `${issue.mechanicalConsequence} Addressing it makes that part of the exercise easier to control. It also gives you a clearer position to repeat on the next set.`,
         whatToDo: `Adjust ${issue.title.toLowerCase()} during the next set using the visible evidence as your reference.`,
         successCheck: `The cited position stays controlled through the same part of the exercise.`,
@@ -575,11 +597,12 @@ export const WHOLE_VIDEO_WRITING_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "whatHappenedDetail", "whyItMatters", "whyItMattersDetail", "whatToDo", "successCheck"],
+        required: ["id", "whatHappened", "whatHappenedDetail", "whyItMatters", "whyItMattersDetail", "whatToDo", "successCheck"],
         properties: {
           id: { type: "string" },
+          whatHappened: { type: "string", description: "A concise, video-specific observation heading that describes what the camera shows. It must not repeat the issue title." },
           whatHappenedDetail: { type: "string" },
-          whyItMatters: { type: "string" },
+          whyItMatters: { type: "string", description: "A concise consequence heading that states the meaningful effect on the exercise. It must differ from the issue title and whatHappened heading." },
           whyItMattersDetail: { type: "string" },
           whatToDo: { type: "string" },
           successCheck: { type: "string" },
@@ -621,7 +644,7 @@ export const WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION = `You are Formie's coaching 
 
 Write a coaching item for every supplied issue exactly once. Preserve every supplied issue's identity and visible claims. Never rename, remove, add, merge, or split issues; never alter an issue's observation, evidence, severity, prevalence, confidence, or highlighted regions; and do not invent a new observed fault. Use exercise technique knowledge to turn each supplied fault into a specific, practical correction and visible success check. You may describe the appropriate joint path, direction, position, or endpoint when it directly corrects that supplied fault. For a pulling exercise, when the supplied fault concerns the pull path, arm range, or peak position, state a concrete elbow or arm destination—such as pulling the elbow toward the hips when appropriate for that exercise—instead of merely saying to pull farther back. Every statement about what happened in this recording must trace directly to the declaration, video summary, visibility report, issue, or evidence. Do not introduce a new fault, hypothetical compensation, or unsupported future outcome. Do not substitute equipment names; repeat the supplied equipment term or use the neutral word "equipment" when none is supplied. Use everyday gym language. An occasional useful technical term is allowed only when you explain it immediately in plain language.
 
-For every issue, write exactly three natural, video-specific sentences for whatHappenedDetail. Write a short whyItMatters heading, then exactly three natural, exercise-specific sentences for whyItMattersDetail. Explain the supplied observable mechanical consequences using position, path, range, balance, stability, loaded control, repeatability, and intended muscle stimulus where relevant. You may explain that a visible mechanic can reduce the intended muscle stimulus or shift emphasis away from the exercise's intended target, but cannot observe or assert what the person feels internally. Do not claim muscle activation as an observed fact, diagnose an injury, claim an injury will occur, or make claims about pain, joint health, muscle growth, or medical outcomes. Avoid repeated templates, identical endings, and invented physiology. Write one direct whatToDo sentence and one concrete successCheck sentence.
+For every issue, write a short whatHappened heading that describes what the camera shows, then exactly three natural, video-specific sentences for whatHappenedDetail. Write a short whyItMatters heading that names the meaningful exercise consequence, then exactly three natural, exercise-specific sentences for whyItMattersDetail. These two section headings must be dynamically written for their own content, distinct from each other, and distinct from the issue title; never copy or lightly rephrase the issue title into either heading. Explain the supplied observable mechanical consequences using position, path, range, balance, stability, loaded control, repeatability, and intended muscle stimulus where relevant. You may explain that a visible mechanic can reduce the intended muscle stimulus or shift emphasis away from the exercise's intended target, but cannot observe or assert what the person feels internally. Do not claim muscle activation as an observed fact, diagnose an injury, claim an injury will occur, or make claims about pain, joint health, muscle growth, or medical outcomes. Avoid repeated templates, identical endings, and invented physiology. Write one direct whatToDo sentence and one concrete successCheck sentence.
 
 Return exactly four movement scores on a 0-to-100 scale; never use a 0-to-10 scale. Create them solely from the final issues, their severity, prevalence, and confidence. Minor isolated issues must not make the entire performance appear poor. Create the exercise muscle map from the declaration, video summary, and final issues; keep that exercise muscle map separate from analyst-owned issue-region highlights.`;
 

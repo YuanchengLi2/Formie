@@ -59,6 +59,7 @@ const writing = (source: WholeVideoAnalysis): WholeVideoWriting => ({
   },
   coachingItems: source.issues.map((item) => ({
     id: item.id,
+    whatHappened: `The pulling path changes at issue ${item.id.replace("issue-", "")}`,
     whatHappenedDetail: `The camera shows ${item.title.toLowerCase()}. It appears at the cited moment. The same visible fault guides this coaching.`,
     whyItMatters: "Keep the pull repeatable",
     whyItMattersDetail: "This changes the dumbbell route. The row finishes from a different elbow position. A steadier route makes the set easier to repeat.",
@@ -148,7 +149,7 @@ describe("focused whole-video analyst and writer contract", () => {
       evidence: [{ visualEvidence: source.issues[0].evidence[0].visualEvidence }],
       expandedCoaching: {
         summary: source.issues[0].title,
-        whatHappened: source.issues[0].title,
+        whatHappened: writing(source).coachingItems[0].whatHappened,
       },
     });
   });
@@ -165,6 +166,8 @@ describe("focused whole-video analyst and writer contract", () => {
     const source = analysis(8);
     const normalized = normalizeWholeVideoWriting(null, source);
     expect(normalized.coachingItems.map((item) => item.id)).toEqual(source.issues.map((item) => item.id));
+    expect(normalized.coachingItems[0].whatHappened).not.toBe(source.issues[0].title);
+    expect(normalized.coachingItems[0].whyItMatters).not.toMatch(new RegExp(source.issues[0].title, "i"));
     expect(normalized.movementScores).toHaveLength(4);
     expect(normalized.muscleFocus).toEqual({ primary: [], secondary: [], unclassified: [] });
   });
@@ -192,10 +195,22 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(prompt).toContain('\"coachingItems\":[]');
   });
 
-  it("does not let the writer replace issue titles because the writer schema has no title field", () => {
+  it("keeps analyst issue titles immutable while requiring a distinct writer-generated observation heading", () => {
     const itemProperties = (WHOLE_VIDEO_WRITING_SCHEMA as any).properties.coachingItems.items.properties;
     expect(itemProperties).not.toHaveProperty("title");
-    expect(itemProperties).not.toHaveProperty("whatHappened");
+    expect(itemProperties).toHaveProperty("whatHappened");
+    expect((WHOLE_VIDEO_WRITING_SCHEMA as any).properties.coachingItems.items.required).toContain("whatHappened");
+  });
+
+  it("rejects section headings that repeat the issue title or each other", () => {
+    const source = analysis();
+    const repeatedIssueTitle = writing(source);
+    repeatedIssueTitle.coachingItems[0].whatHappened = source.issues[0].title;
+    expect(() => parseWholeVideoWriting(repeatedIssueTitle, source)).toThrow(/whatHappened.*issue title/i);
+
+    const repeatedSectionHeading = writing(source);
+    repeatedSectionHeading.coachingItems[0].whyItMatters = repeatedSectionHeading.coachingItems[0].whatHappened;
+    expect(() => parseWholeVideoWriting(repeatedSectionHeading, source)).toThrow(/section headings.*distinct/i);
   });
 
   it("uses writer scores and muscle focus while keeping issue highlights separate", () => {
@@ -230,6 +245,8 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/everyday gym language/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/technical terms?.*explain/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/exactly three natural, video-specific sentences.*whatHappenedDetail/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/whatHappened heading.*what the camera shows/i);
+    expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/headings.*must.*distinct.*issue title/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/exactly three natural, exercise-specific sentences.*whyItMattersDetail/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/minor isolated issues.*must not make.*entire performance.*poor/i);
     expect(WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION).toMatch(/0-to-100 scale.*never.*0-to-10/i);
