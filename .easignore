@@ -1,0 +1,55 @@
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+
+# Dependencies and generated bundles
+node_modules/
+website/node_modules/
+website/.next/
+.expo/
+.expo-*/
+dist/
+dist-*/
+web-build/
+*.tsbuildinfo
+
+# Local review, benchmark, and agent artifacts
+.git/
+.github/
+.asset-pack-preview/
+.codex-runtime/
+.codex-tmp/
+.form-scaffold/
+.worktrees/
+artifacts/
+benchmarks/
+docs/
+scripts/
+supabase/
+tmp/
+website/
+worker/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Test-only source is validated before release and is not part of the app bundle
+**/*.test.ts
+**/*.test.tsx
+**/*.test.js
+jest.config.js
+
+# Generated native projects and Supabase working state
+/android/
+/ios/
+supabase/.branches/
+supabase/.temp/
+supabase/seed/criteria-v3/*.sql
+!supabase/seed/criteria-v3/manifest.json
+
+# Local logs, screenshots, and QR codes in the repository root
+*.log
+/*.png
+.DS_Store
