@@ -10,7 +10,7 @@ on:
 
 concurrency:
   group: formie-testflight-local-ios
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-and-submit:
@@ -41,10 +41,16 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Verify mobile flows and presentation
-        run: |
-          npm test -- --runInBand --silent
-          npm run lint
-          npm run typecheck
+        timeout-minutes: 15
+        run: npm test -- --runInBand --silent --forceExit
+
+      - name: Verify mobile lint
+        timeout-minutes: 5
+        run: npm run lint
+
+      - name: Verify mobile TypeScript
+        timeout-minutes: 5
+        run: npm run typecheck
 
       - name: Install website dependencies
         working-directory: website
