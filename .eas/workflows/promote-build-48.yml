@@ -1,0 +1,14 @@
+name: Promote Formie Build 48 to Public Beta
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  distribute_build_48:
+    name: Add Build 48 to Formie Public Beta
+    type: testflight
+    params:
+      build_id: 606cad2a-6114-4200-ac90-7d99fcbfb08d
+      external_groups:
+        - Formie Public Beta
+      submit_beta_review: true
