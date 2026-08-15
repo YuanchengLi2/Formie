@@ -21,11 +21,12 @@ import { heightToCm, weightToKg } from "@/features/onboarding/onboarding-schema"
 import { useCapturePreferences } from "@/features/capture/capture-preferences";
 import { onboardingSteps, type OnboardingAnswers, type OnboardingStep } from "@/features/onboarding/types";
 import type { PurchaseState } from "@/features/billing/types";
+import type { SocialProvider } from "@/features/auth/auth-service";
 import { AccountAccessScreen } from "@/components/account-access-screen";
 import { onboardingTheme } from "@/theme/onboarding";
 import { PremiumScreen } from "./premium-screen";
 
-type Provider = "apple" | "google";
+type Provider = "apple";
 
 export type ApprovedOnboardingScreenProps = {
   step: OnboardingStep;
@@ -34,7 +35,6 @@ export type ApprovedOnboardingScreenProps = {
   onNext: () => void;
   onBack: () => void;
   onOAuth: (provider: Provider) => void;
-  onEmail: () => void;
   onRestoreAccount: () => void;
   onSignIn?: () => void;
   onOpenTerms: () => void;
@@ -45,7 +45,7 @@ export type ApprovedOnboardingScreenProps = {
   price: string;
   purchaseAvailable: boolean;
   busy: boolean;
-  busyProvider?: Provider | null;
+  busyProvider?: SocialProvider | null;
   error?: string | null;
   restoreMessage?: string | null;
   purchaseState?: PurchaseState;
@@ -290,7 +290,7 @@ function AccountScreen(props: ApprovedOnboardingScreenProps) {
   const personalizedMessage = goal
     ? `Save your account so Formie can keep coaching you toward ${goal}.`
     : "Save your account so Formie can keep your goals, analyses, and personalized coaching together.";
-  return <AccountAccessScreen mode="onboarding" personalizedMessage={personalizedMessage} busy={props.busy} busyProvider={props.busyProvider} error={props.error} onBack={props.onBack} onOpenTerms={props.onOpenTerms} onOpenPrivacy={props.onOpenPrivacy} onPrivacyConsentChange={(accepted) => props.onAnswerChange("acceptedPrivacy", accepted)} onMarketingOptInChange={(accepted) => props.onAnswerChange("marketingOptIn", accepted)} onEmail={() => impactThen(props.onEmail)} onOAuth={(provider) => impactThen(() => props.onOAuth(provider))} />;
+  return <AccountAccessScreen mode="onboarding" personalizedMessage={personalizedMessage} busy={props.busy} busyProvider={props.busyProvider} error={props.error} onBack={props.onBack} onOpenTerms={props.onOpenTerms} onOpenPrivacy={props.onOpenPrivacy} onPrivacyConsentChange={(accepted) => props.onAnswerChange("acceptedPrivacy", accepted)} onMarketingOptInChange={(accepted) => props.onAnswerChange("marketingOptIn", accepted)} onOAuth={(provider) => impactThen(() => props.onOAuth(provider))} />;
 }
 
 function LoadingScreen({ onComplete }: { onComplete?: () => void }) {

@@ -25,7 +25,6 @@ async function renderStep(step: OnboardingStep, overrides: Partial<ApprovedOnboa
     onNext: jest.fn(),
     onBack: jest.fn(),
     onOAuth: jest.fn(),
-    onEmail: jest.fn(),
     onRestoreAccount: jest.fn(),
     onOpenTerms: jest.fn(),
     onOpenPrivacy: jest.fn(),
@@ -387,21 +386,19 @@ describe("approved onboarding screen", () => {
     expect(onAnswerChange).toHaveBeenCalledWith("acquisitionSourceOther", "Local trainer");
   });
 
-  it("keeps Apple as the only enabled account action and marks Google and email coming soon", async () => {
+  it("keeps Apple as the only visible account action", async () => {
     const { screen, props } = await renderStep("create-account", { answers: { ...initialOnboardingAnswers, acceptedPrivacy: true } });
 
     await fireEvent.press(screen.getByLabelText("Agree to the Terms of Use and Privacy Policy"));
     await fireEvent.press(screen.getByText("Sign in with Apple"));
-    await fireEvent.press(screen.getByText("Sign in with Google"));
-    await fireEvent.press(screen.getByText("Continue with email"));
 
     expect(props.onOAuth).toHaveBeenCalledTimes(1);
     expect(props.onOAuth).toHaveBeenCalledWith("apple");
-    expect(props.onEmail).not.toHaveBeenCalled();
-    expect(screen.getAllByText("Coming soon")).toHaveLength(2);
+    expect(screen.queryByText("Sign in with Google")).toBeNull();
+    expect(screen.queryByText("Continue with email")).toBeNull();
+    expect(screen.queryByText("Coming soon")).toBeNull();
     expect(screen.queryByText("Restore account")).toBeNull();
     expect(screen.queryByLabelText("Password")).toBeNull();
-    expect(screen.getByText("Continue with email")).toBeTruthy();
   });
 
   it("shows the live monthly offer, renewal terms, restore, and legal actions", async () => {

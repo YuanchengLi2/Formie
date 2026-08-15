@@ -13,9 +13,8 @@ function withSafeArea(node: React.ReactNode) {
 describe("account access screens", () => {
   it("matches the approved white account-access reference on login", async () => {
     const onOAuth = jest.fn();
-    const onEmail = jest.fn();
     const onCreateAccount = jest.fn();
-    const screen = await render(withSafeArea(<SocialLoginScreen onOAuth={onOAuth} onEmail={onEmail} onCreateAccount={onCreateAccount} busyProvider={null} />));
+    const screen = await render(withSafeArea(<SocialLoginScreen onOAuth={onOAuth} onCreateAccount={onCreateAccount} busyProvider={null} />));
 
     expect(screen.getByTestId("account-access-top-row")).toBeTruthy();
     expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#050505" });
@@ -24,22 +23,22 @@ describe("account access screens", () => {
     expect(screen.queryByText("Welcome back. Your coaching history is ready when you are.")).toBeNull();
     expect(screen.queryByText(/Create or restore|profile stays private/i)).toBeNull();
     expect(screen.getByText("Sign in with Apple")).toBeTruthy();
-    expect(screen.getByText("Sign in with Google")).toBeTruthy();
-    expect(screen.getByText("Sign in with Email")).toBeTruthy();
+    expect(screen.queryByText("Sign in with Google")).toBeNull();
+    expect(screen.queryByText("Sign in with Email")).toBeNull();
+    expect(screen.queryByText("Coming soon")).toBeNull();
     expect(screen.getByText("Create New Account")).toBeTruthy();
     expect(screen.getByTestId("account-access-scroll")).toBeTruthy();
     expect(screen.getByTestId("provider-apple")).toHaveStyle({ minHeight: 58, backgroundColor: "#E5AD32" });
-    expect(screen.getByTestId("provider-google")).toHaveStyle({ minHeight: 58, backgroundColor: "#111110", borderColor: "#E5AD32" });
-    expect(screen.getByTestId("provider-email")).toHaveStyle({ minHeight: 58, backgroundColor: "#111110", borderColor: "#E5AD32" });
+    expect(screen.queryByTestId("provider-google")).toBeNull();
+    expect(screen.queryByTestId("provider-email")).toBeNull();
 
     await fireEvent.press(screen.getByText("Create New Account"));
     expect(onCreateAccount).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps Apple enabled while Google and email are blurred, inert coming-soon actions", async () => {
+  it("shows Apple as the only production sign-in action", async () => {
     const onOAuth = jest.fn();
-    const onEmail = jest.fn();
-    const screen = await render(withSafeArea(<SocialLoginScreen onOAuth={onOAuth} onEmail={onEmail} onCreateAccount={jest.fn()} busyProvider={null} />));
+    const screen = await render(withSafeArea(<SocialLoginScreen onOAuth={onOAuth} onCreateAccount={jest.fn()} busyProvider={null} />));
 
     const apple = screen.getByLabelText("Sign in with Apple");
     expect(apple.props.accessibilityState.disabled).toBe(false);
@@ -47,15 +46,21 @@ describe("account access screens", () => {
     expect(onOAuth).toHaveBeenCalledWith("apple");
     expect(screen.queryByLabelText("Agree to the Terms of Use")).toBeNull();
     expect(screen.queryByLabelText("Acknowledge the Privacy Policy")).toBeNull();
-    const google = screen.getByLabelText("Sign in with Google — Coming soon");
-    const email = screen.getByLabelText("Sign in with Email — Coming soon");
-    expect(google.props.accessibilityState.disabled).toBe(true);
-    expect(email.props.accessibilityState.disabled).toBe(true);
-    await fireEvent.press(google);
-    await fireEvent.press(email);
-    expect(onOAuth).not.toHaveBeenCalledWith("google");
-    expect(onEmail).not.toHaveBeenCalled();
-    expect(screen.getAllByText("Coming soon")).toHaveLength(2);
+    expect(screen.queryByLabelText(/Google|Email|Coming soon/i)).toBeNull();
+  });
+
+  it("announces confirmed account deletion without claiming Apple authorization was revoked", async () => {
+    const screen = await render(withSafeArea(
+      <SocialLoginScreen
+        onOAuth={jest.fn()}
+        onCreateAccount={jest.fn()}
+        busyProvider={null}
+        notice="Your Formie account was deleted."
+      />,
+    ));
+
+    const notice = screen.getByText("Your Formie account was deleted.");
+    expect(notice.props.accessibilityLiveRegion).toBe("polite");
   });
 
   it("matches the approved white save-progress reference", async () => {
@@ -64,7 +69,6 @@ describe("account access screens", () => {
         mode="onboarding"
         personalizedMessage="Save your account so Formie can keep coaching you toward your first 225 lb bench."
         onOAuth={jest.fn()}
-        onEmail={jest.fn()}
         busyProvider={null}
       />,
     ));
@@ -72,8 +76,8 @@ describe("account access screens", () => {
     expect(screen.getByText("Save your progress")).toBeTruthy();
     expect(screen.queryByText(/225 lb bench/)).toBeNull();
     expect(screen.getByText("Sign in with Apple")).toBeTruthy();
-    expect(screen.getByText("Sign in with Google")).toBeTruthy();
-    expect(screen.getByText("Continue with email")).toBeTruthy();
+    expect(screen.queryByText("Sign in with Google")).toBeNull();
+    expect(screen.queryByText("Continue with email")).toBeNull();
     expect(screen.queryByText("Create New Account")).toBeNull();
     expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#050505" });
     expect(screen.getByTestId("account-access-gold-bar")).toHaveStyle({ height: 3, backgroundColor: "#E5AD32" });

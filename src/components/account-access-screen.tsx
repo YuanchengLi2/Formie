@@ -19,11 +19,10 @@ function ConsentRow({ label, checked, onPress, children }: { label: string; chec
   </View>;
 }
 
-export function AccountAccessScreen({ mode = "login", onOAuth, onEmail, onCreateAccount, onBack, onOpenTerms, onOpenPrivacy, onPrivacyConsentChange, onMarketingOptInChange, busyProvider = null, busy = false, error }: {
+export function AccountAccessScreen({ mode = "login", onOAuth, onCreateAccount, onBack, onOpenTerms, onOpenPrivacy, onPrivacyConsentChange, onMarketingOptInChange, busyProvider = null, busy = false, error, notice }: {
   mode?: AccountAccessMode;
   personalizedMessage?: string;
-  onOAuth: (provider: SocialProvider) => void;
-  onEmail: () => void;
+  onOAuth: (provider: "apple") => void;
   onCreateAccount?: () => void;
   onBack?: () => void;
   onOpenTerms?: () => void;
@@ -33,6 +32,7 @@ export function AccountAccessScreen({ mode = "login", onOAuth, onEmail, onCreate
   busyProvider?: SocialProvider | null;
   busy?: boolean;
   error?: string | null;
+  notice?: string | null;
 }) {
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
@@ -52,8 +52,9 @@ export function AccountAccessScreen({ mode = "login", onOAuth, onEmail, onCreate
       </View>
       <View style={styles.hero}><Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text></View>
       <View testID="account-access-actions" style={[styles.actions, compact && styles.actionsCompact]}>
-        <SocialProviderButtons mode={mode} disabled={disabled} busyProvider={busyProvider} onOAuth={onOAuth} onEmail={onEmail} />
+        <SocialProviderButtons disabled={disabled} busyProvider={busyProvider} onOAuth={onOAuth} />
         {busy && !busyProvider ? <View style={styles.busy}><ActivityIndicator color="#E5AD32" /><Text style={styles.busyText}>Connecting…</Text></View> : null}
+        {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
         {mode === "login" && onCreateAccount ? <Pressable accessibilityRole="button" onPress={onCreateAccount} style={({ pressed }) => [styles.createAccount, pressed && styles.pressed]}><Text style={styles.createAccountText}>Create New Account</Text></Pressable> : null}
       </View>
@@ -82,6 +83,7 @@ const styles = StyleSheet.create({
   busy: { minHeight: 28, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   busyText: { color: "#D8D3C8", fontSize: 14 },
   error: { color: "#FF8A82", fontSize: 14, lineHeight: 20, fontWeight: "600", textAlign: "center" },
+  notice: { color: "#D8D3C8", fontSize: 14, lineHeight: 20, fontWeight: "600", textAlign: "center" },
   createAccount: { minHeight: 48, alignItems: "center", justifyContent: "center" },
   createAccountText: { color: "#E5AD32", fontSize: 16, fontWeight: "700", textDecorationLine: "underline" },
   consents: { width: "100%", maxWidth: 296, alignSelf: "center", gap: 10, marginTop: 20 },

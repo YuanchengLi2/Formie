@@ -43,7 +43,6 @@ export default function OnboardingStepRoute() {
     onBack={() => { if (previous) void go(previous); }}
     onLoadingComplete={() => void finishLoading()}
     onOAuth={(provider) => void onboarding.startOAuth("create_account").then(() => auth.signInWithProvider(provider))}
-    onEmail={() => void onboarding.startOAuth("create_account").then(() => router.push("/email?intent=onboarding" as Href))}
     onRestoreAccount={() => void onboarding.markLoggedOut().then(() => router.replace("/login" as Href))}
     onSignIn={() => router.replace("/login" as Href)}
     onOpenTerms={() => { if (legal) void Linking.openURL(legal.termsUrl); }}

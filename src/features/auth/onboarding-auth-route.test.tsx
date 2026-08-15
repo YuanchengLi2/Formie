@@ -44,13 +44,13 @@ describe("onboarding OAuth routing", () => {
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/subscription"));
   });
 
-  it("routes email onboarding to the email code entry screen", async () => {
+  it("does not expose unfinished email onboarding", async () => {
     mockAuthPhase = "signed_out";
     mockOnboardingStatus = "account_required";
     render(<OnboardingStepRoute />);
     await waitFor(() => expect(mockApprovedProps).not.toBeNull());
-    await act(async () => { (mockApprovedProps?.onEmail as (() => void))(); });
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/email?intent=onboarding"));
+    expect(mockApprovedProps).not.toHaveProperty("onEmail");
+    expect(mockPush).not.toHaveBeenCalledWith("/email?intent=onboarding");
   });
 
   it("routes the welcome-page Sign in button to the existing login screen", async () => {
