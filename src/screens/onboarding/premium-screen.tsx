@@ -10,69 +10,81 @@ export type PremiumScreenProps = {
   busy: boolean;
   state?: PurchaseState;
   error?: string | null;
+  restoreMessage?: string | null;
   onBack?: () => void;
   onPurchase: () => void;
   onPurchasePlan?: (plan: "monthly") => void;
   onRetrySync?: () => void;
+  onRestore: () => void;
+  onOpenTerms: () => void;
+  onOpenPrivacy: () => void;
 };
 
-const referencePaywall = require("../../../assets/production/paywall/reference/paywall-reference-no-icons-852x1846.png");
+const referencePaywall = require("../../../assets/production/paywall/reference/paywall-reference-no-social-proof.png");
 const goldGradient = require("../../../assets/production/onboarding/gold-gradient.png");
 
 const PAYWALL_SOURCE_WIDTH = 852;
 const PAYWALL_SOURCE_HEIGHT = 1846;
-const PAYWALL_SCROLL_BREATHING_ROOM = 16;
+const HERO_SOURCE_END_Y = 390;
 const STATUS_BAR_SOURCE_HEIGHT = 76;
-const CTA_SOURCE_FRAME = { x: 74, y: 1640, width: 704, height: 105 };
 const BACK_SOURCE_FRAME = { x: 36, y: 108, size: 82 };
 
-export function getPremiumArtworkLayout(windowWidth: number, windowHeight: number) {
+export function getPremiumArtworkLayout(windowWidth: number, _windowHeight: number) {
   const contentWidth = Math.min(windowWidth, 480);
+  const sourceScale = contentWidth / PAYWALL_SOURCE_WIDTH;
   const imageWidth = contentWidth;
-  const sourceScale = imageWidth / PAYWALL_SOURCE_WIDTH;
   const imageHeight = PAYWALL_SOURCE_HEIGHT * sourceScale;
-  const cropHeight = Math.max(windowHeight, imageHeight);
-  const imageLeft = 0;
-  const imageTop = 0;
-  const statusMaskHeight = STATUS_BAR_SOURCE_HEIGHT * sourceScale;
-  const nativeCtaHeight = 56;
-  const cta = {
-    left: imageLeft + CTA_SOURCE_FRAME.x * sourceScale,
-    top: CTA_SOURCE_FRAME.y * sourceScale,
-    width: CTA_SOURCE_FRAME.width * sourceScale,
-    height: nativeCtaHeight,
-  };
-  const back = {
-    left: imageLeft + BACK_SOURCE_FRAME.x * sourceScale,
-    top: BACK_SOURCE_FRAME.y * sourceScale,
-    size: Math.max(52, BACK_SOURCE_FRAME.size * sourceScale),
-  };
-
   return {
     contentWidth,
     imageWidth,
     imageHeight,
-    imageLeft,
-    imageTop,
-    cropHeight,
-    topCropSourceY: 0,
-    statusMaskHeight,
-    cropSourceEndY: PAYWALL_SOURCE_HEIGHT,
-    contentMinHeight: cropHeight + PAYWALL_SCROLL_BREATHING_ROOM,
-    cta,
-    back,
+    heroHeight: HERO_SOURCE_END_Y * sourceScale,
+    heroSourceEndY: HERO_SOURCE_END_Y,
+    statusMaskHeight: STATUS_BAR_SOURCE_HEIGHT * sourceScale,
+    back: {
+      left: BACK_SOURCE_FRAME.x * sourceScale,
+      top: BACK_SOURCE_FRAME.y * sourceScale,
+      size: Math.max(52, BACK_SOURCE_FRAME.size * sourceScale),
+    },
   };
 }
 
-export function PremiumScreen({ price, purchaseAvailable, busy, state = "idle", error, onBack, onPurchase, onPurchasePlan, onRetrySync }: PremiumScreenProps) {
+export function PremiumScreen({
+  price,
+  purchaseAvailable,
+  busy,
+  state = "idle",
+  error,
+  restoreMessage,
+  onBack,
+  onPurchase,
+  onPurchasePlan,
+  onRetrySync,
+  onRestore,
+  onOpenTerms,
+  onOpenPrivacy,
+}: PremiumScreenProps) {
   const { width, height } = useWindowDimensions();
   const layout = getPremiumArtworkLayout(width, height);
-  const billingState = state as string;
-  const reconciling = busy || billingState === "purchasing" || billingState === "reconciling";
-  const syncRequired = billingState === "sync_required";
-  const ctaLabel = syncRequired ? "Check purchase" : reconciling ? "Starting..." : "Start monthly - " + price + "/mo";
-  const visibleCtaLabel = syncRequired ? "Check purchase" : reconciling ? "Starting..." : purchaseAvailable ? "Continue with Pro" : "Plan unavailable";
-  const ctaDisabled = reconciling || (!purchaseAvailable && !syncRequired);
+  const reconciling = busy || state === "purchasing" || state === "reconciling";
+  const restoring = state === "restoring";
+  const storeBusy = reconciling || restoring;
+  const syncRequired = state === "sync_required";
+  const ctaLabel = !purchaseAvailable && !syncRequired
+    ? "Monthly plan unavailable"
+    : syncRequired
+      ? "Check purchase"
+      : reconciling
+        ? "Starting..."
+        : `Start monthly - ${price}/mo`;
+  const visibleCtaLabel = !purchaseAvailable && !syncRequired
+    ? "Plan unavailable"
+    : syncRequired
+      ? "Check purchase"
+      : reconciling
+        ? "Starting..."
+        : "Continue with Pro";
+  const ctaDisabled = storeBusy || (!purchaseAvailable && !syncRequired);
   const purchase = () => {
     if (syncRequired) {
       onRetrySync?.();
@@ -81,21 +93,6 @@ export function PremiumScreen({ price, purchaseAvailable, busy, state = "idle", 
     if (onPurchasePlan) onPurchasePlan("monthly");
     else onPurchase();
   };
-  const accessibilitySummary = [
-    "Formie plans paywall",
-    "Upgrade to Formie Pro",
-    "AI form analysis for serious lifters",
-    "Most popular",
-    "Pro, " + price + " per month",
-    "Cancel anytime",
-    "10 analyses every month",
-    "AI Form Analysis",
-    "Personalized Feedback",
-    "Progress Tracking",
-    "Formie Coach",
-    "Continue with Pro",
-    "Secure payment",
-  ].join(". ");
 
   return (
     <View testID="premium-native-screen" style={styles.screen}>
@@ -107,66 +104,82 @@ export function PremiumScreen({ price, purchaseAvailable, busy, state = "idle", 
         bounces
         alwaysBounceVertical
         style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { minHeight: layout.contentMinHeight }]}
+        contentContainerStyle={styles.scrollContent}
       >
-        <View style={[styles.artworkCrop, { width: layout.contentWidth, height: layout.cropHeight }]}>
-          <Image
-            testID="premium-reference-image"
-            source={referencePaywall}
-            contentFit="fill"
-            contentPosition="center"
-            style={[styles.referenceImage, { left: layout.imageLeft, top: layout.imageTop, width: layout.imageWidth, height: layout.imageHeight }]}
-          />
+        <View style={[styles.content, { width: layout.contentWidth }]}>
+          <View testID="premium-artwork-hero" style={[styles.hero, { height: layout.heroHeight }]}>
+            <Image
+              testID="premium-reference-image"
+              accessibilityElementsHidden
+              source={referencePaywall}
+              contentFit="fill"
+              contentPosition="top"
+              style={{ width: layout.imageWidth, height: layout.imageHeight }}
+            />
+            <View testID="premium-status-mask" pointerEvents="none" style={[styles.statusMask, { height: layout.statusMaskHeight }]} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              accessibilityState={{ disabled: !onBack }}
+              disabled={!onBack}
+              onPress={onBack}
+              hitSlop={12}
+              style={[styles.backButton, { left: layout.back.left, top: layout.back.top, width: layout.back.size, height: layout.back.size }]}
+            />
+          </View>
 
-          <View
-            testID="premium-status-mask"
-            pointerEvents="none"
-            style={[styles.statusMask, { height: layout.statusMaskHeight }]}
-          />
+          <View style={styles.offerCard}>
+            <Text accessibilityRole="header" style={styles.offerTitle}>Formie Pro</Text>
+            <Text style={styles.offerPrice}>{purchaseAvailable ? `${price} per month` : "Monthly plan unavailable"}</Text>
+            <Text style={styles.quota}>10 analyses every month</Text>
+            <View style={styles.features}>
+              <Text style={styles.feature}>✓ Evidence-linked form analysis</Text>
+              <Text style={styles.feature}>✓ Personalized corrections and cues</Text>
+              <Text style={styles.feature}>✓ Saved progress and coaching history</Text>
+              <Text style={styles.feature}>✓ Follow-up questions with Formie Coach</Text>
+            </View>
+            <Text style={styles.renewalDisclosure}>
+              Payment is charged to your Apple ID. The subscription automatically renews each month until cancelled at least 24 hours before the end of the current period. Manage or cancel it in Apple subscription settings.
+            </Text>
 
-          <View
-            testID="premium-accessibility-summary"
-            accessible
-            accessibilityRole="text"
-            accessibilityLabel={accessibilitySummary}
-            pointerEvents="none"
-            style={styles.accessibilitySummary}
-          />
+            {error ? <Text accessibilityRole="alert" selectable style={styles.error}>{error}</Text> : null}
 
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            accessibilityState={{ disabled: !onBack }}
-            disabled={!onBack}
-            onPress={onBack}
-            hitSlop={12}
-            style={[styles.backButton, { left: layout.back.left, top: layout.back.top, width: layout.back.size, height: layout.back.size }]}
-          />
-
-          {error ? <Text accessibilityRole="alert" selectable style={[styles.error, { top: Math.max(0, layout.cta.top - 58) }]}>{error}</Text> : null}
-
-          <Pressable
-            testID="onboarding-bottom-cta"
-            accessibilityRole="button"
-            accessibilityLabel={ctaLabel}
-            accessibilityState={{ disabled: ctaDisabled }}
-            disabled={ctaDisabled}
-            onPress={purchase}
-            style={({ pressed }) => [
-              styles.cta,
-              styles.ctaOverlay,
-              { left: layout.cta.left, top: layout.cta.top, width: layout.cta.width, height: layout.cta.height, minHeight: layout.cta.height },
-              pressed && !ctaDisabled && styles.ctaPressed,
-            ]}
-          >
-            <>
+            <Pressable
+              testID="onboarding-bottom-cta"
+              accessibilityRole="button"
+              accessibilityLabel={ctaLabel}
+              accessibilityState={{ disabled: ctaDisabled }}
+              disabled={ctaDisabled}
+              onPress={purchase}
+              style={({ pressed }) => [styles.cta, pressed && !ctaDisabled && styles.pressed, ctaDisabled && styles.disabled]}
+            >
               <Image accessibilityElementsHidden pointerEvents="none" source={goldGradient} contentFit="fill" style={StyleSheet.absoluteFillObject} />
-              <View style={styles.ctaContent}>
-                <Text style={styles.ctaText}>{visibleCtaLabel}</Text>
-                {reconciling ? <ActivityIndicator accessibilityLabel="Starting purchase" color="#080808" /> : <Text style={styles.ctaArrow}>→</Text>}
-              </View>
-            </>
-          </Pressable>
+              <Text style={styles.ctaText}>{visibleCtaLabel}</Text>
+              {reconciling ? <ActivityIndicator accessibilityLabel="Starting purchase" color="#080808" /> : <Text style={styles.ctaArrow}>→</Text>}
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Restore Purchases"
+              accessibilityState={{ disabled: storeBusy }}
+              disabled={storeBusy}
+              onPress={onRestore}
+              style={({ pressed }) => [styles.restore, pressed && !storeBusy && styles.pressed, storeBusy && styles.disabled]}
+            >
+              <Text style={styles.restoreText}>{restoring ? "Restoring..." : "Restore Purchases"}</Text>
+            </Pressable>
+            {restoreMessage ? <Text accessibilityLiveRegion="polite" style={styles.restoreMessage}>{restoreMessage}</Text> : null}
+
+            <View style={styles.legalRow}>
+              <Pressable accessibilityRole="link" accessibilityLabel="Terms of Use" onPress={onOpenTerms} hitSlop={8}>
+                <Text style={styles.legalText}>Terms of Use</Text>
+              </Pressable>
+              <Text style={styles.legalSeparator}>•</Text>
+              <Pressable accessibilityRole="link" accessibilityLabel="Privacy Policy" onPress={onOpenPrivacy} hitSlop={8}>
+                <Text style={styles.legalText}>Privacy Policy</Text>
+              </Pressable>
+            </View>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -176,17 +189,28 @@ export function PremiumScreen({ price, purchaseAvailable, busy, state = "idle", 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#000000" },
   scroll: { flex: 1, width: "100%" },
-  scrollContent: { alignItems: "center", backgroundColor: "#000000" },
-  artworkCrop: { position: "relative", overflow: "hidden", backgroundColor: "#000000" },
-  referenceImage: { position: "absolute" },
-  statusMask: { position: "absolute", zIndex: 2, top: 0, left: 0, right: 0, backgroundColor: "#000000" },
-  accessibilitySummary: { position: "absolute", width: 1, height: 1, opacity: 0 },
-  backButton: { position: "absolute", zIndex: 3, backgroundColor: "transparent" },
-  cta: { position: "absolute", zIndex: 3, opacity: 1, justifyContent: "center", borderRadius: 14, borderCurve: "continuous", overflow: "hidden" },
-  ctaOverlay: { boxShadow: "0 8px 24px rgba(222, 166, 45, 0.24)" },
-  ctaPressed: { opacity: 1, transform: [{ scale: 0.985 }] },
-  ctaContent: { flex: 1, minHeight: 56, paddingHorizontal: 22, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  scrollContent: { alignItems: "center", backgroundColor: "#000000", paddingBottom: 28 },
+  content: { maxWidth: 480 },
+  hero: { position: "relative", overflow: "hidden", backgroundColor: "#000000" },
+  statusMask: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: "#000000" },
+  backButton: { position: "absolute", zIndex: 2, borderRadius: 99, backgroundColor: "transparent" },
+  offerCard: { marginHorizontal: 18, marginTop: 4, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 20, gap: 14, borderRadius: 24, borderWidth: 1, borderColor: "rgba(229,173,50,0.68)", backgroundColor: "#0B0B0B" },
+  offerTitle: { color: "#F6F3EB", fontSize: 31, lineHeight: 36, fontWeight: "800", textAlign: "center" },
+  offerPrice: { color: "#E5AD32", fontSize: 27, lineHeight: 32, fontWeight: "800", textAlign: "center" },
+  quota: { color: "#F6F3EB", fontSize: 18, lineHeight: 24, fontWeight: "700", textAlign: "center" },
+  features: { gap: 9, paddingVertical: 4 },
+  feature: { color: "#E2DED4", fontSize: 15, lineHeight: 21 },
+  renewalDisclosure: { color: "#AAA69E", fontSize: 12.5, lineHeight: 18, textAlign: "center" },
+  error: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, color: "#FF8A82", backgroundColor: "rgba(80,10,10,0.42)", textAlign: "center", fontSize: 13, lineHeight: 18 },
+  cta: { minHeight: 56, paddingHorizontal: 22, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 14, borderCurve: "continuous", overflow: "hidden" },
   ctaText: { color: "#070707", fontSize: 18, lineHeight: 22, fontWeight: "800" },
   ctaArrow: { color: "#070707", fontSize: 28, lineHeight: 31 },
-  error: { position: "absolute", zIndex: 3, left: "9%", right: "9%", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, color: "#FF8A82", backgroundColor: "rgba(0,0,0,0.92)", textAlign: "center", fontSize: 13, lineHeight: 18 },
+  restore: { minHeight: 44, alignItems: "center", justifyContent: "center" },
+  restoreText: { color: "#E5AD32", fontSize: 15, fontWeight: "700", textDecorationLine: "underline" },
+  restoreMessage: { color: "#D8D3C8", fontSize: 13, lineHeight: 18, textAlign: "center" },
+  legalRow: { minHeight: 32, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  legalText: { color: "#C8C3B9", fontSize: 12.5, textDecorationLine: "underline" },
+  legalSeparator: { color: "#706D67", fontSize: 12 },
+  pressed: { opacity: 0.72 },
+  disabled: { opacity: 0.55 },
 });

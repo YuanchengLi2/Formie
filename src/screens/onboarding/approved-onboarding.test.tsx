@@ -1,5 +1,6 @@
 import { act, fireEvent, render, within } from "@testing-library/react-native";
-import { StyleSheet } from "react-native";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 
 import { initialOnboardingAnswers, type OnboardingStep } from "@/features/onboarding/types";
@@ -28,6 +29,7 @@ async function renderStep(step: OnboardingStep, overrides: Partial<ApprovedOnboa
     onRestoreAccount: jest.fn(),
     onOpenTerms: jest.fn(),
     onOpenPrivacy: jest.fn(),
+    onRestore: jest.fn(),
     onPurchase: jest.fn(),
     onPurchasePlan: jest.fn(),
     price: "$9.99",
@@ -71,7 +73,7 @@ describe("approved onboarding screen", () => {
   ] as const)("renders the approved %s content without a pictured phone frame", async (step, copy) => {
     const { screen } = await renderStep(step);
 
-    expect(step === "premium" ? screen.getByLabelText(/Formie plans paywall/) : screen.getByText(copy)).toBeTruthy();
+    expect(step === "premium" ? screen.getByRole("header", { name: "Formie Pro" }) : screen.getByText(copy)).toBeTruthy();
     expect(screen.queryByTestId("phone-frame")).toBeNull();
   });
 
@@ -402,26 +404,50 @@ describe("approved onboarding screen", () => {
     expect(screen.getByText("Continue with email")).toBeTruthy();
   });
 
-  it("uses the live premium price and purchase action without a skip", async () => {
+  it("shows the live monthly offer, renewal terms, restore, and legal actions", async () => {
     const { screen, props } = await renderStep("premium", { price: "$12.49" });
 
-    expect(screen.getByLabelText(/Formie plans paywall/)).toBeTruthy();
+    expect(screen.getByText("$12.49 per month")).toBeTruthy();
+    expect(screen.getByText(/automatically renews each month until cancelled/i)).toBeTruthy();
     expect(screen.getByText("Continue with Pro")).toBeTruthy();
     expect(screen.queryByText("Skip")).toBeNull();
-    expect(screen.queryByText("Restore Purchase")).toBeNull();
+    expect(screen.getByRole("button", { name: "Restore Purchases" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Terms of Use" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Privacy Policy" })).toBeTruthy();
     const purchaseButton = screen.getByRole("button", { name: "Start monthly - $12.49/mo" });
     expect(purchaseButton).toHaveStyle({ minHeight: 56 });
     await fireEvent.press(purchaseButton);
+    await fireEvent.press(screen.getByRole("button", { name: "Restore Purchases" }));
+    await fireEvent.press(screen.getByRole("link", { name: "Terms of Use" }));
+    await fireEvent.press(screen.getByRole("link", { name: "Privacy Policy" }));
     expect(props.onPurchasePlan).toHaveBeenCalledWith("monthly");
+    expect(props.onRestore).toHaveBeenCalledTimes(1);
+    expect(props.onOpenTerms).toHaveBeenCalledTimes(1);
+    expect(props.onOpenPrivacy).toHaveBeenCalledTimes(1);
   });
 
-  it("disables purchase when RevenueCat has no live monthly package", async () => {
+  it("does not substitute a price when RevenueCat has no live monthly package", async () => {
     const { screen, props } = await renderStep("premium", { price: "Unavailable", purchaseAvailable: false });
-    const purchaseButton = screen.getByRole("button", { name: /^Start monthly/ });
+    const purchaseButton = screen.getByRole("button", { name: "Monthly plan unavailable" });
 
+    expect(screen.getByText("Monthly plan unavailable")).toBeTruthy();
+    expect(screen.queryByText(/\$9\.99/)).toBeNull();
     expect(purchaseButton.props.accessibilityState.disabled).toBe(true);
     await fireEvent.press(purchaseButton);
     expect(props.onPurchasePlan).not.toHaveBeenCalled();
+  });
+
+  it("prevents duplicate store operations and announces restore outcomes", async () => {
+    const { screen, props } = await renderStep("premium", {
+      purchaseState: "restoring",
+      restoreMessage: "No active Formie subscription was found.",
+    });
+
+    const restore = screen.getByRole("button", { name: "Restore Purchases" });
+    expect(restore.props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByText("No active Formie subscription was found.").props.accessibilityLiveRegion).toBe("polite");
+    await fireEvent.press(restore);
+    expect(props.onRestore).not.toHaveBeenCalled();
   });
 
   it("uses the latest supplied reference paywall composition", async () => {
@@ -431,69 +457,53 @@ describe("approved onboarding screen", () => {
     expect(scroll.props.contentInsetAdjustmentBehavior).toBe("never");
     expect(scroll.props.bounces).toBe(true);
     expect(scroll.props.alwaysBounceVertical).toBe(true);
-    expect(screen.getByTestId("premium-reference-image")).toBeTruthy();
+    expect(screen.getByTestId("premium-reference-image", { includeHiddenElements: true })).toBeTruthy();
     expect(screen.getByTestId("premium-status-mask")).toBeTruthy();
-    expect(screen.getByLabelText(/Formie plans paywall/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Monthly" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Yearly" })).toBeNull();
     expect(screen.queryByTestId("approved-premium-screenshot")).toBeNull();
   });
 
-  it("allows a small amount of paywall scrolling and keeps the live CTA compact", async () => {
+  it("bundles the icon-complete paywall artwork without social proof", () => {
+    const source = readFileSync(resolve(__dirname, "premium-screen.tsx"), "utf8");
+
+    expect(source).toContain("paywall-reference-no-social-proof.png");
+    expect(source).not.toContain("paywall-reference-no-icons-852x1846.png");
+  });
+
+  it("keeps the paywall scrollable and the native CTA compact", async () => {
     const { screen } = await renderStep("premium", { price: "$9.99" });
     const layout = getPremiumArtworkLayout(390, 844);
 
-    expect(layout.contentMinHeight).toBeGreaterThan(layout.cropHeight);
+    expect(layout.heroHeight).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Start monthly - $9.99/mo" })).toHaveStyle({ minHeight: 56 });
   });
 
-  it("exposes the reference paywall content to accessibility", async () => {
+  it("uses native offer content as the accessibility source", async () => {
     const { screen } = await renderStep("premium");
 
-    const summary = screen.getByLabelText(/Formie plans paywall/).props.accessibilityLabel;
-    expect(summary).toContain("Upgrade to Formie Pro");
-    expect(summary).toContain("AI form analysis for serious lifters");
-    expect(summary).toContain("10 analyses every month");
-    expect(summary).toContain("AI Form Analysis");
-    expect(summary).toContain("Personalized Feedback");
-    expect(summary).toContain("Progress Tracking");
-    expect(summary).toContain("Formie Coach");
-    expect(summary).toContain("Continue with Pro");
-    expect(summary).toContain("Secure payment");
-    expect(summary).not.toContain("Trusted by 1,000+ lifters");
-    expect(summary).not.toContain("Real progress. Real results.");
+    expect(screen.getByRole("header", { name: "Formie Pro" })).toBeTruthy();
+    expect(screen.getByText("10 analyses every month")).toBeTruthy();
+    expect(screen.queryByTestId("premium-accessibility-summary")).toBeNull();
   });
 
-  it("preserves the supplied paywall aspect ratio and source coordinates", () => {
+  it("crops the static-price portion out of the decorative artwork", () => {
     const layout = getPremiumArtworkLayout(390, 844);
 
     expect(layout.imageWidth).toBe(layout.contentWidth);
-    expect(layout.imageLeft).toBe(0);
-    expect(layout.imageTop).toBe(0);
-    expect(layout.topCropSourceY).toBe(0);
-    expect(layout.statusMaskHeight).toBeGreaterThan(0);
-    expect(layout.cropSourceEndY).toBe(1846);
     expect(layout.imageHeight / layout.imageWidth).toBeCloseTo(1846 / 852, 5);
-    expect(layout.statusMaskHeight / layout.imageWidth).toBeCloseTo(76 / 852, 5);
-    expect(layout.cta.top / layout.imageWidth).toBeCloseTo(1640 / 852, 5);
-    expect(layout.contentMinHeight).toBeGreaterThanOrEqual(844);
-    expect(layout.cta.top + layout.cta.height).toBeLessThan(layout.cropHeight);
-    expect(layout.cta.height).toBe(56);
-
-    const shortPhoneLayout = getPremiumArtworkLayout(390, 667);
-    expect(shortPhoneLayout.contentMinHeight).toBeGreaterThan(667);
-    expect(shortPhoneLayout.imageHeight / shortPhoneLayout.imageWidth).toBeCloseTo(1846 / 852, 5);
+    expect(layout.heroSourceEndY).toBeLessThan(500);
   });
 
-  it("keeps the live purchase surface opaque while it is reconciling", async () => {
+  it("disables the native purchase surface while it is reconciling", async () => {
     const reconciling = await renderStep("premium", { purchaseState: "reconciling", busy: true });
-    expect(StyleSheet.flatten(reconciling.screen.getByTestId("onboarding-bottom-cta").props.style).opacity).toBe(1);
+    expect(reconciling.screen.getByTestId("onboarding-bottom-cta").props.accessibilityState.disabled).toBe(true);
   });
 
-  it("renders the supplied reference image as the full paywall surface", async () => {
+  it("renders the supplied artwork as a cropped decorative hero", async () => {
     const { screen } = await renderStep("premium");
 
-    expect(screen.getByTestId("premium-reference-image").props.contentFit).toBe("fill");
+    expect(screen.getByTestId("premium-reference-image", { includeHiddenElements: true }).props.contentFit).toBe("fill");
   });
 
   it("always purchases the monthly package", async () => {

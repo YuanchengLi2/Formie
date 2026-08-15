@@ -1,9 +1,11 @@
 import { useEffect } from "react";
+import * as Linking from "expo-linking";
 import { type Href, useRouter } from "expo-router";
 import { ActivityIndicator, Text, View } from "react-native";
 
 import { useAccess } from "@/features/access/access-provider";
 import { useAuth } from "@/features/auth/auth-provider";
+import { getLegalLinks } from "@/features/auth/legal-config";
 import { useBilling } from "@/features/billing/billing-provider";
 import { useOnboarding } from "@/features/onboarding/onboarding-store";
 import { resolveSubscriptionView } from "@/features/billing/subscription-view";
@@ -21,6 +23,7 @@ export default function SubscriptionRoute() {
   const onboarding = useOnboarding();
   const completeAccess = onboarding.completeAccess;
   const view = resolveSubscriptionView(access.access.status, access.access.lifecycleState, access.access.remaining);
+  const legal = (() => { try { return getLegalLinks(); } catch { return null; } })();
 
   useEffect(() => {
     if (auth.phase !== "signed_out") return;
@@ -82,12 +85,16 @@ export default function SubscriptionRoute() {
   }
 
   return <PremiumScreen
-    price={billing.plans.monthly?.priceString ?? "$9.99"}
+    price={billing.plans.monthly?.priceString ?? "Unavailable"}
     purchaseAvailable={Boolean(billing.plans.monthly)}
     busy={purchasing}
     state={billing.state}
     error={billing.error}
+    restoreMessage={billing.restoreMessage}
     onBack={() => router.back()}
+    onRestore={() => void billing.restore().then((active) => active ? completePurchase() : undefined)}
+    onOpenTerms={() => { if (legal) void Linking.openURL(legal.termsUrl); }}
+    onOpenPrivacy={() => { if (legal) void Linking.openURL(legal.privacyUrl); }}
     onRetrySync={() => void billing.retryPurchaseSync().then((active) => active ? completePurchase() : undefined)}
     onPurchase={() => void finish()}
   />;

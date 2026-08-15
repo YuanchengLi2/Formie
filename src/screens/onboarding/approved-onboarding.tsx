@@ -47,8 +47,10 @@ export type ApprovedOnboardingScreenProps = {
   busy: boolean;
   busyProvider?: Provider | null;
   error?: string | null;
+  restoreMessage?: string | null;
   purchaseState?: PurchaseState;
   onRetrySync?: () => void;
+  onRestore: () => void;
   onLoadingComplete?: () => void;
 };
 
@@ -313,7 +315,7 @@ export function ApprovedOnboardingScreen(props: ApprovedOnboardingScreenProps) {
   if (props.step === "product-value" || props.step === "why-formie" || props.step === "product-demonstration" || props.step === "long-term-value") return <NativeArtworkScreen step={props.step} onNext={props.onNext} onBack={props.onBack} />;
   if (props.step === "loading") return <LoadingScreen onComplete={props.onLoadingComplete} />;
   if (props.step === "create-account") return <AccountScreen {...props} />;
-  if (props.step === "premium") return <PremiumScreen price={props.price} purchaseAvailable={props.purchaseAvailable} busy={props.busy} state={props.purchaseState} error={props.error} onRetrySync={props.onRetrySync} onBack={props.onBack} onPurchase={() => impactThen(props.onPurchase)} onPurchasePlan={(plan) => impactThen(() => props.onPurchasePlan ? props.onPurchasePlan(plan) : props.onPurchase())} />;
+  if (props.step === "premium") return <PremiumScreen price={props.price} purchaseAvailable={props.purchaseAvailable} busy={props.busy} state={props.purchaseState} error={props.error} restoreMessage={props.restoreMessage} onRetrySync={props.onRetrySync} onBack={props.onBack} onPurchase={() => impactThen(props.onPurchase)} onPurchasePlan={(plan) => impactThen(() => props.onPurchasePlan ? props.onPurchasePlan(plan) : props.onPurchase())} onRestore={props.onRestore} onOpenTerms={props.onOpenTerms} onOpenPrivacy={props.onOpenPrivacy} />;
   return <QuestionScreen {...props} />;
 }
 

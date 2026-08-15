@@ -49,9 +49,11 @@ export default function OnboardingStepRoute() {
     onOpenTerms={() => { if (legal) void Linking.openURL(legal.termsUrl); }}
     onOpenPrivacy={() => { if (legal) void Linking.openURL(legal.privacyUrl); }}
     onPurchase={() => void billing.purchase("monthly").then((outcome) => outcome === "active" ? onboarding.completeAccess() : undefined)}
-    price={billing.plans.monthly?.priceString ?? "—"}
+    price={billing.plans.monthly?.priceString ?? "Unavailable"}
     purchaseAvailable={Boolean(billing.plans.monthly)}
     purchaseState={billing.state}
+    restoreMessage={billing.restoreMessage}
+    onRestore={() => void billing.restore().then((active) => active ? onboarding.completeAccess() : undefined)}
     onRetrySync={() => void billing.retryPurchaseSync().then((active) => active ? onboarding.completeAccess() : undefined)}
     busyProvider={auth.signingIn}
     busy={auth.signingIn !== null || (step === "create-account" && onboarding.status === "profile_sync_required" && profile.status === "loading") || billing.state === "loading" || billing.state === "purchasing" || billing.state === "reconciling" || billing.state === "restoring"}
