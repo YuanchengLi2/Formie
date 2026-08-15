@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
+import type { AdminDashboardSnapshot } from "../../lib/admin/dashboard-data";
 import { AdminDashboard } from "./admin-dashboard";
 
-const snapshot = {
+const snapshot: AdminDashboardSnapshot = {
   generatedAt: "2026-08-14T12:00:00.000Z",
   metrics: {
     totalUsers: 42, newUsersToday: 3, newUsers7d: 11, newUsers30d: 29, dau: 8, wau: 23,

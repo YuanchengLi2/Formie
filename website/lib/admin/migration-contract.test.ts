@@ -20,8 +20,8 @@ test("accuracy-first reporting prices known token usage and builds an ordered pr
   const sql = readFileSync(resolve(__dirname, "../../../supabase/migrations/202608140002_accuracy_first_founder_dashboard.sql"), "utf8");
 
   assert.match(sql, /create table if not exists public\.ai_model_pricing/i);
-  assert.match(sql, /prompt_tokens.*input_usd_per_million/is);
-  assert.match(sql, /output_tokens.*thinking_tokens.*output_usd_per_million/is);
+  assert.match(sql, /prompt_tokens[\s\S]*input_usd_per_million/i);
+  assert.match(sql, /output_tokens[\s\S]*thinking_tokens[\s\S]*output_usd_per_million/i);
   assert.match(sql, /upper\(event\.environment\)\s*=\s*'PRODUCTION'/i);
   assert.match(sql, /first_analysis_at\s*>=\s*cohort\.onboarding_completed_at/i);
   assert.match(sql, /paywall_at\s*>=\s*cohort\.first_analysis_at/i);
