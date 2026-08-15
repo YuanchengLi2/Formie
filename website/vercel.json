@@ -6,5 +6,12 @@
       "destination": "https://useformie.com/$1",
       "permanent": true
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "dashboard.useformie.app" }],
+      "destination": "/admin"
+    }
   ]
 }

@@ -28,6 +28,10 @@ type ResultsScreenProps = {
   reanalysisError?: string | null;
   exampleState?: "loading" | "ready" | "error";
   onWatchExample?: () => void;
+  onRateAnalysis?: (helpful: boolean) => void;
+  analysisRating?: boolean | null;
+  ratingPending?: boolean;
+  ratingError?: string | null;
 };
 
 const summaryTextStyle = { fontSize: 16, lineHeight: 23, fontWeight: "400" as const };
@@ -93,7 +97,7 @@ function declaredAmountLabel(result: AnalysisResult): string | null {
     : `${amount.value} reps${amount.countScope === "per_side" ? " per side" : ""}`;
 }
 
-export function ResultsScreen({ result, videoUrl = null, durationMs = null, playbackWindow = null, onRecordAnother, onAskCoach = () => undefined, onReanalyze, reanalyzing = false, reanalysisError = null, exampleState = "loading", onWatchExample }: ResultsScreenProps) {
+export function ResultsScreen({ result, videoUrl = null, durationMs = null, playbackWindow = null, onRecordAnother, onAskCoach = () => undefined, onReanalyze, reanalyzing = false, reanalysisError = null, exampleState = "loading", onWatchExample, onRateAnalysis, analysisRating = null, ratingPending = false, ratingError = null }: ResultsScreenProps) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const wideWorkspace = width >= 820;
@@ -335,6 +339,20 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
           <Text style={[typography.body, { color: exampleState === "error" ? colors.textMuted : colors.gold, textAlign: "center" }]}>{exampleState === "loading" ? "Loading Example…" : exampleState === "error" ? "Retry Example" : "Watch Example"}</Text>
         </Pressable>
       </View>
+
+      {onRateAnalysis ? <View testID="analysis-feedback" style={{ gap: spacing.md, alignItems: "center", padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+        <Text selectable style={[typography.heading, { color: colors.text, textAlign: "center" }]}>Was this analysis helpful?</Text>
+        <Text selectable style={[typography.caption, { color: colors.textMuted, textAlign: "center" }]}>Your rating helps improve Formie&apos;s coaching.</Text>
+        <View style={{ width: "100%", flexDirection: "row", gap: spacing.sm }}>
+          {([{ helpful: true, label: "Helpful" }, { helpful: false, label: "Not helpful" }] as const).map((option) => {
+            const selected = analysisRating === option.helpful;
+            return <Pressable key={option.label} accessibilityLabel={option.label} accessibilityRole="button" accessibilityState={{ selected, disabled: ratingPending }} disabled={ratingPending} onPress={() => onRateAnalysis(option.helpful)} style={({ pressed }) => ({ flex: 1, minHeight: 52, alignItems: "center", justifyContent: "center", borderRadius: radii.md, borderWidth: 1, borderColor: selected ? colors.gold : colors.border, backgroundColor: selected ? colors.gold : pressed ? colors.surfaceRaised : colors.background, opacity: ratingPending ? .6 : 1 })}>
+              <Text style={[typography.label, { color: selected ? colors.background : colors.text }]}>{option.label}</Text>
+            </Pressable>;
+          })}
+        </View>
+        {ratingError ? <Text accessibilityRole="alert" selectable style={[typography.caption, { color: colors.danger, textAlign: "center" }]}>Couldn&apos;t save your rating. Try again.</Text> : analysisRating !== null ? <Text selectable style={[typography.caption, { color: colors.success }]}>Thanks for the feedback.</Text> : null}
+      </View> : null}
 
       {videoUrl && onReanalyze ? <View style={{ gap: spacing.sm, alignItems: "center" }}>
         <Text selectable style={[typography.body, { color: colors.textSecondary, textAlign: "center" }]}>Something look wrong?</Text>

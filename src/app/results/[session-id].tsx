@@ -7,6 +7,7 @@ import * as WebBrowser from "expo-web-browser";
 import { declarationForReanalysis } from "@/features/analysis/reanalysis-declaration";
 import type { SetDeclaration } from "@/features/analysis/set-declaration";
 import { AnalysisApiError, reanalyzeAnalysis } from "@/features/analysis/api";
+import { submitAnalysisFeedback } from "@/features/analysis/feedback";
 import { useAnalysisStatus } from "@/features/analysis/use-analysis-status";
 import { getAccessToken } from "@/features/auth/access-token";
 import { useExerciseTutorial } from "@/features/analysis/use-exercise-tutorial";
@@ -58,6 +59,12 @@ export default function ResultsRoute() {
         queryClient.removeQueries({ queryKey: ["analysis-status", sessionId] });
       }
       router.replace(result.kind === "server" ? `/analysis/${sessionId}` : "/analysis/review");
+    },
+  });
+  const feedback = useMutation({
+    mutationFn: async (helpful: boolean) => {
+      await submitAnalysisFeedback(sessionId, helpful);
+      return helpful;
     },
   });
   const prepareReanalysis = async () => {
@@ -132,6 +139,10 @@ export default function ResultsRoute() {
         }
       }}
       onAskCoach={() => router.push({ pathname: "/(tabs)/(coach)", params: { sessionId } })}
+      onRateAnalysis={(helpful) => feedback.mutate(helpful)}
+      analysisRating={feedback.data ?? null}
+      ratingPending={feedback.isPending}
+      ratingError={feedback.error instanceof Error ? feedback.error.message : null}
       onRecordAnother={() => {
         resetCapture({ type: "reset" });
         const previousExercise = status.data.setDeclaration?.exercise;

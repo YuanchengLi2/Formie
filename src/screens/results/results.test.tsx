@@ -144,6 +144,21 @@ function renderedTestIds(node: unknown, ids: string[] = []): string[] {
 }
 
 describe("ResultsScreen", () => {
+  it("collects one helpful or not-helpful rating for the completed analysis", async () => {
+    const onRateAnalysis = jest.fn();
+    const screen = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
+        <ResultsScreen result={result()} onRecordAnother={jest.fn()} onRateAnalysis={onRateAnalysis} analysisRating={null} />
+      </SafeAreaProvider>,
+    );
+
+    expect(screen.getByText("Was this analysis helpful?")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Helpful"));
+    expect(onRateAnalysis).toHaveBeenCalledWith(true);
+    await fireEvent.press(screen.getByLabelText("Not helpful"));
+    expect(onRateAnalysis).toHaveBeenCalledWith(false);
+  });
+
   it("matches the focused Coaching Review hierarchy and includes every supported improvement point", async () => {
     const screen = await renderResults();
 

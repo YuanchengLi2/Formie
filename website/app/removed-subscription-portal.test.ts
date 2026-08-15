@@ -5,7 +5,7 @@ import test from "node:test";
 
 const websiteRoot = resolve(__dirname, "..");
 
-test("the public website has no subscription-management or portal-auth surface", () => {
+test("the public website has no customer subscription-management surface", () => {
   const removedPaths = [
     "app/manage-subscription/page.tsx",
     "app/manage-subscription/manage-subscription-client.tsx",
@@ -27,6 +27,7 @@ test("the public website has no subscription-management or portal-auth surface",
   const siteShell = readFileSync(resolve(websiteRoot, "components/site-shell.tsx"), "utf8");
   assert.doesNotMatch(siteShell, /manage-subscription|Manage Subscription/i);
 
-  const packageManifest = readFileSync(resolve(websiteRoot, "package.json"), "utf8");
-  assert.doesNotMatch(packageManifest, /@supabase\/(?:ssr|supabase-js)/);
+  const adminPage = readFileSync(resolve(websiteRoot, "app/admin/page.tsx"), "utf8");
+  assert.match(adminPage, /FounderDashboardPage/);
+  assert.doesNotMatch(siteShell, /admin|founder dashboard/i);
 });
