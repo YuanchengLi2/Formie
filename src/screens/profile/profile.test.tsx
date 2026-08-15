@@ -15,7 +15,7 @@ describe("ProfileScreen", () => {
     expect(screen.queryByText("No cloud video library")).toBeNull();
     expect(screen.getByRole("button", { name: "Log Out" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Manage subscription" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /delete account/i })).toBeNull();
+    expect(screen.getByRole("button", { name: "Delete Account" })).toBeTruthy();
   });
 
   it("opens the authoritative native management flow without exposing client-side cancel mutations", async () => {
@@ -116,5 +116,58 @@ describe("ProfileScreen", () => {
     await fireEvent.press(screen.getByLabelText("Decrease analyses remaining"));
     await fireEvent.press(screen.getByLabelText("Apply remaining analyses"));
     await waitFor(() => expect(onSetTestRemaining).toHaveBeenCalledWith(8));
+  });
+
+  it("warns about Apple billing and requires exact typed confirmation", async () => {
+    const onDeleteAccount = jest.fn().mockResolvedValue(undefined);
+    const onManageSubscription = jest.fn();
+    const screen = await render(<ProfileScreen hasManagedSubscription onDeleteAccount={onDeleteAccount} onManageSubscription={onManageSubscription} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Delete Account" }));
+    expect(screen.getByText(/does not cancel your Apple subscription/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Delete Account Now" }).props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(screen.getByRole("button", { name: "Manage Apple Subscription" }));
+    expect(onManageSubscription).toHaveBeenCalledTimes(1);
+    await fireEvent.changeText(screen.getByLabelText("Type DELETE to confirm"), "delete");
+    expect(screen.getByRole("button", { name: "Delete Account Now" }).props.accessibilityState.disabled).toBe(true);
+    await fireEvent.changeText(screen.getByLabelText("Type DELETE to confirm"), "DELETE");
+    await fireEvent.press(screen.getByRole("button", { name: "Delete Account Now" }));
+    await waitFor(() => expect(onDeleteAccount).toHaveBeenCalledTimes(1));
+  });
+
+  it("cancels deletion without calling the destructive action", async () => {
+    const onDeleteAccount = jest.fn();
+    const screen = await render(<ProfileScreen onDeleteAccount={onDeleteAccount} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Delete Account" }));
+    expect(screen.getByText(/deletes your Formie account immediately/i)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Manage Apple Subscription" })).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Cancel account deletion" }));
+    expect(screen.queryByLabelText("Type DELETE to confirm")).toBeNull();
+    expect(onDeleteAccount).not.toHaveBeenCalled();
+  });
+
+  it("prevents duplicate deletion requests while one is pending", async () => {
+    let resolveDeletion!: () => void;
+    const onDeleteAccount = jest.fn(() => new Promise<void>((resolve) => { resolveDeletion = resolve; }));
+    const screen = await render(<ProfileScreen onDeleteAccount={onDeleteAccount} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Delete Account" }));
+    await fireEvent.changeText(screen.getByLabelText("Type DELETE to confirm"), "DELETE");
+    const submit = screen.getByRole("button", { name: "Delete Account Now" });
+    await fireEvent.press(submit);
+    await fireEvent.press(submit);
+    expect(onDeleteAccount).toHaveBeenCalledTimes(1);
+    resolveDeletion();
+    await waitFor(() => expect(onDeleteAccount).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps the dialog open with a retryable truthful failure", async () => {
+    const onDeleteAccount = jest.fn().mockRejectedValueOnce(new Error("failed")).mockResolvedValue(undefined);
+    const screen = await render(<ProfileScreen onDeleteAccount={onDeleteAccount} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Delete Account" }));
+    await fireEvent.changeText(screen.getByLabelText("Type DELETE to confirm"), "DELETE");
+    await fireEvent.press(screen.getByRole("button", { name: "Delete Account Now" }));
+    expect(await screen.findByText("Your account could not be deleted. No deletion was confirmed. Try again.")).toBeTruthy();
+    expect(screen.getByLabelText("Type DELETE to confirm")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Delete Account Now" }));
+    await waitFor(() => expect(onDeleteAccount).toHaveBeenCalledTimes(2));
   });
 });

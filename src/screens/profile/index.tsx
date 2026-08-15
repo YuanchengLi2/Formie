@@ -13,7 +13,7 @@ const mark = require("../../../assets/images/form-logo-mark.png");
 
 type ProfileSubscription = { plan: string; stateLabel: string; access?: BillingBoundaryInput };
 
-export function ProfileScreen({ displayName = "Formie Athlete", email = null, subscription, capturePreferences = defaultCapturePreferences, onSaveProfile = async () => undefined, onSaveCapturePreferences = async () => undefined, onSendFeedback = () => undefined, onManageSubscription = () => undefined, onSubscriptionBoundary, termsUrl, privacyUrl, retentionUrl, onOpenUrl = async () => undefined, onLogOut = async () => undefined, showTestControls = false, showAnalysisBalanceControl = false, testRemaining = null, onTestControl = async () => undefined, onSetTestRemaining = async () => undefined }: {
+export function ProfileScreen({ displayName = "Formie Athlete", email = null, subscription, capturePreferences = defaultCapturePreferences, onSaveProfile = async () => undefined, onSaveCapturePreferences = async () => undefined, onSendFeedback = () => undefined, onManageSubscription = () => undefined, onSubscriptionBoundary, termsUrl, privacyUrl, retentionUrl, onOpenUrl = async () => undefined, onLogOut = async () => undefined, hasManagedSubscription = false, onDeleteAccount = async () => undefined, showTestControls = false, showAnalysisBalanceControl = false, testRemaining = null, onTestControl = async () => undefined, onSetTestRemaining = async () => undefined }: {
   displayName?: string;
   email?: string | null;
   subscription?: ProfileSubscription;
@@ -28,6 +28,8 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
   retentionUrl?: string;
   onOpenUrl?: (url: string) => Promise<void>;
   onLogOut?: () => Promise<void>;
+  hasManagedSubscription?: boolean;
+  onDeleteAccount?: () => Promise<void>;
   showTestControls?: boolean;
   showAnalysisBalanceControl?: boolean;
   testRemaining?: number | null;
@@ -42,6 +44,10 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
   const [capture, setCapture] = useState(capturePreferences);
   const [busy, setBusy] = useState<"profile" | "logout" | "reset" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [testDraft, setTestDraft] = useState(Math.max(0, Math.min(10, testRemaining ?? 10)));
   useEffect(() => { setName(displayName); setDraftName(displayName); }, [displayName]);
   useEffect(() => setCapture(capturePreferences), [capturePreferences]);
@@ -73,6 +79,29 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
     } },
   ]);
   const logOut = async () => { if (busy) return; setBusy("logout"); setError(null); try { await onLogOut(); } catch { setError("Could not log out. Try again."); setBusy(null); } };
+  const openDeleteModal = () => {
+    setDeleteConfirmation("");
+    setDeleteError(null);
+    setDeleteModalVisible(true);
+  };
+  const cancelDelete = () => {
+    if (deleteBusy) return;
+    setDeleteModalVisible(false);
+    setDeleteConfirmation("");
+    setDeleteError(null);
+  };
+  const submitDelete = async () => {
+    if (deleteConfirmation !== "DELETE" || deleteBusy || !onDeleteAccount) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await onDeleteAccount();
+    } catch {
+      setDeleteError("Your account could not be deleted. No deletion was confirmed. Try again.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
 
   return <ImageBackground source={background} resizeMode="cover" style={styles.root}>
     <ScrollView contentInsetAdjustmentBehavior="automatic" showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 19 * scale, paddingHorizontal: 18 * scale, paddingTop: 13 * scale, paddingBottom: 32 * scale }}>
@@ -133,11 +162,28 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       <Pressable accessibilityRole="button" disabled={Boolean(busy)} onPress={reset} style={({ pressed }) => [styles.resetButton, { opacity: pressed || busy ? 0.6 : 1 }]}><Text style={styles.resetText}>{busy === "reset" ? "Resetting…" : "Reset to Defaults"}</Text></Pressable>
       <Pressable testID="logout-button" accessibilityLabel="Log Out" accessibilityRole="button" disabled={Boolean(busy)} onPress={() => void logOut()} style={({ pressed }) => [styles.logoutButton, { opacity: pressed || busy ? 0.6 : 1 }]}><Text style={styles.logoutText}>{busy === "logout" ? "Logging Out…" : "Log Out"}</Text></Pressable>
+      <Pressable accessibilityLabel="Delete Account" accessibilityRole="button" disabled={deleteBusy} onPress={openDeleteModal} style={({ pressed }) => [styles.deleteButton, { opacity: pressed || deleteBusy ? 0.6 : 1 }]}><Text style={styles.deleteText}>Delete Account</Text></Pressable>
       <Text style={styles.version}>Formie 1.0</Text>
     </ScrollView>
 
     <Modal visible={editingName} animationType="fade" transparent onRequestClose={() => setEditingName(false)}>
       <View style={styles.modalScrim}><View style={styles.modalCard}><Text style={styles.modalTitle}>Display name</Text><Text style={styles.modalCopy}>This is how your account appears inside Formie.</Text><TextInput accessibilityLabel="Display name" autoFocus autoCapitalize="words" maxLength={60} value={draftName} onChangeText={setDraftName} style={styles.input} /><View style={styles.modalActions}><Pressable accessibilityRole="button" onPress={() => { setDraftName(name); setEditingName(false); }} style={styles.modalCancel}><Text style={styles.modalCancelText}>Cancel</Text></Pressable><Pressable accessibilityRole="button" disabled={busy === "profile" || draftName.trim().length < 2} onPress={() => void saveName()} style={styles.modalSave}><Text style={styles.modalSaveText}>{busy === "profile" ? "Saving…" : "Save"}</Text></Pressable></View></View></View>
+    </Modal>
+
+    <Modal visible={deleteModalVisible} animationType="fade" transparent onRequestClose={cancelDelete}>
+      <View style={styles.modalScrim}>
+        <View style={styles.modalCard}>
+          <Text accessibilityRole="header" style={styles.modalTitle}>Permanently delete account?</Text>
+          <Text style={styles.modalCopy}>Deleting your account removes your Formie account, uploaded videos, derived artifacts, analyses, coaching conversations, profile, and linked app activity. This cannot be undone.</Text>
+          {hasManagedSubscription ? <Text style={styles.deleteWarning}>Deleting Formie data does not cancel your Apple subscription. You can manage or cancel it with Apple before or after deleting your account.</Text> : <Text style={styles.modalCopy}>This deletes your Formie account immediately. You do not need to contact support.</Text>}
+          <Text style={styles.deletePrompt}>Type DELETE to confirm.</Text>
+          <TextInput accessibilityLabel="Type DELETE to confirm" autoCapitalize="characters" autoCorrect={false} editable={!deleteBusy} value={deleteConfirmation} onChangeText={setDeleteConfirmation} style={styles.input} />
+          {deleteError ? <Text accessibilityRole="alert" style={styles.error}>{deleteError}</Text> : null}
+          {hasManagedSubscription ? <Pressable accessibilityRole="button" accessibilityLabel="Manage Apple Subscription" disabled={deleteBusy} onPress={onManageSubscription} style={styles.manageAppleButton}><Text style={styles.manageAppleText}>Manage Apple Subscription</Text></Pressable> : null}
+          <Pressable accessibilityRole="button" accessibilityLabel="Delete Account Now" accessibilityState={{ disabled: deleteConfirmation !== "DELETE" || deleteBusy }} disabled={deleteConfirmation !== "DELETE" || deleteBusy} onPress={() => void submitDelete()} style={({ pressed }) => [styles.confirmDeleteButton, { opacity: pressed || deleteConfirmation !== "DELETE" || deleteBusy ? 0.5 : 1 }]}><Text style={styles.confirmDeleteText}>{deleteBusy ? "Deleting Account…" : "Delete Account Now"}</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Cancel account deletion" disabled={deleteBusy} onPress={cancelDelete} style={styles.modalCancel}><Text style={styles.modalCancelText}>Cancel</Text></Pressable>
+        </View>
+      </View>
     </Modal>
   </ImageBackground>;
 }
@@ -155,7 +201,7 @@ const styles = StyleSheet.create({
   accountRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 12 }, avatar: { alignItems: "center", justifyContent: "center", backgroundColor: colors.goldSoft, borderWidth: 1, borderColor: colors.gold }, avatarText: { color: colors.gold, fontWeight: "800" }, accountName: { color: colors.text, fontWeight: "700" }, accountEmail: { color: colors.textMuted }, chevron: { color: colors.gold, lineHeight: 30 },
   sectionLabel: { color: colors.textMuted, fontSize: 10.5, lineHeight: 14, fontWeight: "700", letterSpacing: 1.1, textTransform: "uppercase", paddingHorizontal: 3 }, subscriptionRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 }, crown: { alignItems: "center", justifyContent: "center", backgroundColor: colors.goldSoft, borderWidth: 1, borderColor: "rgba(200,169,107,0.28)" }, stateLabel: { color: colors.textSecondary, lineHeight: 17 },
   settingsRow: { minHeight: 57, flexDirection: "row", alignItems: "center", gap: 12 }, rowTitle: { color: colors.text, fontSize: 14, lineHeight: 19, fontWeight: "600" }, rowDetail: { color: colors.textMuted, fontSize: 10.5, lineHeight: 15 }, rule: { height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.09)", marginVertical: 8 }, countdownChoices: { flexDirection: "row", gap: 5 }, countdownPill: { minWidth: 34, height: 29, alignItems: "center", justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: colors.border }, countdownPillSelected: { backgroundColor: colors.gold, borderColor: colors.gold }, pillText: { color: colors.textSecondary, fontSize: 10.5, fontWeight: "700" },
-  linkRow: { minHeight: 43, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, linkChevron: { color: colors.gold, fontSize: 23 }, resetButton: { minHeight: 50, alignItems: "center", justifyContent: "center", borderRadius: 15, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(18,18,18,0.88)" }, resetText: { color: colors.text, fontSize: 13, fontWeight: "600" }, logoutButton: { minHeight: 50, alignItems: "center", justifyContent: "center", borderRadius: 15, borderWidth: 1, borderColor: colors.danger, backgroundColor: "rgba(20,5,5,0.46)" }, logoutText: { color: colors.danger, fontSize: 13, fontWeight: "700" }, error: { color: colors.danger, fontSize: 11.5, textAlign: "center" }, version: { color: colors.textMuted, fontSize: 10.5, textAlign: "center" },
-  modalScrim: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.74)" }, modalCard: { borderRadius: 22, padding: 20, gap: 13, backgroundColor: "#171717", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }, modalTitle: { color: colors.text, fontSize: 22, fontWeight: "700" }, modalCopy: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 }, input: { minHeight: 51, paddingHorizontal: 14, borderRadius: 13, borderWidth: 1, borderColor: colors.gold, color: colors.text, backgroundColor: "#0D0D0D", fontSize: 15 }, modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 9 }, modalCancel: { minHeight: 43, paddingHorizontal: 18, justifyContent: "center" }, modalCancelText: { color: colors.textSecondary, fontWeight: "600" }, modalSave: { minHeight: 43, paddingHorizontal: 20, justifyContent: "center", borderRadius: 12, backgroundColor: colors.gold }, modalSaveText: { color: "#080808", fontWeight: "800" },
+  linkRow: { minHeight: 43, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, linkChevron: { color: colors.gold, fontSize: 23 }, resetButton: { minHeight: 50, alignItems: "center", justifyContent: "center", borderRadius: 15, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(18,18,18,0.88)" }, resetText: { color: colors.text, fontSize: 13, fontWeight: "600" }, logoutButton: { minHeight: 50, alignItems: "center", justifyContent: "center", borderRadius: 15, borderWidth: 1, borderColor: colors.danger, backgroundColor: "rgba(20,5,5,0.46)" }, logoutText: { color: colors.danger, fontSize: 13, fontWeight: "700" }, deleteButton: { minHeight: 46, alignItems: "center", justifyContent: "center" }, deleteText: { color: colors.danger, fontSize: 12.5, fontWeight: "700", textDecorationLine: "underline" }, error: { color: colors.danger, fontSize: 11.5, textAlign: "center" }, version: { color: colors.textMuted, fontSize: 10.5, textAlign: "center" },
+  modalScrim: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.74)" }, modalCard: { borderRadius: 22, padding: 20, gap: 13, backgroundColor: "#171717", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }, modalTitle: { color: colors.text, fontSize: 22, fontWeight: "700" }, modalCopy: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 }, deleteWarning: { color: colors.gold, fontSize: 12, lineHeight: 18 }, deletePrompt: { color: colors.text, fontSize: 12, fontWeight: "700" }, input: { minHeight: 51, paddingHorizontal: 14, borderRadius: 13, borderWidth: 1, borderColor: colors.gold, color: colors.text, backgroundColor: "#0D0D0D", fontSize: 15 }, modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 9 }, modalCancel: { minHeight: 43, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" }, modalCancelText: { color: colors.textSecondary, fontWeight: "600" }, modalSave: { minHeight: 43, paddingHorizontal: 20, justifyContent: "center", borderRadius: 12, backgroundColor: colors.gold }, modalSaveText: { color: "#080808", fontWeight: "800" }, manageAppleButton: { minHeight: 46, alignItems: "center", justifyContent: "center", borderRadius: 13, borderWidth: 1, borderColor: colors.gold }, manageAppleText: { color: colors.gold, fontSize: 13, fontWeight: "700" }, confirmDeleteButton: { minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: colors.danger }, confirmDeleteText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   testCopy: { color: colors.textMuted, fontSize: 10.5, lineHeight: 15 }, testRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 7, marginTop: 10 }, testActions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10 }, testButton: { minHeight: 34, justifyContent: "center", paddingHorizontal: 10, borderRadius: 99, borderWidth: 1, borderColor: colors.gold }, testText: { color: colors.gold, fontSize: 10.5, fontWeight: "600" }, testApply: { minHeight: 34, justifyContent: "center", paddingHorizontal: 11, borderRadius: 99, backgroundColor: colors.gold }, testApplyText: { color: "#080808", fontSize: 10.5, fontWeight: "700" },
 });
