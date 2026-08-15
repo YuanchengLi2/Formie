@@ -12,6 +12,7 @@ import { useProfile } from "@/features/profile/profile-provider";
 import { useAccess, useBillingSurfaceRefresh } from "@/features/access/access-provider";
 import { createSubscriptionPresentation } from "@/features/billing/subscription-management-presentation";
 import { runSubscriptionTestControl, setSubscriptionTestRemaining } from "@/features/billing/subscription-test-controls";
+import { deleteAccount } from "@/features/account-deletion/api";
 
 export default function ProfileRoute() {
   const auth = useAuth();
@@ -25,6 +26,10 @@ export default function ProfileRoute() {
   const updateCapture = useCapturePreferences((state) => state.update);
   useBillingSurfaceRefresh();
   const subscriptionPresentation = createSubscriptionPresentation(access.access);
+  const hasManagedSubscription = Boolean(access.access.store)
+    && access.access.lifecycleState !== "not_subscribed"
+    && access.access.lifecycleState !== "expired"
+    && access.access.lifecycleState !== "unknown";
   const legal = (() => {
     try {
       return getLegalLinks();
@@ -80,6 +85,18 @@ export default function ProfileRoute() {
         await billing.logOut().catch(() => undefined);
         await onboarding.markLoggedOut();
         await auth.logOut("user");
+      }}
+      hasManagedSubscription={hasManagedSubscription}
+      onDeleteAccount={async () => {
+        const accessToken = auth.session?.access_token;
+        if (!accessToken) throw new Error("Sign in again before deleting your account.");
+
+        await deleteAccount({ accessToken });
+
+        await billing.logOut().catch(() => undefined);
+        await onboarding.markLoggedOut();
+        await auth.logOut("user");
+        router.replace("/login?accountDeleted=1" as Href);
       }}
       />
     </>
