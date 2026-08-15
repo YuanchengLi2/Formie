@@ -1,0 +1,68 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "version": "1.0",
+    "copyright": "2026 Formie",
+    "categories": [
+      "HEALTH_AND_FITNESS"
+    ],
+    "release": {
+      "automaticRelease": true
+    },
+    "review": {
+      "notes": "Sign-in and account setup:\n1. Launch Formie and complete the onboarding screens.\n2. Tap Sign in with Apple. Apple is the only account method shown in this release; no separate demo password is required.\n\nSubscription:\n1. The Formie Pro monthly offer appears after account setup or from Settings > Subscription.\n2. The screen shows the localized App Store price, auto-renewal disclosure, Terms of Use, Privacy Policy, and Restore Purchases.\n3. Apple controls the purchase sheet and subscription management.\n\nCore review flow:\n1. From Home, start an analysis and select or confirm the exercise.\n2. Record a short exercise set. Camera access and a physical device are required for recording.\n3. Submit the recording and wait for the analysis to complete.\n4. Open the result to review evidence-linked coaching.\n\nAccount deletion:\n1. Open Settings > Delete Account.\n2. Review the subscription warning, enter DELETE, and confirm Delete Account Now.\n3. Deletion removes the Formie account and Formie-controlled uploaded/derived data. It does not cancel Apple billing; Manage Apple Subscription is available in the confirmation.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/\nPrivacy choices: https://useformie.com/privacy-choices"
+    },
+    "info": {
+      "en-US": {
+        "title": "Formie",
+        "subtitle": "Video form coaching",
+        "description": "Formie turns a short exercise recording into focused, evidence-linked coaching. Record your set, choose the exercise and equipment you used, and review the moments that most affect your technique.\n\nEach analysis explains what happened, why it matters, and what to do next. Corrections are tied to specific moments in your recording so you can understand the feedback and apply it on your next set.\n\nUse Formie to:\n\n- Record or review an exercise set\n- See prioritized technique corrections\n- Revisit the exact evidence behind each correction\n- Track saved analyses and progress over time\n- Manage Formie Pro from the app\n\nFormie is an educational fitness tool and is not medical advice. Exercise within your ability and seek qualified guidance when needed.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+        "keywords": [
+          "fitness",
+          "form",
+          "coach",
+          "workout",
+          "exercise",
+          "video",
+          "technique",
+          "strength",
+          "gym",
+          "training"
+        ],
+        "promoText": "Record a set, review the moments that matter, and get clear coaching for your next rep.",
+        "privacyPolicyUrl": "https://useformie.com/privacy",
+        "supportUrl": "https://useformie.com/support",
+        "marketingUrl": "https://useformie.com"
+      }
+    },
+    "advisory": {
+      "ageRatingOverride": "NONE",
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "NONE",
+      "gambling": false,
+      "gamblingSimulated": "NONE",
+      "horrorOrFearThemes": "NONE",
+      "kidsAgeBand": null,
+      "koreaAgeRatingOverride": "NONE",
+      "lootBox": false,
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "profanityOrCrudeHumor": "NONE",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "unrestrictedWebAccess": false,
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "advertising": false,
+      "ageAssurance": false,
+      "ageRatingOverrideV2": "NONE",
+      "developerAgeRatingInfoUrl": null,
+      "gunsOrOtherWeapons": "NONE",
+      "healthOrWellnessTopics": true,
+      "messagingAndChat": false,
+      "parentalControls": false,
+      "userGeneratedContent": false
+    }
+  }
+}
