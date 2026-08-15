@@ -12,10 +12,10 @@ export type DashboardMetrics = {
   totalAnalyses: number;
   secondAnalysisRate: number;
   payingSubscribers: number;
-  freeToPaidRate: number;
-  estimatedMrr: number;
+  freeToPaidRate: DashboardMetricValue;
+  estimatedMrr: DashboardMetricValue;
   cancellations: number;
-  aiCostMonth: number;
+  aiCostMonth: DashboardMetricValue;
   analysisSuccessRate: number;
   helpfulRate: DashboardMetricValue;
   helpfulVotes: number;
@@ -49,8 +49,33 @@ export type RecentAnalysis = {
   status: string;
   createdAt: string;
   processingMs: number | null;
-  aiCost: number;
+  aiCost: DashboardMetricValue;
+  aiCostComplete: boolean;
   feedback: boolean | null;
+};
+
+export type AccuracyStatus = "exact" | "estimated" | "incomplete" | "unavailable";
+
+export type DashboardAccuracy = {
+  aiCost: {
+    status: AccuracyStatus;
+    pricedCalls: number;
+    totalCalls: number;
+    coveragePercent: DashboardMetricValue;
+    unpricedCalls: number;
+    isMinimum: boolean;
+  };
+  revenue: {
+    status: AccuracyStatus;
+    pricedSubscriptions: number;
+    totalSubscriptions: number;
+    coveragePercent: DashboardMetricValue;
+  };
+  funnel: {
+    status: AccuracyStatus;
+    observedSince: string;
+    ordered: boolean;
+  };
 };
 
 export type AdminDashboardSnapshot = {
@@ -59,6 +84,7 @@ export type AdminDashboardSnapshot = {
   funnel: FunnelStep[];
   recentUsers: RecentUser[];
   recentAnalyses: RecentAnalysis[];
+  accuracy: DashboardAccuracy;
 };
 
 const metricKeys: Array<keyof DashboardMetrics> = [
@@ -80,13 +106,18 @@ function numberValue(value: unknown, label: string, nullable = false): number | 
   return parsed;
 }
 
+function statusValue(value: unknown, label: string): AccuracyStatus {
+  if (value === "exact" || value === "estimated" || value === "incomplete" || value === "unavailable") return value;
+  throw new Error(`Invalid ${label}`);
+}
+
 export function parseDashboardSnapshot(input: unknown): AdminDashboardSnapshot {
   const root = record(input, "dashboard snapshot");
   if (typeof root.generatedAt !== "string" || Number.isNaN(Date.parse(root.generatedAt))) throw new Error("Invalid generatedAt");
   const rawMetrics = record(root.metrics, "metrics");
   const metrics = {} as DashboardMetrics;
   for (const key of metricKeys) {
-    metrics[key] = numberValue(rawMetrics[key], key, key === "helpfulRate") as never;
+    metrics[key] = numberValue(rawMetrics[key], key, key === "helpfulRate" || key === "freeToPaidRate" || key === "estimatedMrr" || key === "aiCostMonth") as never;
   }
   if (!Array.isArray(root.funnel) || !Array.isArray(root.recentUsers) || !Array.isArray(root.recentAnalyses)) {
     throw new Error("Invalid dashboard collections");
@@ -104,11 +135,43 @@ export function parseDashboardSnapshot(input: unknown): AdminDashboardSnapshot {
     };
   });
 
+  const rawAccuracy = record(root.accuracy, "accuracy");
+  const rawAiCost = record(rawAccuracy.aiCost, "accuracy.aiCost");
+  const rawRevenue = record(rawAccuracy.revenue, "accuracy.revenue");
+  const rawFunnel = record(rawAccuracy.funnel, "accuracy.funnel");
+  if (typeof rawAiCost.isMinimum !== "boolean") throw new Error("Invalid accuracy.aiCost.isMinimum");
+  if (typeof rawFunnel.ordered !== "boolean" || typeof rawFunnel.observedSince !== "string" || Number.isNaN(Date.parse(rawFunnel.observedSince))) {
+    throw new Error("Invalid accuracy.funnel");
+  }
+
+  const accuracy: DashboardAccuracy = {
+    aiCost: {
+      status: statusValue(rawAiCost.status, "accuracy.aiCost.status"),
+      pricedCalls: numberValue(rawAiCost.pricedCalls, "accuracy.aiCost.pricedCalls") as number,
+      totalCalls: numberValue(rawAiCost.totalCalls, "accuracy.aiCost.totalCalls") as number,
+      coveragePercent: numberValue(rawAiCost.coveragePercent, "accuracy.aiCost.coveragePercent", true),
+      unpricedCalls: numberValue(rawAiCost.unpricedCalls, "accuracy.aiCost.unpricedCalls") as number,
+      isMinimum: rawAiCost.isMinimum,
+    },
+    revenue: {
+      status: statusValue(rawRevenue.status, "accuracy.revenue.status"),
+      pricedSubscriptions: numberValue(rawRevenue.pricedSubscriptions, "accuracy.revenue.pricedSubscriptions") as number,
+      totalSubscriptions: numberValue(rawRevenue.totalSubscriptions, "accuracy.revenue.totalSubscriptions") as number,
+      coveragePercent: numberValue(rawRevenue.coveragePercent, "accuracy.revenue.coveragePercent", true),
+    },
+    funnel: {
+      status: statusValue(rawFunnel.status, "accuracy.funnel.status"),
+      observedSince: rawFunnel.observedSince,
+      ordered: rawFunnel.ordered,
+    },
+  };
+
   return {
     generatedAt: root.generatedAt,
     metrics,
     funnel,
     recentUsers: root.recentUsers as RecentUser[],
     recentAnalyses: root.recentAnalyses as RecentAnalysis[],
+    accuracy,
   };
 }

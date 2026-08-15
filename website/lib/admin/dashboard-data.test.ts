@@ -18,10 +18,10 @@ test("normalizes the database snapshot into finite dashboard values", () => {
       totalAnalyses: 77,
       secondAnalysisRate: "38.5",
       payingSubscribers: 9,
-      freeToPaidRate: 12.5,
-      estimatedMrr: "89.91",
+      freeToPaidRate: null,
+      estimatedMrr: null,
       cancellations: 2,
-      aiCostMonth: "14.2841",
+      aiCostMonth: "1.6059",
       analysisSuccessRate: "96.7",
       helpfulRate: null,
       helpfulVotes: 0,
@@ -33,11 +33,19 @@ test("normalizes the database snapshot into finite dashboard values", () => {
     ],
     recentUsers: [],
     recentAnalyses: [],
+    accuracy: {
+      aiCost: { status: "incomplete", pricedCalls: 58, totalCalls: 59, coveragePercent: 98.3, unpricedCalls: 1, isMinimum: true },
+      revenue: { status: "unavailable", pricedSubscriptions: 0, totalSubscriptions: 0, coveragePercent: null },
+      funnel: { status: "exact", observedSince: "2026-08-04T00:00:00.000Z", ordered: true },
+    },
   });
 
   assert.equal(snapshot.metrics.totalUsers, 42);
-  assert.equal(snapshot.metrics.estimatedMrr, 89.91);
+  assert.equal(snapshot.metrics.estimatedMrr, null);
   assert.equal(snapshot.metrics.helpfulRate, null);
+  assert.equal(snapshot.accuracy.aiCost.coveragePercent, 98.3);
+  assert.equal(snapshot.accuracy.aiCost.isMinimum, true);
+  assert.equal(snapshot.accuracy.revenue.status, "unavailable");
   assert.equal(snapshot.funnel[1].conversionFromPrevious, 50);
 });
 

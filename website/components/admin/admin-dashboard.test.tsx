@@ -9,8 +9,8 @@ const snapshot = {
   metrics: {
     totalUsers: 42, newUsersToday: 3, newUsers7d: 11, newUsers30d: 29, dau: 8, wau: 23,
     analysesToday: 6, analyses7d: 31, totalAnalyses: 77, secondAnalysisRate: 38.5,
-    payingSubscribers: 9, freeToPaidRate: 12.5, estimatedMrr: 89.91, cancellations: 2,
-    aiCostMonth: 14.2841, analysisSuccessRate: 96.7, helpfulRate: null, helpfulVotes: 0, unhelpfulVotes: 0,
+    payingSubscribers: 9, freeToPaidRate: null, estimatedMrr: null, cancellations: 2,
+    aiCostMonth: 1.6059, analysisSuccessRate: 96.7, helpfulRate: null, helpfulVotes: 0, unhelpfulVotes: 0,
   },
   funnel: [
     { key: "signup", label: "Signed up", users: 42, conversionFromPrevious: 100, conversionFromSignup: 100 },
@@ -19,18 +19,27 @@ const snapshot = {
     { key: "second_analysis", label: "Second analysis", users: 7, conversionFromPrevious: 77.8, conversionFromSignup: 16.7 },
   ],
   recentUsers: [{ id: "u1", email: "member@example.com", displayName: "Member", joinedAt: "2026-08-14T10:00:00Z", plan: "Pro monthly", analyses: 2, lastActiveAt: "2026-08-14T11:00:00Z", source: "TikTok", status: "Active" }],
-  recentAnalyses: [{ id: "a1", userEmail: "member@example.com", exercise: "Back Squat", status: "Complete", createdAt: "2026-08-14T11:00:00Z", processingMs: 42000, aiCost: 0.0831, feedback: null }],
+  recentAnalyses: [{ id: "a1", userEmail: "member@example.com", exercise: "Back Squat", status: "Complete", createdAt: "2026-08-14T11:00:00Z", processingMs: 42000, aiCost: 0.0831, aiCostComplete: true, feedback: null }],
+  accuracy: {
+    aiCost: { status: "incomplete", pricedCalls: 58, totalCalls: 59, coveragePercent: 98.3, unpricedCalls: 1, isMinimum: true },
+    revenue: { status: "unavailable", pricedSubscriptions: 0, totalSubscriptions: 0, coveragePercent: null },
+    funnel: { status: "exact", observedSince: "2026-08-04T00:00:00.000Z", ordered: true },
+  },
 };
 
 test("renders the founder metrics, funnel, and operational tables", () => {
   const html = renderToStaticMarkup(<AdminDashboard snapshot={snapshot} adminEmail="yuanchengli612@gmail.com" />);
 
-  for (const text of ["Second analysis rate", "Estimated MRR", "Analysis success", "Advice rating", "Recent users", "Recent analyses", "Signed up", "Purchased"]) {
+  for (const text of ["Second analysis rate", "Gross subscription run rate", "Tracked AI cost", "Analysis success", "Advice rating", "Recent users", "Recent analyses", "Signed up", "Purchased"]) {
     assert.match(html, new RegExp(text, "i"));
   }
   assert.match(html, /No ratings yet/i);
   assert.match(html, /member@example\.com/i);
-  assert.match(html, /Monthly production subscriptions only/i);
+  assert.match(html, /98\.3% priced/i);
+  assert.match(html, /minimum/i);
+  assert.match(html, /Unavailable/i);
+  assert.match(html, /ordered cohort/i);
+  assert.doesNotMatch(html, /Estimated MRR/i);
 });
 
 test("renders a zero-width funnel bar when the production conversion is zero", () => {

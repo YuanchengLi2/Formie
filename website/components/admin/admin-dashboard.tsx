@@ -3,10 +3,12 @@ import type { AdminDashboardSnapshot } from "@/lib/admin/dashboard-data";
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 
-function MetricCard({ label, value, detail, feature = false }: { label: string; value: string; detail: string; feature?: boolean }) {
+type QualityLabel = "Exact" | "Estimated" | "Incomplete" | "Unavailable";
+
+function MetricCard({ label, value, detail, quality, feature = false }: { label: string; value: string; detail: string; quality: QualityLabel; feature?: boolean }) {
   return (
     <article className={`admin-metric${feature ? " admin-metric-feature" : ""}`}>
-      <span>{label}</span>
+      <div className="admin-metric-label"><span>{label}</span><em data-quality={quality.toLowerCase()}>{quality}</em></div>
       <strong>{value}</strong>
       <small>{detail}</small>
     </article>
@@ -19,22 +21,30 @@ function dateTime(value: string | null) {
 }
 
 function percent(value: number | null) {
-  return value === null ? "No ratings yet" : `${value.toFixed(1)}%`;
+  return value === null ? "Unavailable" : `${value.toFixed(1)}%`;
+}
+
+function qualityLabel(status: "exact" | "estimated" | "incomplete" | "unavailable"): QualityLabel {
+  return `${status[0].toUpperCase()}${status.slice(1)}` as QualityLabel;
 }
 
 export function AdminDashboard({ snapshot, adminEmail }: { snapshot: AdminDashboardSnapshot; adminEmail: string }) {
   const m = snapshot.metrics;
+  const aiAccuracy = snapshot.accuracy.aiCost;
+  const revenueAccuracy = snapshot.accuracy.revenue;
+  const aiCoverage = aiAccuracy.coveragePercent === null ? "coverage unavailable" : `${aiAccuracy.coveragePercent.toFixed(1)}% priced`;
+  const revenueCoverage = revenueAccuracy.coveragePercent === null ? "no production subscriptions to price" : `${revenueAccuracy.coveragePercent.toFixed(1)}% priced`;
   const cards = [
-    ["Total users", compact.format(m.totalUsers), `${m.newUsersToday} joined today`],
-    ["Daily active", compact.format(m.dau), `${m.wau} weekly active`],
-    ["Total analyses", compact.format(m.totalAnalyses), `${m.analysesToday} completed today`],
-    ["Second analysis rate", percent(m.secondAnalysisRate), "Users who returned for analysis two", true],
-    ["Paying users", compact.format(m.payingSubscribers), `${percent(m.freeToPaidRate)} first-analysis to paid`],
-    ["Estimated MRR", money.format(m.estimatedMrr), "Monthly production subscriptions only"],
-    ["Cancellations", compact.format(m.cancellations), "Active plans set not to renew"],
-    ["AI cost", money.format(m.aiCostMonth), "Current calendar month"],
-    ["Analysis success", percent(m.analysisSuccessRate), "Delivered of terminal attempts"],
-    ["Advice rating", percent(m.helpfulRate), `${m.helpfulVotes} helpful · ${m.unhelpfulVotes} not helpful`],
+    ["Total users", compact.format(m.totalUsers), `${m.newUsersToday} joined today`, "Exact"],
+    ["Observed daily active", compact.format(m.dau), `${m.wau} observed weekly active`, "Exact"],
+    ["Delivered analyses", compact.format(m.totalAnalyses), `${m.analysesToday} delivered today`, "Exact"],
+    ["Second analysis rate", percent(m.secondAnalysisRate), "Users with two or more delivered analyses", "Exact", true],
+    ["Active paid subscriptions", compact.format(m.payingSubscribers), m.freeToPaidRate === null ? "Ordered purchase conversion unavailable" : `${percent(m.freeToPaidRate)} ordered conversion`, "Exact"],
+    ["Gross subscription run rate", m.estimatedMrr === null ? "Unavailable" : money.format(m.estimatedMrr), `${revenueCoverage}; excludes fees, tax, and refunds`, qualityLabel(revenueAccuracy.status)],
+    ["Currently cancelling", compact.format(m.cancellations), "Active production plans set not to renew", "Exact"],
+    ["Tracked AI cost — minimum", m.aiCostMonth === null ? "Unavailable" : money.format(m.aiCostMonth), `${aiCoverage}; ${aiAccuracy.unpricedCalls} unpriced call${aiAccuracy.unpricedCalls === 1 ? "" : "s"}`, qualityLabel(aiAccuracy.status)],
+    ["Analysis success", percent(m.analysisSuccessRate), "Delivered of terminal attempts in 30 days", "Exact"],
+    ["Advice rating", m.helpfulRate === null ? "No ratings yet" : percent(m.helpfulRate), `${m.helpfulVotes} helpful · ${m.unhelpfulVotes} not helpful`, "Exact"],
   ] as const;
 
   return (
@@ -46,10 +56,10 @@ export function AdminDashboard({ snapshot, adminEmail }: { snapshot: AdminDashbo
 
       <section className="admin-content">
         <div className="admin-title"><div><span className="admin-kicker">Launch control</span><h1>Are people coming, using, and paying?</h1></div><p>Updated {dateTime(snapshot.generatedAt)}. Production billing excludes sandbox and legacy access.</p></div>
-        <div className="admin-metrics">{cards.map(([label, value, detail, feature]) => <MetricCard key={label} label={label} value={value} detail={detail} feature={feature} />)}</div>
+        <div className="admin-metrics">{cards.map(([label, value, detail, quality, feature]) => <MetricCard key={label} label={label} value={value} detail={detail} quality={quality} feature={feature} />)}</div>
 
         <section className="admin-panel admin-funnel-panel">
-          <div className="admin-panel-heading"><div><span className="admin-kicker">Core funnel</span><h2>Signup to second analysis</h2></div><p>Counts unique users. Each percentage compares with the immediately previous stage.</p></div>
+          <div className="admin-panel-heading"><div><span className="admin-kicker">Ordered cohort</span><h2>Signup to subscriber return</h2></div><p>Each user must reach every prior stage in timestamp order. Observed since {dateTime(snapshot.accuracy.funnel.observedSince)}.</p></div>
           <div className="admin-funnel">
             {snapshot.funnel.map((step, index) => (
               <article key={step.key}>
@@ -73,7 +83,7 @@ export function AdminDashboard({ snapshot, adminEmail }: { snapshot: AdminDashbo
           <section className="admin-panel">
             <div className="admin-panel-heading"><div><span className="admin-kicker">Pipeline</span><h2>Recent analyses</h2></div></div>
             <div className="admin-table-wrap"><table><thead><tr><th>User</th><th>Exercise</th><th>Status</th><th>Started</th><th>Processing</th><th>AI cost</th><th>Rating</th></tr></thead><tbody>
-              {snapshot.recentAnalyses.length ? snapshot.recentAnalyses.map((analysis) => <tr key={analysis.id}><td>{analysis.userEmail}</td><td><b>{analysis.exercise}</b></td><td><span className="admin-pill">{analysis.status}</span></td><td>{dateTime(analysis.createdAt)}</td><td>{analysis.processingMs === null ? "—" : `${Math.round(analysis.processingMs / 1000)}s`}</td><td>{money.format(analysis.aiCost)}</td><td>{analysis.feedback === null ? "—" : analysis.feedback ? "Helpful" : "Not helpful"}</td></tr>) : <tr><td colSpan={7} className="admin-empty">No analyses yet.</td></tr>}
+              {snapshot.recentAnalyses.length ? snapshot.recentAnalyses.map((analysis) => <tr key={analysis.id}><td>{analysis.userEmail}</td><td><b>{analysis.exercise}</b></td><td><span className="admin-pill">{analysis.status}</span></td><td>{dateTime(analysis.createdAt)}</td><td>{analysis.processingMs === null ? "—" : `${Math.round(analysis.processingMs / 1000)}s`}</td><td>{analysis.aiCost === null ? "Unpriced" : `${money.format(analysis.aiCost)}${analysis.aiCostComplete ? "" : " minimum"}`}</td><td>{analysis.feedback === null ? "—" : analysis.feedback ? "Helpful" : "Not helpful"}</td></tr>) : <tr><td colSpan={7} className="admin-empty">No analyses yet.</td></tr>}
             </tbody></table></div>
           </section>
         </div>

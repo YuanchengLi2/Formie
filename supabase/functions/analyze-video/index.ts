@@ -106,7 +106,7 @@ Deno.serve(async (request) => {
     status: "succeeded" | "failed";
     errorCode?: string;
   }): Promise<void> {
-    await admin.from("model_call_telemetry").insert({
+    const { error } = await admin.from("model_call_telemetry").insert({
       session_id: input.sessionId,
       stage: input.stage,
       model: input.modelName,
@@ -120,7 +120,16 @@ Deno.serve(async (request) => {
       duration_ms: Math.max(0, Date.now() - input.startedAt),
       status: input.status,
       error_code: input.errorCode ?? null,
-    }).then(() => undefined).catch(() => undefined);
+    });
+    if (error) {
+      console.error(JSON.stringify({
+        context: "MODEL_CALL_TELEMETRY_SAVE_FAILED",
+        sessionId: input.sessionId,
+        stage: input.stage,
+        model: input.modelName,
+        message: error.message,
+      }));
+    }
   }
 
   async function generate(input: {
@@ -149,6 +158,9 @@ Deno.serve(async (request) => {
       });
       return response.value;
     } catch (error) {
+      const usage = error && typeof error === "object" && "usage" in error
+        ? (error as { usage?: { promptTokens: number; outputTokens: number; thinkingTokens: number } }).usage
+        : undefined;
       await recordModelCall({
         sessionId: input.sessionId,
         stage: input.stage,
@@ -157,6 +169,7 @@ Deno.serve(async (request) => {
         clipStartMs: input.window?.startMs ?? null,
         clipEndMs: input.window?.endMs ?? null,
         startedAt,
+        usage,
         status: "failed",
         errorCode: errorCode(error),
       });

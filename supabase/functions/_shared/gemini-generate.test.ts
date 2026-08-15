@@ -54,6 +54,17 @@ describe("whole-video Gemini request construction", () => {
     }));
   });
 
+  it("preserves billable usage when a successful provider response contains invalid JSON", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: "not-json" }] } }],
+      usageMetadata: { promptTokenCount: 1_200, candidatesTokenCount: 300, thoughtsTokenCount: 500 },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    const client = createGenerateContentClient({ apiKey: "key", fetcher });
+
+    await expect(client.generate("gemini-test", buildTextGenerateContentRequest({ prompt: "Write", schema, thinkingLevel: "low" })))
+      .rejects.toMatchObject({ usage: { promptTokens: 1_200, outputTokens: 300, thinkingTokens: 500 } });
+  });
+
   it("lets Gemini use native temporal sampling for the complete high-resolution video", () => {
     const request = buildVideoGenerateContentRequest({ file, prompt: "Analyze everything", schema, fps: null, thinkingLevel: "high", mediaResolution: "MEDIA_RESOLUTION_HIGH" });
     expect(request.contents[0].parts[0]).toEqual({ fileData: { fileUri: file.uri, mimeType: file.mimeType } });

@@ -31,6 +31,20 @@ export class GeminiContentBlockedError extends Error {
   }
 }
 
+export type GeminiUsage = { promptTokens: number; outputTokens: number; thinkingTokens: number };
+
+export class GeminiStructuredResponseError extends Error {
+  readonly code = "GEMINI_INVALID_STRUCTURED_RESPONSE";
+  readonly usage: GeminiUsage;
+
+  constructor(cause: unknown, usage: GeminiUsage) {
+    super(cause instanceof Error ? cause.message : "Gemini returned invalid structured JSON");
+    this.name = "GeminiStructuredResponseError";
+    this.usage = usage;
+    this.cause = cause;
+  }
+}
+
 type GenerateConfig = {
   thinkingConfig: { thinkingLevel: ThinkingLevel };
   responseMimeType: "application/json";
@@ -201,7 +215,12 @@ export function parseGenerateContentResponse(payload: Record<string, unknown>) {
     throw new GeminiContentBlockedError(promptFeedback.blockReason);
   }
   const usage = payload.usageMetadata && typeof payload.usageMetadata === "object" ? payload.usageMetadata as Record<string, unknown> : {};
-  return { value: JSON.parse(responseText(payload)) as unknown, usage: { promptTokens: token(usage.promptTokenCount), outputTokens: token(usage.candidatesTokenCount), thinkingTokens: token(usage.thoughtsTokenCount) } };
+  const parsedUsage = { promptTokens: token(usage.promptTokenCount), outputTokens: token(usage.candidatesTokenCount), thinkingTokens: token(usage.thoughtsTokenCount) };
+  try {
+    return { value: JSON.parse(responseText(payload)) as unknown, usage: parsedUsage };
+  } catch (error) {
+    throw new GeminiStructuredResponseError(error, parsedUsage);
+  }
 }
 
 export function createGenerateContentClient(input: { apiKey: string; fetcher?: typeof fetch }) {

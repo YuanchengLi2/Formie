@@ -8,10 +8,15 @@ const rawSnapshot = {
   metrics: {
     totalUsers: 1, newUsersToday: 1, newUsers7d: 1, newUsers30d: 1, dau: 1, wau: 1,
     analysesToday: 0, analyses7d: 0, totalAnalyses: 0, secondAnalysisRate: 0,
-    payingSubscribers: 0, freeToPaidRate: 0, estimatedMrr: 0, cancellations: 0,
-    aiCostMonth: 0, analysisSuccessRate: 0, helpfulRate: null, helpfulVotes: 0, unhelpfulVotes: 0,
+    payingSubscribers: 0, freeToPaidRate: null, estimatedMrr: null, cancellations: 0,
+    aiCostMonth: null, analysisSuccessRate: 0, helpfulRate: null, helpfulVotes: 0, unhelpfulVotes: 0,
   },
   funnel: [], recentUsers: [], recentAnalyses: [],
+  accuracy: {
+    aiCost: { status: "unavailable", pricedCalls: 0, totalCalls: 0, coveragePercent: null, unpricedCalls: 0, isMinimum: false },
+    revenue: { status: "unavailable", pricedSubscriptions: 0, totalSubscriptions: 0, coveragePercent: null },
+    funnel: { status: "exact", observedSince: "2026-08-04T00:00:00.000Z", ordered: true },
+  },
 };
 
 test("loads privileged dashboard data only after founder identity is verified", async () => {
