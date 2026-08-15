@@ -55,7 +55,7 @@ export function AdminDashboard({ snapshot, adminEmail }: { snapshot: AdminDashbo
               <article key={step.key}>
                 <div className="admin-funnel-top"><span>{String(index + 1).padStart(2, "0")}</span><b>{step.users.toLocaleString()}</b></div>
                 <h3>{step.label}</h3>
-                <div className="admin-funnel-track"><i style={{ width: `${Math.max(2, Math.min(100, step.conversionFromSignup))}%` }} /></div>
+                <div className="admin-funnel-track"><i style={{ width: `${Math.max(0, Math.min(100, step.conversionFromSignup))}%` }} /></div>
                 <small>{index === 0 ? "Starting cohort" : `${step.conversionFromPrevious.toFixed(1)}% from previous`}</small>
               </article>
             ))}

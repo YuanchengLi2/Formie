@@ -32,3 +32,18 @@ test("renders the founder metrics, funnel, and operational tables", () => {
   assert.match(html, /member@example\.com/i);
   assert.match(html, /Monthly production subscriptions only/i);
 });
+
+test("renders a zero-width funnel bar when the production conversion is zero", () => {
+  const zeroSnapshot = {
+    ...snapshot,
+    funnel: [
+      ...snapshot.funnel,
+      { key: "no_purchase", label: "No purchases", users: 0, conversionFromPrevious: 0, conversionFromSignup: 0 },
+    ],
+  };
+
+  const html = renderToStaticMarkup(<AdminDashboard snapshot={zeroSnapshot} adminEmail="yuanchengli612@gmail.com" />);
+
+  assert.match(html, /width:0%/);
+  assert.doesNotMatch(html, /width:2%/);
+});
