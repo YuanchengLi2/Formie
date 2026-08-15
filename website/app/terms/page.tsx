@@ -6,8 +6,8 @@ export const metadata: Metadata = { title: "Terms of Use", alternates: { canonic
 
 export default function TermsPage() {
   return (
-    <LegalPage eyebrow="Using Formie" title="Terms of Use" updated="August 10, 2026">
-      <p>These draft terms describe the rules for using Formie and will be reviewed and finalized before public release.</p>
+    <LegalPage eyebrow="Using Formie" title="Terms of Use" updated="August 15, 2026">
+      <p>These terms govern your use of the Formie app and website.</p>
       <h2>Who may use Formie</h2>
       <p>You must be legally able to agree to these terms and provide accurate account information. Keep your credentials secure and use Formie only for lawful personal exercise coaching.</p>
       <h2>Exercise and AI limitations</h2>
@@ -15,11 +15,17 @@ export default function TermsPage() {
       <h2>Your content</h2>
       <p>You retain ownership of recordings and messages you submit. You give Formie permission to host and process that content only as needed to provide, secure, support, and improve the service in accordance with the Privacy Policy and your settings.</p>
       <h2>Subscriptions</h2>
-      <p>Formie Pro is offered monthly for new purchases and includes 10 analyses in each monthly quota period. Existing provider-managed annual subscriptions, if any, remain honored through their verified paid-through date; they are not a new purchase option. Unused analyses do not carry over. Apple or Google controls billing and renewal. Manage your subscription in the Formie app. Canceling stops the next renewal but preserves app access and unused analyses through the paid-through date. Resubscribing restores automatic renewal without changing the current period or balance; the balance returns to 10 only when the next quota period begins. After expiration, native account history remains available and new analyses require repurchase through the Formie app.</p>
+      <p>Formie Pro is a monthly auto-renewable subscription offered at the localized price shown before purchase. Payment is charged to your Apple ID when the purchase is confirmed. The subscription automatically renews each month until cancelled, unless you cancel at least 24 hours before the current period ends. Apple may charge renewal within 24 hours before the end of that period.</p>
+      <p>Manage your subscription in the Formie app, which opens Apple subscription settings where you can change or cancel it. Deleting your Formie account does not cancel your Apple subscription. Restore Purchases is available in the app for eligible purchases.</p>
+      <p>Formie Pro includes 10 analyses in each monthly quota period, and unused analyses do not roll over. Existing provider-managed annual access, if present, remains honored through its verified paid-through date, but an annual plan is not offered as a new in-app purchase.</p>
+      <h2>Account deletion</h2>
+      <p>You can permanently delete your account in Formie Settings. Successful deletion removes Formie-controlled user content, subject to limited processor, security, backup, billing, fraud-prevention, and legal retention described in the <a href="/privacy">Privacy Policy</a> and <a href="/retention">Retention Policy</a>. Account deletion does not cancel Apple billing.</p>
       <h2>Acceptable use</h2>
       <p>Do not misuse the service, probe or bypass security, upload content you lack permission to use, interfere with other users, or use automated output to cause harm.</p>
       <h2>Availability and changes</h2>
       <p>We may change or discontinue features, enforce reasonable limits, or suspend access needed to protect users and the service. We do not promise uninterrupted availability.</p>
+      <h2>Apple terms</h2>
+      <p>Apple&apos;s <a href="https://www.apple.com/legal/internet-services/itunes/dev/stdeula/">Standard End User License Agreement</a> also applies to the iOS app.</p>
       <h2>Contact</h2>
       <p>Questions about these terms can be sent to <a href="mailto:yuanchengli612@gmail.com">yuanchengli612@gmail.com</a>.</p>
     </LegalPage>

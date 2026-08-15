@@ -55,6 +55,7 @@ export function SiteFooter() {
       </Link>
       <div className="footer-links">
         <Link href="/privacy">Privacy</Link>
+        <Link href="/privacy-choices">Privacy Choices</Link>
         <Link href="/retention">Retention</Link>
         <Link href="/terms">Terms</Link>
         <Link href="/support">Support</Link>
