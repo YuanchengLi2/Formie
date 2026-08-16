@@ -19,7 +19,7 @@ describe("v83 simple-language calibrated whole-video coaching wiring", () => {
     expect(source).toContain("parseWholeVideoWriting");
     expect(source).toContain("normalizeWholeVideoWriting");
     expect(source).toContain("buildWholeVideoWritingRepairPrompt");
-    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v85-evidence-only-issues"');
+    expect(source).toContain('const PIPELINE_VERSION = "gemini-whole-video-v84-short-issue-titles"');
     expect(source).toContain('const ANALYST_MODEL = "gemini-3.7-flash"');
     expect(source).toContain('const WRITER_MODEL = "gemini-3.1-flash-lite"');
     expect(source).not.toContain("limitWholeVideoAnalysis");

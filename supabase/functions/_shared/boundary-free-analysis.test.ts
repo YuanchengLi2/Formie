@@ -105,14 +105,11 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(JSON.stringify(schema)).not.toMatch(/minimum|maximum|minItems|maxItems/);
   });
 
-  it("reports only consequential supported issues without imposing a minimum quota", () => {
+  it("finds the four to six highest-consequence supported issues without letting recommended checks limit discovery", () => {
     const prompt = buildBoundaryFreeAnalysisPrompt(12_000);
     expect(prompt).toMatch(/complete video from beginning to end/i);
     expect(prompt).toMatch(/watch.*once/i);
-    expect(prompt).toMatch(/up to six.*highest-consequence.*form (?:problems|issues)/i);
-    expect(prompt).toMatch(/fewer than four.*complete and correct/i);
-    expect(prompt).toMatch(/no consequential issue.*empty issues array/i);
-    expect(prompt).not.toMatch(/four to six/i);
+    expect(prompt).toMatch(/four to six.*highest-consequence.*form (?:problems|issues)/i);
     expect(prompt).toMatch(/support or control under load/i);
     expect(prompt).toMatch(/joint.*position.*under load/i);
     expect(prompt).toMatch(/intended.*muscle.*stimulus/i);
@@ -123,8 +120,7 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(prompt).toMatch(/do not include.*minor.*optimization/i);
     expect(prompt).toMatch(/recommendations.*not.*limits/i);
     expect(prompt).toMatch(/head or gaze.*toward the camera.*not.*form issue.*unless.*position.*balance.*path.*control/i);
-    expect(BOUNDARY_FREE_ANALYSIS_SCHEMA.properties.issues.description).toMatch(/up to six.*highest-consequence/i);
-    expect(BOUNDARY_FREE_ANALYSIS_SCHEMA.properties.issues.description).toMatch(/no issue count is required/i);
+    expect(BOUNDARY_FREE_ANALYSIS_SCHEMA.properties.issues.description).toMatch(/four to six.*highest-consequence/i);
     expect(prompt).toMatch(/at least one.*evidence moment/i);
     expect(prompt).toMatch(/repeated or throughout issue.*two meaningfully separated evidence moments/i);
     expect(prompt).toMatch(/beginning, middle, and end.*never invent or move a timestamp/i);
