@@ -133,6 +133,26 @@ describe("ExerciseSelectionScreen", () => {
     expect(screen.getByLabelText("Use seated one arm dumbbell extensions for setup")).toBeTruthy();
   });
 
+  it("keeps a typed custom exercise selectable when the remote catalog is unavailable", async () => {
+    const onGenerateCustomGuide = jest.fn();
+    const screen = await render(
+      <ExerciseSelectionScreen
+        onSearch={jest.fn(async () => { throw new Error("network unavailable"); })}
+        onSelect={jest.fn()}
+        onGenerateCustomGuide={onGenerateCustomGuide}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByLabelText("Search exercises"), "Jefferson curl");
+      await new Promise((resolve) => setTimeout(resolve, 220));
+    });
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/could not be loaded/i));
+    fireEvent.press(screen.getByLabelText("Use Jefferson curl for setup"));
+    expect(onGenerateCustomGuide).toHaveBeenCalledWith("Jefferson curl");
+  });
+
   it.each([
     ["One-Arm Dumbbell Row"],
     ["single arm dumbbell row"],

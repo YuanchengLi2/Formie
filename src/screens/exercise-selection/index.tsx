@@ -66,7 +66,7 @@ export function ExerciseSelectionScreen({
         .catch(() => {
           if (active) {
             setResults([]);
-            setError("Exercises could not be loaded. Check your connection and try again.");
+            setError("Exercises could not be loaded. Retry, or use the exercise name you entered.");
           }
         })
         .finally(() => {
@@ -147,7 +147,7 @@ export function ExerciseSelectionScreen({
             <Text style={[typography.heading, { color: colors.gold }]}>›</Text>
           </Pressable>
         ))}
-        {!loading && searchIsActive && !hasExactCatalogMatch && !error ? (
+        {!loading && searchIsActive && !hasExactCatalogMatch ? (
           <Pressable
             accessibilityLabel={`Use ${normalizedQuery} for setup`}
             accessibilityRole="button"
