@@ -144,7 +144,7 @@ function renderedTestIds(node: unknown, ids: string[] = []): string[] {
 }
 
 describe("ResultsScreen", () => {
-  it("collects one helpful or not-helpful rating for the completed analysis", async () => {
+  it("dismisses the analysis feedback prompt after one rating", async () => {
     const onRateAnalysis = jest.fn();
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
@@ -155,8 +155,8 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("Was this analysis helpful?")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Helpful"));
     expect(onRateAnalysis).toHaveBeenCalledWith(true);
-    await fireEvent.press(screen.getByLabelText("Not helpful"));
-    expect(onRateAnalysis).toHaveBeenCalledWith(false);
+    expect(screen.queryByTestId("analysis-feedback")).toBeNull();
+    expect(screen.queryByText("Was this analysis helpful?")).toBeNull();
   });
 
   it("matches the focused Coaching Review hierarchy and includes every supported improvement point", async () => {
@@ -188,7 +188,7 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("Camera visibility note")).toBeNull();
     expect(screen.queryByText("Objective breakdown from your recording")).toBeNull();
     expect(screen.getByText("EXERCISE MUSCLE FOCUS")).toBeTruthy();
-    expect(screen.getByText("YOUR ANALYSIS")).toBeTruthy();
+    expect(screen.queryByTestId("analysis-score-hero")).toBeNull();
     expect(screen.getByTestId("overall-analysis-score").props.children).toBe(75);
     expect(screen.getByTestId("overall-analysis-score").props.accessibilityLabel).toBe("Overall score 75 out of 100");
     expect(screen.getByText("MOVEMENT SCORES")).toBeTruthy();
@@ -316,13 +316,14 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("STARTING POSITION")).toBeNull();
   });
 
-  it("uses a surface body-region map for form issues and the rotatable model for target muscles", async () => {
+  it("highlights form issues and target muscles on the same rotatable anatomy model", async () => {
     const screen = await renderResults();
 
     expect(screen.getByTestId("muscle-focus-figure")).toBeTruthy();
     expect(screen.getByTestId("anatomy-body-image")).toBeTruthy();
-    expect(screen.getByLabelText("Front and back anatomy map")).toBeTruthy();
-    expect(screen.queryByLabelText("Rotatable anatomy model")).toBeNull();
+    expect(screen.queryByLabelText("Front and back anatomy map")).toBeNull();
+    expect(screen.getByLabelText("Rotatable anatomy model")).toBeTruthy();
+    expect(screen.getByLabelText("Rotate anatomy")).toBeTruthy();
     expect(screen.queryByLabelText("Zoom out anatomy")).toBeNull();
     expect(screen.getByLabelText("Your Form").props.accessibilityState).toEqual({ selected: true });
     expect(screen.queryByTestId("anatomy-target-chest")).toBeNull();
@@ -510,6 +511,7 @@ describe("ResultsScreen", () => {
     const screen = await renderResults();
     expect(screen.getAllByLabelText("Overall score 75 out of 100")).toHaveLength(1);
     expect(screen.getByTestId("overall-analysis-score")).toBeTruthy();
+    expect(screen.queryByTestId("analysis-score-hero")).toBeNull();
     expect(screen.queryByText("TECHNIQUE SCORE")).toBeNull();
     expect(screen.queryByText(/low angle showed tempo and elbow path/i)).toBeNull();
     expect(screen.queryByText("High-to-low cable row")).toBeNull();

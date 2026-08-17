@@ -107,8 +107,10 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
   const synchronizedReviewFrames = useMemo(() => buildReviewFrames(result).observed, [result]);
   const [pointIndex, setPointIndex] = useState(0);
   const [purpose, setPurpose] = useState<ReviewPurpose>("observed");
+  const [feedbackDismissed, setFeedbackDismissed] = useState(analysisRating !== null);
   const movementScores = result.movementScores ?? [];
   const hasMovementScores = movementScores.length > 0;
+  const hasScoreContent = presentation.score !== null || hasMovementScores;
   const selectedIndex = Math.min(pointIndex, Math.max(0, points.length - 1));
   const point = points[selectedIndex] ?? null;
   const activeFrame = point?.[purpose] ?? null;
@@ -255,13 +257,8 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
 
   return (
     <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: spacing.xl, paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
-      <View testID="analysis-score-hero" style={{ gap: spacing.sm, padding: spacing.lg, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.goldSoft }}>
+      <View style={{ gap: spacing.md }}>
         <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.8 }]}>YOUR ANALYSIS</Text>
-        {presentation.score !== null ? <View style={{ flexDirection: "row", alignItems: "baseline", gap: spacing.xs }}>
-          <Text accessibilityLabel={`Overall score ${presentation.score} out of 100`} selectable testID="overall-analysis-score" style={{ color: colors.gold, fontSize: 68, lineHeight: 74, fontWeight: "800", letterSpacing: -2, fontVariant: ["tabular-nums"] }}>{presentation.score}</Text>
-          <Text selectable style={[typography.heading, { color: colors.textSecondary }]}>/ 100</Text>
-        </View> : null}
-        <Text selectable style={[typography.label, { color: colors.text }]}>Overall form score</Text>
       </View>
 
       <View testID="coaching-workspace" style={{ flexDirection: wideWorkspace ? "row" : "column", alignItems: "flex-start", gap: spacing.lg }}>
@@ -278,9 +275,16 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
         <MuscleFocusFigure focus={exerciseMuscleFocus} issueRegions={issueRegions} />
       </View> : null}
 
-      {(coachNote || hasMovementScores) ? <View testID="coach-note-scores-section" style={{ width: "100%", gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.goldSoft }}>
-        {hasMovementScores ? <View style={{ width: "100%", gap: spacing.md }}>
+      {(coachNote || hasScoreContent) ? <View testID="coach-note-scores-section" style={{ width: "100%", gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.goldSoft }}>
+        {hasScoreContent ? <View style={{ width: "100%", gap: spacing.md }}>
           <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>MOVEMENT SCORES</Text>
+          {presentation.score !== null ? <View testID="movement-score-overall" style={{ gap: spacing.xs, paddingBottom: hasMovementScores ? spacing.sm : 0 }}>
+            <Text selectable style={[typography.label, { color: colors.textSecondary }]}>Overall score</Text>
+            <View style={{ flexDirection: "row", alignItems: "baseline", gap: spacing.xs }}>
+              <Text accessibilityLabel={`Overall score ${presentation.score} out of 100`} selectable testID="overall-analysis-score" style={{ color: colors.gold, fontSize: 56, lineHeight: 62, fontWeight: "800", letterSpacing: -1.5, fontVariant: ["tabular-nums"] }}>{presentation.score}</Text>
+              <Text selectable style={[typography.heading, { color: colors.textSecondary }]}>/ 100</Text>
+            </View>
+          </View> : null}
           {movementScores.length > 0 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="movement-scores" contentContainerStyle={{ gap: spacing.sm }}>
             {movementScores.map((item) => (
               <View key={item.id} style={{ width: Math.min(230, width - spacing.xl * 2), gap: spacing.sm, padding: spacing.md, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
@@ -322,13 +326,16 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
         </Pressable>
       </View>
 
-      {onRateAnalysis ? <View testID="analysis-feedback" style={{ gap: spacing.md, alignItems: "center", padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+      {onRateAnalysis && !feedbackDismissed ? <View testID="analysis-feedback" style={{ gap: spacing.md, alignItems: "center", padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
         <Text selectable style={[typography.heading, { color: colors.text, textAlign: "center" }]}>Was this analysis helpful?</Text>
         <Text selectable style={[typography.caption, { color: colors.textMuted, textAlign: "center" }]}>Your rating helps improve Formie&apos;s coaching.</Text>
         <View style={{ width: "100%", flexDirection: "row", gap: spacing.sm }}>
           {([{ helpful: true, label: "Helpful" }, { helpful: false, label: "Not helpful" }] as const).map((option) => {
             const selected = analysisRating === option.helpful;
-            return <Pressable key={option.label} accessibilityLabel={option.label} accessibilityRole="button" accessibilityState={{ selected, disabled: ratingPending }} disabled={ratingPending} onPress={() => onRateAnalysis(option.helpful)} style={({ pressed }) => ({ flex: 1, minHeight: 52, alignItems: "center", justifyContent: "center", borderRadius: radii.md, borderWidth: 1, borderColor: selected ? colors.gold : colors.border, backgroundColor: selected ? colors.gold : pressed ? colors.surfaceRaised : colors.background, opacity: ratingPending ? .6 : 1 })}>
+            return <Pressable key={option.label} accessibilityLabel={option.label} accessibilityRole="button" accessibilityState={{ selected, disabled: ratingPending }} disabled={ratingPending} onPress={() => {
+              setFeedbackDismissed(true);
+              onRateAnalysis(option.helpful);
+            }} style={({ pressed }) => ({ flex: 1, minHeight: 52, alignItems: "center", justifyContent: "center", borderRadius: radii.md, borderWidth: 1, borderColor: selected ? colors.gold : colors.border, backgroundColor: selected ? colors.gold : pressed ? colors.surfaceRaised : colors.background, opacity: ratingPending ? .6 : 1 })}>
               <Text style={[typography.label, { color: selected ? colors.background : colors.text }]}>{option.label}</Text>
             </Pressable>;
           })}
