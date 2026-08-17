@@ -5,8 +5,6 @@ on:
   push:
     branches:
       - codex/ios-3d-tracking-scoring
-    paths:
-      - .github/workflows/testflight-local-ios.yml
 
 concurrency:
   group: formie-testflight-local-ios
