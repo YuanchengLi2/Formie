@@ -10,6 +10,7 @@ const mockSetDeclarationProps = jest.fn();
 const mockFindDeviceVideo = jest.fn();
 const mockDismissTo = jest.fn();
 const mockNavigationAddListener = jest.fn(() => jest.fn());
+const mockResultsProps = jest.fn();
 const mockDeclaration: SetDeclaration = {
   exercise: { source: "catalog", catalogExerciseId: 3, label: "Dumbbell Bench Press" },
   amount: { kind: "reps", value: 8, countScope: "total" },
@@ -25,6 +26,7 @@ jest.mock("expo-router", () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), dismissTo: mockDismissTo }),
 }));
 jest.mock("@tanstack/react-query", () => ({
+  useQuery: () => ({ data: false }),
   useMutation: () => ({
     mutate: mockMutate,
     isPending: false,
@@ -71,11 +73,12 @@ jest.mock("@/features/capture/capture-store", () => ({
 jest.mock("@/screens/results", () => {
   const { Pressable, Text } = jest.requireActual("react-native");
   return {
-    ResultsScreen: ({ onReanalyze }: { onReanalyze: () => void }) => (
-      <Pressable accessibilityRole="button" onPress={onReanalyze}>
-        <Text>Analyze Again</Text>
-      </Pressable>
-    ),
+    ResultsScreen: (props: { onReanalyze: () => void; analysisRating: boolean | null }) => {
+      mockResultsProps(props);
+      return <Pressable accessibilityRole="button" onPress={props.onReanalyze}>
+          <Text>Analyze Again</Text>
+        </Pressable>;
+    },
   };
 });
 jest.mock("@/screens/set-declaration", () => {
@@ -115,11 +118,18 @@ describe("ResultsRoute reanalysis confirmation", () => {
     mockFindDeviceVideo.mockReset();
     mockDismissTo.mockClear();
     mockNavigationAddListener.mockClear();
+    mockResultsProps.mockClear();
     mockFindDeviceVideo.mockResolvedValue({
       localUri: "file:///formie-recordings/saved-set.mp4",
       durationMs: 12_000,
       mimeType: "video/mp4",
     });
+  });
+
+  it("passes the persisted feedback rating back into a reopened result", async () => {
+    await render(<ResultsRoute />);
+
+    expect(mockResultsProps).toHaveBeenLastCalledWith(expect.objectContaining({ analysisRating: false }));
   });
 
   it("lets the server authoritatively reserve reanalysis instead of blocking on stale client access", () => {

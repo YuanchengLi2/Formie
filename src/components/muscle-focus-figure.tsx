@@ -51,6 +51,7 @@ export function MuscleFocusFigure({ focus, issueRegions }: { focus: MuscleFocus 
         })}
       </View>
       <AnatomyModel
+        mode={view === "form" ? "form" : "muscles"}
         targetRegions={view === "targets" ? targetRegions : []}
         secondaryRegions={view === "targets" ? secondaryRegions : []}
         issueRegions={view === "form" ? issueRegions : []}

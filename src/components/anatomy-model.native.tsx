@@ -7,10 +7,10 @@ import { loadAsync, Renderer } from "expo-three";
 import * as THREE from "three";
 
 import { AnatomyInteractionSurface } from "@/components/anatomy-interaction-surface";
-import { AnatomyZoneHighlights } from "@/components/anatomy-zone-highlights";
 import {
   anatomyHighlightForName,
   fittedAnatomyScale,
+  isRenderableAnatomyMuscle,
   isSurfaceAnatomyMuscle,
   type AnatomyHighlight,
 } from "@/components/anatomy-region-mapping";
@@ -25,6 +25,7 @@ export type AnatomyModelProps = {
   targetRegions: MuscleRegion[];
   secondaryRegions: MuscleRegion[];
   issueRegions: AnatomyRegion[];
+  mode?: "muscles" | "form";
 };
 
 type MaterialPalette = Record<AnatomyHighlight, THREE.MeshStandardMaterial>;
@@ -110,6 +111,7 @@ function applyAnatomyMaterials(
   targetRegions: readonly MuscleRegion[],
   secondaryRegions: readonly MuscleRegion[],
   issueRegions: readonly AnatomyRegion[],
+  mode: "muscles" | "form",
 ) {
   root.traverse((object) => {
     const mesh = object as THREE.Mesh;
@@ -117,8 +119,8 @@ function applyAnatomyMaterials(
 
     const name = searchableName(object);
     const muscle = isMuscle(object);
-    const surfaceMuscle = muscle && isSurfaceAnatomyMuscle(name);
-    const structuralBone = !muscle && isStructuralBone(name);
+    const surfaceMuscle = muscle && (mode === "form" ? isRenderableAnatomyMuscle(name) : isSurfaceAnatomyMuscle(name));
+    const structuralBone = mode === "muscles" && !muscle && isStructuralBone(name);
     mesh.visible = surfaceMuscle || structuralBone;
     if (!mesh.visible) return;
 
@@ -135,7 +137,7 @@ function applyAnatomyMaterials(
   });
 }
 
-export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: AnatomyModelProps) {
+export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions, mode = "muscles" }: AnatomyModelProps) {
   const [failed, setFailed] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -151,7 +153,7 @@ export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: 
   const targetRegionsRef = useRef(targetRegions);
   const secondaryRegionsRef = useRef(secondaryRegions);
   const issueRegionsRef = useRef(issueRegions);
-  const regionKey = `${targetRegions.join(",")}|${secondaryRegions.join(",")}|${issueRegions.join(",")}`;
+  const regionKey = `${mode}|${targetRegions.join(",")}|${secondaryRegions.join(",")}|${issueRegions.join(",")}`;
 
   useEffect(() => () => {
     mountedRef.current = false;
@@ -170,6 +172,7 @@ export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: 
         targetRegions,
         secondaryRegions,
         issueRegions,
+        mode,
       );
       renderRef.current?.();
     }
@@ -252,6 +255,7 @@ export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: 
         targetRegionsRef.current,
         secondaryRegionsRef.current,
         issueRegionsRef.current,
+        mode,
       );
 
       const bounds = new THREE.Box3().setFromObject(root);
@@ -299,6 +303,7 @@ export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: 
           backgroundColor: colors.background,
         }}
       >
+        {mode === "form" ? <View pointerEvents="none" testID="anatomy-surface-highlight-mode" /> : null}
         {failed ? (
           <View style={{ position: "absolute", inset: 0, transform: [{ scale: zoomLevel }] }}>
             <Image
@@ -308,7 +313,6 @@ export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: 
               testID="anatomy-body-image"
               style={{ position: "absolute", inset: 0, left: backFacing ? "-100%" : "0%", width: "200%", height: "100%" }}
             />
-            <AnatomyZoneHighlights targetRegions={targetRegions} secondaryRegions={secondaryRegions} issueRegions={issueRegions} face={backFacing ? "back" : "front"} />
           </View>
         ) : (
           <GLView

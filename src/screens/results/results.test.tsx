@@ -159,6 +159,16 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("Was this analysis helpful?")).toBeNull();
   });
 
+  it("does not show the feedback prompt when this analysis already has a persisted rating", async () => {
+    const screen = await render(
+      <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
+        <ResultsScreen result={result()} onRecordAnother={jest.fn()} onRateAnalysis={jest.fn()} analysisRating={false} />
+      </SafeAreaProvider>,
+    );
+
+    expect(screen.queryByTestId("analysis-feedback")).toBeNull();
+  });
+
   it("matches the focused Coaching Review hierarchy and includes every supported improvement point", async () => {
     const screen = await renderResults();
 
@@ -273,7 +283,7 @@ describe("ResultsScreen", () => {
     const sectionIds = [
       "coaching-workspace",
       "muscle-focus-section",
-      "coach-note-scores-section",
+      "movement-scores-section",
       "whole-set-summary-section",
       "result-actions",
     ];
@@ -326,6 +336,7 @@ describe("ResultsScreen", () => {
     expect(screen.getByLabelText("Rotate anatomy")).toBeTruthy();
     expect(screen.queryByLabelText("Zoom out anatomy")).toBeNull();
     expect(screen.getByLabelText("Your Form").props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByTestId("anatomy-surface-highlight-mode")).toBeTruthy();
     expect(screen.queryByTestId("anatomy-target-chest")).toBeNull();
     expect(screen.getByTestId("anatomy-issue-shoulders")).toBeTruthy();
     expect(screen.getByText("Target Muscles")).toBeTruthy();
@@ -333,8 +344,9 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("Observed issue areas")).toBeTruthy();
     expect(screen.queryByText(/never claims actual muscle activation/i)).toBeNull();
     expect(screen.getByTestId("anatomy-gesture-surface")).toBeTruthy();
-    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(true);
+    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(false);
     await fireEvent.press(screen.getByLabelText("Target Muscles"));
+    expect(screen.queryByTestId("anatomy-surface-highlight-mode")).toBeNull();
     expect(screen.getByLabelText("Rotatable anatomy model")).toBeTruthy();
     expect(screen.getByLabelText("Rotate anatomy")).toBeTruthy();
     expect(screen.getByTestId("anatomy-target-lats")).toBeTruthy();
@@ -373,7 +385,7 @@ describe("ResultsScreen", () => {
     expect(screen.getByTestId("muscle-focus-figure")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Your Form"));
     expect(screen.getByTestId("anatomy-issue-shoulders")).toBeTruthy();
-    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(true);
+    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(false);
   });
 
   it("recovers observed issue areas from legacy evidence when the provider region field is empty", async () => {
@@ -392,15 +404,15 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("None identified from this recording")).toBeNull();
   });
 
-  it("shows scores and Coach's Note together without a view slider", async () => {
+  it("shows movement scores without the removed Coach's Note", async () => {
     const screen = await renderResults();
 
     expect(screen.getByText("Handle Path")).toBeTruthy();
     expect(screen.getByText("Shoulder Level")).toBeTruthy();
-    expect(screen.getByText(result().coachNote!)).toBeTruthy();
+    expect(screen.queryByText(result().coachNote!)).toBeNull();
     expect(screen.getByTestId("movement-scores")).toBeTruthy();
     expect(screen.queryByLabelText("Scores")).toBeNull();
-    expect(screen.queryByLabelText("Coach's Note")).toBeNull();
+    expect(screen.queryByText("COACH'S NOTE")).toBeNull();
   });
 
   it("keeps what happened and what to do next bound to the issue selected by the arrows", async () => {

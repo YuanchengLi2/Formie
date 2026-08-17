@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { type Href, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Text, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 
 import { declarationForReanalysis } from "@/features/analysis/reanalysis-declaration";
 import type { SetDeclaration } from "@/features/analysis/set-declaration";
 import { AnalysisApiError, reanalyzeAnalysis } from "@/features/analysis/api";
-import { submitAnalysisFeedback } from "@/features/analysis/feedback";
+import { getAnalysisFeedback, submitAnalysisFeedback } from "@/features/analysis/feedback";
 import { useAnalysisStatus } from "@/features/analysis/use-analysis-status";
 import { getAccessToken } from "@/features/auth/access-token";
 import { useExerciseTutorial } from "@/features/analysis/use-exercise-tutorial";
@@ -33,6 +33,13 @@ export default function ResultsRoute() {
   const [preparingReanalysis, setPreparingReanalysis] = useState(false);
   const [reanalysisPreparationError, setReanalysisPreparationError] = useState<string | null>(null);
   const resetCapture = useCaptureStore((state) => state.dispatch);
+  const feedbackQueryKey = ["analysis-feedback", sessionId] as const;
+  const persistedFeedback = useQuery({
+    queryKey: feedbackQueryKey,
+    queryFn: () => getAnalysisFeedback(sessionId),
+    enabled: Boolean(sessionId),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
   useEffect(() => navigation.addListener("beforeRemove", createResultsExitHandler(() => {
     router.dismissTo("/(tabs)/(home)" as Href);
   })), [navigation, router]);
@@ -70,6 +77,9 @@ export default function ResultsRoute() {
     mutationFn: async (helpful: boolean) => {
       await submitAnalysisFeedback(sessionId, helpful);
       return helpful;
+    },
+    onSuccess: (helpful) => {
+      queryClient.setQueryData(feedbackQueryKey, helpful);
     },
   });
   const prepareReanalysis = async () => {
@@ -145,7 +155,7 @@ export default function ResultsRoute() {
       }}
       onAskCoach={() => router.push({ pathname: "/(tabs)/(coach)", params: { sessionId } })}
       onRateAnalysis={(helpful) => feedback.mutate(helpful)}
-      analysisRating={feedback.data ?? null}
+      analysisRating={feedback.data ?? persistedFeedback.data ?? null}
       ratingPending={feedback.isPending}
       ratingError={feedback.error instanceof Error ? feedback.error.message : null}
       onRecordAnother={() => {

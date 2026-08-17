@@ -132,7 +132,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
     ? deriveObservedIssueRegions([point.observed.finding]) as AnatomyRegion[]
     : [];
   const hasMuscleFocus = exerciseMuscleFocus !== null || allIssueRegions.length > 0;
-  const hasPersonalizedSummary = hasMuscleFocus || Boolean(result.coachNote);
+  const hasPersonalizedSummary = hasMuscleFocus;
   const wholeSetSummary = (
     hasPersonalizedSummary
       ? result.overallAssessment
@@ -162,7 +162,6 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
   const summaryStrengths = presentation.didWell.slice(0, 3).map((finding) => ({ id: finding.id, text: finding.title }));
   const summaryFocusAreas = presentation.priorityCorrections.map((finding) => ({ id: finding.id, text: finding.title }));
   const summaryNextActions = nextSetActions.slice(0, 3).map((item) => ({ id: item.id, text: item.action }));
-  const coachNote = result.coachNote?.trim() || null;
   const conciseWholeSetSummary = wholeSetSummary ? conciseCopy(wholeSetSummary, 4, 85) : null;
   const movePoint = (direction: -1 | 1) => {
     if (points.length === 0) return;
@@ -275,7 +274,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
         <MuscleFocusFigure focus={exerciseMuscleFocus} issueRegions={issueRegions} />
       </View> : null}
 
-      {(coachNote || hasScoreContent) ? <View testID="coach-note-scores-section" style={{ width: "100%", gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.goldSoft }}>
+      {hasScoreContent ? <View testID="movement-scores-section" style={{ width: "100%", gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.goldSoft }}>
         {hasScoreContent ? <View style={{ width: "100%", gap: spacing.md }}>
           <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>MOVEMENT SCORES</Text>
           {presentation.score !== null ? <View testID="movement-score-overall" style={{ gap: spacing.xs, paddingBottom: hasMovementScores ? spacing.sm : 0 }}>
@@ -300,10 +299,6 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
             ))}
           </ScrollView> : null}
         </View> : null}
-        {coachNote ? <View style={{ width: "100%", gap: spacing.sm, paddingTop: hasMovementScores ? spacing.sm : 0, borderTopWidth: hasMovementScores ? 1 : 0, borderTopColor: colors.border }}>
-          <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>COACH&apos;S NOTE</Text>
-          <Text selectable style={{ color: colors.text, fontSize: 16, lineHeight: 23 }}>{coachNote}</Text>
-        </View> : null}
       </View> : null}
 
       {conciseWholeSetSummary ? <View testID="whole-set-summary-section" style={{ gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised }}>
@@ -326,7 +321,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
         </Pressable>
       </View>
 
-      {onRateAnalysis && !feedbackDismissed ? <View testID="analysis-feedback" style={{ gap: spacing.md, alignItems: "center", padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+      {onRateAnalysis && analysisRating === null && !feedbackDismissed ? <View testID="analysis-feedback" style={{ gap: spacing.md, alignItems: "center", padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
         <Text selectable style={[typography.heading, { color: colors.text, textAlign: "center" }]}>Was this analysis helpful?</Text>
         <Text selectable style={[typography.caption, { color: colors.textMuted, textAlign: "center" }]}>Your rating helps improve Formie&apos;s coaching.</Text>
         <View style={{ width: "100%", flexDirection: "row", gap: spacing.sm }}>

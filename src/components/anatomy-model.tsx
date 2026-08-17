@@ -3,7 +3,6 @@ import { View } from "react-native";
 import { Image } from "expo-image";
 
 import { AnatomyInteractionSurface } from "@/components/anatomy-interaction-surface";
-import { AnatomyZoneHighlights } from "@/components/anatomy-zone-highlights";
 import {
   anatomyRotationFromDrag,
   normalizedAnatomyRotation,
@@ -18,9 +17,10 @@ export type AnatomyModelProps = {
   targetRegions: MuscleRegion[];
   secondaryRegions: MuscleRegion[];
   issueRegions: AnatomyRegion[];
+  mode?: "muscles" | "form";
 };
 
-export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: AnatomyModelProps) {
+export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions, mode = "muscles" }: AnatomyModelProps) {
   const [rotation, setRotation] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
   const progress = normalizedAnatomyRotation(rotation);
@@ -51,6 +51,7 @@ export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: 
           backgroundColor: colors.background,
         }}
       >
+        {mode === "form" ? <View pointerEvents="none" testID="anatomy-surface-highlight-mode" /> : null}
         <View style={{ position: "absolute", inset: 0, transform: [{ scale: zoomLevel }] }}>
           <Image
             accessibilityLabel={`${backFacing ? "Back" : "Front"} anatomical muscle figure`}
@@ -65,7 +66,6 @@ export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: 
               height: "100%",
             }}
           />
-          <AnatomyZoneHighlights targetRegions={targetRegions} secondaryRegions={secondaryRegions} issueRegions={issueRegions} face={backFacing ? "back" : "front"} />
         </View>
         {targetRegions.map((region) => (
           <View key={`target-${region}`} pointerEvents="none" testID={`anatomy-target-${region}`} />

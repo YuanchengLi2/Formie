@@ -1,6 +1,7 @@
 import {
   anatomyHighlightForName,
   fittedAnatomyScale,
+  isRenderableAnatomyMuscle,
   isSurfaceAnatomyMuscle,
   regionMatchesAnatomyName,
 } from "./anatomy-region-mapping";
@@ -89,5 +90,25 @@ describe("anatomy region mapping", () => {
     "Multifidus Lumborum Muscle",
   ])("removes deep and internal anatomy from the fitness model: %s", (name) => {
     expect(isSurfaceAnatomyMuscle(name)).toBe(false);
+  });
+
+  it.each([
+    "Infraspinatus Muscle",
+    "Teres Major Muscle",
+    "Rhomboid Major Muscle",
+    "Extensor Digiti Minimi",
+  ])("fills the visible outer shell with additional muscle geometry: %s", (name) => {
+    expect(isRenderableAnatomyMuscle(name)).toBe(true);
+  });
+
+  it.each([
+    "Inferior Rectus Muscle",
+    "Common Tendinous Ring",
+    "Diaphragm",
+    "Genioglossus Muscle",
+    "Inferior Pharyngeal Constrictor",
+    "Obturator Internus",
+  ])("never exposes internal muscle geometry: %s", (name) => {
+    expect(isRenderableAnatomyMuscle(name)).toBe(false);
   });
 });
