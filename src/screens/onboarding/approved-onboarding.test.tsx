@@ -468,12 +468,14 @@ describe("approved onboarding screen", () => {
     expect(source).not.toContain("paywall-reference-no-icons-852x1846.png");
   });
 
-  it("keeps the paywall scrollable and the native CTA compact", async () => {
+  it("keeps the full approved paywall artwork and overlays the native CTA on it", async () => {
     const { screen } = await renderStep("premium", { price: "$9.99" });
     const layout = getPremiumArtworkLayout(390, 844);
 
-    expect(layout.heroHeight).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Start monthly - $9.99/mo" })).toHaveStyle({ minHeight: 56 });
+    expect(layout.cropSourceEndY).toBe(1846);
+    expect(layout.cropHeight).toBeGreaterThanOrEqual(layout.imageHeight);
+    expect(layout.cta.top).toBeGreaterThan(layout.imageHeight * 0.8);
+    expect(screen.getByRole("button", { name: "Start monthly - $9.99/mo" })).toHaveStyle({ position: "absolute", minHeight: 56 });
   });
 
   it("uses native offer content as the accessibility source", async () => {
@@ -484,12 +486,13 @@ describe("approved onboarding screen", () => {
     expect(screen.queryByTestId("premium-accessibility-summary")).toBeNull();
   });
 
-  it("crops the static-price portion out of the decorative artwork", () => {
+  it("renders the complete approved artwork instead of cropping it to a hero", () => {
     const layout = getPremiumArtworkLayout(390, 844);
 
     expect(layout.imageWidth).toBe(layout.contentWidth);
     expect(layout.imageHeight / layout.imageWidth).toBeCloseTo(1846 / 852, 5);
-    expect(layout.heroSourceEndY).toBeLessThan(500);
+    expect(layout.cropSourceEndY).toBe(1846);
+    expect(layout.contentMinHeight).toBeGreaterThan(layout.imageHeight);
   });
 
   it("disables the native purchase surface while it is reconciling", async () => {
@@ -497,10 +500,11 @@ describe("approved onboarding screen", () => {
     expect(reconciling.screen.getByTestId("onboarding-bottom-cta").props.accessibilityState.disabled).toBe(true);
   });
 
-  it("renders the supplied artwork as a cropped decorative hero", async () => {
+  it("renders the supplied artwork as the full paywall surface", async () => {
     const { screen } = await renderStep("premium");
 
     expect(screen.getByTestId("premium-reference-image", { includeHiddenElements: true }).props.contentFit).toBe("fill");
+    expect(screen.queryByTestId("premium-artwork-hero")).toBeNull();
   });
 
   it("always purchases the monthly package", async () => {

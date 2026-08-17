@@ -25,22 +25,32 @@ const goldGradient = require("../../../assets/production/onboarding/gold-gradien
 
 const PAYWALL_SOURCE_WIDTH = 852;
 const PAYWALL_SOURCE_HEIGHT = 1846;
-const HERO_SOURCE_END_Y = 390;
+const PAYWALL_SCROLL_BREATHING_ROOM = 16;
 const STATUS_BAR_SOURCE_HEIGHT = 76;
+const CTA_SOURCE_FRAME = { x: 74, y: 1640, width: 704, height: 105 };
 const BACK_SOURCE_FRAME = { x: 36, y: 108, size: 82 };
 
-export function getPremiumArtworkLayout(windowWidth: number, _windowHeight: number) {
+export function getPremiumArtworkLayout(windowWidth: number, windowHeight: number) {
   const contentWidth = Math.min(windowWidth, 480);
   const sourceScale = contentWidth / PAYWALL_SOURCE_WIDTH;
   const imageWidth = contentWidth;
   const imageHeight = PAYWALL_SOURCE_HEIGHT * sourceScale;
+  const cropHeight = Math.max(windowHeight, imageHeight);
+
   return {
     contentWidth,
     imageWidth,
     imageHeight,
-    heroHeight: HERO_SOURCE_END_Y * sourceScale,
-    heroSourceEndY: HERO_SOURCE_END_Y,
+    cropHeight,
+    cropSourceEndY: PAYWALL_SOURCE_HEIGHT,
+    contentMinHeight: cropHeight + PAYWALL_SCROLL_BREATHING_ROOM,
     statusMaskHeight: STATUS_BAR_SOURCE_HEIGHT * sourceScale,
+    cta: {
+      left: CTA_SOURCE_FRAME.x * sourceScale,
+      top: CTA_SOURCE_FRAME.y * sourceScale,
+      width: CTA_SOURCE_FRAME.width * sourceScale,
+      height: 56,
+    },
     back: {
       left: BACK_SOURCE_FRAME.x * sourceScale,
       top: BACK_SOURCE_FRAME.y * sourceScale,
@@ -93,7 +103,6 @@ export function PremiumScreen({
     if (onPurchasePlan) onPurchasePlan("monthly");
     else onPurchase();
   };
-
   return (
     <View testID="premium-native-screen" style={styles.screen}>
       <StatusBar hidden />
@@ -104,81 +113,66 @@ export function PremiumScreen({
         bounces
         alwaysBounceVertical
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { minHeight: layout.contentMinHeight }]}
       >
-        <View style={[styles.content, { width: layout.contentWidth }]}>
-          <View testID="premium-artwork-hero" style={[styles.hero, { height: layout.heroHeight }]}>
-            <Image
-              testID="premium-reference-image"
-              accessibilityElementsHidden
-              source={referencePaywall}
-              contentFit="fill"
-              contentPosition="top"
-              style={{ width: layout.imageWidth, height: layout.imageHeight }}
-            />
-            <View testID="premium-status-mask" pointerEvents="none" style={[styles.statusMask, { height: layout.statusMaskHeight }]} />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              accessibilityState={{ disabled: !onBack }}
-              disabled={!onBack}
-              onPress={onBack}
-              hitSlop={12}
-              style={[styles.backButton, { left: layout.back.left, top: layout.back.top, width: layout.back.size, height: layout.back.size }]}
-            />
+        <View style={[styles.artworkCrop, { width: layout.contentWidth, height: layout.cropHeight }]}>
+          <Image
+            testID="premium-reference-image"
+            accessibilityElementsHidden
+            source={referencePaywall}
+            contentFit="fill"
+            contentPosition="top"
+            style={[styles.referenceImage, { width: layout.imageWidth, height: layout.imageHeight }]}
+          />
+          <View testID="premium-status-mask" pointerEvents="none" style={[styles.statusMask, { height: layout.statusMaskHeight }]} />
+          <View pointerEvents="none" style={styles.accessibilityCopy}>
+            <Text accessibilityRole="header">Formie Pro</Text>
+            <Text>{purchaseAvailable ? `${price} per month` : "Monthly plan unavailable"}</Text>
+            <Text>10 analyses every month</Text>
           </View>
-
-          <View style={styles.offerCard}>
-            <Text accessibilityRole="header" style={styles.offerTitle}>Formie Pro</Text>
-            <Text style={styles.offerPrice}>{purchaseAvailable ? `${price} per month` : "Monthly plan unavailable"}</Text>
-            <Text style={styles.quota}>10 analyses every month</Text>
-            <View style={styles.features}>
-              <Text style={styles.feature}>✓ Evidence-linked form analysis</Text>
-              <Text style={styles.feature}>✓ Personalized corrections and cues</Text>
-              <Text style={styles.feature}>✓ Saved progress and coaching history</Text>
-              <Text style={styles.feature}>✓ Follow-up questions with Formie Coach</Text>
-            </View>
-            <Text style={styles.renewalDisclosure}>
-              Payment is charged to your Apple ID. The subscription automatically renews each month until cancelled at least 24 hours before the end of the current period. Manage or cancel it in Apple subscription settings.
-            </Text>
-
-            {error ? <Text accessibilityRole="alert" selectable style={styles.error}>{error}</Text> : null}
-
-            <Pressable
-              testID="onboarding-bottom-cta"
-              accessibilityRole="button"
-              accessibilityLabel={ctaLabel}
-              accessibilityState={{ disabled: ctaDisabled }}
-              disabled={ctaDisabled}
-              onPress={purchase}
-              style={({ pressed }) => [styles.cta, pressed && !ctaDisabled && styles.pressed, ctaDisabled && styles.disabled]}
-            >
-              <Image accessibilityElementsHidden pointerEvents="none" source={goldGradient} contentFit="fill" style={StyleSheet.absoluteFillObject} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            accessibilityState={{ disabled: !onBack }}
+            disabled={!onBack}
+            onPress={onBack}
+            hitSlop={12}
+            style={[styles.backButton, { left: layout.back.left, top: layout.back.top, width: layout.back.size, height: layout.back.size }]}
+          />
+          {error ? <Text accessibilityRole="alert" selectable style={[styles.error, { top: Math.max(0, layout.cta.top - 58) }]}>{error}</Text> : null}
+          <Pressable
+            testID="onboarding-bottom-cta"
+            accessibilityRole="button"
+            accessibilityLabel={ctaLabel}
+            accessibilityState={{ disabled: ctaDisabled }}
+            disabled={ctaDisabled}
+            onPress={purchase}
+            style={({ pressed }) => [
+              styles.cta,
+              { left: layout.cta.left, top: layout.cta.top, width: layout.cta.width, height: layout.cta.height, minHeight: layout.cta.height },
+              pressed && !ctaDisabled && styles.ctaPressed,
+            ]}
+          >
+            <Image accessibilityElementsHidden pointerEvents="none" source={goldGradient} contentFit="fill" style={StyleSheet.absoluteFillObject} />
+            <View style={styles.ctaContent}>
               <Text style={styles.ctaText}>{visibleCtaLabel}</Text>
               {reconciling ? <ActivityIndicator accessibilityLabel="Starting purchase" color="#080808" /> : <Text style={styles.ctaArrow}>→</Text>}
-            </Pressable>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Restore Purchases"
-              accessibilityState={{ disabled: storeBusy }}
-              disabled={storeBusy}
-              onPress={onRestore}
-              style={({ pressed }) => [styles.restore, pressed && !storeBusy && styles.pressed, storeBusy && styles.disabled]}
-            >
-              <Text style={styles.restoreText}>{restoring ? "Restoring..." : "Restore Purchases"}</Text>
-            </Pressable>
-            {restoreMessage ? <Text accessibilityLiveRegion="polite" style={styles.restoreMessage}>{restoreMessage}</Text> : null}
-
-            <View style={styles.legalRow}>
-              <Pressable accessibilityRole="link" accessibilityLabel="Terms of Use" onPress={onOpenTerms} hitSlop={8}>
-                <Text style={styles.legalText}>Terms of Use</Text>
-              </Pressable>
-              <Text style={styles.legalSeparator}>•</Text>
-              <Pressable accessibilityRole="link" accessibilityLabel="Privacy Policy" onPress={onOpenPrivacy} hitSlop={8}>
-                <Text style={styles.legalText}>Privacy Policy</Text>
-              </Pressable>
             </View>
+          </Pressable>
+        </View>
+
+        <View style={[styles.complianceFooter, { width: layout.contentWidth }]}>
+          <Text style={styles.renewalDisclosure}>
+            Payment is charged to your Apple ID. The subscription automatically renews each month until cancelled at least 24 hours before the end of the current period. Manage or cancel it in Apple subscription settings.
+          </Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Restore Purchases" accessibilityState={{ disabled: storeBusy }} disabled={storeBusy} onPress={onRestore} style={({ pressed }) => [styles.restore, pressed && !storeBusy && styles.pressed, storeBusy && styles.disabled]}>
+            <Text style={styles.restoreText}>{restoring ? "Restoring..." : "Restore Purchases"}</Text>
+          </Pressable>
+          {restoreMessage ? <Text accessibilityLiveRegion="polite" style={styles.restoreMessage}>{restoreMessage}</Text> : null}
+          <View style={styles.legalRow}>
+            <Pressable accessibilityRole="link" accessibilityLabel="Terms of Use" onPress={onOpenTerms} hitSlop={8}><Text style={styles.legalText}>Terms of Use</Text></Pressable>
+            <Text style={styles.legalSeparator}>•</Text>
+            <Pressable accessibilityRole="link" accessibilityLabel="Privacy Policy" onPress={onOpenPrivacy} hitSlop={8}><Text style={styles.legalText}>Privacy Policy</Text></Pressable>
           </View>
         </View>
       </ScrollView>
@@ -190,19 +184,17 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#000000" },
   scroll: { flex: 1, width: "100%" },
   scrollContent: { alignItems: "center", backgroundColor: "#000000", paddingBottom: 28 },
-  content: { maxWidth: 480 },
-  hero: { position: "relative", overflow: "hidden", backgroundColor: "#000000" },
-  statusMask: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: "#000000" },
-  backButton: { position: "absolute", zIndex: 2, borderRadius: 99, backgroundColor: "transparent" },
-  offerCard: { marginHorizontal: 18, marginTop: 4, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 20, gap: 14, borderRadius: 24, borderWidth: 1, borderColor: "rgba(229,173,50,0.68)", backgroundColor: "#0B0B0B" },
-  offerTitle: { color: "#F6F3EB", fontSize: 31, lineHeight: 36, fontWeight: "800", textAlign: "center" },
-  offerPrice: { color: "#E5AD32", fontSize: 27, lineHeight: 32, fontWeight: "800", textAlign: "center" },
-  quota: { color: "#F6F3EB", fontSize: 18, lineHeight: 24, fontWeight: "700", textAlign: "center" },
-  features: { gap: 9, paddingVertical: 4 },
-  feature: { color: "#E2DED4", fontSize: 15, lineHeight: 21 },
+  artworkCrop: { position: "relative", overflow: "hidden", backgroundColor: "#000000" },
+  referenceImage: { position: "absolute", left: 0, top: 0 },
+  statusMask: { position: "absolute", zIndex: 2, top: 0, left: 0, right: 0, backgroundColor: "#000000" },
+  accessibilityCopy: { position: "absolute", width: 1, height: 1, opacity: 0, overflow: "hidden" },
+  backButton: { position: "absolute", zIndex: 3, borderRadius: 99, backgroundColor: "transparent" },
+  complianceFooter: { paddingHorizontal: 28, paddingTop: 14, gap: 8, backgroundColor: "#000000" },
   renewalDisclosure: { color: "#AAA69E", fontSize: 12.5, lineHeight: 18, textAlign: "center" },
-  error: { paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, color: "#FF8A82", backgroundColor: "rgba(80,10,10,0.42)", textAlign: "center", fontSize: 13, lineHeight: 18 },
-  cta: { minHeight: 56, paddingHorizontal: 22, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: 14, borderCurve: "continuous", overflow: "hidden" },
+  error: { position: "absolute", zIndex: 4, left: "9%", right: "9%", paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, color: "#FF8A82", backgroundColor: "rgba(0,0,0,0.92)", textAlign: "center", fontSize: 13, lineHeight: 18 },
+  cta: { position: "absolute", zIndex: 3, justifyContent: "center", borderRadius: 14, borderCurve: "continuous", overflow: "hidden" },
+  ctaPressed: { opacity: 1, transform: [{ scale: 0.985 }] },
+  ctaContent: { flex: 1, minHeight: 56, paddingHorizontal: 22, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   ctaText: { color: "#070707", fontSize: 18, lineHeight: 22, fontWeight: "800" },
   ctaArrow: { color: "#070707", fontSize: 28, lineHeight: 31 },
   restore: { minHeight: 44, alignItems: "center", justifyContent: "center" },
