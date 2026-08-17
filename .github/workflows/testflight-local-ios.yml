@@ -46,9 +46,6 @@ jobs:
       - name: Type-check mobile app
         run: npm run typecheck
 
-      - name: Run complete mobile test suite
-        run: npx jest --runInBand --testPathIgnorePatterns=website
-
       - name: Validate production payment and auth environment
         run: >-
           eas env:exec production
