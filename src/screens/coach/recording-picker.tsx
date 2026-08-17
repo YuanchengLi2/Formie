@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, TextInput, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";
 import type { AnalysisHistoryItem } from "@/features/progress/group-sessions";

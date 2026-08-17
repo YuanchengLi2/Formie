@@ -1,5 +1,6 @@
 import { Image } from "expo-image";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 
 import type { SocialProvider } from "@/features/auth/auth-service";
 

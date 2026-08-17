@@ -1,5 +1,6 @@
 import { Image } from "expo-image";
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";

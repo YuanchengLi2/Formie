@@ -1,7 +1,8 @@
 import { Image } from "expo-image";
 import { type Href, useRouter } from "expo-router";
 import { useState } from "react";
-import { ImageBackground, Linking, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ImageBackground, Linking, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SubscriptionBoundary } from "@/components/subscription-boundary";

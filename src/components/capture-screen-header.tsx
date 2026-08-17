@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CaptureReferenceIcon } from "@/components/capture-reference-icon";

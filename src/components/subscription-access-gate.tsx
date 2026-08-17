@@ -1,7 +1,8 @@
 import * as Linking from "expo-linking";
 import { Image } from "expo-image";
 import { useState, type PropsWithChildren } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAccess } from "@/features/access/access-provider";

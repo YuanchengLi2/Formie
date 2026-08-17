@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, Text, View, type LayoutChangeEvent } from "react-native";
+import { Text, View, type LayoutChangeEvent } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { LinearTransition, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";

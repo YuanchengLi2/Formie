@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Keyboard, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Keyboard, ScrollView, Text, TextInput, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { Image } from "expo-image";
 
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";

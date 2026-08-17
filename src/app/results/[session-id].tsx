@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { type Href, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useMutation } from "@tanstack/react-query";
 import { Text, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
@@ -11,6 +11,7 @@ import { submitAnalysisFeedback } from "@/features/analysis/feedback";
 import { useAnalysisStatus } from "@/features/analysis/use-analysis-status";
 import { getAccessToken } from "@/features/auth/access-token";
 import { useExerciseTutorial } from "@/features/analysis/use-exercise-tutorial";
+import { createResultsExitHandler } from "@/features/analysis/results-exit";
 import { useCaptureStore } from "@/features/capture/capture-store";
 import { deviceVideoStore } from "@/features/capture/device-video-store";
 import type { RecordedSet } from "@/features/capture/types";
@@ -23,6 +24,7 @@ import { typography } from "@/theme/type";
 
 export default function ResultsRoute() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { "session-id": sessionId = "" } = useLocalSearchParams<{ "session-id": string }>();
   const status = useAnalysisStatus(sessionId, { includeVideoUrl: true, mode: "status" });
   const tutorial = useExerciseTutorial(sessionId, Boolean(status.data?.result));
@@ -31,6 +33,9 @@ export default function ResultsRoute() {
   const [preparingReanalysis, setPreparingReanalysis] = useState(false);
   const [reanalysisPreparationError, setReanalysisPreparationError] = useState<string | null>(null);
   const resetCapture = useCaptureStore((state) => state.dispatch);
+  useEffect(() => navigation.addListener("beforeRemove", createResultsExitHandler(() => {
+    router.dismissTo("/(tabs)/(home)" as Href);
+  })), [navigation, router]);
   const reanalysis = useMutation({
     mutationFn: async (declaration?: SetDeclaration) => {
       if (!declaration) throw new Error("Set details are required");

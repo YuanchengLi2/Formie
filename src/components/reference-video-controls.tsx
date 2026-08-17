@@ -1,6 +1,7 @@
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, Pressable, Text, View, type LayoutChangeEvent } from "react-native";
+import { Modal, Text, View, type LayoutChangeEvent } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CaptureReferenceIcon } from "@/components/capture-reference-icon";
@@ -136,15 +137,18 @@ export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControls
           player={player}
           style={{ flex: 1, backgroundColor: colors.cameraBlack }}
         />
-        <Pressable
-          accessibilityLabel="Close fullscreen recording"
-          accessibilityRole="button"
-          hitSlop={12}
-          onPress={() => setFullscreenOpen(false)}
-          style={{ position: "absolute", top: 14, left: 14, width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 22, backgroundColor: "rgba(8,8,8,0.78)" }}
-        >
-          <Text style={{ color: colors.text, fontSize: 28, lineHeight: 30 }}>×</Text>
-        </Pressable>
+        <SafeAreaView edges={["top"]} pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0, right: 0 }}>
+          <Pressable
+            accessibilityLabel="Close fullscreen recording"
+            accessibilityRole="button"
+            hitSlop={12}
+            onPress={() => setFullscreenOpen(false)}
+            style={{ minWidth: 96, minHeight: 52, alignSelf: "flex-end", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 12, marginRight: 16, paddingHorizontal: 16, borderRadius: 26, borderWidth: 2, borderColor: colors.cameraBlack, backgroundColor: colors.gold }}
+          >
+            <Text style={{ color: colors.cameraBlack, fontSize: 25, lineHeight: 27, fontWeight: "800" }}>{"\u00D7"}</Text>
+            <Text style={[typography.label, { color: colors.cameraBlack }]}>Close</Text>
+          </Pressable>
+        </SafeAreaView>
       </SafeAreaView>
     </Modal>
   </>);

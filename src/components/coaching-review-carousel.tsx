@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 
 import { formatPlaybackTime, nextFrameIndex, reviewPurposeLabel } from "@/components/full-recording";
 import type { ReviewFrame, ReviewFrameGroups, ReviewPurpose } from "@/features/analysis/review-frames";

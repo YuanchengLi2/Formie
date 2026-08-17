@@ -265,12 +265,12 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(normalized.coachingItems.slice(1)).toEqual(proseTitle.coachingItems.slice(1));
   });
 
-  it("calibrates numeric scores from validated issue impact instead of trusting arbitrary writer numbers", () => {
+  it("deducts meaningful score impact from every validated issue instead of averaging away faults", () => {
     const source = analysis();
     const finalWriting = writing(source);
     const candidate = boundaryFreeToCandidate(source, finalWriting);
-    expect(candidate.movementScores?.map((item) => item.score)).toEqual([86, 96, 92, 96]);
-    expect(candidate.score).toBe(93);
+    expect(candidate.movementScores?.map((item) => item.score)).toEqual([62, 100, 85, 100]);
+    expect(candidate.score).toBe(53);
     expect(candidate.muscleFocus).toEqual(finalWriting.muscleFocus);
     expect(candidate.priorityCorrections[0].observedIssueRegions).toEqual(["elbows"]);
     expect(candidate.muscleFocus.primary[0].region).toBe("lats");

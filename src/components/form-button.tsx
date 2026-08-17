@@ -1,10 +1,9 @@
-import * as Haptics from "expo-haptics";
-import { Pressable, Text, type StyleProp, type ViewStyle } from "react-native";
+import { Text, type StyleProp, type ViewStyle } from "react-native";
 
+import { HapticPressable } from "@/components/haptic-pressable";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
-import { useCapturePreferences } from "@/features/capture/capture-preferences";
 
 type FormButtonProps = {
   label: string;
@@ -23,13 +22,6 @@ export function FormButton({
   style,
   testID,
 }: FormButtonProps) {
-  const handlePress = () => {
-    if (process.env.EXPO_OS === "ios" && useCapturePreferences.getState().preferences.interactionHapticsEnabled) {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-    onPress();
-  };
-
   const palette = {
     primary: { backgroundColor: colors.gold, borderColor: colors.gold, color: colors.background },
     secondary: { backgroundColor: colors.surface, borderColor: colors.gold, color: colors.gold },
@@ -37,12 +29,12 @@ export function FormButton({
   }[variant];
 
   return (
-    <Pressable
+    <HapticPressable
       accessibilityLabel={label}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
-      onPress={handlePress}
+      onPress={onPress}
       testID={testID}
       style={({ pressed }) => [
         {
@@ -64,6 +56,6 @@ export function FormButton({
       <Text selectable style={[typography.label, { color: palette.color }]}>
         {label}
       </Text>
-    </Pressable>
+    </HapticPressable>
   );
 }

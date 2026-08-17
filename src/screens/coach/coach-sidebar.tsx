@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, ScrollView, Text, TextInput, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import Animated, { FadeIn, FadeOut, SlideInLeft, SlideOutLeft } from "react-native-reanimated";
 import { BlurView } from "expo-blur";
 

@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
 
 import { FormButton } from "@/components/form-button";

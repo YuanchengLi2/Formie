@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Modal, ScrollView, Text, TextInput, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
 
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";

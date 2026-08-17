@@ -1,6 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import { useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { SocialProviderButtons } from "@/components/social-provider-buttons";

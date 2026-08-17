@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 
 import { AnatomyModel } from "@/components/anatomy-model";
+import { AnatomyModel as AnatomyBodyMap } from "@/components/anatomy-body-map";
 import type { AnatomyRegion, MuscleFocus } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -49,7 +51,9 @@ export function MuscleFocusFigure({ focus, issueRegions }: { focus: MuscleFocus 
           );
         })}
       </View>
-      <AnatomyModel targetRegions={view === "targets" ? targetRegions : []} secondaryRegions={view === "targets" ? secondaryRegions : []} issueRegions={view === "form" ? issueRegions : []} />
+      {view === "targets"
+        ? <AnatomyModel targetRegions={targetRegions} secondaryRegions={secondaryRegions} issueRegions={[]} />
+        : <AnatomyBodyMap targetRegions={[]} issueRegions={issueRegions} />}
       {view === "targets"
         ? <View style={{ gap: spacing.sm }}>
           <LegendLine color={TARGET_COLOR} label="Primary muscles" names={primary.map((target) => target.name)} />

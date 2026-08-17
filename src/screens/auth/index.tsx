@@ -1,5 +1,6 @@
 import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 
 import { AccountAccessScreen } from "@/components/account-access-screen";
 import type { SocialProvider } from "@/features/auth/auth-service";

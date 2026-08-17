@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { Image } from "expo-image";
 import { StatusBar } from "expo-status-bar";
 

@@ -416,18 +416,28 @@ function fallbackMovementScores(analysis: WholeVideoAnalysis): MovementScore[] {
   ], analysis);
 }
 
+function issueScorePenalty(issue: WholeVideoAnalysis["issues"][number]): number {
+  const prevalenceWeight = { isolated: 1, repeated: 1.6, throughout: 2.2 } as const;
+  const severityWeight = { note: 4, important: 10, high: 18 } as const;
+  const confidenceWeight = 0.65 + 0.35 * Math.max(0, Math.min(1, issue.confidence));
+  return severityWeight[issue.severity] * prevalenceWeight[issue.prevalence] * confidenceWeight;
+}
+
+function combinedIssuePenalty(issues: WholeVideoAnalysis["issues"]): number {
+  return Math.sqrt(issues.reduce((sum, issue) => sum + issueScorePenalty(issue) ** 2, 0));
+}
+
+function scoreFromIssues(issues: WholeVideoAnalysis["issues"]): number {
+  return Math.max(0, Math.min(100, Math.round(100 - combinedIssuePenalty(issues))));
+}
+
 function calibrateMovementScores(scores: Array<Omit<MovementScore, "score">>, analysis: WholeVideoAnalysis): MovementScore[] {
   const byId = new Map(analysis.issues.map((issue) => [issue.id, issue]));
-  const prevalenceWeight = { isolated: 0.5, repeated: 1, throughout: 1.35 } as const;
-  const severityWeight = { note: 1.5, important: 4, high: 8 } as const;
   return scores.map((movementScore) => {
-    const penalty = movementScore.evidenceIds.reduce((sum, issueId) => {
-      const issue = byId.get(issueId);
-      return issue
-        ? sum + severityWeight[issue.severity] * prevalenceWeight[issue.prevalence] * issue.confidence
-        : sum;
-    }, 0);
-    return { ...movementScore, score: Math.max(45, Math.min(96, Math.round(96 - penalty))) };
+    const issues = movementScore.evidenceIds
+      .map((issueId) => byId.get(issueId))
+      .filter((issue): issue is WholeVideoAnalysis["issues"][number] => issue !== undefined);
+    return { ...movementScore, score: scoreFromIssues(issues) };
   });
 }
 
@@ -503,9 +513,7 @@ export function boundaryFreeToCandidate(
   const equipment = recognitionContext.equipment
     ?? (declaration?.load.kind === "bodyweight" ? ["bodyweight"] : []);
   const movementScores = calibrateMovementScores(writing.movementScores, analysis);
-  const score = movementScores.length > 0
-    ? Math.round(movementScores.reduce((sum, item) => sum + item.score, 0) / movementScores.length)
-    : null;
+  const score = movementScores.length > 0 ? scoreFromIssues(analysis.issues) : null;
   const muscleFocus = writing.muscleFocus;
   const visibleReferences = [...new Set([
     ...analysis.visibility.clearlyVisible,

@@ -3,6 +3,7 @@ import { Tabs, type Href, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CenterTabButton } from "@/components/center-tab-button";
+import { triggerInteractionHaptic } from "@/components/haptic-pressable";
 import { useAccess } from "@/features/access/access-provider";
 import { formatAnalysisEntryLabel, resolveAnalysisEntry } from "@/features/access/account-access";
 import { formatQuotaMessage, formatQuotaTitle } from "@/features/access/quota-message";
@@ -28,6 +29,7 @@ export default function TabsLayout() {
           : "Record";
   return (
     <Tabs
+      screenListeners={{ tabPress: () => triggerInteractionHaptic("tab") }}
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: true,

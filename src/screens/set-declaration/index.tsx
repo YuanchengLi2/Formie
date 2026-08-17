@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
-  Pressable,
+
   ScrollView,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 

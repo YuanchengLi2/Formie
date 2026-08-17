@@ -8,6 +8,8 @@ import type { SetDeclaration } from "./set-declaration";
 const mockMutate = jest.fn();
 const mockSetDeclarationProps = jest.fn();
 const mockFindDeviceVideo = jest.fn();
+const mockDismissTo = jest.fn();
+const mockNavigationAddListener = jest.fn(() => jest.fn());
 const mockDeclaration: SetDeclaration = {
   exercise: { source: "catalog", catalogExerciseId: 3, label: "Dumbbell Bench Press" },
   amount: { kind: "reps", value: 8, countScope: "total" },
@@ -19,7 +21,8 @@ const mockDeclaration: SetDeclaration = {
 
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ "session-id": "session-1" }),
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+  useNavigation: () => ({ addListener: mockNavigationAddListener }),
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), dismissTo: mockDismissTo }),
 }));
 jest.mock("@tanstack/react-query", () => ({
   useMutation: () => ({
@@ -110,6 +113,8 @@ describe("ResultsRoute reanalysis confirmation", () => {
     mockMutate.mockClear();
     mockSetDeclarationProps.mockClear();
     mockFindDeviceVideo.mockReset();
+    mockDismissTo.mockClear();
+    mockNavigationAddListener.mockClear();
     mockFindDeviceVideo.mockResolvedValue({
       localUri: "file:///formie-recordings/saved-set.mp4",
       durationMs: 12_000,

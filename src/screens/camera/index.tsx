@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Linking, Pressable, Text, View } from "react-native";
+import { Linking, Text, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { CameraView, useCameraPermissions, type CameraType } from "expo-camera";
 import { Image } from "expo-image";
 import * as Haptics from "expo-haptics";

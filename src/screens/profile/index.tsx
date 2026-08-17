@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import { useEffect, useState, type ReactNode } from "react";
-import { Alert, ImageBackground, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Alert, ImageBackground, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { HapticPressable as Pressable, triggerInteractionHaptic } from "@/components/haptic-pressable";
 
 import { SubscriptionBoundary } from "@/components/subscription-boundary";
 import type { BillingBoundaryInput } from "@/features/access/billing-boundary";
@@ -142,9 +143,9 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
       <SettingsGroup title="Preferences">
         <SettingsRow label="Countdown" detail="Before recording starts"><View style={styles.countdownChoices}>{([5, 10, 15] as const).map((seconds) => <Pressable key={seconds} accessibilityRole="button" accessibilityState={{ selected: capture.countdownSeconds === seconds }} onPress={() => void commitCapture({ ...capture, countdownSeconds: seconds })} style={[styles.countdownPill, capture.countdownSeconds === seconds && styles.countdownPillSelected]}><Text style={[styles.pillText, capture.countdownSeconds === seconds && { color: "#080808" }]}>{seconds}s</Text></Pressable>)}</View></SettingsRow>
         <Rule />
-        <SettingsRow label="Vibrate on record" detail="Success vibration when recording begins"><Switch accessibilityLabel="Vibrate on record" value={capture.recordingVibrationEnabled} onValueChange={(recordingVibrationEnabled) => void commitCapture({ ...capture, recordingVibrationEnabled })} trackColor={{ false: "#343434", true: colors.goldSoft }} thumbColor={capture.recordingVibrationEnabled ? colors.gold : "#909090"} /></SettingsRow>
+        <SettingsRow label="Vibrate on record" detail="Success vibration when recording begins"><Switch accessibilityLabel="Vibrate on record" value={capture.recordingVibrationEnabled} onValueChange={(recordingVibrationEnabled) => { triggerInteractionHaptic("switch"); void commitCapture({ ...capture, recordingVibrationEnabled }); }} trackColor={{ false: "#343434", true: colors.goldSoft }} thumbColor={capture.recordingVibrationEnabled ? colors.gold : "#909090"} /></SettingsRow>
         <Rule />
-        <SettingsRow label="Start haptics" detail="Feedback on buttons and onboarding"><Switch accessibilityLabel="Start haptics" value={capture.interactionHapticsEnabled} onValueChange={(interactionHapticsEnabled) => void commitCapture({ ...capture, interactionHapticsEnabled })} trackColor={{ false: "#343434", true: colors.goldSoft }} thumbColor={capture.interactionHapticsEnabled ? colors.gold : "#909090"} /></SettingsRow>
+        <SettingsRow label="Start haptics" detail="Feedback on buttons and onboarding"><Switch accessibilityLabel="Start haptics" value={capture.interactionHapticsEnabled} onValueChange={(interactionHapticsEnabled) => { triggerInteractionHaptic("switch", interactionHapticsEnabled); void commitCapture({ ...capture, interactionHapticsEnabled }); }} trackColor={{ false: "#343434", true: colors.goldSoft }} thumbColor={capture.interactionHapticsEnabled ? colors.gold : "#909090"} /></SettingsRow>
       </SettingsGroup>
 
       <SettingsGroup title="Support & Legal">

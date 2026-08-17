@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
-import { PanResponder, Pressable, View } from "react-native";
+import { PanResponder, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 
 import {
   anatomyRotationFromSlider,

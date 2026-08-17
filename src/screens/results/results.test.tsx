@@ -162,7 +162,7 @@ describe("ResultsScreen", () => {
   it("matches the focused Coaching Review hierarchy and includes every supported improvement point", async () => {
     const screen = await renderResults();
 
-    expect(screen.getByText("COACHING REVIEW")).toBeTruthy();
+    expect(screen.getByText("YOUR ANALYSIS")).toBeTruthy();
     expect(screen.queryByTestId("issue-carousel")).toBeNull();
     expect(screen.queryByText("ALL COACHING POINTS")).toBeNull();
     expect(screen.queryByText("Each tab has one job: see the mistake, understand it, then fix one thing.")).toBeNull();
@@ -188,9 +188,12 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("Camera visibility note")).toBeNull();
     expect(screen.queryByText("Objective breakdown from your recording")).toBeNull();
     expect(screen.getByText("EXERCISE MUSCLE FOCUS")).toBeTruthy();
-    expect(screen.getByText("SCORES")).toBeTruthy();
+    expect(screen.getByText("YOUR ANALYSIS")).toBeTruthy();
+    expect(screen.getByTestId("overall-analysis-score").props.children).toBe(75);
+    expect(screen.getByTestId("overall-analysis-score").props.accessibilityLabel).toBe("Overall score 75 out of 100");
+    expect(screen.getByText("MOVEMENT SCORES")).toBeTruthy();
     expect(screen.queryByText("Your early repetitions establish a controlled path.")).toBeNull();
-    expect(screen.getByTestId("coach-score-gauge").props.accessibilityRole).toBe("progressbar");
+    expect(screen.queryByTestId("coach-score-gauge")).toBeNull();
     expect(screen.getByTestId("movement-scores")).toBeTruthy();
     expect(screen.queryByText("WEAKNESSES")).toBeNull();
     expect(screen.queryByText(/drag to rotate/i)).toBeNull();
@@ -313,13 +316,13 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("STARTING POSITION")).toBeNull();
   });
 
-  it("uses a rotatable anatomy model without circular body overlays", async () => {
+  it("uses a surface body-region map for form issues and the rotatable model for target muscles", async () => {
     const screen = await renderResults();
 
     expect(screen.getByTestId("muscle-focus-figure")).toBeTruthy();
     expect(screen.getByTestId("anatomy-body-image")).toBeTruthy();
-    expect(screen.getByLabelText("Rotatable anatomy model")).toBeTruthy();
-    expect(screen.getByLabelText("Rotate anatomy")).toBeTruthy();
+    expect(screen.getByLabelText("Front and back anatomy map")).toBeTruthy();
+    expect(screen.queryByLabelText("Rotatable anatomy model")).toBeNull();
     expect(screen.queryByLabelText("Zoom out anatomy")).toBeNull();
     expect(screen.getByLabelText("Your Form").props.accessibilityState).toEqual({ selected: true });
     expect(screen.queryByTestId("anatomy-target-chest")).toBeNull();
@@ -331,6 +334,8 @@ describe("ResultsScreen", () => {
     expect(screen.getByTestId("anatomy-gesture-surface")).toBeTruthy();
     expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(true);
     await fireEvent.press(screen.getByLabelText("Target Muscles"));
+    expect(screen.getByLabelText("Rotatable anatomy model")).toBeTruthy();
+    expect(screen.getByLabelText("Rotate anatomy")).toBeTruthy();
     expect(screen.getByTestId("anatomy-target-lats")).toBeTruthy();
     expect(screen.getByTestId("anatomy-target-upper_back")).toBeTruthy();
     expect(screen.getByTestId("anatomy-secondary-biceps")).toBeTruthy();
@@ -386,19 +391,15 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("None identified from this recording")).toBeNull();
   });
 
-  it("uses one compact Coach's Note card with separate Scores and Coach's Note views", async () => {
+  it("shows scores and Coach's Note together without a view slider", async () => {
     const screen = await renderResults();
 
-    expect(screen.getByLabelText("Scores").props.accessibilityState).toEqual({ selected: true });
     expect(screen.getByText("Handle Path")).toBeTruthy();
     expect(screen.getByText("Shoulder Level")).toBeTruthy();
-    expect(screen.queryByText("Your early repetitions establish a controlled path.")).toBeNull();
-
-    await fireEvent.press(screen.getByLabelText("Coach's Note"));
-    expect(screen.getByLabelText("Coach's Note").props.accessibilityState).toEqual({ selected: true });
     expect(screen.getByText(result().coachNote!)).toBeTruthy();
-    expect(screen.queryByText("Handle Path")).toBeNull();
-    expect(screen.queryByTestId("movement-scores")).toBeNull();
+    expect(screen.getByTestId("movement-scores")).toBeTruthy();
+    expect(screen.queryByLabelText("Scores")).toBeNull();
+    expect(screen.queryByLabelText("Coach's Note")).toBeNull();
   });
 
   it("keeps what happened and what to do next bound to the issue selected by the arrows", async () => {
@@ -507,12 +508,12 @@ describe("ResultsScreen", () => {
 
   it("always shows the numeric score for a viewable workout", async () => {
     const screen = await renderResults();
-    expect(screen.getAllByLabelText("Coach score 75 out of 100")).toHaveLength(1);
-    expect(screen.getByTestId("coach-score-gauge")).toBeTruthy();
+    expect(screen.getAllByLabelText("Overall score 75 out of 100")).toHaveLength(1);
+    expect(screen.getByTestId("overall-analysis-score")).toBeTruthy();
     expect(screen.queryByText("TECHNIQUE SCORE")).toBeNull();
     expect(screen.queryByText(/low angle showed tempo and elbow path/i)).toBeNull();
     expect(screen.queryByText("High-to-low cable row")).toBeNull();
-    expect(screen.getByText("COACHING REVIEW")).toBeTruthy();
+    expect(screen.getByText("YOUR ANALYSIS")).toBeTruthy();
   });
 
   it("keeps evidence review inline and supports another recording", async () => {
@@ -554,7 +555,7 @@ describe("ResultsScreen", () => {
   it("turns the result into an evidence-led coaching loop", async () => {
     const screen = await renderResults();
 
-    expect(screen.getByText("COACHING REVIEW")).toBeTruthy();
+    expect(screen.getByText("YOUR ANALYSIS")).toBeTruthy();
     expect(screen.getByText("What happened")).toBeTruthy();
     expect(screen.getByText("Why it matters")).toBeTruthy();
     expect(screen.getByText("What to do next")).toBeTruthy();
@@ -719,7 +720,7 @@ describe("ResultsScreen", () => {
     };
 
     const screen = await renderResults(jest.fn(), value);
-    expect(screen.getByLabelText("Coach score 59 out of 100")).toBeTruthy();
+    expect(screen.getByLabelText("Overall score 59 out of 100")).toBeTruthy();
     expect(screen.queryByText("Why this score")).toBeNull();
     expect(screen.queryByText("Movement path and alignment")).toBeNull();
     expect(screen.queryByText(/Score capped at 59/)).toBeNull();

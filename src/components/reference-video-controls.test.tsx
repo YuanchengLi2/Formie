@@ -1,6 +1,7 @@
 /* eslint-disable import/first */
 import React from "react";
 import { act, fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 
 const mockPlay = jest.fn();
 const mockPause = jest.fn();
@@ -88,7 +89,10 @@ describe("ReferenceVideoControls", () => {
 
     await fireEvent.press(screen.getByLabelText("View recording fullscreen"));
     expect(screen.getByLabelText("Fullscreen recording preview")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Close fullscreen recording"));
+    const close = screen.getByLabelText("Close fullscreen recording");
+    expect(StyleSheet.flatten(close.props.style)).toMatchObject({ minWidth: 96, minHeight: 52, backgroundColor: "#C8A96B" });
+    expect(screen.getByText("Close")).toBeTruthy();
+    await fireEvent.press(close);
     expect(screen.queryByLabelText("Fullscreen recording preview")).toBeNull();
   });
 });

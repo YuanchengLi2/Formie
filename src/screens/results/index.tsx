@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormButton } from "@/components/form-button";
@@ -107,8 +108,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
   const [pointIndex, setPointIndex] = useState(0);
   const [purpose, setPurpose] = useState<ReviewPurpose>("observed");
   const movementScores = result.movementScores ?? [];
-  const hasCoachScores = presentation.score !== null || movementScores.length > 0;
-  const [coachView, setCoachView] = useState<"scores" | "note">(hasCoachScores ? "scores" : "note");
+  const hasMovementScores = movementScores.length > 0;
   const selectedIndex = Math.min(pointIndex, Math.max(0, points.length - 1));
   const point = points[selectedIndex] ?? null;
   const activeFrame = point?.[purpose] ?? null;
@@ -255,8 +255,13 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
 
   return (
     <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: spacing.xl, paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={{ gap: spacing.md }}>
-        <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.8 }]}>COACHING REVIEW</Text>
+      <View testID="analysis-score-hero" style={{ gap: spacing.sm, padding: spacing.lg, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.goldSoft }}>
+        <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.8 }]}>YOUR ANALYSIS</Text>
+        {presentation.score !== null ? <View style={{ flexDirection: "row", alignItems: "baseline", gap: spacing.xs }}>
+          <Text accessibilityLabel={`Overall score ${presentation.score} out of 100`} selectable testID="overall-analysis-score" style={{ color: colors.gold, fontSize: 68, lineHeight: 74, fontWeight: "800", letterSpacing: -2, fontVariant: ["tabular-nums"] }}>{presentation.score}</Text>
+          <Text selectable style={[typography.heading, { color: colors.textSecondary }]}>/ 100</Text>
+        </View> : null}
+        <Text selectable style={[typography.label, { color: colors.text }]}>Overall form score</Text>
       </View>
 
       <View testID="coaching-workspace" style={{ flexDirection: wideWorkspace ? "row" : "column", alignItems: "flex-start", gap: spacing.lg }}>
@@ -273,35 +278,9 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
         <MuscleFocusFigure focus={exerciseMuscleFocus} issueRegions={issueRegions} />
       </View> : null}
 
-      {(coachNote || hasCoachScores) ? <View testID="coach-note-scores-section" style={{ width: "100%", gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.goldSoft }}>
-        <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>COACH&apos;S NOTE</Text>
-        <View accessibilityRole="tablist" style={{ flexDirection: "row", padding: 3, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background }}>
-          {([
-            ["scores", "Scores", hasCoachScores],
-            ["note", "Coach's Note", Boolean(coachNote)],
-          ] as const).filter(([, , available]) => available).map(([value, label]) => {
-            const selected = coachView === value;
-            return (
-              <Pressable key={value} accessibilityLabel={label} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => setCoachView(value)} style={{ flex: 1, minHeight: 42, alignItems: "center", justifyContent: "center", borderRadius: radii.sm, backgroundColor: selected ? colors.gold : "transparent" }}>
-                <Text style={[typography.label, { color: selected ? colors.background : colors.textSecondary }]}>{label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-        {coachView === "scores" && hasCoachScores ? <View style={{ width: "100%", gap: spacing.md }}>
-          <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>SCORES</Text>
-          {presentation.score !== null ? <View style={{ width: "100%", gap: spacing.sm }}>
-            <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: spacing.sm }}>
-              <Text selectable style={[typography.label, { color: colors.text }]}>Overall Form</Text>
-              <Text accessibilityLabel={`Coach score ${presentation.score} out of 100`} selectable style={[typography.heading, { color: colors.gold, fontVariant: ["tabular-nums"] }]}>{presentation.score}</Text>
-            </View>
-            <View testID="coach-score-gauge" accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: presentation.score }} style={{ height: 18, justifyContent: "center" }}>
-              <View style={{ height: 5, borderRadius: 3, backgroundColor: colors.border }}>
-                <View style={{ width: `${presentation.score}%`, height: 5, borderRadius: 3, backgroundColor: colors.gold }} />
-                <View style={{ position: "absolute", left: `${presentation.score}%`, top: -6, width: 17, height: 17, marginLeft: -8.5, borderRadius: 9, borderWidth: 3, borderColor: colors.goldSoft, backgroundColor: colors.gold }} />
-              </View>
-            </View>
-          </View> : null}
+      {(coachNote || hasMovementScores) ? <View testID="coach-note-scores-section" style={{ width: "100%", gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.goldSoft }}>
+        {hasMovementScores ? <View style={{ width: "100%", gap: spacing.md }}>
+          <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>MOVEMENT SCORES</Text>
           {movementScores.length > 0 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="movement-scores" contentContainerStyle={{ gap: spacing.sm }}>
             {movementScores.map((item) => (
               <View key={item.id} style={{ width: Math.min(230, width - spacing.xl * 2), gap: spacing.sm, padding: spacing.md, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
@@ -317,7 +296,10 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
             ))}
           </ScrollView> : null}
         </View> : null}
-        {coachView === "note" && coachNote ? <Text selectable style={{ color: colors.text, fontSize: 16, lineHeight: 23 }}>{coachNote}</Text> : null}
+        {coachNote ? <View style={{ width: "100%", gap: spacing.sm, paddingTop: hasMovementScores ? spacing.sm : 0, borderTopWidth: hasMovementScores ? 1 : 0, borderTopColor: colors.border }}>
+          <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>COACH&apos;S NOTE</Text>
+          <Text selectable style={{ color: colors.text, fontSize: 16, lineHeight: 23 }}>{coachNote}</Text>
+        </View> : null}
       </View> : null}
 
       {conciseWholeSetSummary ? <View testID="whole-set-summary-section" style={{ gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised }}>
