@@ -1,7 +1,7 @@
 import {
   anatomyHighlightForName,
   fittedAnatomyScale,
-  isRenderableAnatomyMuscle,
+  isAnatomyMuscleVisible,
   isSurfaceAnatomyMuscle,
   regionMatchesAnatomyName,
 } from "./anatomy-region-mapping";
@@ -92,23 +92,11 @@ describe("anatomy region mapping", () => {
     expect(isSurfaceAnatomyMuscle(name)).toBe(false);
   });
 
-  it.each([
-    "Infraspinatus Muscle",
-    "Teres Major Muscle",
-    "Rhomboid Major Muscle",
-    "Extensor Digiti Minimi",
-  ])("fills the visible outer shell with additional muscle geometry: %s", (name) => {
-    expect(isRenderableAnatomyMuscle(name)).toBe(true);
-  });
-
-  it.each([
-    "Inferior Rectus Muscle",
-    "Common Tendinous Ring",
-    "Diaphragm",
-    "Genioglossus Muscle",
-    "Inferior Pharyngeal Constrictor",
-    "Obturator Internus",
-  ])("never exposes internal muscle geometry: %s", (name) => {
-    expect(isRenderableAnatomyMuscle(name)).toBe(false);
+  it("uses the same clean outer muscle shell for targets and form issues", () => {
+    expect(isAnatomyMuscleVisible("Latissimus Dorsi Muscle", "muscles")).toBe(true);
+    expect(isAnatomyMuscleVisible("Latissimus Dorsi Muscle", "form")).toBe(true);
+    expect(isAnatomyMuscleVisible("Infraspinatus Muscle", "muscles")).toBe(false);
+    expect(isAnatomyMuscleVisible("Infraspinatus Muscle", "form")).toBe(false);
+    expect(isAnatomyMuscleVisible("Diaphragm", "form")).toBe(false);
   });
 });

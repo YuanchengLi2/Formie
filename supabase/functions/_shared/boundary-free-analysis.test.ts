@@ -126,6 +126,9 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(prompt).toMatch(/beginning, middle, and end.*never invent or move a timestamp/i);
     expect(prompt).toMatch(/peakMs.*clearest.*frame/i);
     expect(prompt).toMatch(/visibility/i);
+    expect(prompt).toMatch(/neutral evaluator.*not.*encouragement/i);
+    expect(prompt).toMatch(/do not soften.*severity/i);
+    expect(prompt).toMatch(/high.*materially breaks.*important.*meaningful.*note.*limited/i);
     for (const lens of ["setup", "equipment", "contact", "hands", "grip", "body position", "alignment", "posture", "support", "path", "range", "endpoints", "tempo", "control", "balance", "stability", "joint tracking", "left-right", "symmetry", "beginning", "middle", "end"]) {
       expect(prompt.toLowerCase()).toContain(lens);
     }
@@ -269,14 +272,28 @@ describe("focused whole-video analyst and writer contract", () => {
     const source = analysis();
     const finalWriting = writing(source);
     const candidate = boundaryFreeToCandidate(source, finalWriting);
-    expect(candidate.movementScores?.map((item) => item.score)).toEqual([62, 100, 85, 100]);
-    expect(candidate.score).toBe(53);
+    expect(candidate.movementScores?.map((item) => item.score)).toEqual([65, 100, 86, 100]);
+    expect(candidate.score).toBe(40);
     expect(candidate.muscleFocus).toEqual(finalWriting.muscleFocus);
     expect(candidate.priorityCorrections[0].observedIssueRegions).toEqual(["elbows"]);
     expect(candidate.muscleFocus.primary[0].region).toBe("lats");
     expect(candidate.didWell).toEqual([]);
     expect(candidate.coachingCues).toEqual([]);
     expect(candidate.repTimeline).toEqual([]);
+  });
+
+  it("scores isolated notes distinctly from recurring important and high faults", () => {
+    const isolatedNote = analysis(1);
+    isolatedNote.issues[0].severity = "note";
+    isolatedNote.issues[0].prevalence = "isolated";
+    const repeatedImportant = analysis(1);
+    repeatedImportant.issues[0].severity = "important";
+    repeatedImportant.issues[0].prevalence = "repeated";
+    const throughoutHigh = analysis(1);
+
+    expect(boundaryFreeToCandidate(isolatedNote, writing(isolatedNote)).score).toBe(96);
+    expect(boundaryFreeToCandidate(repeatedImportant, writing(repeatedImportant)).score).toBe(86);
+    expect(boundaryFreeToCandidate(throughoutHigh, writing(throughoutHigh)).score).toBe(65);
   });
 
   it("does not spend writer output on numeric scores that the app calculates locally", () => {

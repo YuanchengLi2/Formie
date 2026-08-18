@@ -32,14 +32,15 @@ const REGION_PATTERNS: Record<HighlightRegion, RegExp> = {
 
 const SURFACE_MUSCLE_PATTERN = /(?:pectoralis major|deltoid|trapezius|latissimus dorsi|biceps brachii|triceps brachii|brachialis|coracobrachialis|anconeus|brachioradialis|pronator teres|supinator|flexor carpi|extensor carpi|flexor digitorum|extensor digitorum|palmaris longus|abductor pollicis|extensor pollicis|flexor pollicis|rectus abdominis|external abdominal oblique|serratus anterior|iliocostalis|longissimus thoracis|gluteus maximus|gluteus medius|tensor fasciae latae|sartorius|rectus femoris|vastus lateralis|vastus medialis|adductor longus|adductor magnus|gracilis|biceps femoris|semimembranosus|semitendinosus|gastrocnemius|soleus|plantaris|fibularis|tibialis anterior|extensor digitorum longus|extensor hallucis longus|sternocleidomastoid|platysma|frontalis|temporalis|superficial part of masseter|orbicularis oris|orbicularis oculi|buccinator|zygomaticus|nasalis|mentalis|depressor anguli oris|depressor labii inferioris|levator anguli oris|levator labii superioris)/;
 
-const INTERNAL_MUSCLE_PATTERN = /(?:rectus muscle|oblique muscle|tendinous ring|tarsus|palpebrae|pterygoid|arytenoid|cricothyroid|thyro-arytenoid|pharyngeal constrictor|palatopharyngeus|stylopharyngeus|genioglossus|hyoglossus|geniohyoid|mylohyoid|digastric|diaphragm|innermost intercostal|internal intercostal|transversus thoracis|transversus abdominis|pectoralis minor|obturator|gemellus|piriformis|gluteus minimus|psoas|iliacus|quadratus femoris|multifidus|interspinales|intertransversarii|rotatores|pronator quadratus|flexor digitorum profundus|tibialis posterior)/;
-
 export function isSurfaceAnatomyMuscle(name: string): boolean {
   return SURFACE_MUSCLE_PATTERN.test(name.toLowerCase());
 }
 
-export function isRenderableAnatomyMuscle(name: string): boolean {
-  return !INTERNAL_MUSCLE_PATTERN.test(name.toLowerCase());
+export function isAnatomyMuscleVisible(
+  name: string,
+  _mode: "muscles" | "form",
+): boolean {
+  return isSurfaceAnatomyMuscle(name);
 }
 
 export function regionMatchesAnatomyName(region: HighlightRegion, name: string): boolean {

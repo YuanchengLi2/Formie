@@ -11,6 +11,7 @@ import { deriveObservedIssueRegions } from "@/features/analysis/issue-regions";
 import { getResultPresentation } from "@/features/analysis/presentation";
 import { resolvePlaybackWindow, sourceToClipMs, type PlaybackWindow } from "@/features/analysis/playback-window";
 import { buildCoachingReviewPoints, buildReviewFrames, type ReviewFrame, type ReviewPurpose } from "@/features/analysis/review-frames";
+import { scoreLetterGrade } from "@/features/analysis/score-grade";
 import { limitAnalysisSentences, normalizeAnalysisText } from "@/features/analysis/sentences";
 import type { AnalysisResult, AnatomyRegion } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
@@ -279,9 +280,14 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
           <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>MOVEMENT SCORES</Text>
           {presentation.score !== null ? <View testID="movement-score-overall" style={{ gap: spacing.xs, paddingBottom: hasMovementScores ? spacing.sm : 0 }}>
             <Text selectable style={[typography.label, { color: colors.textSecondary }]}>Overall score</Text>
-            <View style={{ flexDirection: "row", alignItems: "baseline", gap: spacing.xs }}>
-              <Text accessibilityLabel={`Overall score ${presentation.score} out of 100`} selectable testID="overall-analysis-score" style={{ color: colors.gold, fontSize: 56, lineHeight: 62, fontWeight: "800", letterSpacing: -1.5, fontVariant: ["tabular-nums"] }}>{presentation.score}</Text>
-              <Text selectable style={[typography.heading, { color: colors.textSecondary }]}>/ 100</Text>
+            <View style={{ width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
+              <View style={{ flexDirection: "row", alignItems: "baseline", gap: spacing.xs }}>
+                <Text accessibilityLabel={`Overall score ${presentation.score} out of 100`} selectable testID="overall-analysis-score" style={{ color: colors.gold, fontSize: 56, lineHeight: 62, fontWeight: "800", letterSpacing: -1.5, fontVariant: ["tabular-nums"] }}>{presentation.score}</Text>
+                <Text selectable style={[typography.heading, { color: colors.textSecondary }]}>/ 100</Text>
+              </View>
+              <View accessibilityLabel={`Letter grade ${scoreLetterGrade(presentation.score)}`} testID="score-grade-stamp" style={{ width: 72, height: 72, alignItems: "center", justifyContent: "center", borderRadius: 10, borderCurve: "continuous", borderWidth: 3, borderColor: colors.gold, backgroundColor: colors.background, transform: [{ rotate: "-11deg" }] }}>
+                <Text selectable style={{ color: colors.gold, fontSize: 43, lineHeight: 48, fontWeight: "900" }}>{scoreLetterGrade(presentation.score)}</Text>
+              </View>
             </View>
           </View> : null}
           {movementScores.length > 0 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="movement-scores" contentContainerStyle={{ gap: spacing.sm }}>

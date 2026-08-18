@@ -10,8 +10,7 @@ import { AnatomyInteractionSurface } from "@/components/anatomy-interaction-surf
 import {
   anatomyHighlightForName,
   fittedAnatomyScale,
-  isRenderableAnatomyMuscle,
-  isSurfaceAnatomyMuscle,
+  isAnatomyMuscleVisible,
   type AnatomyHighlight,
 } from "@/components/anatomy-region-mapping";
 import { anatomyRotationFromDrag, normalizedAnatomyRotation } from "@/components/anatomy-rotation";
@@ -119,7 +118,7 @@ function applyAnatomyMaterials(
 
     const name = searchableName(object);
     const muscle = isMuscle(object);
-    const surfaceMuscle = muscle && (mode === "form" ? isRenderableAnatomyMuscle(name) : isSurfaceAnatomyMuscle(name));
+    const surfaceMuscle = muscle && isAnatomyMuscleVisible(name, mode);
     const structuralBone = mode === "muscles" && !muscle && isStructuralBone(name);
     mesh.visible = surfaceMuscle || structuralBone;
     if (!mesh.visible) return;

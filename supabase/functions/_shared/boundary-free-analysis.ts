@@ -417,14 +417,18 @@ function fallbackMovementScores(analysis: WholeVideoAnalysis): MovementScore[] {
 }
 
 function issueScorePenalty(issue: WholeVideoAnalysis["issues"][number]): number {
-  const prevalenceWeight = { isolated: 1, repeated: 1.6, throughout: 2.2 } as const;
-  const severityWeight = { note: 4, important: 10, high: 18 } as const;
-  const confidenceWeight = 0.65 + 0.35 * Math.max(0, Math.min(1, issue.confidence));
+  const prevalenceWeight = { isolated: 0.65, repeated: 1, throughout: 1.35 } as const;
+  const severityWeight = { note: 6, important: 14, high: 26 } as const;
+  const confidenceWeight = 0.85 + 0.15 * Math.max(0, Math.min(1, issue.confidence));
   return severityWeight[issue.severity] * prevalenceWeight[issue.prevalence] * confidenceWeight;
 }
 
 function combinedIssuePenalty(issues: WholeVideoAnalysis["issues"]): number {
-  return Math.sqrt(issues.reduce((sum, issue) => sum + issueScorePenalty(issue) ** 2, 0));
+  const overlapWeights = [1, 0.75, 0.6, 0.5, 0.4] as const;
+  return issues
+    .map(issueScorePenalty)
+    .sort((left, right) => right - left)
+    .reduce((sum, penalty, index) => sum + penalty * (overlapWeights[index] ?? 0.35), 0);
 }
 
 function scoreFromIssues(issues: WholeVideoAnalysis["issues"]): number {
@@ -725,6 +729,8 @@ export function buildBoundaryFreeAnalysisPrompt(
   return `You are Formie's full-video exercise analyst. The recording is ${durationMs} ms long. ${declaredSetSummary(declaration)}
 
 Watch the complete video from beginning to end once before choosing any issues. Review the beginning, middle, and end so the result represents the entire performed set. Do not count or audit repetitions, assign repetition numbers, or create a repetition timeline. Summarize the performed set and report what the camera clearly shows, partly shows, and does not show. Use that visibility report to avoid guessing about hidden mechanics.
+
+Act as a neutral evaluator, not a source of encouragement. Do not soften a finding, its prevalence, or its severity to make the result feel supportive, and do not inflate the assessment because parts of the set looked acceptable. Grade severity from the visible mechanical effect: high means the fault materially breaks the intended execution, support, control, path, range, or joint position under load; important means a clear, meaningful fault changes execution but does not reach that level; note means a limited deviation with a small mechanical effect. Grade prevalence from the whole recording: isolated appears once or briefly, repeated appears at multiple distinct moments, and throughout is present for most of the visible set.
 
 Identify the four to six highest-consequence distinct form problems visible in the recording. Interpret the declared exercise in context and allow valid variations in technique, equipment configuration, and individual movement. Do not assume that one mandatory setup or textbook style applies to every person or variation. Prioritize issues by their meaningful consequence, not by a preferred category: how much the visible mechanic affects support or control under load, joint position under load, balance or stability, movement path, usable range, or the intended muscle stimulus. Do not prioritize a fault merely because it is easy to notice. Do not include minor form optimizations, cosmetic differences, or unsupported filler. Do not diagnose an injury or claim that an injury will occur; identify the consequential loaded mechanic. Do not duplicate one problem under multiple labels, invent unsupported faults, or request another video pass.
 
