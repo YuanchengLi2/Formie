@@ -202,6 +202,8 @@ describe("ResultsScreen", () => {
     expect(screen.getByTestId("overall-analysis-score").props.children).toBe(75);
     expect(screen.getByTestId("overall-analysis-score").props.accessibilityLabel).toBe("Overall score 75 out of 100");
     expect(screen.getByTestId("score-grade-stamp").props.accessibilityLabel).toBe("Letter grade C");
+    expect(screen.getByTestId("score-grade-stamp").props.style).toEqual(expect.objectContaining({ width: 112, height: 68, marginLeft: 16, marginRight: 8 }));
+    expect(screen.getByText("FORM GRADE")).toBeTruthy();
     expect(screen.getByText("C")).toBeTruthy();
     expect(screen.getByText("MOVEMENT SCORES")).toBeTruthy();
     expect(screen.queryByText("Your early repetitions establish a controlled path.")).toBeNull();

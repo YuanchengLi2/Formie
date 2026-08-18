@@ -280,13 +280,19 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
           <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>MOVEMENT SCORES</Text>
           {presentation.score !== null ? <View testID="movement-score-overall" style={{ gap: spacing.xs, paddingBottom: hasMovementScores ? spacing.sm : 0 }}>
             <Text selectable style={[typography.label, { color: colors.textSecondary }]}>Overall score</Text>
-            <View style={{ width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
-              <View style={{ flexDirection: "row", alignItems: "baseline", gap: spacing.xs }}>
+            <View style={{ width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "flex-start", gap: spacing.sm }}>
+              <View style={{ flexShrink: 1, flexDirection: "row", alignItems: "baseline", gap: spacing.xs }}>
                 <Text accessibilityLabel={`Overall score ${presentation.score} out of 100`} selectable testID="overall-analysis-score" style={{ color: colors.gold, fontSize: 56, lineHeight: 62, fontWeight: "800", letterSpacing: -1.5, fontVariant: ["tabular-nums"] }}>{presentation.score}</Text>
                 <Text selectable style={[typography.heading, { color: colors.textSecondary }]}>/ 100</Text>
               </View>
-              <View accessibilityLabel={`Letter grade ${scoreLetterGrade(presentation.score)}`} testID="score-grade-stamp" style={{ width: 72, height: 72, alignItems: "center", justifyContent: "center", borderRadius: 10, borderCurve: "continuous", borderWidth: 3, borderColor: colors.gold, backgroundColor: colors.background, transform: [{ rotate: "-11deg" }] }}>
-                <Text selectable style={{ color: colors.gold, fontSize: 43, lineHeight: 48, fontWeight: "900" }}>{scoreLetterGrade(presentation.score)}</Text>
+              <View accessibilityLabel={`Letter grade ${scoreLetterGrade(presentation.score)}`} testID="score-grade-stamp" style={{ width: 112, height: 68, flexShrink: 0, marginLeft: spacing.lg, marginRight: spacing.sm, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.sm, borderRadius: 14, borderCurve: "continuous", borderWidth: 2.5, borderColor: colors.gold, backgroundColor: colors.background, boxShadow: "0 2px 0 rgba(200, 169, 107, 0.28)", transform: [{ rotate: "-9deg" }] }}>
+                <View pointerEvents="none" style={{ position: "absolute", inset: 5, borderRadius: 10, borderWidth: 1, borderColor: "rgba(200, 169, 107, 0.58)" }} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.gold }} />
+                  <Text selectable style={{ color: colors.gold, fontSize: 9, lineHeight: 12, fontWeight: "800", letterSpacing: 1.8 }}>FORM GRADE</Text>
+                  <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.gold }} />
+                </View>
+                <Text selectable style={{ color: colors.gold, fontSize: 40, lineHeight: 43, fontWeight: "900", letterSpacing: -0.5 }}>{scoreLetterGrade(presentation.score)}</Text>
               </View>
             </View>
           </View> : null}

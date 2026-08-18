@@ -279,7 +279,7 @@ export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions, mo
     } catch {
       if (mountedRef.current) setFailed(true);
     }
-  }, []);
+  }, [mode]);
 
   const backFacing = normalizedAnatomyRotation(rotation) >= 0.25 && normalizedAnatomyRotation(rotation) < 0.75;
 
