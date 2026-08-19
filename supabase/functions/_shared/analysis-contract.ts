@@ -119,7 +119,18 @@ export type AnalysisCandidate = {
   muscleFocus: MuscleFocus;
   coachNote: string | null;
   score: number | null;
-  scoreRationale: Array<{ criterion: string; observed: string; impact: number | null; confidence: number; evidenceIds: string[] }>;
+  scoreRationale: Array<{
+    criterion: string;
+    observed: string;
+    impact: number | null;
+    confidence: number;
+    evidenceIds: string[];
+    severity?: "note" | "important" | "high";
+    prevalence?: "isolated" | "repeated" | "throughout";
+    scoringConfidence?: number;
+    penalty?: number;
+    rubricVersion?: "severity-v1";
+  }>;
   movementScores?: MovementScore[];
   scorecard: TechniqueScorecard | null;
   equipmentObservations: EquipmentObservation[];

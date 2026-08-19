@@ -117,7 +117,7 @@ export function parseSetDeclaration(value: unknown): SetDeclaration {
   ) throw new Error("Intentional style selection is invalid");
   if (
     declaration.focusNote !== null &&
-    (typeof declaration.focusNote !== "string" || declaration.focusNote.trim().length < 1 || declaration.focusNote.trim().length > 280)
+    (typeof declaration.focusNote !== "string" || declaration.focusNote.trim().length < 1 || declaration.focusNote.trim().length > 120)
   ) throw new Error("Focus note is invalid");
 
   return {

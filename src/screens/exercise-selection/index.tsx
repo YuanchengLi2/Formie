@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Keyboard, ScrollView, Text, TextInput, View } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { Image } from "expo-image";
 
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";
-import type { CatalogExercise } from "@/features/analysis/exercise-catalog";
+import { exerciseSearchHighlightTerms, normalizeExerciseSearch, type CatalogExercise } from "@/features/analysis/exercise-catalog";
 import { inferExerciseFamily, isExerciseFamily } from "@/features/exercises/exercise-family";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
@@ -19,14 +19,15 @@ type ExerciseSelectionScreenProps = {
 
 const benchPressHero = require("../../../assets/production/choose-exercise-bench.png");
 
-function normalizeExerciseMatch(value: string): string {
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLocaleLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
+function HighlightedExerciseName({ name, query }: { name: string; query: string }) {
+  const queryWords = new Set(exerciseSearchHighlightTerms(query));
+  return (
+    <Text style={[typography.heading, { color: colors.text }]}>
+      {name.split(/(\s+)/).map((part, index) => (
+        <Text key={`${part}-${index}`} style={queryWords.has(normalizeExerciseSearch(part)) ? { color: colors.gold } : undefined}>{part}</Text>
+      ))}
+    </Text>
+  );
 }
 
 export function ExerciseSelectionScreen({
@@ -39,13 +40,10 @@ export function ExerciseSelectionScreen({
   const [results, setResults] = useState<CatalogExercise[]>(initialExercise ? [initialExercise] : []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
   const normalizedQuery = query.trim();
   const searchIsActive = normalizedQuery.length >= 2;
-  const exactMatchQuery = normalizeExerciseMatch(normalizedQuery);
-  const hasExactCatalogMatch = results.some((exercise) => (
-    [exercise.name, ...exercise.aliases]
-      .some((candidate) => normalizeExerciseMatch(candidate) === exactMatchQuery)
-  ));
+  const hasCredibleCatalogMatch = results.length > 0;
 
   useEffect(() => {
     const normalized = query.trim();
@@ -56,22 +54,23 @@ export function ExerciseSelectionScreen({
       return;
     }
 
+    const sequence = ++requestSequence.current;
     let active = true;
     const timer = setTimeout(() => {
       setLoading(true);
       setError(null);
       void onSearch(normalized)
         .then((matches) => {
-          if (active) setResults(matches);
+          if (active && sequence === requestSequence.current) setResults(matches);
         })
         .catch(() => {
-          if (active) {
+          if (active && sequence === requestSequence.current) {
             setResults([]);
             setError("Exercises could not be loaded. Retry, or use the exercise name you entered.");
           }
         })
         .finally(() => {
-          if (active) setLoading(false);
+          if (active && sequence === requestSequence.current) setLoading(false);
         });
     }, 180);
 
@@ -142,13 +141,16 @@ export function ExerciseSelectionScreen({
               size={44}
             />
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[typography.heading, { color: colors.text }]}>{exercise.name}</Text>
+              <HighlightedExerciseName name={exercise.name} query={normalizedQuery} />
               <Text style={[typography.caption, { color: colors.textMuted }]}>{exercise.family}</Text>
+              {typeof exercise.mechanics.equipmentClass === "string" ? (
+                <Text style={[typography.caption, { color: colors.textMuted }]}>{exercise.mechanics.equipmentClass}</Text>
+              ) : null}
             </View>
             <Text style={[typography.heading, { color: colors.gold }]}>›</Text>
           </Pressable>
         ))}
-        {!loading && searchIsActive && !hasExactCatalogMatch ? (
+        {!loading && searchIsActive && !hasCredibleCatalogMatch ? (
           <Pressable
             accessibilityLabel={`Use ${normalizedQuery} for setup`}
             accessibilityRole="button"

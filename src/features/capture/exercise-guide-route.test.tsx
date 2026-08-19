@@ -126,7 +126,7 @@ describe("ExerciseGuideRoute", () => {
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
 
-  it("continues directly to Camera without stacking another capture route", async () => {
+  it("continues to Recording Tips without stacking another capture route", async () => {
     mockGetExerciseGuide.mockResolvedValue(guide);
     const screen = await render(<ExerciseGuideRoute />);
     await waitFor(() => expect(screen.getByText("guide:One-Arm Dumbbell Row")).toBeTruthy());
@@ -134,7 +134,7 @@ describe("ExerciseGuideRoute", () => {
     await fireEvent.press(screen.getByLabelText("Continue to Camera"));
 
     expect(mockReplace).toHaveBeenCalledWith({
-      pathname: "/camera",
+      pathname: "/recording-tips",
       params: {},
     });
     expect(mockPush).not.toHaveBeenCalled();
@@ -154,7 +154,7 @@ describe("ExerciseGuideRoute", () => {
 
     expect(useCaptureStore.getState().recording).toBeNull();
     expect(mockReplace).toHaveBeenCalledWith({
-      pathname: "/camera",
+      pathname: "/recording-tips",
       params: { previousSessionId: "session-1" },
     });
     expect(mockGetExerciseGuide).not.toHaveBeenCalled();

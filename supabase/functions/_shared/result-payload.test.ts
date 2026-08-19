@@ -15,6 +15,27 @@ describe("resultPayload", () => {
     };
     expect(resultPayload({ pipeline_version: "gemini-problem-finder-v49", active_v49_run_id: "run-1" }, null, v49)).toBe(v49);
   });
+
+  it("treats the severity-scored whole-video pipeline as a current result", () => {
+    const result = {
+      status: "complete",
+      analysis_basis: "observed",
+      overall_assessment: "Visible set reviewed.",
+      score: 60,
+      score_rationale: [{ criterion: "issue-1", observed: "Knees drift inward.", impact: 18.9, confidence: 1, evidenceIds: ["issue-1:500"], severity: "important", prevalence: "throughout", scoringConfidence: 1, penalty: 18.9 }],
+      movement_scores: [{ id: "overall", label: "Overall Form", score: 60, observed: "The complete set shows one recurring issue.", evidenceIds: ["issue-1"] }],
+      muscle_focus: { primary: [], secondary: [], unclassified: [] },
+      coach_note: "Keep the knees tracking over the feet.",
+      did_well: [], priority_corrections: [], coaching_cues: [], equipment_observations: [],
+      set_context: { cameraView: "front", visibleReferences: ["knees"], sequenceSummary: "The full set was visible.", changeAcrossSet: null, coachingBasis: "Observed mechanics." },
+      set_summary: { totalReps: 8, consistentReps: null, verdict: "Needs more control." },
+      next_set_plan: [], precision_request: { requestedRuns: 0, reason: null, targets: [] }, comparison: null,
+    };
+    const payload = resultPayload({ pipeline_version: "gemini-whole-video-v86-severity-scored", detected_label: "Squat", detected_equipment: [], exercise_family: "squat" }, result);
+    expect(payload?.score).toBe(60);
+    expect(payload?.scoreRationale[0]).toMatchObject({ severity: "important", prevalence: "throughout", penalty: 18.9 });
+    expect(payload?.movementScores?.[0]?.score).toBe(60);
+  });
   it("maps current whole-video results directly and normalizes the retired mixed label on readable v46 results", () => {
     const result = {
       status: "complete",

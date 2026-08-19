@@ -58,6 +58,10 @@ export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControls
     setCurrentTime(nextTime);
   }, [duration, player]);
 
+  const onTimelineMove = (locationX: number) => {
+    seek(locationX);
+  };
+
   const onTimelineLayout = (event: LayoutChangeEvent) => {
     timelineWidthRef.current = Math.max(1, event.nativeEvent.layout.width);
   };
@@ -65,7 +69,8 @@ export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControls
   const progress = safeDuration > 0 ? Math.max(0, Math.min(1, currentTime / safeDuration)) : 0;
 
   return (<>
-    <View style={{ overflow: "hidden", aspectRatio: 16 / 10, borderRadius: radii.lg, borderCurve: "continuous", borderWidth: 1, borderColor: "#3A3A3A", backgroundColor: colors.cameraBlack }}>
+    <View style={{ gap: 4 }}>
+    <View testID="recording-video-frame" style={{ overflow: "hidden", aspectRatio: 1.255, borderRadius: radii.lg, borderCurve: "continuous", borderWidth: 1, borderColor: "#3A3A3A", backgroundColor: colors.cameraBlack }}>
       <VideoView
         accessibilityLabel="Recorded set preview"
         contentFit="contain"
@@ -79,9 +84,9 @@ export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControls
           accessibilityLabel="Play recording preview"
           accessibilityRole="button"
           onPress={togglePlayback}
-          style={{ position: "absolute", top: "50%", left: "50%", width: 72, height: 72, marginTop: -36, marginLeft: -36, alignItems: "center", justifyContent: "center", borderRadius: 36, backgroundColor: "rgba(8,8,8,0.88)" }}
+          style={{ position: "absolute", top: "50%", left: "50%", width: 58, height: 58, marginTop: -29, marginLeft: -29, alignItems: "center", justifyContent: "center", borderRadius: 29, backgroundColor: "rgba(8,8,8,0.82)" }}
         >
-          <View style={{ marginLeft: 4 }}><CaptureReferenceIcon name="play" color={colors.text} size={34} /></View>
+          <View style={{ marginLeft: 3 }}><CaptureReferenceIcon name="play" color={colors.text} size={28} /></View>
         </Pressable>
       ) : null}
 
@@ -91,7 +96,17 @@ export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControls
         </View>
       ) : null}
 
-      <View style={{ position: "absolute", left: 14, right: 14, bottom: 10, minHeight: 34, flexDirection: "row", alignItems: "center", gap: 10 }}>
+      <Pressable
+        accessibilityLabel="View recording fullscreen"
+        accessibilityRole="button"
+        hitSlop={8}
+        onPress={() => setFullscreenOpen(true)}
+        style={{ position: "absolute", top: 10, left: 10, width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 9, backgroundColor: "rgba(20,20,20,0.86)" }}
+      >
+        <CaptureReferenceIcon name="fullscreen" color={colors.text} size={19} />
+      </Pressable>
+
+      <View style={{ position: "absolute", left: 14, right: 14, bottom: 30, minHeight: 34, flexDirection: "row", alignItems: "center", gap: 10 }}>
         <Pressable
           accessibilityLabel={playing ? "Pause recording" : "Play recording"}
           accessibilityRole="button"
@@ -105,7 +120,13 @@ export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControls
           accessibilityLabel="Recording timeline"
           accessibilityRole="adjustable"
           accessibilityValue={{ min: 0, max: Math.round(safeDuration), now: Math.round(currentTime), text: `${formatPlaybackTime(currentTime)} of ${formatPlaybackTime(safeDuration)}` }}
+          onStartShouldSetResponder={() => true}
           onLayout={onTimelineLayout}
+          onPressIn={(event) => {
+            seek(event.nativeEvent.locationX);
+          }}
+          onPressMove={(event) => onTimelineMove(event.nativeEvent.locationX)}
+          onResponderMove={(event) => onTimelineMove(event.nativeEvent.locationX)}
           onPress={(event) => seek(event.nativeEvent.locationX)}
           style={{ flex: 1, height: 30, justifyContent: "center" }}
         >
@@ -114,19 +135,17 @@ export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControls
             <View style={{ position: "absolute", top: -4, left: `${progress * 100}%`, width: 12, height: 12, marginLeft: -6, borderRadius: 6, backgroundColor: colors.gold }} />
           </View>
         </Pressable>
-        <Text selectable style={[typography.caption, { width: 34, color: colors.text, fontSize: 12, lineHeight: 16, textAlign: "right", fontVariant: ["tabular-nums"] }]}>
-          {formatPlaybackTime(currentTime)}
-        </Text>
-        <Pressable
-          accessibilityLabel="View recording fullscreen"
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={() => setFullscreenOpen(true)}
-          style={{ width: 22, height: 30, alignItems: "center", justifyContent: "center" }}
-        >
-          <CaptureReferenceIcon name="fullscreen" color={colors.text} size={20} />
-        </Pressable>
+        <View accessibilityLabel={`Playback time ${formatPlaybackTime(currentTime)} of ${formatPlaybackTime(safeDuration)}`} style={{ minWidth: 72, flexDirection: "row", justifyContent: "flex-end", alignItems: "center" }}>
+          <Text selectable style={[typography.caption, { color: colors.text, fontSize: 12, lineHeight: 16, fontVariant: ["tabular-nums"] }]}>
+            {formatPlaybackTime(currentTime)}
+          </Text>
+          <Text selectable style={[typography.caption, { color: colors.textSecondary, fontSize: 12, lineHeight: 16, fontVariant: ["tabular-nums"] }]}>
+            {` / ${formatPlaybackTime(safeDuration)}`}
+          </Text>
+        </View>
       </View>
+    </View>
+    <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, bottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 }}><Text style={{ color: colors.gold, fontSize: 12 }}>☝</Text><Text selectable style={[typography.caption, { color: colors.textMuted, fontSize: 11, lineHeight: 15 }]}>Drag or swipe to scrub</Text></View>
     </View>
     <Modal animationType="fade" onRequestClose={() => setFullscreenOpen(false)} presentationStyle="fullScreen" visible={fullscreenOpen}>
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.cameraBlack }}>

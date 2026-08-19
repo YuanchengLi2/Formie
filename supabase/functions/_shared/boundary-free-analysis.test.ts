@@ -296,6 +296,16 @@ describe("focused whole-video analyst and writer contract", () => {
     expect(boundaryFreeToCandidate(throughoutHigh, writing(throughoutHigh)).score).toBe(65);
   });
 
+  it("keeps fallback and repaired writer output on the same deterministic issue score", () => {
+    const source = analysis(4);
+    const fallback = boundaryFreeToCandidate(source, normalizeWholeVideoWriting(null, source));
+    const repaired = boundaryFreeToCandidate(source, normalizeWholeVideoWriting({ ...writing(source), movementScores: [] }, source));
+    expect(repaired.score).toBe(fallback.score);
+    expect(repaired.scoreRationale).toEqual(expect.arrayContaining([
+      expect.objectContaining({ severity: source.issues[0].severity, prevalence: source.issues[0].prevalence, penalty: expect.any(Number), scoringConfidence: expect.any(Number) }),
+    ]));
+  });
+
   it("does not spend writer output on numeric scores that the app calculates locally", () => {
     const movementItem = (WHOLE_VIDEO_WRITING_SCHEMA as any).properties.movementScores.items;
     expect(movementItem.required).not.toContain("score");

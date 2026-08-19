@@ -46,7 +46,7 @@ describe("CameraControls", () => {
       <CameraControls phase="idle" countdown={null} elapsedMs={0} error={null} hasRecording={false} zoomed onResetZoom={onResetZoom} onRecord={jest.fn()} onStop={jest.fn()} onRetryUpload={jest.fn()} />,
     );
     expect(screen.queryByText(/pinch to zoom/i)).toBeNull();
-    await fireEvent.press(screen.getByText("Reset view"));
+    await fireEvent.press(screen.getByLabelText("Reset zoom to 1x"));
     expect(onResetZoom).toHaveBeenCalledTimes(1);
   });
 

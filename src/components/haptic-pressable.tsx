@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { forwardRef, type ElementRef } from "react";
-import { Pressable as NativePressable, type PressableProps } from "react-native";
+import { Pressable as NativePressable, type GestureResponderEvent, type PressableProps } from "react-native";
 
 import { useCapturePreferences } from "@/features/capture/capture-preferences";
 
@@ -16,10 +16,16 @@ export function triggerInteractionHaptic(role: PressableProps["accessibilityRole
   void feedback?.catch(() => undefined);
 }
 
-export const HapticPressable = forwardRef<ElementRef<typeof NativePressable>, PressableProps>(function HapticPressable({ onPress, accessibilityRole, ...props }, ref) {
+type HapticPressableProps = PressableProps & {
+  /** Pressability's continuous move callback is omitted from older RN type definitions. */
+  onPressMove?: (event: GestureResponderEvent) => void;
+};
+
+export const HapticPressable = forwardRef<ElementRef<typeof NativePressable>, HapticPressableProps>(function HapticPressable({ onPress, onPressMove, accessibilityRole, ...props }, ref) {
+  const nativeProps = { ...props, ...(onPressMove ? { onPressMove } : {}) } as PressableProps;
   return <NativePressable
     ref={ref}
-    {...props}
+    {...nativeProps}
     accessibilityRole={accessibilityRole}
     onPress={onPress ? (event) => {
       triggerInteractionHaptic(accessibilityRole);

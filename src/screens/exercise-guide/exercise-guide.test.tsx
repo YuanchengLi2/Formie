@@ -141,6 +141,9 @@ describe("ExerciseGuideScreen", () => {
     );
 
     expect(screen.getByLabelText("Loading exercise guide")).toBeTruthy();
+    expect(screen.getByTestId("exercise-guide-skeleton")).toBeTruthy();
+    expect(screen.getByTestId("exercise-guide-skeleton-step-0")).toBeTruthy();
+    expect(screen.queryByText(/%|seconds remaining|minutes remaining/i)).toBeNull();
     await fireEvent.press(screen.getByLabelText("Continue to Camera"));
     expect(onContinue).toHaveBeenCalledTimes(1);
   });

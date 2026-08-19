@@ -1,4 +1,4 @@
-import { cameraZoomPresets, pinchMagnification, pinchZoom, resolveCameraMagnification, resolveCameraZoom, zoomDisplayLabel } from "./camera-zoom";
+import { cameraLensDetent, cameraZoomPresets, lensForMagnification, pinchMagnification, pinchZoom, resolveCameraMagnification, resolveCameraZoom, zoomDisplayLabel } from "./camera-zoom";
 
 describe("camera zoom", () => {
   it("always offers 1x and 2x and adds 0.5x when an ultrawide lens exists", () => {
@@ -32,5 +32,21 @@ describe("camera zoom", () => {
     expect(pinchMagnification(0.5, 4, true)).toBe(2);
     expect(pinchMagnification(1, 0.25, false)).toBe(1);
     expect(pinchMagnification(2, 3, true)).toBe(4);
+  });
+
+  it("keeps a physical lens selected through the 1x boundary with hysteresis", () => {
+    const lenses = ["wideAngleCamera", "ultraWideCamera"];
+    expect(lensForMagnification(0.95, lenses, "wideAngleCamera")).toBe("wideAngleCamera");
+    expect(lensForMagnification(0.93, lenses, "wideAngleCamera")).toBe("ultraWideCamera");
+    expect(lensForMagnification(1.04, lenses, "ultraWideCamera")).toBe("ultraWideCamera");
+    expect(lensForMagnification(1.07, lenses, "ultraWideCamera")).toBe("wideAngleCamera");
+    expect(resolveCameraMagnification(0.95, lenses, "wideAngleCamera").zoom).toBe(0);
+  });
+
+  it("only exposes physical detents for haptic and selected-label transitions", () => {
+    expect(cameraLensDetent(0.5, true)).toBe("0.5x");
+    expect(cameraLensDetent(0.99, true)).toBe("1x");
+    expect(cameraLensDetent(1.76, true)).toBe("2x");
+    expect(cameraLensDetent(0.5, false)).toBe("1x");
   });
 });

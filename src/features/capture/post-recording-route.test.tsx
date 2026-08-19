@@ -215,17 +215,18 @@ describe("post-recording route invariants", () => {
     });
     const screen = await renderRoute(<AnalysisReviewRoute />);
 
-    expect(screen.getByText("Review Recording")).toBeTruthy();
+    expect(screen.getByText("Check Recording")).toBeTruthy();
     expect(screen.getByLabelText("Recorded set preview")).toBeTruthy();
     expect(screen.getByText("1 analysis will be used")).toBeTruthy();
     expect(screen.getByText("10 available now · charged only after completion")).toBeTruthy();
-    expect(screen.getByText("Full body visible")).toBeTruthy();
-    expect(screen.getByText("Good lighting")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("What to check tab"));
+    expect(screen.getByText("Whole body visible.")).toBeTruthy();
+    expect(screen.getByText("Stable and not shaky.")).toBeTruthy();
     expect(screen.queryByText("FINAL CHECK")).toBeNull();
     expect(screen.queryByText(/Formie can only analyze what the camera clearly shows/)).toBeNull();
     expect(screen.queryByText("set-details-screen")).toBeNull();
 
-    await fireEvent.press(screen.getByLabelText("Use Recording"));
+    await fireEvent.press(screen.getByLabelText("Continue"));
 
     expect(mockReplace).toHaveBeenCalledWith("/analysis/set-details");
     expect(useCaptureStore.getState().phase).toBe("recorded");
@@ -235,7 +236,7 @@ describe("post-recording route invariants", () => {
     useCaptureStore.setState({ phase: "recorded", recording });
     const screen = await renderRoute(<AnalysisReviewRoute />);
 
-    await fireEvent.press(screen.getByLabelText("Go back from Review Recording"));
+    await fireEvent.press(screen.getByLabelText("Go back from Check Recording"));
 
     expect(useCaptureStore.getState().recording).toBeNull();
     expect(mockReplace).toHaveBeenCalledWith({ pathname: "/recording-tips", params: {} });
@@ -292,7 +293,7 @@ describe("post-recording route invariants", () => {
 
     const screen = await renderRoute(<AnalysisReviewRoute />);
 
-    expect(screen.getByText("Review Recording")).toBeTruthy();
+    expect(screen.getByText("Check Recording")).toBeTruthy();
     expect(screen.queryByText("set-details-screen")).toBeNull();
   });
 });

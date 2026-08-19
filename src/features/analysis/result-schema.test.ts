@@ -74,7 +74,7 @@ function validResult(): AnalysisResult {
     coachNote: null,
     score: 82,
     scoreRationale: [
-      { criterion: "elbow control", observed: "Forward drift appeared in rep 3", impact: 72, confidence: 0.88 },
+      { criterion: "elbow control", observed: "Forward drift appeared in rep 3", impact: 72, confidence: 0.88, severity: "important", prevalence: "repeated", scoringConfidence: 0.982, penalty: 13.748 },
       { criterion: "torso control", observed: "Torso remained stable", impact: 92, confidence: 0.91 },
     ],
     movementScores: [

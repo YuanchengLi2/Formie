@@ -92,7 +92,7 @@ export function CameraControls({
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.pill, backgroundColor: "rgba(0,0,0,0.58)" }}>
               <Text selectable style={[typography.caption, { color: colors.text }]}>Keep the full movement visible</Text>
-              {zoomed ? <Pressable accessibilityRole="button" onPress={onResetZoom} hitSlop={10}><Text style={[typography.label, { color: colors.gold }]}>Reset view</Text></Pressable> : null}
+              {zoomed ? <Pressable accessibilityLabel="Reset zoom to 1x" accessibilityRole="button" onPress={onResetZoom} hitSlop={10}><Text style={[typography.label, { color: colors.gold }]}>Reset to 1×</Text></Pressable> : null}
             </View>
             <Pressable
               accessibilityLabel="Start countdown"

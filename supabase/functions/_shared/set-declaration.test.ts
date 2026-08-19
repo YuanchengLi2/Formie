@@ -41,4 +41,17 @@ describe("edge set declaration parser", () => {
       focusNote: null,
     })).toThrow(/count scope/i);
   });
+
+  it("enforces the 120-character focus note limit at the server boundary", () => {
+    const base = {
+      exercise: { source: "custom", catalogExerciseId: null, label: "Cable press" },
+      amount: { kind: "reps", value: 8, countScope: "total" },
+      load: { kind: "unknown" },
+      side: null,
+      styles: [],
+    } as const;
+    const note = "x".repeat(120);
+    expect(parseSetDeclaration({ ...base, focusNote: note }).focusNote).toBe(note);
+    expect(() => parseSetDeclaration({ ...base, focusNote: `${note}x` })).toThrow(/focus note/i);
+  });
 });

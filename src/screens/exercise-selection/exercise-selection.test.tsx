@@ -108,7 +108,7 @@ describe("ExerciseSelectionScreen", () => {
     expect(onGenerateCustomGuide).toHaveBeenCalledWith("Jefferson curl");
   });
 
-  it("offers the typed exercise when fuzzy catalog suggestions do not exactly match it", async () => {
+  it("does not offer custom text while a credible catalog suggestion exists", async () => {
     const fuzzyResult: CatalogExercise = {
       id: 301,
       name: "Single Arm Dumbbell Overhead Triceps Extension",
@@ -130,7 +130,27 @@ describe("ExerciseSelectionScreen", () => {
     });
 
     await waitFor(() => expect(screen.getByText(fuzzyResult.name)).toBeTruthy());
-    expect(screen.getByLabelText("Use seated one arm dumbbell extensions for setup")).toBeTruthy();
+    expect(screen.queryByLabelText("Use seated one arm dumbbell extensions for setup")).toBeNull();
+  });
+
+  it("ignores a late response from an older query", async () => {
+    let resolveFirst: ((value: CatalogExercise[]) => void) | undefined;
+    const first = new Promise<CatalogExercise[]>((resolve) => { resolveFirst = resolve; });
+    const onSearch = jest.fn((value: string) => value === "first" ? first : Promise.resolve([row]));
+    const screen = await render(
+      <ExerciseSelectionScreen onSearch={onSearch} onSelect={jest.fn()} onGenerateCustomGuide={jest.fn()} />,
+    );
+
+    await act(async () => {
+      fireEvent.changeText(screen.getByLabelText("Search exercises"), "first");
+      await new Promise((resolve) => setTimeout(resolve, 220));
+      fireEvent.changeText(screen.getByLabelText("Search exercises"), "second");
+      await new Promise((resolve) => setTimeout(resolve, 220));
+    });
+    await waitFor(() => expect(screen.getByText(row.name)).toBeTruthy());
+    await act(async () => { resolveFirst?.([{ ...row, id: 999, name: "Stale exercise" }]); });
+    expect(screen.queryByText("Stale exercise")).toBeNull();
+    expect(screen.getByText(row.name)).toBeTruthy();
   });
 
   it("keeps a typed custom exercise selectable when the remote catalog is unavailable", async () => {

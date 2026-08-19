@@ -88,6 +88,11 @@ const scoreRationaleSchema = z.object({
   impact: z.number().min(0).max(100).nullable(),
   confidence: z.number().min(0).max(1),
   evidenceIds: z.array(z.string().min(1)).optional(),
+  severity: z.enum(["note", "important", "high"]).optional(),
+  prevalence: z.enum(["isolated", "repeated", "throughout"]).optional(),
+  scoringConfidence: z.number().min(0).max(1).optional(),
+  penalty: z.number().min(0).max(100).optional(),
+  rubricVersion: z.literal("severity-v1").optional(),
 });
 
 const movementScoreSchema = z.object({

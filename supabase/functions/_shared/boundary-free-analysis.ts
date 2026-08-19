@@ -8,6 +8,7 @@ import type {
   MovementScore,
 } from "./analysis-contract.ts";
 import type { SetDeclaration } from "./set-declaration.ts";
+import { scoreForIssueIds, scoreIssues, type ScoredIssueInput } from "./issue-score.ts";
 
 export type WholeVideoEvidence = {
   startMs: number;
@@ -416,23 +417,8 @@ function fallbackMovementScores(analysis: WholeVideoAnalysis): MovementScore[] {
   ], analysis);
 }
 
-function issueScorePenalty(issue: WholeVideoAnalysis["issues"][number]): number {
-  const prevalenceWeight = { isolated: 0.65, repeated: 1, throughout: 1.35 } as const;
-  const severityWeight = { note: 6, important: 14, high: 26 } as const;
-  const confidenceWeight = 0.85 + 0.15 * Math.max(0, Math.min(1, issue.confidence));
-  return severityWeight[issue.severity] * prevalenceWeight[issue.prevalence] * confidenceWeight;
-}
-
-function combinedIssuePenalty(issues: WholeVideoAnalysis["issues"]): number {
-  const overlapWeights = [1, 0.75, 0.6, 0.5, 0.4] as const;
-  return issues
-    .map(issueScorePenalty)
-    .sort((left, right) => right - left)
-    .reduce((sum, penalty, index) => sum + penalty * (overlapWeights[index] ?? 0.35), 0);
-}
-
-function scoreFromIssues(issues: WholeVideoAnalysis["issues"]): number {
-  return Math.max(0, Math.min(100, Math.round(100 - combinedIssuePenalty(issues))));
+function asScoredIssues(issues: WholeVideoAnalysis["issues"]): ScoredIssueInput[] {
+  return issues.map(({ id, severity, prevalence, confidence }) => ({ id, severity, prevalence, confidence }));
 }
 
 function calibrateMovementScores(scores: Array<Omit<MovementScore, "score">>, analysis: WholeVideoAnalysis): MovementScore[] {
@@ -441,7 +427,7 @@ function calibrateMovementScores(scores: Array<Omit<MovementScore, "score">>, an
     const issues = movementScore.evidenceIds
       .map((issueId) => byId.get(issueId))
       .filter((issue): issue is WholeVideoAnalysis["issues"][number] => issue !== undefined);
-    return { ...movementScore, score: scoreFromIssues(issues) };
+    return { ...movementScore, score: scoreForIssueIds(asScoredIssues(issues), movementScore.evidenceIds).score };
   });
 }
 
@@ -517,7 +503,11 @@ export function boundaryFreeToCandidate(
   const equipment = recognitionContext.equipment
     ?? (declaration?.load.kind === "bodyweight" ? ["bodyweight"] : []);
   const movementScores = calibrateMovementScores(writing.movementScores, analysis);
-  const score = movementScores.length > 0 ? scoreFromIssues(analysis.issues) : null;
+  // The analyst owns the complete issue set. The writer only supplies prose
+  // and category IDs, so score even when writer categories are repaired or
+  // temporarily absent.
+  const issueScore = scoreIssues(asScoredIssues(analysis.issues));
+  const score = issueScore.score;
   const muscleFocus = writing.muscleFocus;
   const visibleReferences = [...new Set([
     ...analysis.visibility.clearlyVisible,
@@ -547,13 +537,21 @@ export function boundaryFreeToCandidate(
     muscleFocus,
     coachNote: writing.coachNote,
     score,
-    scoreRationale: movementScores.map((item) => ({
-      criterion: item.id,
-      observed: item.observed,
-      impact: item.score,
-      confidence: 0.7,
-      evidenceIds: item.evidenceIds,
-    })),
+    scoreRationale: issueScore?.issues.map((detail) => {
+      const issue = analysis.issues.find((candidate) => candidate.id === detail.issueId)!;
+      return {
+        criterion: detail.issueId,
+        observed: issue.observation,
+        impact: detail.penalty,
+        confidence: detail.scoringConfidence,
+        evidenceIds: issue.evidence.map((moment) => `${detail.issueId}:${moment.peakMs}`),
+        severity: detail.severity,
+        prevalence: detail.prevalence,
+        scoringConfidence: detail.scoringConfidence,
+        penalty: detail.penalty,
+        rubricVersion: detail.rubricVersion,
+      };
+    }) ?? [],
     movementScores,
     scorecard: null,
     equipmentObservations: [],

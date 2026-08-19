@@ -39,6 +39,7 @@ export default function AnalysisSetDetailsRoute() {
   return (
     <SetDeclarationScreen
       localVideoUri={recording.localUri}
+      onBack={() => router.replace("/analysis/review")}
       initialDeclaration={declaration}
       preselectedExercise={exerciseChoice.kind === "selected" ? exerciseChoice : null}
       initialExerciseName={exerciseChoice.kind === "custom" ? exerciseChoice.canonicalName : undefined}

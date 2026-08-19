@@ -81,11 +81,15 @@ describe("ReferenceVideoControls", () => {
 
     await act(async () => mockListeners.timeUpdate?.({ currentTime: 7.8 }));
     expect(screen.getByText("0:07")).toBeTruthy();
+    expect(screen.getByText(" / 0:18")).toBeTruthy();
+    expect(screen.getByText("Drag or swipe to scrub")).toBeTruthy();
 
     const timeline = screen.getByLabelText("Recording timeline");
     await fireEvent(timeline, "layout", { nativeEvent: { layout: { width: 200 } } });
     await fireEvent.press(timeline, { nativeEvent: { locationX: 250 } });
     expect(mockCurrentTime).toBe(18);
+    await fireEvent(timeline, "responderMove", { nativeEvent: { locationX: 50 } });
+    expect(mockCurrentTime).toBe(4.5);
 
     await fireEvent.press(screen.getByLabelText("View recording fullscreen"));
     expect(screen.getByLabelText("Fullscreen recording preview")).toBeTruthy();

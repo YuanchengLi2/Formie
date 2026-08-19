@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
-import { useState } from "react";
-import { ActivityIndicator, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { useEffect, useState } from "react";
+import { AccessibilityInfo, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -68,6 +69,48 @@ function TutorialCard({ tutorial, onOpen }: { tutorial: TutorialVideo; onOpen: (
   );
 }
 
+function GuideSkeleton() {
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const opacity = useSharedValue(0.52);
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  useEffect(() => {
+    const getPreference = AccessibilityInfo.isReduceMotionEnabled;
+    if (typeof getPreference === "function") {
+      void getPreference().then(setReducedMotion).catch(() => undefined);
+    }
+  }, []);
+  useEffect(() => {
+    if (reducedMotion) {
+      opacity.value = 0.62;
+      return () => cancelAnimation(opacity);
+    }
+    opacity.value = withRepeat(withTiming(0.9, { duration: 850 }), -1, true);
+    return () => cancelAnimation(opacity);
+  }, [opacity, reducedMotion]);
+
+  const bar = (width: `${number}%` | number, height = 14) => (
+    <Animated.View style={[{ width, height, borderRadius: 7, backgroundColor: colors.surfaceRaised }, animatedStyle]} />
+  );
+  return (
+    <Animated.View accessibilityLabel="Loading exercise guide" testID="exercise-guide-skeleton" style={[{ gap: spacing.lg }, animatedStyle]}>
+      <View style={{ overflow: "hidden", aspectRatio: 16 / 9, borderRadius: radii.lg, backgroundColor: colors.surfaceRaised }} />
+      <View style={{ height: 44, flexDirection: "row", gap: spacing.sm }}>
+        {bar("50%", 44)}
+        {bar("50%", 44)}
+      </View>
+      <View style={{ gap: spacing.md }}>
+        {[0, 1, 2].map((index) => (
+          <View key={index} testID={`exercise-guide-skeleton-step-${index}`} style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+            {bar(28, 20)}
+            {bar(index === 1 ? "82%" : "92%", 18)}
+          </View>
+        ))}
+      </View>
+      <View style={{ height: 66, borderRadius: radii.lg, backgroundColor: colors.surfaceRaised }} />
+    </Animated.View>
+  );
+}
+
 export function ExerciseGuideScreen({
   exerciseName,
   guide,
@@ -108,19 +151,12 @@ export function ExerciseGuideScreen({
             <Text selectable style={[typography.body, { color: colors.gold, fontSize: 16, lineHeight: 21 }]}>
               {formatExerciseFamily(guide.exercise.family)}
             </Text>
-          ) : null}
+          ) : loading ? <View style={{ width: 110, height: 17, borderRadius: 8, backgroundColor: colors.surfaceRaised }} /> : null}
         </View>
 
         {guide?.tutorial ? <TutorialCard tutorial={guide.tutorial} onOpen={() => onOpenTutorial(guide.tutorial!)} /> : null}
 
-        {loading ? (
-          <View style={{ minHeight: compact ? 190 : 230, alignItems: "center", justifyContent: "center", gap: spacing.md, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
-            <ActivityIndicator accessibilityLabel="Loading exercise guide" color={colors.gold} />
-            <Text selectable style={[typography.body, { color: colors.textSecondary }]}>Preparing your exercise guide…</Text>
-          </View>
-        ) : null}
-
-        {guide ? (
+        {loading ? <GuideSkeleton /> : guide ? (
           <>
             <View testID="exercise-guide-tabs" style={{ minHeight: 44, flexDirection: "row", padding: 2, borderRadius: 10, borderCurve: "continuous", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
               {guideTabs.map((tab) => {

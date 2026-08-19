@@ -14,7 +14,9 @@ export type CaptureReferenceIconName =
   | "phone"
   | "lighting"
   | "check"
-  | "fullscreen";
+  | "fullscreen"
+  | "shieldCheck"
+  | "list";
 
 type CaptureReferenceIconProps = {
   name: CaptureReferenceIconName;
@@ -104,6 +106,22 @@ export function CaptureReferenceIcon({
       {name === "fullscreen" ? (
         <>
           <Path {...common} d="M8.5 4H4v4.5M15.5 4H20v4.5M20 15.5V20h-4.5M8.5 20H4v-4.5" />
+        </>
+      ) : null}
+      {name === "shieldCheck" ? (
+        <>
+          <Path {...common} d="M12 2.8 19 5.5v5.8c0 4.7-2.8 7.9-7 9.9-4.2-2-7-5.2-7-9.9V5.5L12 2.8Z" />
+          <Path {...common} d="m8.7 12 2.1 2.1 4.5-5" strokeWidth="2" />
+        </>
+      ) : null}
+      {name === "list" ? (
+        <>
+          <Circle cx="5" cy="7" fill={color} r="1" />
+          <Circle cx="5" cy="12" fill={color} r="1" />
+          <Circle cx="5" cy="17" fill={color} r="1" />
+          <Line {...common} x1="9" x2="20" y1="7" y2="7" />
+          <Line {...common} x1="9" x2="20" y1="12" y2="12" />
+          <Line {...common} x1="9" x2="20" y1="17" y2="17" />
         </>
       ) : null}
     </Svg>

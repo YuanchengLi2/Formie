@@ -97,13 +97,13 @@ export default function ExerciseGuideRoute() {
           analysisUploadCoordinator.reset();
           dispatch({ type: "discard_recording" });
           router.replace({
-            pathname: "/camera",
+            pathname: "/recording-tips",
             params: previousSessionId ? { previousSessionId } : {},
           });
           return;
         }
         router.replace({
-          pathname: "/camera",
+          pathname: "/recording-tips",
           params: previousSessionId ? { previousSessionId } : {},
         });
       }}

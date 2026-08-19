@@ -54,7 +54,7 @@ export const setDeclarationSchema = z.object({
     (styles) => new Set(styles).size === styles.length,
     "Each intentional style can only be selected once",
   ),
-  focusNote: z.string().trim().min(1).max(280).nullable(),
+  focusNote: z.string().trim().min(1).max(120).nullable(),
 }).strict();
 
 export type SetDeclaration = z.infer<typeof setDeclarationSchema>;

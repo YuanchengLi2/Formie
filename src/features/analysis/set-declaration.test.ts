@@ -56,6 +56,12 @@ describe("set declaration", () => {
     }).amount).toEqual({ kind: "seconds", value: 45, countScope: null });
   });
 
+  it("caps focus notes at the 120-character reference limit", () => {
+    const note = "x".repeat(120);
+    expect(parseSetDeclaration({ ...validDeclaration, focusNote: note }).focusNote).toBe(note);
+    expect(() => parseSetDeclaration({ ...validDeclaration, focusNote: `${note}x` })).toThrow(/120|too big/i);
+  });
+
   it.each([
     [{ ...validDeclaration, exercise: { source: "catalog", catalogExerciseId: null, label: "Bench press" } }, /catalog exercise/i],
     [{ ...validDeclaration, exercise: { source: "custom", catalogExerciseId: 2, label: "Custom press" } }, /custom exercise/i],

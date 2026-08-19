@@ -45,7 +45,7 @@ function renderReview(element: ReactElement) {
 }
 
 describe("RecordingReviewScreen", () => {
-  it("shows the exact reference hierarchy with a real projected remaining balance", async () => {
+  it("shows one full-width Check Recording page with Video and What to check tabs", async () => {
     const onRetake = jest.fn();
     const onUseRecording = jest.fn();
     const screen = await renderReview(
@@ -57,27 +57,28 @@ describe("RecordingReviewScreen", () => {
       />,
     );
 
-    expect(screen.getByText("Review Recording")).toBeTruthy();
+    expect(screen.getByText(/Tell Formie/)).toBeTruthy();
+    expect(screen.getByLabelText("Video tab")).toBeTruthy();
+    expect(screen.getByLabelText("What to check tab")).toBeTruthy();
     expect(screen.getByLabelText("Recorded set preview")).toBeTruthy();
-    expect(screen.getByText("Before you continue")).toBeTruthy();
-    expect(screen.getByText("A clear angle gives you a more accurate analysis.")).toBeTruthy();
-    expect(screen.getByText("Full body visible")).toBeTruthy();
-    expect(screen.getByText("Side angle")).toBeTruthy();
-    expect(screen.getByText("Phone level")).toBeTruthy();
-    expect(screen.getByText("Good lighting")).toBeTruthy();
+    expect(screen.getByText("Drag or swipe to scrub")).toBeTruthy();
+    expect(screen.queryByText("Camera isn’t too far away.")).toBeNull();
+    await fireEvent.press(screen.getByLabelText("What to check tab"));
+    expect(screen.getByText("Camera isn’t too far away")).toBeTruthy();
+    expect(screen.getByText("Whole movement visible")).toBeTruthy();
+    expect(screen.getByText("Camera stays in the same position")).toBeTruthy();
     expect(screen.getByText("1 analysis will be used")).toBeTruthy();
-    expect(screen.getByText("10 available now · charged only after completion")).toBeTruthy();
+    expect(screen.getByText("10 available now")).toBeTruthy();
     expect(screen.getByTestId("recording-review-scroll").props.nestedScrollEnabled).toBe(true);
     expect(screen.queryByText("FINAL CHECK")).toBeNull();
     expect(screen.queryByText("Is this recording ready?")).toBeNull();
     expect(screen.getByTestId("recording-review-checklist").props.style).toEqual(expect.objectContaining({ borderRadius: 16 }));
-    expect(screen.getByTestId("recording-review-actions").props.style).toEqual(expect.objectContaining({ flexDirection: "row" }));
+    expect(screen.getByTestId("recording-review-check-row-0").props.style).toEqual(expect.objectContaining({ width: "100%" }));
 
-    await fireEvent.press(screen.getByLabelText("Go back from Review Recording"));
-    await fireEvent.press(screen.getByLabelText("Record Again"));
-    expect(onRetake).toHaveBeenCalledTimes(2);
+    await fireEvent.press(screen.getByLabelText("Go back from Check Recording"));
+    expect(onRetake).toHaveBeenCalledTimes(1);
 
-    await fireEvent.press(screen.getByLabelText("Use Recording"));
+    await fireEvent.press(screen.getByLabelText("Continue"));
     expect(onUseRecording).toHaveBeenCalledTimes(1);
   });
 
@@ -91,7 +92,7 @@ describe("RecordingReviewScreen", () => {
       />,
     );
 
-    expect(screen.getByText("Balance updates after a completed analysis")).toBeTruthy();
+    expect(screen.getByText("Balance updates after analysis")).toBeTruthy();
     expect(screen.queryByText(/remaining this month/)).toBeNull();
   });
 });

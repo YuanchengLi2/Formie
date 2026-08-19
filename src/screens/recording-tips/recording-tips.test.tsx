@@ -1,24 +1,29 @@
 import { fireEvent, render } from "@testing-library/react-native";
 
 import { RecordingTipsScreen } from "./index";
+import { RECORDING_CHECKS } from "@/features/capture/recording-checks";
 
 describe("RecordingTipsScreen", () => {
   it("shows forgiving phone-placement guidance", async () => {
     const screen = await render(<RecordingTipsScreen onContinue={jest.fn()} onOpenSpaceHelp={jest.fn()} />);
 
     expect(screen.getByText("Set up your camera.")).toBeTruthy();
-    expect(screen.queryByText(
-      "Front, side, back, low, and high views are all okay. Keep the complete movement and exercise-critical areas clear and undistorted.",
-    )).toBeNull();
-    expect(screen.getByText(
-      "Front, side, back, low, or high: keep the complete movement clear and undistorted",
-    )).toBeTruthy();
+    expect(screen.getByText("Camera isn’t too far away.")).toBeTruthy();
+    expect(screen.getByText("Whole body visible.")).toBeTruthy();
     expect(screen.queryByText(/Use the rear camera for better quality/)).toBeNull();
-    expect(screen.getByText("Use 0.5x if space is limited")).toBeTruthy();
-    expect(screen.getByText("Keep the working joints, equipment, and support in frame")).toBeTruthy();
+    expect(screen.getByText("Stable and not shaky.")).toBeTruthy();
+    expect(screen.getByText("Nothing blocks your body.")).toBeTruthy();
     expect(screen.getByLabelText("Animated phone placement guide")).toBeTruthy();
     expect(screen.getByTestId("recording-tips-motion-card")).toBeTruthy();
-    expect(screen.getAllByTestId(/recording-tip-row-/)).toHaveLength(4);
+    expect(screen.getAllByTestId(/recording-tip-row-/)).toHaveLength(6);
+    expect(RECORDING_CHECKS).toEqual([
+      "Camera isn’t too far away.",
+      "Whole body visible.",
+      "Whole movement visible.",
+      "Stable and not shaky.",
+      "Nothing blocks your body.",
+      "Camera stays in the same position.",
+    ]);
     expect(screen.queryByLabelText("Phone placement from the production mockup")).toBeNull();
     expect(screen.queryByText(/recording|record your|video upload|private video/i)).toBeNull();
     expect(screen.queryByText(/squat|curl|press/i)).toBeNull();

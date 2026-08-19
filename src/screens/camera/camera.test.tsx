@@ -6,6 +6,7 @@ const mockReplace = jest.fn();
 const mockGetAvailableLensesAsync = jest.fn<Promise<string[]>, []>();
 let mockPinchBegin: (() => void) | undefined;
 let mockPinchUpdate: ((event: { scale: number }) => void) | undefined;
+let mockPinchEnd: ((event: { scale: number }) => void) | undefined;
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ back: mockBack, replace: mockReplace }),
@@ -27,6 +28,7 @@ jest.mock("expo-camera", () => {
 
 jest.mock("expo-haptics", () => ({
   notificationAsync: jest.fn(),
+  selectionAsync: jest.fn(),
   NotificationFeedbackType: { Success: "success" },
 }));
 
@@ -40,6 +42,7 @@ jest.mock("react-native-gesture-handler", () => {
     runOnJS: () => pinch,
     onBegin: (callback: () => void) => { mockPinchBegin = callback; return pinch; },
     onUpdate: (callback: (event: { scale: number }) => void) => { mockPinchUpdate = callback; return pinch; },
+    onFinalize: (callback: (event: { scale: number }) => void) => { mockPinchEnd = callback; return pinch; },
   };
   return { Gesture: { Pinch: () => pinch }, GestureDetector: View };
 });
@@ -65,6 +68,7 @@ describe("CameraScreen capture lifecycle", () => {
     mockGetAvailableLensesAsync.mockReset();
     mockPinchBegin = undefined;
     mockPinchUpdate = undefined;
+    mockPinchEnd = undefined;
     (analysisUploadCoordinator.reset as jest.Mock).mockClear();
     useCaptureStore.getState().dispatch({ type: "reset" });
     useCaptureStore.getState().dispatch({
@@ -150,6 +154,17 @@ describe("CameraScreen capture lifecycle", () => {
     expect(screen.getByLabelText("Camera zoom 0.5x").props.accessibilityState).toEqual({ selected: true });
   });
 
+  it("returns Reset to 1x to the wide physical lens after ultrawide use", async () => {
+    const screen = await render(<CameraScreen />);
+    const preview = screen.getByLabelText("Camera preview");
+    await act(async () => preview.props.onAvailableLensesChanged({ lenses: ["wideAngleCamera", "ultraWideCamera"] }));
+    await fireEvent.press(screen.getByLabelText("Camera zoom 0.5x"));
+    expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("ultraWideCamera");
+    await fireEvent.press(screen.getByLabelText("Reset zoom to 1x"));
+    expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("wideAngleCamera");
+    expect(screen.getByLabelText("Camera zoom 1x").props.accessibilityState).toEqual({ selected: true });
+  });
+
   it("discovers the native ultrawide lens when the camera becomes ready", async () => {
     mockGetAvailableLensesAsync.mockResolvedValue(["builtInWideAngleCamera", "builtInUltraWideCamera"]);
     const screen = await render(<CameraScreen />);
@@ -168,6 +183,7 @@ describe("CameraScreen capture lifecycle", () => {
     await act(async () => {
       mockPinchBegin?.();
       mockPinchUpdate?.({ scale: 0.5 });
+      mockPinchEnd?.({ scale: 0.5 });
     });
 
     expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("ultraWideCamera");

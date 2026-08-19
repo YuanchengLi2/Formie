@@ -1,5 +1,5 @@
 begin;
-select plan(56);
+select plan(59);
 
 select has_table('public', 'analysis_sessions', 'analysis_sessions exists');
 select has_table('public', 'analysis_results', 'analysis_results exists');
@@ -54,14 +54,29 @@ select has_function(
   array['text', 'integer'],
   'exercise catalog exposes bounded name and alias search'
 );
+select has_function(
+  'public',
+  'search_exercise_variants_v2',
+  array['text', 'integer'],
+  'v2 exercise catalog search is available at the RPC boundary'
+);
+select ok(
+  (select count(*) <= 20 from public.search_exercise_variants_v2('press', 99)),
+  'v2 exercise search clamps the requested result count to twenty'
+);
+select is(
+  (select name from public.search_exercise_variants_v2('Dumbbell Bench Press', 20) limit 1),
+  'Flat Dumbbell Bench Press',
+  'v2 exact exercise search ranks the canonical base variation first'
+);
 select ok(
   (select count(*) <= 12 from public.search_exercise_variants('press', 99)),
   'exercise search never returns more than 12 variants'
 );
 select is(
   (select name from public.search_exercise_variants('Dumbbell Bench Press', 12) limit 1),
-  'Dumbbell Bench Press',
-  'an exact exercise name ranks first'
+  'Flat Dumbbell Bench Press',
+  'the legacy search wrapper uses the corrected canonical base ranking'
 );
 select has_function(
   'public',

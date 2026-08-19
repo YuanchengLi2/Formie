@@ -34,7 +34,7 @@ function isWholeVideoPipeline(value: unknown): boolean {
   const version = String(value ?? "");
   if (WHOLE_VIDEO_PIPELINES.has(version)) return true;
   const match = version.match(/^gemini-whole-video-v(\d+)(?:-|$)/);
-  return Boolean(match && Number(match[1]) >= 57 && Number(match[1]) <= 68);
+  return Boolean(match && Number(match[1]) >= 57);
 }
 
 function currentResultPayload(session: Record<string, unknown>, result: Record<string, unknown>): AnalysisCandidate {

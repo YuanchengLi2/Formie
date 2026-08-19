@@ -2,6 +2,12 @@ name: Build iOS locally and submit to TestFlight
 
 on:
   workflow_dispatch:
+    inputs:
+      submit_to_testflight:
+        description: Submit the completed IPA to TestFlight
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - codex/ios-3d-tracking-scoring
@@ -54,4 +60,5 @@ jobs:
         run: eas build --platform ios --profile production --local --non-interactive --output ./Formie.ipa
 
       - name: Submit IPA to TestFlight
+        if: ${{ inputs.submit_to_testflight == true }}
         run: eas submit --platform ios --profile production --path ./Formie.ipa --non-interactive --wait

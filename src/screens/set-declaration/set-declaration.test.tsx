@@ -133,9 +133,9 @@ describe("SetDeclarationScreen", () => {
     );
 
     expect(StyleSheet.flatten(screen.getByTestId("set-declaration-scroll").props.contentContainerStyle)).toMatchObject({
-      paddingTop: 63,
-      paddingBottom: 66,
-      paddingHorizontal: 16,
+      paddingTop: 59,
+      paddingBottom: 58,
+      paddingHorizontal: 20,
     });
   });
 
@@ -210,6 +210,7 @@ describe("SetDeclarationScreen", () => {
     await fireEvent.press(screen.getByLabelText("Analyze Again"));
     expect(onAnalyze).toHaveBeenCalledWith({
       ...savedUnilateralDeclaration,
+      side: null,
       styles: [],
     });
   });
@@ -249,5 +250,30 @@ describe("SetDeclarationScreen", () => {
     expect(screen.queryByLabelText("Retake")).toBeNull();
     await fireEvent.press(screen.getByLabelText("Re-record this set"));
     expect(onRetake).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears hidden count and load fields instead of submitting stale values", async () => {
+    const onAnalyze = jest.fn();
+    const screen = await renderDeclaration(
+      <SetDeclarationScreen
+        localVideoUri="file:///set.mp4"
+        onAnalyze={onAnalyze}
+        onRetake={jest.fn()}
+      />,
+    );
+    await fireEvent.changeText(screen.getByLabelText("Exact exercise"), "Bench press");
+    await fireEvent.changeText(screen.getByLabelText("Completed amount"), "8");
+    await fireEvent.press(screen.getByLabelText("Count is total"));
+    await fireEvent.press(screen.getByLabelText("Known weight"));
+    await fireEvent.changeText(screen.getByLabelText("Load value"), "40");
+    await fireEvent.press(screen.getByLabelText("Measure in seconds"));
+    await fireEvent.press(screen.getByLabelText("Bodyweight load"));
+    await fireEvent.changeText(screen.getByLabelText("Completed amount"), "30");
+    await fireEvent.press(screen.getByLabelText("Submit for Analysis"));
+
+    expect(onAnalyze).toHaveBeenCalledWith(expect.objectContaining({
+      amount: { kind: "seconds", value: 30, countScope: null },
+      load: { kind: "bodyweight" },
+    }));
   });
 });
