@@ -105,6 +105,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const wideWorkspace = width >= 820;
+  const narrowScoreCard = width < 350;
   const presentation = getResultPresentation(result);
   const points = useMemo(() => buildCoachingReviewPoints(result), [result]);
   const synchronizedReviewFrames = useMemo(() => buildReviewFrames(result).observed, [result]);
@@ -277,21 +278,21 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
         <MuscleFocusFigure focus={exerciseMuscleFocus} issueRegions={issueRegions} />
       </View> : null}
 
-      {hasScoreContent ? <View testID="movement-scores-section" style={{ width: "100%", gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.goldSoft }}>
-        {hasScoreContent ? <View style={{ width: "100%", gap: spacing.md }}>
+      {hasScoreContent ? <View testID="movement-scores-section" style={{ width: "100%", gap: 12, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 11, borderRadius: radii.md, borderCurve: "continuous", borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.goldSoft }}>
+        {hasScoreContent ? <View style={{ width: "100%", gap: 12 }}>
           <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>MOVEMENT SCORES</Text>
-          {presentation.score !== null ? <View testID="movement-score-overall" style={{ gap: spacing.xs, paddingBottom: hasMovementScores ? spacing.sm : 0 }}>
+          {presentation.score !== null ? <View testID="movement-score-overall" style={{ gap: 3, paddingBottom: hasMovementScores ? 3 : 0 }}>
             <Text selectable style={[typography.label, { color: colors.textSecondary }]}>Overall score</Text>
-            <View style={{ width: "100%", flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+            <View testID="movement-score-overall-row" style={{ width: "100%", height: 83, flexDirection: "row", alignItems: "center", gap: 10 }}>
               <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "baseline", gap: spacing.xs }}>
-                <Text accessibilityLabel={`Overall score ${presentation.score} out of 100`} selectable testID="overall-analysis-score" style={{ color: colors.gold, fontSize: 56, lineHeight: 62, fontWeight: "800", letterSpacing: -1.5, fontVariant: ["tabular-nums"], flexShrink: 1 }}>{presentation.score}</Text>
-                <Text selectable style={[typography.heading, { color: colors.textSecondary }]}>/ 100</Text>
+                <Text accessibilityLabel={`Overall score ${presentation.score} out of 100`} selectable testID="overall-analysis-score" style={{ color: colors.gold, fontSize: narrowScoreCard ? 43 : 47, lineHeight: narrowScoreCard ? 48 : 52, fontWeight: "800", letterSpacing: -1.2, fontVariant: ["tabular-nums"], flexShrink: 1 }}>{presentation.score}</Text>
+                <Text selectable style={{ color: colors.textSecondary, fontSize: narrowScoreCard ? 14 : 16, lineHeight: 21, fontWeight: "700" }}>/ 100</Text>
               </View>
-              <View accessibilityLabel={`Letter grade ${scoreLetterGrade(presentation.score)}`} testID="score-grade-stamp" style={{ width: 124, height: 124, flexShrink: 0, marginLeft: "auto", alignItems: "center", justifyContent: "center" }}>
-                <Image pointerEvents="none" accessibilityElementsHidden source={formGradeSeal} contentFit="contain" style={{ position: "absolute", inset: 0, width: 124, height: 124 }} />
+              <View accessibilityLabel={`Letter grade ${scoreLetterGrade(presentation.score)}`} testID="score-grade-stamp" style={{ width: narrowScoreCard ? 74 : 80, height: narrowScoreCard ? 74 : 80, flexShrink: 0, marginLeft: "auto", alignItems: "center", justifyContent: "center", transform: [{ translateY: narrowScoreCard ? -7 : -8 }] }}>
+                <Image pointerEvents="none" accessibilityElementsHidden source={formGradeSeal} contentFit="contain" style={{ position: "absolute", inset: 0, width: narrowScoreCard ? 74 : 80, height: narrowScoreCard ? 74 : 80 }} />
                 <View pointerEvents="none" style={{ alignItems: "center", justifyContent: "center", gap: 2 }}>
-                  <Text selectable style={{ color: colors.gold, fontSize: 9, lineHeight: 12, fontWeight: "900", letterSpacing: 1.4 }}>FORM GRADE</Text>
-                  <Text selectable style={{ color: colors.gold, fontSize: 42, lineHeight: 46, fontWeight: "900", letterSpacing: -0.5 }}>{scoreLetterGrade(presentation.score)}</Text>
+                  <Text selectable style={{ color: colors.gold, fontSize: 6, lineHeight: 8, fontWeight: "900", letterSpacing: 0.8 }}>FORM GRADE</Text>
+                  <Text selectable style={{ color: colors.gold, fontSize: narrowScoreCard ? 27 : 29, lineHeight: narrowScoreCard ? 30 : 32, fontWeight: "900", letterSpacing: -0.3 }}>{scoreLetterGrade(presentation.score)}</Text>
                 </View>
               </View>
             </View>

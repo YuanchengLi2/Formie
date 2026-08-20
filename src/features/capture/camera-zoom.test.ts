@@ -1,10 +1,17 @@
-import { cameraLensDetent, cameraZoomPresets, lensForMagnification, pinchMagnification, pinchZoom, resolveCameraMagnification, resolveCameraZoom, zoomDisplayLabel } from "./camera-zoom";
+import { cameraLensDetent, cameraZoomPresets, lensForMagnification, mergeCameraLensInventory, pinchMagnification, pinchZoom, resolveCameraMagnification, resolveCameraZoom, zoomDisplayLabel } from "./camera-zoom";
 
 describe("camera zoom", () => {
   it("always offers 1x and 2x and adds 0.5x when an ultrawide lens exists", () => {
     expect(cameraZoomPresets(["backCamera", "ultraWideCamera"]).map((preset) => preset.label)).toEqual(["0.5x", "1x", "2x"]);
     expect(cameraZoomPresets(["Back Camera", "Ultra Wide Camera"]).map((preset) => preset.label)).toEqual(["0.5x", "1x", "2x"]);
     expect(cameraZoomPresets(["backCamera"]).map((preset) => preset.label)).toEqual(["1x", "2x"]);
+  });
+
+  it("merges asynchronous lens snapshots without losing a discovered physical lens", () => {
+    expect(mergeCameraLensInventory(
+      ["wideAngleCamera", "ultraWideCamera"],
+      ["wideAngleCamera"],
+    )).toEqual(["wideAngleCamera", "ultraWideCamera"]);
   });
 
   it("uses the ultrawide lens for 0.5x and normalized camera zoom for 2x", () => {

@@ -8,6 +8,10 @@ export type CameraZoomPreset = {
 
 export const CAMERA_LENS_HYSTERESIS = 0.06;
 
+export function mergeCameraLensInventory(current: readonly string[], incoming: readonly string[]): string[] {
+  return Array.from(new Set([...current, ...incoming]));
+}
+
 function lensContaining(lenses: string[], term: string): string | undefined {
   const normalizedTerm = term.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "");
   return lenses.find((lens) => lens.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "").includes(normalizedTerm));

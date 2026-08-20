@@ -17,7 +17,7 @@ import { recordedDurationFromCapture } from "@/features/capture/countdown";
 import { deviceVideoStore } from "@/features/capture/device-video-store";
 import type { RecordedSet } from "@/features/capture/types";
 import { captureVideoSettings } from "@/features/capture/video-settings";
-import { CAMERA_LENS_HYSTERESIS, cameraZoomPresets, pinchMagnification, resolveCameraMagnification, type CameraZoomLabel } from "@/features/capture/camera-zoom";
+import { CAMERA_LENS_HYSTERESIS, cameraZoomPresets, mergeCameraLensInventory, pinchMagnification, resolveCameraMagnification, type CameraZoomLabel } from "@/features/capture/camera-zoom";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
@@ -40,6 +40,8 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const [facing, setFacing] = useState<CameraType>("back");
   const [torch, setTorch] = useState(false);
   const [availableLenses, setAvailableLenses] = useState<string[]>([]);
+  const availableLensesRef = useRef<string[]>([]);
+  const lensDiscoveryEpochRef = useRef(0);
   const [selectedLens, setSelectedLens] = useState<string | undefined>();
   const [activeZoomLabel, setActiveZoomLabel] = useState<CameraZoomLabel | null>("1x");
   const [magnification, setMagnification] = useState(1);
@@ -173,22 +175,25 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   }, [availableLenses, magnificationShared, phase, selectedLens, selectedLensIsUltraWideShared]);
 
   const applyAvailableLenses = useCallback((lenses: string[]) => {
-    setAvailableLenses(lenses);
-    const hasUltraWide = cameraZoomPresets(lenses).some((preset) => preset.label === "0.5x");
+    const mergedLenses = mergeCameraLensInventory(availableLensesRef.current, lenses);
+    availableLensesRef.current = mergedLenses;
+    setAvailableLenses(mergedLenses);
+    const hasUltraWide = cameraZoomPresets(mergedLenses).some((preset) => preset.label === "0.5x");
     hasUltraWideShared.value = hasUltraWide;
-    const ultraWideLens = cameraZoomPresets(lenses).find((preset) => preset.label === "0.5x")?.lens;
+    const ultraWideLens = cameraZoomPresets(mergedLenses).find((preset) => preset.label === "0.5x")?.lens;
     selectedLensIsUltraWideShared.value = Boolean(ultraWideLens && selectedLens === ultraWideLens);
     pinchPhysicalDetentShared.value = hasUltraWide && magnificationShared.value < 0.94 ? "ultraWide" : "wide";
     if (selectedLens === undefined) {
       setActiveZoomLabel("1x");
-      setCameraMagnification(1, lenses);
+      setCameraMagnification(1, mergedLenses);
     }
   }, [hasUltraWideShared, magnificationShared, pinchPhysicalDetentShared, selectedLens, selectedLensIsUltraWideShared, setCameraMagnification]);
 
   const discoverAvailableLenses = useCallback(async () => {
+    const discoveryEpoch = lensDiscoveryEpochRef.current;
     try {
       const lenses = await cameraRef.current?.getAvailableLensesAsync();
-      if (lenses) applyAvailableLenses(lenses);
+      if (lenses && discoveryEpoch === lensDiscoveryEpochRef.current) applyAvailableLenses(lenses);
     } catch {
       // Lens presets are optional; preview and recording must remain usable.
     }
@@ -330,7 +335,9 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
             <Text selectable style={{ color: torch ? colors.gold : colors.text, fontSize: 18 }}>ϟ</Text>
           </Pressable>
           <Pressable accessibilityLabel="Flip camera" accessibilityState={{ disabled: phase !== "idle" }} disabled={phase !== "idle"} onPress={() => {
+            lensDiscoveryEpochRef.current += 1;
             setFacing((value) => (value === "back" ? "front" : "back"));
+            availableLensesRef.current = [];
             setAvailableLenses([]);
             setSelectedLens(undefined);
             setActiveZoomLabel("1x");

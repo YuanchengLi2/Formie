@@ -176,6 +176,31 @@ describe("CameraScreen capture lifecycle", () => {
     expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("builtInUltraWideCamera");
   });
 
+  it("keeps the ultrawide lens when asynchronous discovery returns a partial snapshot", async () => {
+    mockGetAvailableLensesAsync.mockResolvedValue(["wideAngleCamera"]);
+    const screen = await render(<CameraScreen />);
+    const preview = screen.getByLabelText("Camera preview");
+
+    await act(async () => preview.props.onAvailableLensesChanged({ lenses: ["wideAngleCamera", "ultraWideCamera"] }));
+    await act(async () => preview.props.onCameraReady());
+
+    expect(screen.getByLabelText("Camera zoom 0.5x")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Camera zoom 0.5x"));
+    expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("ultraWideCamera");
+  });
+
+  it("does not apply a stale rear-camera lens response after switching to the front camera", async () => {
+    let resolveRearLenses: ((lenses: string[]) => void) | undefined;
+    mockGetAvailableLensesAsync.mockReturnValue(new Promise((resolve) => { resolveRearLenses = resolve; }));
+    const screen = await render(<CameraScreen />);
+
+    screen.getByLabelText("Camera preview").props.onCameraReady();
+    await fireEvent.press(screen.getByLabelText("Flip camera"));
+    await act(async () => resolveRearLenses?.(["wideAngleCamera", "ultraWideCamera"]));
+
+    expect(screen.queryByLabelText("Camera zoom 0.5x")).toBeNull();
+  });
+
   it("lets a pinch cross from 1x onto the ultrawide camera", async () => {
     const screen = await render(<CameraScreen />);
     await act(async () => screen.getByLabelText("Camera preview").props.onAvailableLensesChanged({ lenses: ["wideAngleCamera", "ultraWideCamera"] }));

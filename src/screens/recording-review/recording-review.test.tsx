@@ -67,7 +67,7 @@ describe("RecordingReviewScreen", () => {
     expect(screen.getByText("Camera stays in the same position")).toBeTruthy();
     expect(screen.queryByLabelText("Recorded set preview")).toBeNull();
     expect(screen.getByTestId("recording-review-scroll").props.nestedScrollEnabled).toBe(true);
-    expect(StyleSheet.flatten(screen.getByTestId("recording-review-scroll").props.contentContainerStyle)).toMatchObject({ paddingTop: 24 });
+    expect(StyleSheet.flatten(screen.getByTestId("recording-review-scroll").props.contentContainerStyle)).toMatchObject({ paddingTop: 18 });
     expect(screen.queryByLabelText("Check 1 status")).toBeNull();
 
     await fireEvent.press(screen.getByLabelText("Video tab"));
@@ -83,7 +83,10 @@ describe("RecordingReviewScreen", () => {
     expect(screen.queryByText("Is this recording ready?")).toBeNull();
     await fireEvent.press(screen.getByLabelText("What to check tab"));
     expect(screen.getByTestId("recording-review-checklist").props.style).toEqual(expect.objectContaining({ borderRadius: 16 }));
-    expect(screen.getByTestId("recording-review-check-row-0").props.style).toEqual(expect.objectContaining({ width: "100%" }));
+    expect(screen.queryByText("6 things to check")).toBeNull();
+    expect(screen.queryByText(/Make sure your recording meets/)).toBeNull();
+    expect(screen.getByTestId("recording-review-check-row-0").props.style).toEqual(expect.objectContaining({ width: "100%", minHeight: 78 }));
+    expect(screen.getByTestId("recording-review-check-icon-0").props.style).toEqual(expect.objectContaining({ width: 40, height: 40, borderRadius: 11, backgroundColor: "#262117" }));
 
     await fireEvent.press(screen.getByLabelText("Go back from Check Recording"));
     expect(onRetake).toHaveBeenCalledTimes(1);

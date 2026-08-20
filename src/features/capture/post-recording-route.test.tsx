@@ -295,7 +295,7 @@ describe("post-recording route invariants", () => {
     const screen = await renderRoute(<AnalysisReviewRoute />);
 
     expect(screen.getByText("Check your recording")).toBeTruthy();
-    expect(screen.getByText("6 things to check")).toBeTruthy();
+    expect(screen.queryByText("6 things to check")).toBeNull();
     expect(screen.queryByText("set-details-screen")).toBeNull();
   });
 });
