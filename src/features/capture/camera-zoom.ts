@@ -12,20 +12,38 @@ export function mergeCameraLensInventory(current: readonly string[], incoming: r
   return Array.from(new Set([...current, ...incoming]));
 }
 
+function normalizedLensName(lens: string): string {
+  return lens.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
 function lensContaining(lenses: string[], term: string): string | undefined {
-  const normalizedTerm = term.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "");
-  return lenses.find((lens) => lens.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "").includes(normalizedTerm));
+  const normalizedTerm = normalizedLensName(term);
+  return lenses.find((lens) => normalizedLensName(lens).includes(normalizedTerm));
+}
+
+export function isCompoundCameraLens(lens: string | undefined): boolean {
+  if (!lens) return false;
+  const normalized = normalizedLensName(lens);
+  return normalized.includes("triplecamera") || normalized.includes("dualwidecamera");
+}
+
+function compoundCameraLens(lenses: string[]): string | undefined {
+  return lensContaining(lenses, "triplecamera") ?? lensContaining(lenses, "dualwidecamera");
 }
 
 export function resolveCameraZoom(label: CameraZoomLabel, lenses: string[]): { lens: string | undefined; zoom: number } {
+  const compound = compoundCameraLens(lenses);
   const wide = lensContaining(lenses, "wideangle") ?? lensContaining(lenses, "wide") ?? lenses[0];
+  if (compound) {
+    return { lens: compound, zoom: label === "0.5x" ? 0 : label === "1x" ? 0.12 : 0.24 };
+  }
   if (label === "0.5x") return { lens: lensContaining(lenses, "ultrawide"), zoom: 0 };
   if (label === "2x") return { lens: wide, zoom: 0.12 };
   return { lens: wide, zoom: 0 };
 }
 
 export function cameraZoomPresets(lenses: string[]): CameraZoomPreset[] {
-  const labels: CameraZoomLabel[] = lensContaining(lenses, "ultrawide") ? ["0.5x", "1x", "2x"] : ["1x", "2x"];
+  const labels: CameraZoomLabel[] = compoundCameraLens(lenses) || lensContaining(lenses, "ultrawide") ? ["0.5x", "1x", "2x"] : ["1x", "2x"];
   return labels.map((label) => ({ label, ...resolveCameraZoom(label, lenses) }));
 }
 
@@ -50,6 +68,8 @@ export function lensForMagnification(
   lenses: string[],
   previousLens?: string,
 ): string | undefined {
+  const compound = compoundCameraLens(lenses);
+  if (compound) return compound;
   const ultraWide = lensContaining(lenses, "ultrawide");
   const wide = lensContaining(lenses, "wideangle") ?? lensContaining(lenses, "wide") ?? lenses[0];
   if (!ultraWide) return wide;
@@ -65,10 +85,18 @@ export function resolveCameraMagnification(
   lenses: string[],
   previousLens?: string,
 ): { lens: string | undefined; magnification: number; zoom: number } {
+  const compound = compoundCameraLens(lenses);
   const ultraWide = lensContaining(lenses, "ultrawide");
-  const minimum = ultraWide ? 0.5 : 1;
+  const minimum = compound || ultraWide ? 0.5 : 1;
   const magnification = Math.min(4, Math.max(minimum, requestedMagnification));
   const lens = lensForMagnification(magnification, lenses, previousLens);
+  if (lens === compound && compound) {
+    return {
+      lens: compound,
+      magnification,
+      zoom: Math.log2(magnification / 0.5) * 0.12,
+    };
+  }
   if (lens === ultraWide && ultraWide) {
     return {
       lens: ultraWide,

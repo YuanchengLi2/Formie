@@ -4,6 +4,8 @@ describe("camera zoom", () => {
   it("always offers 1x and 2x and adds 0.5x when an ultrawide lens exists", () => {
     expect(cameraZoomPresets(["backCamera", "ultraWideCamera"]).map((preset) => preset.label)).toEqual(["0.5x", "1x", "2x"]);
     expect(cameraZoomPresets(["Back Camera", "Ultra Wide Camera"]).map((preset) => preset.label)).toEqual(["0.5x", "1x", "2x"]);
+    expect(cameraZoomPresets(["Back Triple Camera", "Back Wide Angle Camera"]).map((preset) => preset.label)).toEqual(["0.5x", "1x", "2x"]);
+    expect(cameraZoomPresets(["Back Dual Wide Camera", "Back Wide Angle Camera"]).map((preset) => preset.label)).toEqual(["0.5x", "1x", "2x"]);
     expect(cameraZoomPresets(["backCamera"]).map((preset) => preset.label)).toEqual(["1x", "2x"]);
   });
 
@@ -39,6 +41,16 @@ describe("camera zoom", () => {
     expect(pinchMagnification(0.5, 4, true)).toBe(2);
     expect(pinchMagnification(1, 0.25, false)).toBe(1);
     expect(pinchMagnification(2, 3, true)).toBe(4);
+  });
+
+  it("keeps Apple compound cameras selected while zooming out and back in", () => {
+    const lenses = ["Back Wide Angle Camera", "Back Ultra Wide Camera", "Back Triple Camera"];
+
+    expect(resolveCameraMagnification(0.5, lenses)).toEqual({ lens: "Back Triple Camera", magnification: 0.5, zoom: 0 });
+    expect(resolveCameraMagnification(1, lenses, "Back Triple Camera")).toEqual({ lens: "Back Triple Camera", magnification: 1, zoom: 0.12 });
+    expect(resolveCameraMagnification(2, lenses, "Back Triple Camera")).toEqual({ lens: "Back Triple Camera", magnification: 2, zoom: 0.24 });
+    expect(lensForMagnification(0.5, lenses, "Back Triple Camera")).toBe("Back Triple Camera");
+    expect(lensForMagnification(2, lenses, "Back Triple Camera")).toBe("Back Triple Camera");
   });
 
   it("keeps a physical lens selected through the 1x boundary with hysteresis", () => {

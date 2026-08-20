@@ -215,6 +215,25 @@ describe("CameraScreen capture lifecycle", () => {
     expect(screen.getByLabelText("Camera preview").props.zoom).toBeUndefined();
   });
 
+  it("uses one compound camera for zooming out and back in", async () => {
+    const screen = await render(<CameraScreen />);
+    const preview = screen.getByLabelText("Camera preview");
+    await act(async () => preview.props.onAvailableLensesChanged({ lenses: ["Back Wide Angle Camera", "Back Ultra Wide Camera", "Back Triple Camera"] }));
+
+    await fireEvent.press(screen.getByLabelText("Camera zoom 0.5x"));
+    expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("Back Triple Camera");
+
+    await fireEvent.press(screen.getByLabelText("Camera zoom 2x"));
+    expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("Back Triple Camera");
+
+    await act(async () => {
+      mockPinchBegin?.();
+      mockPinchUpdate?.({ scale: 0.25 });
+      mockPinchEnd?.({ scale: 0.25 });
+    });
+    expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("Back Triple Camera");
+  });
+
   it("locks the physical lens during recording while keeping pinch zoom active", async () => {
     const screen = await render(<CameraScreen />);
     await act(async () => screen.getByLabelText("Camera preview").props.onAvailableLensesChanged({ lenses: ["wideAngleCamera", "ultraWideCamera"] }));

@@ -17,7 +17,7 @@ import { recordedDurationFromCapture } from "@/features/capture/countdown";
 import { deviceVideoStore } from "@/features/capture/device-video-store";
 import type { RecordedSet } from "@/features/capture/types";
 import { captureVideoSettings } from "@/features/capture/video-settings";
-import { CAMERA_LENS_HYSTERESIS, cameraZoomPresets, mergeCameraLensInventory, pinchMagnification, resolveCameraMagnification, type CameraZoomLabel } from "@/features/capture/camera-zoom";
+import { CAMERA_LENS_HYSTERESIS, cameraZoomPresets, isCompoundCameraLens, mergeCameraLensInventory, pinchMagnification, resolveCameraMagnification, type CameraZoomLabel } from "@/features/capture/camera-zoom";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
@@ -47,10 +47,11 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const [magnification, setMagnification] = useState(1);
   const magnificationShared = useSharedValue(1);
   const pinchStartMagnificationShared = useSharedValue(1);
-  const hasUltraWideShared = useSharedValue(false);
+  const hasHalfXShared = useSharedValue(false);
   const pinchPhysicalDetentShared = useSharedValue("wide");
   const lensLockedShared = useSharedValue(false);
-  const selectedLensIsUltraWideShared = useSharedValue(false);
+  const selectedLensUsesHalfXBaseShared = useSharedValue(false);
+  const selectedLensIsCompoundShared = useSharedValue(false);
   const [pinching, setPinching] = useState(false);
   const exitRequestedRef = useRef(false);
   const requestedStopAtRef = useRef<number | null>(null);
@@ -74,17 +75,19 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   }, [hydrateCapturePreferences]);
 
   useEffect(() => {
-    const hasUltraWide = cameraZoomPresets(availableLenses).some((preset) => preset.label === "0.5x");
-    hasUltraWideShared.value = hasUltraWide;
+    const halfXPreset = cameraZoomPresets(availableLenses).find((preset) => preset.label === "0.5x");
+    const hasHalfX = Boolean(halfXPreset);
+    const selectedIsCompound = isCompoundCameraLens(selectedLens);
+    hasHalfXShared.value = hasHalfX;
     magnificationShared.value = magnification;
-    const ultraWideLens = cameraZoomPresets(availableLenses).find((preset) => preset.label === "0.5x")?.lens;
     lensLockedShared.value = phase !== "idle";
-    selectedLensIsUltraWideShared.value = Boolean(ultraWideLens && selectedLens === ultraWideLens);
-    pinchPhysicalDetentShared.value = hasUltraWide && (
-      selectedLens === ultraWideLens
+    selectedLensUsesHalfXBaseShared.value = Boolean(halfXPreset?.lens && selectedLens === halfXPreset.lens);
+    selectedLensIsCompoundShared.value = selectedIsCompound;
+    pinchPhysicalDetentShared.value = hasHalfX && (
+      selectedLens === halfXPreset?.lens
       || (selectedLens === undefined && magnification < 1 - CAMERA_LENS_HYSTERESIS)
     ) ? "ultraWide" : "wide";
-  }, [availableLenses, hasUltraWideShared, lensLockedShared, magnification, magnificationShared, phase, pinchPhysicalDetentShared, selectedLens, selectedLensIsUltraWideShared]);
+  }, [availableLenses, hasHalfXShared, lensLockedShared, magnification, magnificationShared, phase, pinchPhysicalDetentShared, selectedLens, selectedLensIsCompoundShared, selectedLensUsesHalfXBaseShared]);
 
   useEffect(() => {
     if (phase !== "recording" || startedAt === null) return;
@@ -159,35 +162,37 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   }, [dispatch, phase, previousSessionId, router]);
 
   const setCameraMagnification = useCallback((nextMagnification: number, lenses = availableLenses, preserveLensHysteresis = true) => {
-    const ultraWideLens = cameraZoomPresets(lenses).find((preset) => preset.label === "0.5x")?.lens;
+    const halfXLens = cameraZoomPresets(lenses).find((preset) => preset.label === "0.5x")?.lens;
     const lensIsLocked = phase !== "idle" && selectedLens !== undefined;
-    const selectedIsUltraWide = Boolean(ultraWideLens && selectedLens === ultraWideLens);
+    const selectedUsesHalfXBase = Boolean(halfXLens && selectedLens === halfXLens);
+    const selectedIsCompound = isCompoundCameraLens(selectedLens);
     const resolved = lensIsLocked
       ? {
           lens: selectedLens,
-          magnification: Math.min(selectedIsUltraWide ? 1 : 4, Math.max(selectedIsUltraWide ? 0.5 : 1, nextMagnification)),
+          magnification: Math.min(selectedUsesHalfXBase && !selectedIsCompound ? 1 : 4, Math.max(selectedUsesHalfXBase ? 0.5 : 1, nextMagnification)),
         }
       : resolveCameraMagnification(nextMagnification, lenses, preserveLensHysteresis ? selectedLens : undefined);
     magnificationShared.value = resolved.magnification;
     setMagnification(resolved.magnification);
-    selectedLensIsUltraWideShared.value = Boolean(ultraWideLens && resolved.lens === ultraWideLens);
+    selectedLensUsesHalfXBaseShared.value = Boolean(halfXLens && resolved.lens === halfXLens);
+    selectedLensIsCompoundShared.value = isCompoundCameraLens(resolved.lens);
     if (!lensIsLocked) setSelectedLens(resolved.lens);
-  }, [availableLenses, magnificationShared, phase, selectedLens, selectedLensIsUltraWideShared]);
+  }, [availableLenses, magnificationShared, phase, selectedLens, selectedLensIsCompoundShared, selectedLensUsesHalfXBaseShared]);
 
   const applyAvailableLenses = useCallback((lenses: string[]) => {
     const mergedLenses = mergeCameraLensInventory(availableLensesRef.current, lenses);
     availableLensesRef.current = mergedLenses;
     setAvailableLenses(mergedLenses);
-    const hasUltraWide = cameraZoomPresets(mergedLenses).some((preset) => preset.label === "0.5x");
-    hasUltraWideShared.value = hasUltraWide;
-    const ultraWideLens = cameraZoomPresets(mergedLenses).find((preset) => preset.label === "0.5x")?.lens;
-    selectedLensIsUltraWideShared.value = Boolean(ultraWideLens && selectedLens === ultraWideLens);
-    pinchPhysicalDetentShared.value = hasUltraWide && magnificationShared.value < 0.94 ? "ultraWide" : "wide";
+    const halfXLens = cameraZoomPresets(mergedLenses).find((preset) => preset.label === "0.5x")?.lens;
+    hasHalfXShared.value = Boolean(halfXLens);
+    selectedLensUsesHalfXBaseShared.value = Boolean(halfXLens && selectedLens === halfXLens);
+    selectedLensIsCompoundShared.value = isCompoundCameraLens(selectedLens);
+    pinchPhysicalDetentShared.value = halfXLens && magnificationShared.value < 0.94 ? "ultraWide" : "wide";
     if (selectedLens === undefined) {
       setActiveZoomLabel("1x");
       setCameraMagnification(1, mergedLenses);
     }
-  }, [hasUltraWideShared, magnificationShared, pinchPhysicalDetentShared, selectedLens, selectedLensIsUltraWideShared, setCameraMagnification]);
+  }, [hasHalfXShared, magnificationShared, pinchPhysicalDetentShared, selectedLens, selectedLensIsCompoundShared, selectedLensUsesHalfXBaseShared, setCameraMagnification]);
 
   const discoverAvailableLenses = useCallback(async () => {
     const discoveryEpoch = lensDiscoveryEpochRef.current;
@@ -227,20 +232,20 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         const nextMagnification = pinchMagnification(
           pinchStartMagnificationShared.value,
           event.scale,
-          hasUltraWideShared.value && (!lensLockedShared.value || selectedLensIsUltraWideShared.value),
+          hasHalfXShared.value && (!lensLockedShared.value || selectedLensUsesHalfXBaseShared.value),
         );
-        const boundedMagnification = lensLockedShared.value && selectedLensIsUltraWideShared.value
+        const boundedMagnification = lensLockedShared.value && selectedLensUsesHalfXBaseShared.value && !selectedLensIsCompoundShared.value
           ? Math.min(1, nextMagnification)
           : nextMagnification;
         magnificationShared.value = boundedMagnification;
-        const nextPhysicalDetent = !hasUltraWideShared.value
+        const nextPhysicalDetent = !hasHalfXShared.value
           ? "wide"
           : pinchPhysicalDetentShared.value === "ultraWide"
             ? boundedMagnification > 1 + CAMERA_LENS_HYSTERESIS ? "wide" : "ultraWide"
             : boundedMagnification < 1 - CAMERA_LENS_HYSTERESIS ? "ultraWide" : "wide";
-        if (!lensLockedShared.value && nextPhysicalDetent !== pinchPhysicalDetentShared.value) {
+        if (!selectedLensIsCompoundShared.value && !lensLockedShared.value && nextPhysicalDetent !== pinchPhysicalDetentShared.value) {
           pinchPhysicalDetentShared.value = nextPhysicalDetent;
-          selectedLensIsUltraWideShared.value = nextPhysicalDetent === "ultraWide";
+          selectedLensUsesHalfXBaseShared.value = nextPhysicalDetent === "ultraWide";
           runOnJS(commitPinchDetent)(boundedMagnification);
         }
       })
@@ -248,20 +253,22 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         const nextMagnification = pinchMagnification(
           pinchStartMagnificationShared.value,
           event.scale,
-          hasUltraWideShared.value && (!lensLockedShared.value || selectedLensIsUltraWideShared.value),
+          hasHalfXShared.value && (!lensLockedShared.value || selectedLensUsesHalfXBaseShared.value),
         );
-        const boundedMagnification = lensLockedShared.value && selectedLensIsUltraWideShared.value
+        const boundedMagnification = lensLockedShared.value && selectedLensUsesHalfXBaseShared.value && !selectedLensIsCompoundShared.value
           ? Math.min(1, nextMagnification)
           : nextMagnification;
         runOnJS(endPinch)(boundedMagnification);
       }),
-    [beginPinch, commitPinchDetent, endPinch, hasUltraWideShared, lensLockedShared, magnificationShared, pinchPhysicalDetentShared, pinchStartMagnificationShared, selectedLensIsUltraWideShared],
+    [beginPinch, commitPinchDetent, endPinch, hasHalfXShared, lensLockedShared, magnificationShared, pinchPhysicalDetentShared, pinchStartMagnificationShared, selectedLensIsCompoundShared, selectedLensUsesHalfXBaseShared],
   );
 
   const animatedCameraProps = useAnimatedProps(() => {
     const current = magnificationShared.value;
-    const zoomValue = selectedLensIsUltraWideShared.value
-      ? Math.max(0, ((current - 0.5) / 0.5) * 0.12)
+    const zoomValue = selectedLensIsCompoundShared.value
+      ? Math.max(0, (Math.log(current / 0.5) / Math.log(2)) * 0.12)
+      : selectedLensUsesHalfXBaseShared.value
+        ? Math.max(0, ((current - 0.5) / 0.5) * 0.12)
       : Math.max(0, (current - 1) * 0.12);
     return { zoom: Math.min(1, zoomValue) };
   });
@@ -341,8 +348,9 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
             setAvailableLenses([]);
             setSelectedLens(undefined);
             setActiveZoomLabel("1x");
-            hasUltraWideShared.value = false;
-            selectedLensIsUltraWideShared.value = false;
+            hasHalfXShared.value = false;
+            selectedLensUsesHalfXBaseShared.value = false;
+            selectedLensIsCompoundShared.value = false;
             magnificationShared.value = 1;
             setCameraMagnification(1, [], false);
           }} style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)", opacity: phase === "idle" ? 1 : 0.45 }}>

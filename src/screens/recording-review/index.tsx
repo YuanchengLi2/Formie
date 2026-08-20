@@ -56,10 +56,11 @@ export function RecordingReviewScreen({ localVideoUri, analysisRemaining, onUseR
         <ScrollView
           alwaysBounceVertical={false}
           contentInsetAdjustmentBehavior="never"
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 18, paddingBottom: 12 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 18, paddingBottom: 18 }}
           nestedScrollEnabled
+          scrollEnabled
           showsVerticalScrollIndicator={false}
-          style={{ flex: 1 }}
+          style={{ flex: 1, minHeight: 0 }}
           testID="recording-review-scroll"
         >
           <View testID="recording-review-checks-tab"><RecordingChecklist /></View>
