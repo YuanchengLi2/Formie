@@ -63,7 +63,7 @@ export function MuscleFocusFigure({ focus, issueRegions }: { focus: MuscleFocus 
         </View>
         : <LegendLine color={ISSUE_COLOR} label="Observed issue areas" names={issueRegions.map(displayRegion)} />}
       <Text selectable style={[typography.caption, { color: colors.textMuted }]}>
-        Z-Anatomy-derived model · CC BY-SA 4.0
+        Interactive SVG muscle map · MIT licensed
       </Text>
     </View>
   );

@@ -202,8 +202,9 @@ describe("ResultsScreen", () => {
     expect(screen.getByTestId("overall-analysis-score").props.children).toBe(75);
     expect(screen.getByTestId("overall-analysis-score").props.accessibilityLabel).toBe("Overall score 75 out of 100");
     expect(screen.getByTestId("score-grade-stamp").props.accessibilityLabel).toBe("Letter grade C");
-    expect(screen.getByTestId("movement-score-overall-row").props.style).toEqual(expect.objectContaining({ height: 96 }));
-    expect(screen.getByTestId("score-grade-stamp").props.style).toEqual(expect.objectContaining({ width: 92, height: 92, marginLeft: "auto", transform: [{ translateY: -5 }] }));
+    expect(screen.getByTestId("movement-score-overall-row").props.style).toEqual(expect.objectContaining({ height: 120 }));
+    expect(screen.getByTestId("score-grade-stamp").props.style).toEqual(expect.objectContaining({ width: 116, height: 116, marginRight: 16 }));
+    expect(screen.getByTestId("score-grade-stamp").props.style).not.toEqual(expect.objectContaining({ marginLeft: "auto" }));
     expect(screen.getByText("FORM GRADE")).toBeTruthy();
     expect(screen.getByText("C")).toBeTruthy();
     expect(screen.getByText("MOVEMENT SCORES")).toBeTruthy();
@@ -331,17 +332,19 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("STARTING POSITION")).toBeNull();
   });
 
-  it("highlights form issues and target muscles on the same rotatable anatomy model", async () => {
+  it("highlights form issues and target muscles directly on the SVG muscle map", async () => {
     const screen = await renderResults();
 
     expect(screen.getByTestId("muscle-focus-figure")).toBeTruthy();
-    expect(screen.getByTestId("anatomy-body-image")).toBeTruthy();
-    expect(screen.queryByLabelText("Front and back anatomy map")).toBeNull();
-    expect(screen.getByLabelText("Rotatable anatomy model")).toBeTruthy();
-    expect(screen.getByLabelText("Rotate anatomy")).toBeTruthy();
+    expect(screen.getByTestId("native-muscle-map")).toBeTruthy();
+    expect(screen.queryByTestId("anatomy-body-image")).toBeNull();
+    expect(screen.queryByTestId("anatomy-3d-canvas")).toBeNull();
+    expect(screen.getByLabelText("Front and back muscle map")).toBeTruthy();
+    expect(screen.getByLabelText("Front anatomy")).toBeTruthy();
+    expect(screen.getByLabelText("Back anatomy")).toBeTruthy();
     expect(screen.queryByLabelText("Zoom out anatomy")).toBeNull();
     expect(screen.getByLabelText("Your Form").props.accessibilityState).toEqual({ selected: true });
-    expect(screen.getByTestId("anatomy-surface-highlight-mode")).toBeTruthy();
+    expect(screen.getByTestId("muscle-map-native-highlight-deltoids")).toBeTruthy();
     expect(screen.queryByTestId("anatomy-target-chest")).toBeNull();
     expect(screen.getByTestId("anatomy-issue-shoulders")).toBeTruthy();
     expect(screen.getByText("Target Muscles")).toBeTruthy();
@@ -349,11 +352,10 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("Observed issue areas")).toBeTruthy();
     expect(screen.queryByText(/never claims actual muscle activation/i)).toBeNull();
     expect(screen.getByTestId("anatomy-gesture-surface")).toBeTruthy();
-    expect(renderedTestIds(screen.toJSON()).some((id) => id.startsWith("anatomy-highlight-issue-"))).toBe(false);
     await fireEvent.press(screen.getByLabelText("Target Muscles"));
-    expect(screen.queryByTestId("anatomy-surface-highlight-mode")).toBeNull();
-    expect(screen.getByLabelText("Rotatable anatomy model")).toBeTruthy();
-    expect(screen.getByLabelText("Rotate anatomy")).toBeTruthy();
+    expect(screen.getByLabelText("Back anatomy").props.accessibilityState).toEqual({ selected: true });
+    expect(screen.getByTestId("muscle-map-native-highlight-upper-back")).toBeTruthy();
+    expect(screen.getByTestId("muscle-map-native-highlight-trapezius")).toBeTruthy();
     expect(screen.getByTestId("anatomy-target-lats")).toBeTruthy();
     expect(screen.getByTestId("anatomy-target-upper_back")).toBeTruthy();
     expect(screen.getByTestId("anatomy-secondary-biceps")).toBeTruthy();

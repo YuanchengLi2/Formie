@@ -283,16 +283,16 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
           <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>MOVEMENT SCORES</Text>
           {presentation.score !== null ? <View testID="movement-score-overall" style={{ gap: 3, paddingBottom: hasMovementScores ? 3 : 0 }}>
             <Text selectable style={[typography.label, { color: colors.textSecondary }]}>Overall score</Text>
-            <View testID="movement-score-overall-row" style={{ width: "100%", height: 96, flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View testID="movement-score-overall-row" style={{ width: "100%", height: narrowScoreCard ? 108 : 120, flexDirection: "row", alignItems: "center", gap: 10 }}>
               <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "baseline", gap: spacing.xs }}>
                 <Text accessibilityLabel={`Overall score ${presentation.score} out of 100`} selectable testID="overall-analysis-score" style={{ color: colors.gold, fontSize: narrowScoreCard ? 43 : 47, lineHeight: narrowScoreCard ? 48 : 52, fontWeight: "800", letterSpacing: -1.2, fontVariant: ["tabular-nums"], flexShrink: 1 }}>{presentation.score}</Text>
                 <Text selectable style={{ color: colors.textSecondary, fontSize: narrowScoreCard ? 14 : 16, lineHeight: 21, fontWeight: "700" }}>/ 100</Text>
               </View>
-              <View accessibilityLabel={`Letter grade ${scoreLetterGrade(presentation.score)}`} testID="score-grade-stamp" style={{ width: narrowScoreCard ? 82 : 92, height: narrowScoreCard ? 82 : 92, flexShrink: 0, marginLeft: "auto", alignItems: "center", justifyContent: "center", transform: [{ translateY: narrowScoreCard ? -4 : -5 }] }}>
-                <Image pointerEvents="none" accessibilityElementsHidden source={formGradeSeal} contentFit="contain" style={{ position: "absolute", inset: 0, width: narrowScoreCard ? 82 : 92, height: narrowScoreCard ? 82 : 92 }} />
+              <View accessibilityLabel={`Letter grade ${scoreLetterGrade(presentation.score)}`} testID="score-grade-stamp" style={{ width: narrowScoreCard ? 104 : 116, height: narrowScoreCard ? 104 : 116, flexShrink: 0, marginRight: narrowScoreCard ? 8 : 16, alignItems: "center", justifyContent: "center" }}>
+                <Image pointerEvents="none" accessibilityElementsHidden source={formGradeSeal} contentFit="contain" style={{ position: "absolute", inset: 0, width: narrowScoreCard ? 104 : 116, height: narrowScoreCard ? 104 : 116 }} />
                 <View pointerEvents="none" style={{ alignItems: "center", justifyContent: "center", gap: 2 }}>
-                  <Text selectable style={{ color: colors.gold, fontSize: narrowScoreCard ? 6 : 7, lineHeight: 9, fontWeight: "900", letterSpacing: 0.9 }}>FORM GRADE</Text>
-                  <Text selectable style={{ color: colors.gold, fontSize: narrowScoreCard ? 30 : 34, lineHeight: narrowScoreCard ? 33 : 37, fontWeight: "900", letterSpacing: -0.3 }}>{scoreLetterGrade(presentation.score)}</Text>
+                  <Text selectable style={{ color: colors.gold, fontSize: narrowScoreCard ? 7 : 8, lineHeight: 11, fontWeight: "900", letterSpacing: 1.05 }}>FORM GRADE</Text>
+                  <Text selectable style={{ color: colors.gold, fontSize: narrowScoreCard ? 35 : 39, lineHeight: narrowScoreCard ? 38 : 42, fontWeight: "900", letterSpacing: -0.4 }}>{scoreLetterGrade(presentation.score)}</Text>
                 </View>
               </View>
             </View>
