@@ -99,4 +99,12 @@ describe("ReferenceVideoControls", () => {
     await fireEvent.press(close);
     expect(screen.queryByLabelText("Fullscreen recording preview")).toBeNull();
   });
+
+  it("can fill the review tab instead of forcing a short landscape card", async () => {
+    const screen = await render(<ReferenceVideoControls fillAvailableSpace localVideoUri="file:///set.mp4" />);
+    const frameStyle = StyleSheet.flatten(screen.getByTestId("recording-video-frame").props.style);
+
+    expect(frameStyle).toMatchObject({ flex: 1, minHeight: 0 });
+    expect(frameStyle.aspectRatio).toBeUndefined();
+  });
 });

@@ -11,6 +11,7 @@ import { typography } from "@/theme/type";
 
 type ReferenceVideoControlsProps = {
   localVideoUri: string;
+  fillAvailableSpace?: boolean;
 };
 
 export function formatPlaybackTime(seconds: number): string {
@@ -19,7 +20,7 @@ export function formatPlaybackTime(seconds: number): string {
   return `${minutes}:${String(safeSeconds % 60).padStart(2, "0")}`;
 }
 
-export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControlsProps) {
+export function ReferenceVideoControls({ localVideoUri, fillAvailableSpace = false }: ReferenceVideoControlsProps) {
   const player = useVideoPlayer(localVideoUri, (created) => {
     created.loop = true;
     created.timeUpdateEventInterval = 0.25;
@@ -69,8 +70,14 @@ export function ReferenceVideoControls({ localVideoUri }: ReferenceVideoControls
   const progress = safeDuration > 0 ? Math.max(0, Math.min(1, currentTime / safeDuration)) : 0;
 
   return (<>
-    <View style={{ gap: 4 }}>
-    <View testID="recording-video-frame" style={{ overflow: "hidden", aspectRatio: 1.255, borderRadius: radii.lg, borderCurve: "continuous", borderWidth: 1, borderColor: "#3A3A3A", backgroundColor: colors.cameraBlack }}>
+    <View style={[{ gap: 4 }, fillAvailableSpace ? { flex: 1, minHeight: 0 } : undefined]}>
+    <View
+      testID="recording-video-frame"
+      style={[
+        { overflow: "hidden", borderRadius: radii.lg, borderCurve: "continuous", borderWidth: 1, borderColor: "#3A3A3A", backgroundColor: colors.cameraBlack },
+        fillAvailableSpace ? { flex: 1, minHeight: 0 } : { aspectRatio: 1.255 },
+      ]}
+    >
       <VideoView
         accessibilityLabel="Recorded set preview"
         contentFit="contain"

@@ -15,7 +15,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormButton } from "@/components/form-button";
 import { CaptureReferenceIcon } from "@/components/capture-reference-icon";
-import { SetDetailIcon, type SetDetailIconName } from "@/components/set-detail-icon";
 import { exerciseIsUnilateral } from "@/features/analysis/exercise-catalog";
 import {
   setDeclarationSchema,
@@ -49,20 +48,13 @@ function Choice({
   onPress,
   accessibilityLabel,
   style,
-  icon,
-  vertical = false,
-  selectedAppearance = "fill",
 }: {
   label: string;
   selected: boolean;
   onPress: () => void;
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
-  icon?: SetDetailIconName;
-  vertical?: boolean;
-  selectedAppearance?: "fill" | "outline";
 }) {
-  const filled = selected && selectedAppearance === "fill";
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel ?? label}
@@ -76,13 +68,10 @@ function Choice({
         borderRadius: radii.pill,
         borderWidth: 1,
         borderColor: selected ? colors.gold : colors.border,
-        backgroundColor: filled ? colors.gold : colors.surface,
+        backgroundColor: selected ? colors.gold : colors.surface,
       }, style]}
     >
-      <View style={{ flexDirection: vertical ? "column" : "row", alignItems: "center", justifyContent: "center", gap: vertical ? 7 : spacing.xs }}>
-        {icon ? <SetDetailIcon name={icon} size={vertical ? 28 : 18} color={filled ? colors.cameraBlack : selected ? colors.gold : colors.textMuted} /> : null}
-        <Text style={[typography.label, { color: filled ? colors.cameraBlack : selected ? colors.gold : colors.textSecondary, textAlign: "center" }]}>{label}</Text>
-      </View>
+      <Text style={[typography.label, { color: selected ? colors.cameraBlack : colors.textSecondary, textAlign: "center" }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -111,7 +100,7 @@ function RecordedSetPreview({ localVideoUri }: { localVideoUri: string }) {
   });
 
   return (
-    <View style={{ height: 210, overflow: "hidden", borderRadius: radii.lg, backgroundColor: colors.cameraBlack }}>
+    <View style={{ overflow: "hidden", aspectRatio: 16 / 9, borderRadius: radii.lg, backgroundColor: colors.cameraBlack }}>
       <VideoView
         accessibilityLabel="Recorded set preview"
         contentFit="contain"
@@ -282,24 +271,27 @@ export function SetDeclarationScreen({
           paddingBottom: insets.bottom + 24,
           paddingHorizontal: 20,
         }}
-        contentInsetAdjustmentBehavior="automatic"
+        automaticallyAdjustKeyboardInsets
+        contentInsetAdjustmentBehavior="never"
+        keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
         testID="set-declaration-scroll"
       >
-        {onBack ? (
-          <Pressable
-            accessibilityLabel="Back from Set Details"
-            accessibilityRole="button"
-            onPress={onBack}
-            style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 22, borderWidth: 1, borderColor: "#303030", backgroundColor: "#141414" }}
-          >
-            <CaptureReferenceIcon name="back" size={25} color={colors.text} />
-          </Pressable>
-        ) : null}
-        <View style={{ gap: 8 }}>
-          <Text style={[typography.title, { color: colors.text, fontSize: 29, lineHeight: 35, letterSpacing: -0.8 }]}>Tell Formie what you did</Text>
-          <Text style={[typography.body, { color: colors.textSecondary, fontSize: 16, lineHeight: 22 }]}>The more details you provide,{"\n"}the more accurate your analysis.
-          </Text>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+          {onBack ? (
+            <Pressable
+              accessibilityLabel="Back from Set Details"
+              accessibilityRole="button"
+              onPress={onBack}
+              style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 22, borderWidth: 1, borderColor: "#303030", backgroundColor: "#141414" }}
+            >
+              <CaptureReferenceIcon name="back" size={25} color={colors.text} />
+            </Pressable>
+          ) : null}
+          <View style={{ flex: 1, minWidth: 0, gap: 6 }}>
+            <Text style={[typography.title, { color: colors.text, fontSize: 28, lineHeight: 34, letterSpacing: -0.7 }]}>Tell Formie what you did</Text>
+            <Text style={[typography.body, { color: colors.textSecondary, fontSize: 15, lineHeight: 21 }]}>The more details you provide, the more accurate your analysis.</Text>
+          </View>
         </View>
 
         {showVideoPreview ? <RecordedSetPreview localVideoUri={localVideoUri} /> : null}
@@ -322,7 +314,6 @@ export function SetDeclarationScreen({
               justifyContent: "space-between",
               gap: spacing.md,
             }}>
-              <View style={{ width: 48, height: 48, alignItems: "center", justifyContent: "center", borderRadius: 24, backgroundColor: "#1B1B1B" }}><SetDetailIcon name="dumbbell" size={28} /></View>
               <View style={{ flex: 1, gap: 4 }}><Text style={[typography.caption, { color: colors.textSecondary, fontSize: 11, lineHeight: 14, fontWeight: "700" }]}>EXERCISE</Text><Text style={[typography.body, { color: colors.text, fontSize: 16, lineHeight: 21 }]}>{preselectedExercise.canonicalName}</Text></View>
               <Pressable
                 accessibilityLabel="Change exercise"
@@ -332,7 +323,6 @@ export function SetDeclarationScreen({
               >
                 <Text style={[typography.label, { color: colors.gold }]}>Change</Text>
               </Pressable>
-              <SetDetailIcon name="chevron" size={20} color={colors.textMuted} />
             </View>
           </View>
         ) : (
@@ -359,28 +349,25 @@ export function SetDeclarationScreen({
 
         <View style={{ gap: spacing.sm }}>
           <FieldLabel>Completed amount</FieldLabel>
-          <View style={{ height: 54, flexDirection: "row", gap: 0, padding: 3, borderRadius: 15, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
-            <Choice label="Reps" selected={amountKind === "reps"} onPress={() => setAmountKind("reps")} accessibilityLabel="Measure in reps" style={{ flex: 1, alignItems: "center", borderRadius: radii.sm, backgroundColor: amountKind === "reps" ? colors.gold : "transparent" }} />
-            <Choice label="Seconds" selected={amountKind === "seconds"} onPress={() => setAmountKind("seconds")} accessibilityLabel="Measure in seconds" style={{ flex: 1, alignItems: "center", borderRadius: radii.sm, backgroundColor: amountKind === "seconds" ? colors.gold : "transparent" }} />
+          <View testID="amount-kind-options" style={{ width: "100%", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+            <Choice label="Reps" selected={amountKind === "reps"} onPress={() => setAmountKind("reps")} accessibilityLabel="Measure in reps" style={{ flexGrow: 1, flexBasis: 120 }} />
+            <Choice label="Seconds" selected={amountKind === "seconds"} onPress={() => setAmountKind("seconds")} accessibilityLabel="Measure in seconds" style={{ flexGrow: 1, flexBasis: 120 }} />
           </View>
-          <View style={[inputStyle, { minHeight: 56, flexDirection: "row", alignItems: "center", gap: spacing.sm }]}>
-            <SetDetailIcon name="hash" size={20} color={colors.textMuted} />
-            <TextInput
-              accessibilityLabel="Completed amount"
-              keyboardType="number-pad"
-              placeholder={amountKind === "reps" ? "How many reps?" : "How many seconds?"}
-              placeholderTextColor={colors.textMuted}
-              style={[typography.body, { flex: 1, color: colors.text }]}
-              value={amount}
-              onChangeText={(value) => { setAmount(value); setValidationError(null); }}
-            />
-          </View>
+          <TextInput
+            accessibilityLabel="Completed amount"
+            keyboardType="number-pad"
+            placeholder={amountKind === "reps" ? "How many reps?" : "How many seconds?"}
+            placeholderTextColor={colors.textMuted}
+            style={[typography.body, inputStyle]}
+            value={amount}
+            onChangeText={(value) => { setAmount(value); setValidationError(null); }}
+          />
           {amountKind === "reps" ? (
             <View style={{ gap: spacing.sm }}>
               <Text style={[typography.label, { color: colors.text }]}>Total count or per side?</Text>
-              <View style={{ alignSelf: "flex-end", width: "58%", flexDirection: "row", gap: 0, padding: 3, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
-                <Choice label="Total" selected={countScope === "total"} onPress={() => setCountScope("total")} accessibilityLabel="Count is total" style={{ flex: 1, alignItems: "center", borderRadius: radii.sm, backgroundColor: countScope === "total" ? colors.gold : "transparent" }} />
-                <Choice label="Per side" selected={countScope === "per_side"} onPress={() => setCountScope("per_side")} accessibilityLabel="Count is per side" style={{ flex: 1, alignItems: "center", borderRadius: radii.sm, backgroundColor: countScope === "per_side" ? colors.gold : "transparent" }} />
+              <View testID="count-scope-options" style={{ width: "100%", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+                <Choice label="Total" selected={countScope === "total"} onPress={() => setCountScope("total")} accessibilityLabel="Count is total" style={{ flexGrow: 1, flexBasis: 120 }} />
+                <Choice label="Per side" selected={countScope === "per_side"} onPress={() => setCountScope("per_side")} accessibilityLabel="Count is per side" style={{ flexGrow: 1, flexBasis: 120 }} />
               </View>
             </View>
           ) : null}
@@ -405,32 +392,32 @@ export function SetDeclarationScreen({
 
         <View style={{ gap: spacing.sm }}>
           <FieldLabel>Load</FieldLabel>
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <Choice label="Bodyweight" icon="scale" vertical selectedAppearance="outline" selected={loadKind === "bodyweight"} onPress={() => chooseLoad("bodyweight")} accessibilityLabel="Bodyweight load" style={{ flex: 1, minHeight: 76, alignItems: "center", paddingHorizontal: 4, borderRadius: 14 }} />
-            <Choice label="Known weight" icon="weight" vertical selectedAppearance="outline" selected={loadKind === "known"} onPress={() => chooseLoad("known")} accessibilityLabel="Known weight" style={{ flex: 1, minHeight: 76, alignItems: "center", paddingHorizontal: 4, borderRadius: 14 }} />
-            <Choice label="I’m not sure" icon="hand" vertical selectedAppearance="outline" selected={loadKind === "unknown"} onPress={() => chooseLoad("unknown")} accessibilityLabel="Unknown load" style={{ flex: 1, minHeight: 76, alignItems: "center", paddingHorizontal: 4, borderRadius: 14 }} />
+          <View testID="load-kind-options" style={{ width: "100%", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+            <Choice label="Bodyweight" selected={loadKind === "bodyweight"} onPress={() => chooseLoad("bodyweight")} accessibilityLabel="Bodyweight load" style={{ flexGrow: 1, flexBasis: 140 }} />
+            <Choice label="Known weight" selected={loadKind === "known"} onPress={() => chooseLoad("known")} accessibilityLabel="Known weight" style={{ flexGrow: 1, flexBasis: 140 }} />
+            <Choice label="I’m not sure" selected={loadKind === "unknown"} onPress={() => chooseLoad("unknown")} accessibilityLabel="Unknown load" style={{ flexGrow: 1, flexBasis: 140 }} />
           </View>
           {loadKind === "known" ? (
             <View style={{ gap: spacing.sm }}>
-              <View style={[inputStyle, { minHeight: 56, flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingRight: 4 }]}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: spacing.sm }}>
                 <TextInput
                   accessibilityLabel="Load value"
                   keyboardType="decimal-pad"
                   placeholder="Weight"
                   placeholderTextColor={colors.textMuted}
-                  style={[typography.body, { flex: 1, color: colors.text }]}
+                  style={[typography.body, inputStyle, { flexGrow: 1, flexBasis: 150 }]}
                   value={loadValue}
                   onChangeText={setLoadValue}
                 />
-                <View style={{ width: 122, flexDirection: "row", padding: 3, borderRadius: radii.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: "#0E0E0E" }}>
-                  <Choice label="lb" selected={loadUnit === "lb"} onPress={() => setLoadUnit("lb")} accessibilityLabel="Load unit pounds" style={{ flex: 1, minHeight: 42, paddingHorizontal: 3 }} />
-                  <Choice label="kg" selected={loadUnit === "kg"} onPress={() => setLoadUnit("kg")} accessibilityLabel="Load unit kilograms" style={{ flex: 1, minHeight: 42, paddingHorizontal: 3 }} />
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs }}>
+                  <Choice label="lb" selected={loadUnit === "lb"} onPress={() => setLoadUnit("lb")} accessibilityLabel="Load unit pounds" style={{ minWidth: 64 }} />
+                  <Choice label="kg" selected={loadUnit === "kg"} onPress={() => setLoadUnit("kg")} accessibilityLabel="Load unit kilograms" style={{ minWidth: 64 }} />
                 </View>
               </View>
-              <View style={{ height: 54, flexDirection: "row", padding: 3, borderRadius: 15, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
-                <Choice label="Per hand" selected={loadScope === "per_hand"} onPress={() => setLoadScope("per_hand")} accessibilityLabel="Load scope per hand" style={{ flex: 1, paddingHorizontal: 2 }} />
-                <Choice label="Total" selected={loadScope === "total"} onPress={() => setLoadScope("total")} accessibilityLabel="Load scope total" style={{ flex: 1, paddingHorizontal: 2 }} />
-                <Choice label="Machine setting" selected={loadScope === "machine"} onPress={() => setLoadScope("machine")} accessibilityLabel="Load scope machine setting" style={{ flex: 1.3, paddingHorizontal: 2 }} />
+              <View style={{ width: "100%", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+                <Choice label="Per hand" selected={loadScope === "per_hand"} onPress={() => setLoadScope("per_hand")} accessibilityLabel="Load scope per hand" style={{ flexGrow: 1, flexBasis: 100 }} />
+                <Choice label="Total" selected={loadScope === "total"} onPress={() => setLoadScope("total")} accessibilityLabel="Load scope total" style={{ flexGrow: 1, flexBasis: 100 }} />
+                <Choice label="Machine setting" selected={loadScope === "machine"} onPress={() => setLoadScope("machine")} accessibilityLabel="Load scope machine setting" style={{ flexGrow: 1, flexBasis: 130 }} />
               </View>
             </View>
           ) : null}

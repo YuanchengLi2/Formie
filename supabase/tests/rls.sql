@@ -1,5 +1,5 @@
 begin;
-select plan(59);
+select plan(72);
 
 select has_table('public', 'analysis_sessions', 'analysis_sessions exists');
 select has_table('public', 'analysis_results', 'analysis_results exists');
@@ -60,6 +60,34 @@ select has_function(
   array['text', 'integer'],
   'v2 exercise catalog search is available at the RPC boundary'
 );
+select has_column(
+  'public',
+  'exercise_variants_v2',
+  'search_normalized_name',
+  'exercise variants persist their normalized canonical search name'
+);
+select has_column(
+  'public',
+  'exercise_variants_v2',
+  'search_normalized_aliases',
+  'exercise variants persist normalized aliases for exact ranking'
+);
+select has_column(
+  'public',
+  'exercise_variants_v2',
+  'search_text',
+  'exercise variants persist the full search document'
+);
+select ok(
+  not exists (
+    select 1
+    from public.exercise_variants_v2
+    where search_normalized_name is null
+      or search_normalized_aliases is null
+      or search_text is null
+  ),
+  'every exercise variant has a precomputed search document'
+);
 select ok(
   (select count(*) <= 20 from public.search_exercise_variants_v2('press', 99)),
   'v2 exercise search clamps the requested result count to twenty'
@@ -77,6 +105,111 @@ select is(
   (select name from public.search_exercise_variants('Dumbbell Bench Press', 12) limit 1),
   'Flat Dumbbell Bench Press',
   'the legacy search wrapper uses the corrected canonical base ranking'
+);
+select ok(
+  not exists (
+    select 1
+    from (values ('bench press'), ('deadlift'), ('squat'), ('leg extension')) as query(value)
+    cross join lateral public.search_exercise_variants_v2(query.value, 20) as result
+    where result.execution_style is not null
+      or lower(result.name) ~ '(^| )(tempo|pause|paused|partial|isometric)( |$)'
+  ),
+  'generic exercise searches exclude generated and legacy execution styles'
+);
+select ok(
+  exists (
+    select 1
+    from public.search_exercise_variants_v2('1 second pause bench press', 20)
+    where execution_style in ('1-second-lengthened-pause', '1-second-shortened-pause')
+  ),
+  'explicit style wording makes matching styled variants eligible'
+);
+select ok(
+  exists (
+    select 1
+    from public.search_exercise_variants_v2('be', 20)
+    where execution_style is null
+      and lower(name) like '%be%'
+  ),
+  'two-character typeahead returns an ordinary matching exercise'
+);
+select ok(
+  exists (
+    select 1
+    from public.search_exercise_variants_v2('bicep curl', 20)
+    where execution_style is null
+      and lower(name) like '%curl%'
+  ),
+  'ordinary bicep wording resolves to curl exercises'
+);
+select ok(
+  exists (
+    select 1
+    from public.search_exercise_variants_v2('bulgarian split squat', 20)
+    where execution_style is null
+      and lower(name) like '%rear foot elevated split squat%'
+  ),
+  'Bulgarian split squat wording resolves to rear-foot-elevated variants'
+);
+select ok(
+  exists (
+    select 1
+    from public.search_exercise_variants_v2('pres bench dumbell', 20)
+    where execution_style is null
+      and lower(name) like '%dumbbell%bench press%'
+  ),
+  'word order and one-edit spelling errors still resolve to the intended exercise'
+);
+select ok(
+  not exists (
+    select 1
+    from public.search_exercise_variants_v2('leg extension', 20)
+    where lower(name) not like '%leg extension%'
+  ),
+  'exercise-name searches do not pad results with biomechanically related movements'
+);
+select ok(
+  not exists (
+    select 1
+    from public.exercise_variants_v2 as variant
+    where variant.is_active
+      and variant.execution_style is null
+      and trim(regexp_replace(
+        extensions.unaccent(lower(variant.name)),
+        '[^a-z0-9]+', ' ', 'g'
+      )) = ''
+  )
+  and (
+    select count(*) = count(distinct trim(regexp_replace(
+      extensions.unaccent(lower(variant.name)),
+      '[^a-z0-9]+', ' ', 'g'
+    )))
+    from public.exercise_variants_v2 as variant
+    where variant.is_active
+      and variant.execution_style is null
+  ),
+  'every active ordinary catalog exercise has a unique searchable canonical name'
+);
+select ok(
+  not exists (
+    select 1
+    from (
+      select distinct on (variant.execution_style)
+        variant.id,
+        variant.name,
+        variant.execution_style
+      from public.exercise_variants_v2 as variant
+      where variant.is_active
+        and variant.execution_style is not null
+      order by variant.execution_style, variant.id
+    ) as sample
+    where not exists (
+      select 1
+      from public.search_exercise_variants_v2(sample.name, 20) as result
+      where result.id = sample.id
+    )
+  ),
+  'every generated execution-style family is discoverable by a complete styled name'
 );
 select has_function(
   'public',

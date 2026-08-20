@@ -88,6 +88,21 @@ describe("searchExerciseCatalog", () => {
     }))).resolves.toEqual([]);
   });
 
+  it("rejects biomechanically related rows whose exercise name does not match", async () => {
+    const relatedButWrong = {
+      id: 92,
+      name: "Single Leg Hip Thrust",
+      family: "hip-extension",
+      aliases: [],
+      mechanics: { movementFamily: "hip-extension", equipmentClass: "barbell" },
+    };
+
+    await expect(searchExerciseCatalog("leg extension", async () => ({
+      data: [relatedButWrong],
+      error: null,
+    }))).resolves.toEqual([]);
+  });
+
   it.each([
     ["dumbells", "Dumbbell Bench Press"],
     ["lat pulldowns", "Wide Grip Cable Lat Pulldown"],
@@ -95,6 +110,12 @@ describe("searchExerciseCatalog", () => {
     ["one hand row", "One Arm Dumbbell Row"],
     ["smith bench", "Flat Smith Machine Bench Press"],
     ["bulgarian squat", "Rear Foot Elevated Split Squat"],
+    ["bicep curl", "Dumbbell Standing Curl"],
+    ["bulgarian split squat", "Dumbbell Rear Foot Elevated Split Squat"],
+    ["rdl dumbell", "Dumbbell Romanian Deadlift"],
+    ["ohp barbell", "Barbell Overhead Press"],
+    ["shoulder press", "Seated Dumbbell Overhead Press"],
+    ["pushup", "Push Up"],
   ])("keeps ordinary gym wording strict for %s", async (query, name) => {
     const row = { id: 88, name, family: "movement", aliases: [], mechanics: {} };
     await expect(searchExerciseCatalog(query, async () => ({ data: [row], error: null }))).resolves.toEqual([row]);
@@ -104,5 +125,14 @@ describe("searchExerciseCatalog", () => {
     const exactAlias = { id: 1, name: "Chest Press", family: "press", aliases: ["db bench"], mechanics: {} };
     const fuzzy = { id: 2, name: "Dumbbell Bench Press", family: "press", aliases: [], mechanics: {} };
     await expect(searchExerciseCatalog("db bench", async () => ({ data: [exactAlias, fuzzy], error: null }))).resolves.toEqual([exactAlias, fuzzy]);
+  });
+
+  it("accepts reordered words and one-edit spelling errors for the intended exercise", async () => {
+    const row = { id: 91, name: "Flat Dumbbell Bench Press", family: "press", aliases: [], mechanics: {} };
+
+    await expect(searchExerciseCatalog("pres bench dumbell", async () => ({
+      data: [row],
+      error: null,
+    }))).resolves.toEqual([row]);
   });
 });

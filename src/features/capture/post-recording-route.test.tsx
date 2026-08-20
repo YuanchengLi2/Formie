@@ -215,13 +215,14 @@ describe("post-recording route invariants", () => {
     });
     const screen = await renderRoute(<AnalysisReviewRoute />);
 
-    expect(screen.getByText(/Tell Formie/)).toBeTruthy();
-    expect(screen.getByLabelText("Recorded set preview")).toBeTruthy();
+    expect(screen.getByText("Check your recording")).toBeTruthy();
+    expect(screen.queryByLabelText("Recorded set preview")).toBeNull();
     expect(screen.getByText("1 analysis will be used")).toBeTruthy();
-    expect(screen.getByText("10 available now")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("What to check tab"));
+    expect(screen.getByText(/10 available now/)).toBeTruthy();
     expect(screen.getByText("Whole body visible")).toBeTruthy();
     expect(screen.getByText("Stable and not shaky")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Video tab"));
+    expect(screen.getByLabelText("Recorded set preview")).toBeTruthy();
     expect(screen.queryByText("FINAL CHECK")).toBeNull();
     expect(screen.queryByText(/Formie can only analyze what the camera clearly shows/)).toBeNull();
     expect(screen.queryByText("set-details-screen")).toBeNull();
@@ -293,7 +294,8 @@ describe("post-recording route invariants", () => {
 
     const screen = await renderRoute(<AnalysisReviewRoute />);
 
-    expect(screen.getByText(/Tell Formie/)).toBeTruthy();
+    expect(screen.getByText("Check your recording")).toBeTruthy();
+    expect(screen.getByText("6 things to check")).toBeTruthy();
     expect(screen.queryByText("set-details-screen")).toBeNull();
   });
 });

@@ -57,7 +57,11 @@ const QUERY_EXPANSIONS: Record<string, readonly string[]> = {
   single: ["one"],
   hand: ["arm"],
   arm: ["hand"],
+  bicep: ["biceps", "curl"],
+  biceps: ["bicep", "curl"],
   tricep: ["triceps"],
+  rdl: ["romanian"],
+  ohp: ["overhead"],
   pulldown: ["pull down", "pulldown"],
   pulldowns: ["pull down", "pulldown"],
 };
@@ -72,7 +76,9 @@ function singularize(token: string): string {
 
 function expandQuery(value: string): string {
   return normalizeExerciseSearch(value)
-    .replace(/\bbulgarian squat\b/g, "rear foot elevated split squat")
+    .replace(/\bbulgarian(?: split)? squat\b/g, "rear foot elevated split squat")
+    .replace(/\bshoulder press\b/g, "overhead press")
+    .replace(/\bpushups?\b/g, "push up")
     .replace(/\bone hand\b/g, "single arm")
     .replace(/\bone arm\b/g, "single arm")
     .replace(/\bsmiths\b/g, "smith");
@@ -90,13 +96,9 @@ export function exerciseSearchHighlightTerms(value: string): string[] {
 }
 
 function candidateTokens(exercise: CatalogExercise): string[] {
-  const mechanicsText = Object.values(exercise.mechanics)
-    .flatMap((value) => typeof value === "string" ? [value] : Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []);
   return normalizeExerciseSearch([
     exercise.name,
     ...exercise.aliases,
-    exercise.family,
-    ...mechanicsText,
   ].join(" ")).split(" ").filter(Boolean);
 }
 
@@ -132,13 +134,10 @@ function tokenMatches(group: string[], candidates: string[]): boolean {
 function isCredibleSearchResult(exercise: CatalogExercise, query: string): boolean {
   const groups = queryGroups(query);
   if (groups.length === 0) return false;
-  // `matched_terms` is useful evidence from the RPC, but it is not a license
-  // to bypass the token gate. A stale or malformed response must still prove
-  // that every meaningful query group maps to the returned row.
-  const candidates = [
-    ...candidateTokens(exercise),
-    ...(exercise.matched_terms ?? []).flatMap((term) => normalizeExerciseSearch(term).split(" ")),
-  ];
+  // `matched_terms` is intentionally not part of the candidate set. A stale
+  // or malformed response must prove every query group against the exercise's
+  // canonical name or aliases instead of repeating the query as evidence.
+  const candidates = candidateTokens(exercise);
   return groups.every((group) => tokenMatches(group, candidates));
 }
 

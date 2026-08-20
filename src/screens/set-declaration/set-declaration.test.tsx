@@ -137,6 +137,22 @@ describe("SetDeclarationScreen", () => {
       paddingBottom: 58,
       paddingHorizontal: 20,
     });
+    expect(screen.getByTestId("set-declaration-scroll").props.contentInsetAdjustmentBehavior).toBe("never");
+  });
+
+  it("uses wrapping controls instead of fixed-width rows that collide on narrow phones", async () => {
+    const screen = await renderDeclaration(
+      <SetDeclarationScreen
+        localVideoUri="file:///set.mp4"
+        onAnalyze={jest.fn()}
+        onRetake={jest.fn()}
+      />,
+    );
+
+    expect(StyleSheet.flatten(screen.getByTestId("amount-kind-options").props.style)).toMatchObject({ flexWrap: "wrap" });
+    expect(StyleSheet.flatten(screen.getByTestId("count-scope-options").props.style)).toMatchObject({ flexWrap: "wrap", width: "100%" });
+    expect(StyleSheet.flatten(screen.getByTestId("load-kind-options").props.style)).toMatchObject({ flexWrap: "wrap" });
+    expect(screen.queryAllByTestId(/^set-detail-decorative-icon-/)).toHaveLength(0);
   });
 
   it("supports reanalysis-specific submit and cancel labels", async () => {
