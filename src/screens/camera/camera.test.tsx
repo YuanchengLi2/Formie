@@ -187,7 +187,34 @@ describe("CameraScreen capture lifecycle", () => {
     });
 
     expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("ultraWideCamera");
-    expect(screen.getByLabelText("Camera preview").props.zoom).toBe(0);
+    expect(screen.getByLabelText("Camera preview").props.zoom).toBeUndefined();
+  });
+
+  it("locks the physical lens during recording while keeping pinch zoom active", async () => {
+    const screen = await render(<CameraScreen />);
+    await act(async () => screen.getByLabelText("Camera preview").props.onAvailableLensesChanged({ lenses: ["wideAngleCamera", "ultraWideCamera"] }));
+    expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("wideAngleCamera");
+
+    await act(async () => {
+      useCaptureStore.getState().dispatch({ type: "begin_countdown", countdownSeconds: 5 });
+      for (let tick = 0; tick < 5; tick += 1) useCaptureStore.getState().dispatch({ type: "countdown_tick" });
+      useCaptureStore.getState().dispatch({ type: "recording_started", startedAt: Date.now() });
+    });
+    await act(async () => {
+      mockPinchBegin?.();
+      mockPinchUpdate?.({ scale: 0.5 });
+    });
+
+    expect(screen.getByLabelText("Camera preview").props.selectedLens).toBe("wideAngleCamera");
+    expect(screen.getByLabelText("Live camera magnification")).toBeTruthy();
+    expect(screen.getByLabelText("Flip camera").props.accessibilityState).toEqual({ disabled: true });
+    await act(async () => mockPinchEnd?.({ scale: 0.5 }));
+  });
+
+  it("has one authoritative zoom prop instead of competing React and animated values", async () => {
+    const screen = await render(<CameraScreen />);
+    expect(screen.getByLabelText("Camera preview").props.zoom).toBeUndefined();
+    expect(screen.getByLabelText("Camera preview").props.animatedProps).toEqual(expect.objectContaining({ zoom: expect.any(Number) }));
   });
 
   it("does not offer 0.5x when the active camera has no ultrawide lens", async () => {

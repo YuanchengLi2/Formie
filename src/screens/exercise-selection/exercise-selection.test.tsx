@@ -101,14 +101,14 @@ describe("ExerciseSelectionScreen", () => {
     });
 
     expect(screen.queryByTestId("exercise-hero-section")).toBeNull();
-    expect(screen.getByText("No exact match")).toBeTruthy();
+    expect(screen.getByText("Can’t find your exercise?")).toBeTruthy();
     expect(screen.getByText('Use “Jefferson curl”')).toBeTruthy();
     expect(screen.getByText("Formie will use this exercise name to create your setup guide before you record.")).toBeTruthy();
     fireEvent.press(screen.getByLabelText("Use Jefferson curl for setup"));
     expect(onGenerateCustomGuide).toHaveBeenCalledWith("Jefferson curl");
   });
 
-  it("does not offer custom text while a credible catalog suggestion exists", async () => {
+  it("keeps the can't-find action available below fuzzy catalog suggestions", async () => {
     const fuzzyResult: CatalogExercise = {
       id: 301,
       name: "Single Arm Dumbbell Overhead Triceps Extension",
@@ -130,7 +130,7 @@ describe("ExerciseSelectionScreen", () => {
     });
 
     await waitFor(() => expect(screen.getByText(fuzzyResult.name)).toBeTruthy());
-    expect(screen.queryByLabelText("Use seated one arm dumbbell extensions for setup")).toBeNull();
+    expect(screen.getByLabelText("Use seated one arm dumbbell extensions for setup")).toBeTruthy();
   });
 
   it("ignores a late response from an older query", async () => {

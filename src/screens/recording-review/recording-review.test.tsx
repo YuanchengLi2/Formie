@@ -67,6 +67,8 @@ describe("RecordingReviewScreen", () => {
     expect(screen.getByText("Camera stays in the same position")).toBeTruthy();
     expect(screen.queryByLabelText("Recorded set preview")).toBeNull();
     expect(screen.getByTestId("recording-review-scroll").props.nestedScrollEnabled).toBe(true);
+    expect(StyleSheet.flatten(screen.getByTestId("recording-review-scroll").props.contentContainerStyle)).toMatchObject({ paddingTop: 24 });
+    expect(screen.queryByLabelText("Check 1 status")).toBeNull();
 
     await fireEvent.press(screen.getByLabelText("Video tab"));
     expect(screen.getByLabelText("Recorded set preview")).toBeTruthy();

@@ -43,7 +43,11 @@ export function ExerciseSelectionScreen({
   const requestSequence = useRef(0);
   const normalizedQuery = query.trim();
   const searchIsActive = normalizedQuery.length >= 2;
-  const hasCredibleCatalogMatch = results.length > 0;
+  const normalizedSearchQuery = normalizeExerciseSearch(normalizedQuery);
+  const hasExactCatalogMatch = results.some((exercise) => (
+    normalizeExerciseSearch(exercise.name) === normalizedSearchQuery
+    || exercise.aliases.some((alias) => normalizeExerciseSearch(alias) === normalizedSearchQuery)
+  ));
 
   useEffect(() => {
     const normalized = query.trim();
@@ -150,7 +154,7 @@ export function ExerciseSelectionScreen({
             <Text style={[typography.heading, { color: colors.gold }]}>›</Text>
           </Pressable>
         ))}
-        {!loading && searchIsActive && !hasCredibleCatalogMatch ? (
+        {!loading && searchIsActive && !hasExactCatalogMatch ? (
           <Pressable
             accessibilityLabel={`Use ${normalizedQuery} for setup`}
             accessibilityRole="button"
@@ -164,7 +168,7 @@ export function ExerciseSelectionScreen({
               backgroundColor: pressed ? colors.goldSoft : colors.surface,
             })}
           >
-            <Text style={[typography.heading, { color: colors.text }]}>No exact match</Text>
+            <Text style={[typography.heading, { color: colors.text }]}>Can’t find your exercise?</Text>
             <Text style={[typography.body, { color: colors.gold }]}>{`Use “${normalizedQuery}”`}</Text>
             <Text style={[typography.caption, { color: colors.textSecondary }]}>
               Formie will use this exercise name to create your setup guide before you record.

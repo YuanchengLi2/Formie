@@ -133,11 +133,11 @@ describe("SetDeclarationScreen", () => {
     );
 
     expect(StyleSheet.flatten(screen.getByTestId("set-declaration-scroll").props.contentContainerStyle)).toMatchObject({
-      paddingTop: 59,
-      paddingBottom: 58,
-      paddingHorizontal: 20,
+      paddingTop: 63,
+      paddingBottom: 66,
+      paddingHorizontal: 16,
     });
-    expect(screen.getByTestId("set-declaration-scroll").props.contentInsetAdjustmentBehavior).toBe("never");
+    expect(screen.getByTestId("set-declaration-scroll").props.contentInsetAdjustmentBehavior).toBe("automatic");
   });
 
   it("uses wrapping controls instead of fixed-width rows that collide on narrow phones", async () => {

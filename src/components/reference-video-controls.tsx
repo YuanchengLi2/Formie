@@ -1,8 +1,7 @@
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Modal, Text, View, type LayoutChangeEvent } from "react-native";
+import { ActivityIndicator, Text, View, type LayoutChangeEvent } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
-import { SafeAreaView } from "react-native-safe-area-context";
 
 import { CaptureReferenceIcon } from "@/components/capture-reference-icon";
 import { colors } from "@/theme/colors";
@@ -21,22 +20,49 @@ export function formatPlaybackTime(seconds: number): string {
 }
 
 export function ReferenceVideoControls({ localVideoUri, fillAvailableSpace = false }: ReferenceVideoControlsProps) {
-  const player = useVideoPlayer(localVideoUri, (created) => {
+  const player = useVideoPlayer(null, (created) => {
     created.loop = true;
     created.timeUpdateEventInterval = 0.25;
   });
+  const videoViewRef = useRef<VideoView>(null);
   const timelineWidthRef = useRef(1);
+  const sourceGenerationRef = useRef(0);
+  const replaceQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [playing, setPlaying] = useState(player.playing);
   const [currentTime, setCurrentTime] = useState(player.currentTime);
   const [duration, setDuration] = useState(player.duration);
   const [error, setError] = useState<string | null>(null);
-  const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const generation = ++sourceGenerationRef.current;
+    setLoading(true);
+    setError(null);
+    setCurrentTime(0);
+    setDuration(0);
+    replaceQueueRef.current = replaceQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (generation !== sourceGenerationRef.current) return;
+        player.pause();
+        await player.replaceAsync(localVideoUri);
+        if (generation === sourceGenerationRef.current) {
+          setDuration(Number.isFinite(player.duration) ? player.duration : 0);
+        }
+      })
+      .catch((replaceError: unknown) => {
+        if (generation !== sourceGenerationRef.current) return;
+        setLoading(false);
+        setError(replaceError instanceof Error ? replaceError.message : "This recording could not be played.");
+      });
+  }, [localVideoUri, player]);
 
   useEffect(() => {
     const playingSubscription = player.addListener("playingChange", ({ isPlaying }) => setPlaying(isPlaying));
     const timeSubscription = player.addListener("timeUpdate", ({ currentTime: nextTime }) => setCurrentTime(nextTime));
     const statusSubscription = player.addListener("statusChange", ({ status, error: playerError }) => {
       setDuration(Number.isFinite(player.duration) ? player.duration : 0);
+      setLoading(status === "idle" || status === "loading");
       setError(status === "error" ? playerError?.message ?? "This recording could not be played." : null);
     });
     return () => {
@@ -79,14 +105,16 @@ export function ReferenceVideoControls({ localVideoUri, fillAvailableSpace = fal
       ]}
     >
       <VideoView
+        ref={videoViewRef}
         accessibilityLabel="Recorded set preview"
         contentFit="contain"
         nativeControls={false}
+        onFirstFrameRender={() => setLoading(false)}
         player={player}
         style={{ width: "100%", height: "100%", backgroundColor: colors.cameraBlack }}
       />
 
-      {!playing && !error ? (
+      {!playing && !error && !loading ? (
         <Pressable
           accessibilityLabel="Play recording preview"
           accessibilityRole="button"
@@ -103,11 +131,17 @@ export function ReferenceVideoControls({ localVideoUri, fillAvailableSpace = fal
         </View>
       ) : null}
 
+      {loading && !error ? (
+        <View accessibilityLabel="Loading recording" style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center", backgroundColor: colors.cameraBlack }}>
+          <ActivityIndicator color={colors.gold} />
+        </View>
+      ) : null}
+
       <Pressable
         accessibilityLabel="View recording fullscreen"
         accessibilityRole="button"
         hitSlop={8}
-        onPress={() => setFullscreenOpen(true)}
+        onPress={() => { void videoViewRef.current?.enterFullscreen(); }}
         style={{ position: "absolute", top: 10, left: 10, width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 9, backgroundColor: "rgba(20,20,20,0.86)" }}
       >
         <CaptureReferenceIcon name="fullscreen" color={colors.text} size={19} />
@@ -154,28 +188,5 @@ export function ReferenceVideoControls({ localVideoUri, fillAvailableSpace = fal
     </View>
     <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, bottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 }}><Text style={{ color: colors.gold, fontSize: 12 }}>☝</Text><Text selectable style={[typography.caption, { color: colors.textMuted, fontSize: 11, lineHeight: 15 }]}>Drag or swipe to scrub</Text></View>
     </View>
-    <Modal animationType="fade" onRequestClose={() => setFullscreenOpen(false)} presentationStyle="fullScreen" visible={fullscreenOpen}>
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.cameraBlack }}>
-        <VideoView
-          accessibilityLabel="Fullscreen recording preview"
-          contentFit="contain"
-          nativeControls
-          player={player}
-          style={{ flex: 1, backgroundColor: colors.cameraBlack }}
-        />
-        <SafeAreaView edges={["top"]} pointerEvents="box-none" style={{ position: "absolute", top: 0, left: 0, right: 0 }}>
-          <Pressable
-            accessibilityLabel="Close fullscreen recording"
-            accessibilityRole="button"
-            hitSlop={12}
-            onPress={() => setFullscreenOpen(false)}
-            style={{ minWidth: 96, minHeight: 52, alignSelf: "flex-end", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, marginTop: 12, marginRight: 16, paddingHorizontal: 16, borderRadius: 26, borderWidth: 2, borderColor: colors.cameraBlack, backgroundColor: colors.gold }}
-          >
-            <Text style={{ color: colors.cameraBlack, fontSize: 25, lineHeight: 27, fontWeight: "800" }}>{"\u00D7"}</Text>
-            <Text style={[typography.label, { color: colors.cameraBlack }]}>Close</Text>
-          </Pressable>
-        </SafeAreaView>
-      </SafeAreaView>
-    </Modal>
   </>);
 }

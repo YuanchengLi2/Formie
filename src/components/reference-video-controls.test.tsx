@@ -1,10 +1,12 @@
 /* eslint-disable import/first */
 import React from "react";
-import { act, fireEvent, render } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 
 const mockPlay = jest.fn();
 const mockPause = jest.fn();
+const mockReplaceAsync = jest.fn<Promise<void>, [string]>(async () => undefined);
+const mockEnterFullscreen = jest.fn(async () => undefined);
 const mockListeners: Record<string, (event: Record<string, unknown>) => void> = {};
 let mockCurrentTime = 0;
 
@@ -13,10 +15,10 @@ jest.mock("expo-video", () => {
   const { View } = jest.requireActual<typeof import("react-native")>("react-native");
   return {
     VideoView: ReactRuntime.forwardRef((props: Record<string, unknown>, ref) => {
-      ReactRuntime.useImperativeHandle(ref, () => ({}));
+      ReactRuntime.useImperativeHandle(ref, () => ({ enterFullscreen: mockEnterFullscreen }));
       return <View {...props} />;
     }),
-    useVideoPlayer: (_source: string, setup?: (player: Record<string, unknown>) => void) => {
+    useVideoPlayer: (_source: string | null, setup?: (player: Record<string, unknown>) => void) => {
       const playerRef = ReactRuntime.useRef<Record<string, unknown> | null>(null);
       if (!playerRef.current) {
         const player: Record<string, unknown> = {
@@ -28,6 +30,7 @@ jest.mock("expo-video", () => {
           pause: mockPause,
           play: mockPlay,
           playing: false,
+          replaceAsync: mockReplaceAsync,
           status: "readyToPlay",
         };
         Object.defineProperty(player, "currentTime", {
@@ -54,6 +57,8 @@ describe("ReferenceVideoControls", () => {
   beforeEach(() => {
     mockPlay.mockClear();
     mockPause.mockClear();
+    mockReplaceAsync.mockClear();
+    mockEnterFullscreen.mockClear();
     mockCurrentTime = 0;
     Object.keys(mockListeners).forEach((key) => delete mockListeners[key]);
   });
@@ -68,8 +73,11 @@ describe("ReferenceVideoControls", () => {
     expect(formatPlaybackTime(seconds)).toBe(expected);
   });
 
-  it("drives real playback state, clamped seeking, and an explicitly dismissible fullscreen view", async () => {
+  it("drives real playback state, clamped seeking, and native fullscreen on one video view", async () => {
     const screen = await render(<ReferenceVideoControls localVideoUri="file:///set.mp4" />);
+
+    await waitFor(() => expect(mockReplaceAsync).toHaveBeenCalledWith("file:///set.mp4"));
+    mockPause.mockClear();
 
     expect(screen.getByLabelText("Recorded set preview").props.nativeControls).toBe(false);
     await fireEvent.press(screen.getByLabelText("Play recording"));
@@ -92,12 +100,17 @@ describe("ReferenceVideoControls", () => {
     expect(mockCurrentTime).toBe(4.5);
 
     await fireEvent.press(screen.getByLabelText("View recording fullscreen"));
-    expect(screen.getByLabelText("Fullscreen recording preview")).toBeTruthy();
-    const close = screen.getByLabelText("Close fullscreen recording");
-    expect(StyleSheet.flatten(close.props.style)).toMatchObject({ minWidth: 96, minHeight: 52, backgroundColor: "#C8A96B" });
-    expect(screen.getByText("Close")).toBeTruthy();
-    await fireEvent.press(close);
+    expect(mockEnterFullscreen).toHaveBeenCalledTimes(1);
     expect(screen.queryByLabelText("Fullscreen recording preview")).toBeNull();
+  });
+
+  it("replaces the player source when the recording URI changes", async () => {
+    const screen = await render(<ReferenceVideoControls localVideoUri="file:///first.mp4" />);
+    await waitFor(() => expect(mockReplaceAsync).toHaveBeenCalledWith("file:///first.mp4"));
+    screen.rerender(<ReferenceVideoControls localVideoUri="file:///second.mp4" />);
+    await waitFor(() => expect(mockReplaceAsync).toHaveBeenCalledWith("file:///second.mp4"));
+
+    expect(mockReplaceAsync.mock.calls.map(([source]) => source)).toEqual(["file:///first.mp4", "file:///second.mp4"]);
   });
 
   it("can fill the review tab instead of forcing a short landscape card", async () => {
