@@ -202,17 +202,21 @@ describe("ResultsScreen", () => {
     expect(screen.getByTestId("overall-analysis-score").props.children).toBe(75);
     expect(screen.getByTestId("overall-analysis-score").props.accessibilityLabel).toBe("Overall score 75 out of 100");
     expect(screen.getByTestId("score-grade-stamp").props.accessibilityLabel).toBe("Letter grade C");
-    expect(screen.getByTestId("movement-score-overall-row").props.style).toEqual(expect.objectContaining({ height: 120 }));
-    expect(screen.getByTestId("score-grade-stamp").props.style).toEqual(expect.objectContaining({ width: 116, height: 116, marginRight: 16 }));
-    expect(screen.getByTestId("score-grade-stamp").props.style).not.toEqual(expect.objectContaining({ marginLeft: "auto" }));
+    expect(screen.getByTestId("overall-score-ring")).toBeTruthy();
+    expect(screen.getByText("Overall Performance")).toBeTruthy();
+    expect(screen.getByText("SCORE BREAKDOWN")).toBeTruthy();
     expect(screen.getByText("FORM GRADE")).toBeTruthy();
     expect(screen.getByText("C")).toBeTruthy();
-    expect(screen.getByText("MOVEMENT SCORES")).toBeTruthy();
+    expect(screen.getByText("MOVEMENT SCORE")).toBeTruthy();
     expect(screen.queryByText("Your early repetitions establish a controlled path.")).toBeNull();
     expect(screen.queryByTestId("coach-score-gauge")).toBeNull();
-    expect(screen.getByTestId("movement-scores")).toBeTruthy();
+    expect(screen.getByTestId("movement-score-list")).toBeTruthy();
+    expect(screen.getAllByTestId(/^movement-score-row-/)).toHaveLength(4);
+    expect(screen.getByTestId("movement-score-icon-handle-path").props.accessibilityLabel).toBe("Path icon");
+    expect(screen.getByTestId("movement-score-icon-lowering-control").props.accessibilityLabel).toBe("Control icon");
     expect(screen.queryByText("WEAKNESSES")).toBeNull();
-    expect(screen.queryByText(/drag to rotate/i)).toBeNull();
+    expect(screen.getByText("Drag to rotate")).toBeTruthy();
+    expect(screen.queryByText(/focus on improving stability/i)).toBeNull();
     expect(screen.getByTestId("coaching-workspace")).toBeTruthy();
     expect(screen.getByTestId("active-coaching-panel").props.accessibilityLabel).toContain("Priority 1");
     expect(screen.getByTestId("coaching-what-happened-copy")).toHaveStyle({ color: colors.text, fontSize: 15, lineHeight: 22, fontWeight: "700" });
@@ -332,16 +336,16 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("STARTING POSITION")).toBeNull();
   });
 
-  it("highlights form issues and target muscles directly on the SVG muscle map", async () => {
+  it("shows one solid finger-rotatable muscle map without front and back controls", async () => {
     const screen = await renderResults();
 
     expect(screen.getByTestId("muscle-focus-figure")).toBeTruthy();
     expect(screen.getByTestId("native-muscle-map")).toBeTruthy();
     expect(screen.queryByTestId("anatomy-body-image")).toBeNull();
     expect(screen.queryByTestId("anatomy-3d-canvas")).toBeNull();
-    expect(screen.getByLabelText("Front and back muscle map")).toBeTruthy();
-    expect(screen.getByLabelText("Front anatomy")).toBeTruthy();
-    expect(screen.getByLabelText("Back anatomy")).toBeTruthy();
+    expect(screen.getByLabelText("Rotatable muscle map")).toBeTruthy();
+    expect(screen.queryByLabelText("Front anatomy")).toBeNull();
+    expect(screen.queryByLabelText("Back anatomy")).toBeNull();
     expect(screen.queryByLabelText("Zoom out anatomy")).toBeNull();
     expect(screen.getByLabelText("Your Form").props.accessibilityState).toEqual({ selected: true });
     expect(screen.getByTestId("muscle-map-native-highlight-deltoids")).toBeTruthy();
@@ -353,7 +357,6 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText(/never claims actual muscle activation/i)).toBeNull();
     expect(screen.getByTestId("anatomy-gesture-surface")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Target Muscles"));
-    expect(screen.getByLabelText("Back anatomy").props.accessibilityState).toEqual({ selected: true });
     expect(screen.getByTestId("muscle-map-native-highlight-upper-back")).toBeTruthy();
     expect(screen.getByTestId("muscle-map-native-highlight-trapezius")).toBeTruthy();
     expect(screen.getByTestId("anatomy-target-lats")).toBeTruthy();
@@ -417,7 +420,7 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("Handle Path")).toBeTruthy();
     expect(screen.getByText("Shoulder Level")).toBeTruthy();
     expect(screen.queryByText(result().coachNote!)).toBeNull();
-    expect(screen.getByTestId("movement-scores")).toBeTruthy();
+    expect(screen.getByTestId("movement-score-list")).toBeTruthy();
     expect(screen.queryByLabelText("Scores")).toBeNull();
     expect(screen.queryByText("COACH'S NOTE")).toBeNull();
   });

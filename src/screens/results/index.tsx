@@ -1,18 +1,17 @@
 import { useMemo, useState } from "react";
 import { ScrollView, Text, useWindowDimensions, View } from "react-native";
-import { Image } from "expo-image";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormButton } from "@/components/form-button";
 import { FullRecording } from "@/components/full-recording";
 import { MuscleFocusFigure } from "@/components/muscle-focus-figure";
+import { MovementScoreCard } from "@/components/movement-score-card";
 import { resolveExerciseMuscleFocus } from "@/features/analysis/exercise-muscle-focus";
 import { deriveObservedIssueRegions } from "@/features/analysis/issue-regions";
 import { getResultPresentation } from "@/features/analysis/presentation";
 import { resolvePlaybackWindow, sourceToClipMs, type PlaybackWindow } from "@/features/analysis/playback-window";
 import { buildCoachingReviewPoints, buildReviewFrames, type ReviewFrame, type ReviewPurpose } from "@/features/analysis/review-frames";
-import { scoreLetterGrade } from "@/features/analysis/score-grade";
 import { limitAnalysisSentences, normalizeAnalysisText } from "@/features/analysis/sentences";
 import type { AnalysisResult, AnatomyRegion } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
@@ -39,7 +38,6 @@ type ResultsScreenProps = {
 
 const summaryTextStyle = { fontSize: 16, lineHeight: 23, fontWeight: "400" as const };
 const summaryListTextStyle = { fontSize: 16, lineHeight: 23, fontWeight: "600" as const };
-const formGradeSeal = require("../../../assets/production/form-grade-seal-v2.png");
 export function conciseCopy(value: string, maxSentences: number, maxWords: number): string {
   const selected = limitAnalysisSentences(value, maxSentences);
   const words = selected.split(/\s+/).filter(Boolean);
@@ -105,7 +103,6 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const wideWorkspace = width >= 820;
-  const narrowScoreCard = width < 350;
   const presentation = getResultPresentation(result);
   const points = useMemo(() => buildCoachingReviewPoints(result), [result]);
   const synchronizedReviewFrames = useMemo(() => buildReviewFrames(result).observed, [result]);
@@ -278,41 +275,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
         <MuscleFocusFigure focus={exerciseMuscleFocus} issueRegions={issueRegions} />
       </View> : null}
 
-      {hasScoreContent ? <View testID="movement-scores-section" style={{ width: "100%", gap: 12, paddingHorizontal: 14, paddingTop: 14, paddingBottom: 11, borderRadius: radii.md, borderCurve: "continuous", borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.goldSoft }}>
-        {hasScoreContent ? <View style={{ width: "100%", gap: 12 }}>
-          <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>MOVEMENT SCORES</Text>
-          {presentation.score !== null ? <View testID="movement-score-overall" style={{ gap: 3, paddingBottom: hasMovementScores ? 3 : 0 }}>
-            <Text selectable style={[typography.label, { color: colors.textSecondary }]}>Overall score</Text>
-            <View testID="movement-score-overall-row" style={{ width: "100%", height: narrowScoreCard ? 108 : 120, flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View style={{ flex: 1, minWidth: 0, flexDirection: "row", alignItems: "baseline", gap: spacing.xs }}>
-                <Text accessibilityLabel={`Overall score ${presentation.score} out of 100`} selectable testID="overall-analysis-score" style={{ color: colors.gold, fontSize: narrowScoreCard ? 43 : 47, lineHeight: narrowScoreCard ? 48 : 52, fontWeight: "800", letterSpacing: -1.2, fontVariant: ["tabular-nums"], flexShrink: 1 }}>{presentation.score}</Text>
-                <Text selectable style={{ color: colors.textSecondary, fontSize: narrowScoreCard ? 14 : 16, lineHeight: 21, fontWeight: "700" }}>/ 100</Text>
-              </View>
-              <View accessibilityLabel={`Letter grade ${scoreLetterGrade(presentation.score)}`} testID="score-grade-stamp" style={{ width: narrowScoreCard ? 104 : 116, height: narrowScoreCard ? 104 : 116, flexShrink: 0, marginRight: narrowScoreCard ? 8 : 16, alignItems: "center", justifyContent: "center" }}>
-                <Image pointerEvents="none" accessibilityElementsHidden source={formGradeSeal} contentFit="contain" style={{ position: "absolute", inset: 0, width: narrowScoreCard ? 104 : 116, height: narrowScoreCard ? 104 : 116 }} />
-                <View pointerEvents="none" style={{ alignItems: "center", justifyContent: "center", gap: 2 }}>
-                  <Text selectable style={{ color: colors.gold, fontSize: narrowScoreCard ? 7 : 8, lineHeight: 11, fontWeight: "900", letterSpacing: 1.05 }}>FORM GRADE</Text>
-                  <Text selectable style={{ color: colors.gold, fontSize: narrowScoreCard ? 35 : 39, lineHeight: narrowScoreCard ? 38 : 42, fontWeight: "900", letterSpacing: -0.4 }}>{scoreLetterGrade(presentation.score)}</Text>
-                </View>
-              </View>
-            </View>
-          </View> : null}
-          {movementScores.length > 0 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="movement-scores" contentContainerStyle={{ gap: spacing.sm }}>
-            {movementScores.map((item) => (
-              <View key={item.id} style={{ width: Math.min(230, width - spacing.xl * 2), gap: spacing.sm, padding: spacing.md, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
-                <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: spacing.sm }}>
-                  <Text selectable style={[typography.label, { flex: 1, color: colors.text }]}>{item.label}</Text>
-                  <Text selectable style={[typography.label, { color: colors.gold, fontVariant: ["tabular-nums"] }]}>{Math.round(item.score)}</Text>
-                </View>
-                <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(item.score) }} style={{ height: 5, borderRadius: 3, overflow: "hidden", backgroundColor: colors.border }}>
-                  <View style={{ width: `${Math.max(0, Math.min(100, item.score))}%`, height: 5, backgroundColor: colors.gold }} />
-                </View>
-                <Text selectable style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20 }}>{item.observed}</Text>
-              </View>
-            ))}
-          </ScrollView> : null}
-        </View> : null}
-      </View> : null}
+      {hasScoreContent ? <MovementScoreCard score={presentation.score} movementScores={movementScores} /> : null}
 
       {conciseWholeSetSummary ? <View testID="whole-set-summary-section" style={{ gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceRaised }}>
         <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.4 }]}>WHOLE SET SUMMARY</Text>

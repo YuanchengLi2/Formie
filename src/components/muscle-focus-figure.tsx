@@ -8,9 +8,9 @@ import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
 
-const TARGET_COLOR = "#35D07F";
-const SECONDARY_COLOR = colors.danger;
-const ISSUE_COLOR = "#F1B542";
+const TARGET_COLOR = colors.gold;
+const SECONDARY_COLOR = colors.goldPressed;
+const ISSUE_COLOR = colors.danger;
 
 function LegendLine({ color, label, names }: { color: string; label: string; names: string[] }) {
   return (
@@ -62,9 +62,7 @@ export function MuscleFocusFigure({ focus, issueRegions }: { focus: MuscleFocus 
           <LegendLine color={SECONDARY_COLOR} label="Supporting muscles" names={secondary.map((target) => target.name)} />
         </View>
         : <LegendLine color={ISSUE_COLOR} label="Observed issue areas" names={issueRegions.map(displayRegion)} />}
-      <Text selectable style={[typography.caption, { color: colors.textMuted }]}>
-        Interactive SVG muscle map · MIT licensed
-      </Text>
+      <Text selectable style={[typography.caption, { color: colors.textMuted, textAlign: "center", letterSpacing: 0.4 }]}>Drag to rotate</Text>
     </View>
   );
 }
