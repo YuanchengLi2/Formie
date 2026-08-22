@@ -1,31 +1,28 @@
-/* eslint-disable @typescript-eslint/no-require-imports, react/no-unknown-property */
-import { Canvas, useFrame, useLoader } from "@react-three/fiber/native";
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+/* eslint-disable @typescript-eslint/no-require-imports */
+import { Asset } from "expo-asset";
+import { File } from "expo-file-system";
+import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { cancelAnimation, ReduceMotion, useSharedValue, withDecay, withSpring, type SharedValue } from "react-native-reanimated";
 import {
-  Box3,
-  Color,
-  Float32BufferAttribute,
-  FrontSide,
-  Group,
-  Mesh,
-  MeshStandardMaterial,
-  Vector3,
-  type BufferGeometry,
-  type Object3D,
+  DirectionalLight,
+  HemisphereLight,
+  OrthographicCamera,
+  Scene,
+  WebGLRenderer,
+  type Group,
 } from "three";
-import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-import { preferredMuscleMapFace } from "@/components/muscle-map-regions";
 import {
-  muscleModelHighlightForPart,
-  muscleModelPartAtPosition,
-  type MuscleModelHighlightKind,
-  type MuscleModelPart,
-  type MuscleModelSelection,
-} from "@/components/muscle-model-regions";
+  disposeAnatomyModel,
+  paintAnatomyModel,
+  prepareAnatomyModel,
+  type AnatomyModelPalette,
+} from "@/components/anatomy-model-scene";
+import { preferredMuscleMapFace } from "@/components/muscle-map-regions";
+import type { MuscleModelSelection } from "@/components/muscle-model-regions";
 import type { AnatomyRegion, MuscleRegion } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
@@ -38,135 +35,174 @@ export type AnatomyModelProps = {
 };
 
 const MODEL_ASSET = require("../../assets/models/formie-athlete-body.glb") as number;
-const MODEL_COLORS: Record<MuscleModelHighlightKind, Color> = {
-  base: new Color(colors.textMuted),
-  target: new Color(colors.gold),
-  secondary: new Color(colors.goldPressed),
-  issue: new Color(colors.danger),
+const MODEL_PALETTE: AnatomyModelPalette = {
+  base: colors.textMuted,
+  target: colors.gold,
+  secondary: colors.goldPressed,
+  issue: colors.danger,
 };
 
-const SPRING = {
-  duration: 400,
-  dampingRatio: 0.82,
-  reduceMotion: ReduceMotion.System,
-} as const;
-
-type PaintableGeometry = BufferGeometry & { userData: { formieParts?: MuscleModelPart[] } };
-
-function paintModel(model: Object3D, selection: MuscleModelSelection) {
-  model.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    const geometry = object.geometry as PaintableGeometry;
-    const position = geometry.getAttribute("position");
-    const parts = geometry.userData.formieParts;
-    if (!parts || parts.length !== position.count) return;
-
-    let colorAttribute = geometry.getAttribute("color") as Float32BufferAttribute | undefined;
-    if (!colorAttribute || colorAttribute.count !== position.count) {
-      colorAttribute = new Float32BufferAttribute(new Float32Array(position.count * 3), 3);
-      geometry.setAttribute("color", colorAttribute);
-    }
-    parts.forEach((part, index) => {
-      const color = MODEL_COLORS[muscleModelHighlightForPart(part, selection)];
-      colorAttribute.setXYZ(index, color.r, color.g, color.b);
-    });
-    colorAttribute.needsUpdate = true;
-  });
-}
-
-function prepareModel(source: Group) {
-  const model = source.clone(true);
-  model.updateMatrixWorld(true);
-  const bounds = new Box3().setFromObject(model);
-  const center = bounds.getCenter(new Vector3());
-  const size = bounds.getSize(new Vector3());
-  const vertex = new Vector3();
-
-  model.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    object.geometry = object.geometry.clone();
-    object.geometry.computeVertexNormals();
-    object.material = new MeshStandardMaterial({
-      color: "#FFFFFF",
-      metalness: 0.03,
-      roughness: 0.72,
-      vertexColors: true,
-      transparent: false,
-      opacity: 1,
-      depthWrite: true,
-      side: FrontSide,
-    });
-    object.castShadow = false;
-    object.receiveShadow = false;
-
-    const geometry = object.geometry as PaintableGeometry;
-    const position = geometry.getAttribute("position");
-    const parts: MuscleModelPart[] = [];
-    for (let index = 0; index < position.count; index += 1) {
-      vertex.fromBufferAttribute(position, index).applyMatrix4(object.matrixWorld);
-      parts.push(muscleModelPartAtPosition(
-        (vertex.x - center.x) / size.x,
-        (vertex.y - center.y) / size.y,
-        (vertex.z - center.z) / size.z,
-      ));
-    }
-    geometry.userData.formieParts = parts;
-  });
-  return model;
-}
-
-function AthleteMesh({ rotation, selection, onReady }: { rotation: SharedValue<number>; selection: MuscleModelSelection; onReady: () => void }) {
-  // R3F's native loader accepts the numeric Metro asset module at runtime.
-  const gltf = useLoader(GLTFLoader, MODEL_ASSET as unknown as string) as GLTF;
-  const model = useMemo(() => prepareModel(gltf.scene), [gltf.scene]);
-  const group = useRef<Group>(null);
-
-  useLayoutEffect(() => paintModel(model, selection), [model, selection]);
-  useEffect(() => onReady(), [onReady]);
-  useFrame(() => {
-    if (group.current) group.current.rotation.y = rotation.get();
-  });
-
-  return <group ref={group}><primitive object={model} /></group>;
-}
+type RenderResources = {
+  renderer: WebGLRenderer;
+  model: Group;
+  frameId: number;
+};
 
 export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: AnatomyModelProps) {
   const { width } = useWindowDimensions();
   const [ready, setReady] = useState(false);
-  const handleModelReady = useCallback(() => setReady(true), []);
-  const selection = useMemo(() => ({ targetRegions, secondaryRegions, issueRegions }), [issueRegions, secondaryRegions, targetRegions]);
+  const [loadError, setLoadError] = useState(false);
+  const resourcesRef = useRef<RenderResources | null>(null);
+  const mountedRef = useRef(true);
+  const rotationRef = useRef(0);
+  const angularVelocityRef = useRef(0);
+  const gestureStartRef = useRef(0);
+  const selection = useMemo<MuscleModelSelection>(
+    () => ({ targetRegions, secondaryRegions, issueRegions }),
+    [issueRegions, secondaryRegions, targetRegions],
+  );
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
   const regionKey = `${targetRegions.join(",")}|${secondaryRegions.join(",")}|${issueRegions.join(",")}`;
   const preferredFace = preferredMuscleMapFace(targetRegions, secondaryRegions, issueRegions);
-  const rotation = useSharedValue(preferredFace === "back" ? Math.PI : 0);
-  const gestureStart = useSharedValue(rotation.value);
   const gestureWidth = Math.max(240, Math.min(width - spacing.xl * 2, 420));
 
   useEffect(() => {
-    rotation.value = withSpring(preferredFace === "back" ? Math.PI : 0, SPRING);
-    // The region key resets orientation only when the highlighted anatomy changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    rotationRef.current = preferredFace === "back" ? Math.PI : 0;
+    angularVelocityRef.current = 0;
   }, [preferredFace, regionKey]);
 
+  useEffect(() => {
+    const model = resourcesRef.current?.model;
+    if (model) paintAnatomyModel(model, selection, MODEL_PALETTE);
+  }, [selection]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      const resources = resourcesRef.current;
+      resourcesRef.current = null;
+      if (!resources) return;
+      cancelAnimationFrame(resources.frameId);
+      disposeAnatomyModel(resources.model);
+      resources.renderer.dispose();
+    };
+  }, []);
+
+  const handleContextCreate = useCallback(async (gl: ExpoWebGLRenderingContext) => {
+    let renderer: WebGLRenderer | null = null;
+    let model: Group | null = null;
+    try {
+      const nativeCanvas = {
+        width: gl.drawingBufferWidth,
+        height: gl.drawingBufferHeight,
+        clientWidth: gl.drawingBufferWidth,
+        clientHeight: gl.drawingBufferHeight,
+        style: {},
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        setAttribute: () => undefined,
+        getContext: () => gl,
+      };
+      renderer = new WebGLRenderer({
+        canvas: nativeCanvas as unknown as HTMLCanvasElement,
+        context: gl as unknown as WebGLRenderingContext,
+        antialias: true,
+        alpha: false,
+      });
+      renderer.setPixelRatio(1);
+      renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight, false);
+      renderer.setClearColor(colors.surface, 1);
+
+      const scene = new Scene();
+      scene.add(new HemisphereLight("#FFF4DD", "#17130F", 1.7));
+      const keyLight = new DirectionalLight("#FFF5E0", 2.2);
+      keyLight.position.set(3, 4, 5);
+      scene.add(keyLight);
+      const goldLight = new DirectionalLight(colors.gold, 1.1);
+      goldLight.position.set(-4, 1, 2);
+      scene.add(goldLight);
+      const rimLight = new DirectionalLight("#6E7B91", 0.7);
+      rimLight.position.set(1, 1, -5);
+      scene.add(rimLight);
+
+      const aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;
+      const viewHeight = width < 350 ? 4.05 : 3.72;
+      const camera = new OrthographicCamera(
+        -(viewHeight * aspect) / 2,
+        (viewHeight * aspect) / 2,
+        viewHeight / 2,
+        -viewHeight / 2,
+        0.1,
+        20,
+      );
+      camera.position.set(0, 0, 5);
+      camera.lookAt(0, 0, 0);
+
+      const asset = Asset.fromModule(MODEL_ASSET);
+      await asset.downloadAsync();
+      const bytes = await new File(asset.localUri ?? asset.uri).bytes();
+      const gltf = await new GLTFLoader().parseAsync(bytes.buffer, "");
+      model = prepareAnatomyModel(gltf.scene);
+      paintAnatomyModel(model, selectionRef.current, MODEL_PALETTE);
+      model.rotation.y = rotationRef.current;
+      scene.add(model);
+
+      if (!mountedRef.current) {
+        disposeAnatomyModel(model);
+        renderer.dispose();
+        return;
+      }
+
+      const activeRenderer = renderer;
+      const activeModel = model;
+      const resources: RenderResources = { renderer: activeRenderer, model: activeModel, frameId: 0 };
+      resourcesRef.current = resources;
+      let previousTime = performance.now();
+      const renderFrame = (time: number) => {
+        if (!mountedRef.current || resourcesRef.current !== resources) return;
+        const deltaSeconds = Math.min((time - previousTime) / 1000, 0.05);
+        previousTime = time;
+        if (Math.abs(angularVelocityRef.current) > 0.001) {
+          rotationRef.current += angularVelocityRef.current * deltaSeconds;
+          angularVelocityRef.current *= Math.pow(0.035, deltaSeconds);
+        } else {
+          angularVelocityRef.current = 0;
+        }
+        activeModel.rotation.y = rotationRef.current;
+        activeRenderer.render(scene, camera);
+        gl.endFrameEXP();
+        resources.frameId = requestAnimationFrame(renderFrame);
+      };
+      resources.frameId = requestAnimationFrame(renderFrame);
+      setReady(true);
+    } catch (error) {
+      if (model) disposeAnatomyModel(model);
+      renderer?.dispose();
+      console.error("Failed to initialize the native anatomy renderer", error);
+      if (mountedRef.current) setLoadError(true);
+    }
+  }, [width]);
+
   const panGesture = useMemo(() => Gesture.Pan()
+    .runOnJS(true)
     .activeOffsetX([-10, 10])
     .failOffsetY([-22, 22])
     .onBegin(() => {
-      cancelAnimation(rotation);
-      gestureStart.value = rotation.value;
+      angularVelocityRef.current = 0;
+      gestureStartRef.current = rotationRef.current;
     })
     .onUpdate((event) => {
-      rotation.value = gestureStart.value + (event.translationX / gestureWidth) * Math.PI * 1.25;
+      rotationRef.current = gestureStartRef.current + (event.translationX / gestureWidth) * Math.PI * 1.25;
     })
     .onEnd((event) => {
-      rotation.value = withDecay({
-        velocity: (event.velocityX / gestureWidth) * Math.PI * 1.25,
-        deceleration: 0.995,
-        reduceMotion: ReduceMotion.System,
-      });
-    }), [gestureStart, gestureWidth, rotation]);
+      angularVelocityRef.current = (event.velocityX / gestureWidth) * Math.PI * 1.25;
+    }), [gestureWidth]);
 
   const rotateByAccessibility = (direction: -1 | 1) => {
-    rotation.value = withSpring(rotation.value + direction * (Math.PI / 2), SPRING);
+    angularVelocityRef.current = 0;
+    rotationRef.current += direction * (Math.PI / 2);
   };
 
   return (
@@ -183,23 +219,16 @@ export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: 
         >
           <View pointerEvents="none" style={{ position: "absolute", alignSelf: "center", width: 260, height: 360, opacity: 0.32, borderRadius: 130, backgroundColor: colors.goldSoft, transform: [{ scaleX: 1.2 }] }} />
           <View testID="native-muscle-map" style={{ flex: 1 }}>
-            <Canvas
+            <GLView
+              pointerEvents="none"
               testID="anatomy-3d-canvas"
-              orthographic
-              camera={{ position: [0, 0, 5], zoom: width < 350 ? 92 : 103, near: 0.1, far: 20 }}
-              gl={{ antialias: true, alpha: false }}
-              onCreated={({ gl }) => gl.setClearColor(colors.surface, 1)}
-            >
-              <hemisphereLight args={["#FFF4DD", "#17130F", 1.7]} />
-              <directionalLight color="#FFF5E0" intensity={2.2} position={[3, 4, 5]} />
-              <directionalLight color={colors.gold} intensity={1.1} position={[-4, 1, 2]} />
-              <directionalLight color="#6E7B91" intensity={0.7} position={[1, 1, -5]} />
-              <Suspense fallback={null}>
-                <AthleteMesh rotation={rotation} selection={selection} onReady={handleModelReady} />
-              </Suspense>
-            </Canvas>
+              msaaSamples={4}
+              onContextCreate={(gl) => void handleContextCreate(gl)}
+              style={{ flex: 1 }}
+            />
           </View>
-          {!ready ? <View pointerEvents="none" style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}><Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading 3D muscle model…</Text></View> : null}
+          {!ready && !loadError ? <View pointerEvents="none" style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center" }}><Text style={{ color: colors.textMuted, fontSize: 13 }}>Loading 3D muscle model…</Text></View> : null}
+          {loadError ? <View pointerEvents="none" style={{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center", padding: spacing.xl }}><Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: "center" }}>The 3D muscle model could not load.</Text></View> : null}
           {targetRegions.map((region) => <View key={`target-${region}`} pointerEvents="none" testID={`anatomy-target-${region}`} />)}
           {secondaryRegions.map((region) => <View key={`secondary-${region}`} pointerEvents="none" testID={`anatomy-secondary-${region}`} />)}
           {issueRegions.map((region) => <View key={`issue-${region}`} pointerEvents="none" testID={`anatomy-issue-${region}`} />)}
