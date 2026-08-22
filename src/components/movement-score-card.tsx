@@ -1,11 +1,9 @@
-import { Text, useWindowDimensions, View } from "react-native";
-import Svg, { Circle, Line, Path } from "react-native-svg";
+import { ScrollView, Text, useWindowDimensions, View } from "react-native";
+import Svg, { Circle, Defs, LinearGradient, Line, Path, Stop } from "react-native-svg";
 
 import { scoreLetterGrade } from "@/features/analysis/score-grade";
 import type { MovementScore } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
-import { radii, spacing } from "@/theme/spacing";
-import { typography } from "@/theme/type";
 
 type ScoreIconKind = "path" | "stability" | "range" | "control" | "consistency" | "movement";
 
@@ -36,9 +34,9 @@ function ScoreIcon({ score }: { score: MovementScore }) {
       accessibilityLabel={ICON_LABEL[kind]}
       accessibilityRole="image"
       testID={`movement-score-icon-${score.id}`}
-      style={{ width: 48, height: 48, flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: radii.md, borderWidth: 1, borderColor: colors.goldSoft, backgroundColor: colors.surfaceRaised }}
+      style={{ width: 34, height: 34, flexShrink: 0, alignItems: "center", justifyContent: "center", borderRadius: 10, borderWidth: 1, borderColor: colors.goldSoft, backgroundColor: colors.surfaceRaised }}
     >
-      <Svg width={28} height={28} viewBox="0 0 28 28" accessibilityElementsHidden>
+      <Svg width={21} height={21} viewBox="0 0 28 28" accessibilityElementsHidden>
         {kind === "path" ? <>
           <Path d="M6 22C6 12 12 17 12 8C12 5.8 13.5 4 16 4" fill="none" {...common} />
           <Path d="M12.5 6.2 16 3l3.5 3.2" fill="none" {...common} />
@@ -68,24 +66,30 @@ function ScoreIcon({ score }: { score: MovementScore }) {
   );
 }
 
-function OverallScore({ score }: { score: number }) {
+function OverallScore({ score, ringSize }: { score: number; ringSize: number }) {
   const rounded = Math.round(score);
-  const ringSize = 210;
-  const strokeWidth = 13;
+  const strokeWidth = ringSize < 120 ? 8 : 9;
   const radius = (ringSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = Math.max(0, Math.min(100, score));
   return (
-    <View style={{ alignItems: "center", gap: spacing.md }}>
+    <View style={{ alignItems: "center", gap: 7 }}>
       <View testID="overall-score-ring" style={{ width: ringSize, height: ringSize, alignItems: "center", justifyContent: "center" }}>
         <Svg width={ringSize} height={ringSize} viewBox={`0 0 ${ringSize} ${ringSize}`} style={{ position: "absolute" }}>
+          <Defs>
+            <LinearGradient id="movementScoreGold" x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0" stopColor="#FFE07A" />
+              <Stop offset="0.52" stopColor={colors.gold} />
+              <Stop offset="1" stopColor="#A9782B" />
+            </LinearGradient>
+          </Defs>
           <Circle cx={ringSize / 2} cy={ringSize / 2} r={radius} fill="none" stroke={colors.goldSoft} strokeWidth={strokeWidth} />
           <Circle
             cx={ringSize / 2}
             cy={ringSize / 2}
             r={radius}
             fill="none"
-            stroke={colors.gold}
+            stroke="url(#movementScoreGold)"
             strokeWidth={strokeWidth}
             strokeLinecap="round"
             strokeDasharray={`${circumference} ${circumference}`}
@@ -94,14 +98,14 @@ function OverallScore({ score }: { score: number }) {
           />
         </Svg>
         <View style={{ alignItems: "center", justifyContent: "center" }}>
-          <Text accessibilityLabel={`Overall score ${rounded} out of 100`} selectable testID="overall-analysis-score" style={{ color: colors.gold, fontSize: 62, lineHeight: 68, fontWeight: "800", letterSpacing: -2, fontVariant: ["tabular-nums"] }}>{rounded}</Text>
-          <Text selectable style={{ color: colors.textMuted, fontSize: 22, lineHeight: 27, fontWeight: "600", fontVariant: ["tabular-nums"] }}>/100</Text>
+          <Text accessibilityLabel={`Overall score ${rounded} out of 100`} selectable testID="overall-analysis-score" style={{ color: colors.gold, fontSize: ringSize < 120 ? 38 : 44, lineHeight: ringSize < 120 ? 42 : 48, fontWeight: "800", letterSpacing: -1.5, fontVariant: ["tabular-nums"] }}>{rounded}</Text>
+          <Text selectable style={{ color: colors.textMuted, fontSize: 13, lineHeight: 16, fontWeight: "600", fontVariant: ["tabular-nums"] }}>/100</Text>
         </View>
       </View>
-      <View style={{ alignItems: "center", gap: spacing.sm }}>
-        <Text selectable style={{ color: colors.gold, fontSize: 13, lineHeight: 18, fontWeight: "800", letterSpacing: 2.2 }}>FORM GRADE</Text>
-        <View accessibilityLabel={`Letter grade ${scoreLetterGrade(score)}`} testID="score-grade-stamp" style={{ width: 56, height: 56, alignItems: "center", justifyContent: "center", borderRadius: 28, borderWidth: 2, borderColor: colors.gold }}>
-          <Text selectable style={{ color: colors.gold, fontSize: 29, lineHeight: 34, fontWeight: "800" }}>{scoreLetterGrade(score)}</Text>
+      <View style={{ alignItems: "center", gap: 4 }}>
+        <Text selectable style={{ color: colors.gold, fontSize: 10, lineHeight: 13, fontWeight: "800", letterSpacing: 1.6 }}>FORM GRADE</Text>
+        <View accessibilityLabel={`Letter grade ${scoreLetterGrade(score)}`} testID="score-grade-stamp" style={{ width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, borderWidth: 1.5, borderColor: colors.gold }}>
+          <Text selectable style={{ color: colors.gold, fontSize: 21, lineHeight: 25, fontWeight: "800" }}>{scoreLetterGrade(score)}</Text>
         </View>
       </View>
     </View>
@@ -111,20 +115,20 @@ function OverallScore({ score }: { score: number }) {
 function ScoreRow({ score, last }: { score: MovementScore; last: boolean }) {
   const rounded = Math.round(score.score);
   return (
-    <View testID={`movement-score-row-${score.id}`} style={{ gap: spacing.md, paddingVertical: spacing.lg, borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.border }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+    <View testID={`movement-score-row-${score.id}`} style={{ gap: 6, paddingVertical: 8, borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.border }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <ScoreIcon score={score} />
-        <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-          <Text selectable style={{ color: colors.text, fontSize: 18, lineHeight: 23, fontWeight: "700" }}>{score.label}</Text>
-          <Text selectable style={{ color: colors.textSecondary, fontSize: 14, lineHeight: 20 }}>{score.observed}</Text>
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Text selectable numberOfLines={1} style={{ color: colors.text, fontSize: 14, lineHeight: 18, fontWeight: "700" }}>{score.label}</Text>
+          <Text selectable numberOfLines={2} style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 15 }}>{score.observed}</Text>
         </View>
-        <View style={{ minWidth: 49, alignItems: "flex-end" }}>
-          <Text selectable style={{ color: colors.gold, fontSize: 27, lineHeight: 31, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{rounded}</Text>
-          <Text selectable style={{ color: colors.textMuted, fontSize: 13, lineHeight: 17, fontWeight: "600", fontVariant: ["tabular-nums"] }}>/100</Text>
+        <View style={{ minWidth: 34, alignItems: "flex-end" }}>
+          <Text selectable style={{ color: colors.gold, fontSize: 20, lineHeight: 23, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{rounded}</Text>
+          <Text selectable style={{ color: colors.textMuted, fontSize: 9, lineHeight: 11, fontWeight: "600", fontVariant: ["tabular-nums"] }}>/100</Text>
         </View>
       </View>
-      <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: rounded }} style={{ height: 7, overflow: "hidden", borderRadius: 4, backgroundColor: colors.border }}>
-        <View style={{ width: `${Math.max(0, Math.min(100, score.score))}%`, height: 7, borderRadius: 4, backgroundColor: colors.gold }} />
+      <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: rounded }} style={{ height: 4, overflow: "hidden", borderRadius: 2, backgroundColor: colors.border }}>
+        <View style={{ width: `${Math.max(0, Math.min(100, score.score))}%`, height: 4, borderRadius: 2, backgroundColor: colors.gold }} />
       </View>
     </View>
   );
@@ -132,21 +136,28 @@ function ScoreRow({ score, last }: { score: MovementScore; last: boolean }) {
 
 export function MovementScoreCard({ score, movementScores }: { score: number | null; movementScores: MovementScore[] }) {
   const { width } = useWindowDimensions();
-  const splitLayout = width >= 760;
+  const overallWidth = width < 360 ? 104 : 124;
+  const breakdownHeight = width < 360 ? 150 : 176;
   if (score === null && movementScores.length === 0) return null;
 
   return (
-    <View testID="movement-scores-section" style={{ width: "100%", gap: spacing.xs, padding: splitLayout ? spacing.xxl : spacing.lg, borderRadius: 24, borderCurve: "continuous", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
-      <Text selectable style={{ color: colors.text, fontSize: 21, lineHeight: 27, fontWeight: "800", letterSpacing: 1.2 }}>MOVEMENT SCORE</Text>
-      <Text selectable style={{ color: colors.textSecondary, fontSize: 16, lineHeight: 22 }}>Overall Performance</Text>
-      <View style={{ flexDirection: splitLayout ? "row" : "column", alignItems: splitLayout ? "stretch" : "center", gap: splitLayout ? spacing.xxl : spacing.xl, paddingTop: spacing.xl }}>
-        {score !== null ? <View testID="movement-score-overall" style={{ width: splitLayout ? 260 : "100%", alignItems: "center", justifyContent: "center", paddingBottom: splitLayout ? 0 : spacing.sm }}><OverallScore score={score} /></View> : null}
-        {score !== null && movementScores.length > 0 ? <View style={{ width: splitLayout ? 1 : "100%", height: splitLayout ? "auto" : 1, backgroundColor: colors.border }} /> : null}
-        {movementScores.length > 0 ? <View style={{ flex: splitLayout ? 1 : undefined, width: splitLayout ? undefined : "100%", minWidth: 0 }}>
-          <Text selectable style={[typography.caption, { color: colors.textSecondary, fontSize: 13, lineHeight: 18, fontWeight: "700", letterSpacing: 2 }]}>SCORE BREAKDOWN</Text>
-          <View testID="movement-score-list">
+    <View testID="movement-scores-section" style={{ width: "100%", gap: 2, padding: 12, borderRadius: 20, borderCurve: "continuous", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+      <Text selectable style={{ color: colors.text, fontSize: 17, lineHeight: 21, fontWeight: "800", letterSpacing: 1 }}>MOVEMENT SCORE</Text>
+      <Text selectable style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 17 }}>Overall Performance</Text>
+      <View testID="movement-score-card-layout" style={{ flexDirection: "row", alignItems: "stretch", gap: 10, paddingTop: 10 }}>
+        {score !== null ? <View testID="movement-score-overall" style={{ width: overallWidth, alignItems: "center", justifyContent: "center" }}><OverallScore score={score} ringSize={overallWidth} /></View> : null}
+        {score !== null && movementScores.length > 0 ? <View style={{ width: 1, backgroundColor: colors.border }} /> : null}
+        {movementScores.length > 0 ? <View style={{ flex: 1, minWidth: 0 }}>
+          <Text selectable style={{ color: colors.textSecondary, fontSize: 10, lineHeight: 13, fontWeight: "700", letterSpacing: 1.4 }}>SCORE BREAKDOWN</Text>
+          <ScrollView
+            testID="movement-score-list"
+            style={{ height: breakdownHeight }}
+            contentContainerStyle={{ paddingBottom: 2 }}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+          >
             {movementScores.map((item, index) => <ScoreRow key={item.id} score={item} last={index === movementScores.length - 1} />)}
-          </View>
+          </ScrollView>
         </View> : null}
       </View>
     </View>

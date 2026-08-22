@@ -203,6 +203,9 @@ describe("ResultsScreen", () => {
     expect(screen.getByTestId("overall-analysis-score").props.accessibilityLabel).toBe("Overall score 75 out of 100");
     expect(screen.getByTestId("score-grade-stamp").props.accessibilityLabel).toBe("Letter grade C");
     expect(screen.getByTestId("overall-score-ring")).toBeTruthy();
+    expect(screen.getByTestId("overall-score-ring")).toHaveStyle({ width: 124, height: 124 });
+    expect(screen.getByTestId("movement-score-card-layout")).toHaveStyle({ flexDirection: "row", alignItems: "stretch" });
+    expect(screen.getByTestId("movement-score-overall")).toHaveStyle({ width: 124 });
     expect(screen.getByText("Overall Performance")).toBeTruthy();
     expect(screen.getByText("SCORE BREAKDOWN")).toBeTruthy();
     expect(screen.getByText("FORM GRADE")).toBeTruthy();
@@ -210,8 +213,10 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("MOVEMENT SCORE")).toBeTruthy();
     expect(screen.queryByText("Your early repetitions establish a controlled path.")).toBeNull();
     expect(screen.queryByTestId("coach-score-gauge")).toBeNull();
-    expect(screen.getByTestId("movement-score-list")).toBeTruthy();
-    expect(screen.getAllByTestId(/^movement-score-row-/)).toHaveLength(4);
+    expect(screen.getByTestId("movement-score-list")).toHaveStyle({ height: 176 });
+    const scoreRows = screen.getAllByTestId(/^movement-score-row-/);
+    expect(scoreRows).toHaveLength(4);
+    expect(scoreRows[0]).toHaveStyle({ paddingVertical: 8 });
     expect(screen.getByTestId("movement-score-icon-handle-path").props.accessibilityLabel).toBe("Path icon");
     expect(screen.getByTestId("movement-score-icon-lowering-control").props.accessibilityLabel).toBe("Control icon");
     expect(screen.queryByText("WEAKNESSES")).toBeNull();
