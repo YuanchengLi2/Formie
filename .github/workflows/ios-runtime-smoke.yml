@@ -8,7 +8,7 @@ on:
 jobs:
   runtime-smoke:
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 90
     permissions:
       contents: read
     env:
@@ -49,7 +49,7 @@ jobs:
 
       - name: Build and install release app
         shell: bash
-        run: eas env:exec production "npx expo run:ios --configuration Release --device '$SIMULATOR_UDID' --no-bundler"
+        run: eas env:exec production "bash scripts/build-ios-runtime-smoke.sh"
 
       - name: Exercise changed analysis components
         shell: bash
