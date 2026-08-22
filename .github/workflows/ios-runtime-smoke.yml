@@ -1,0 +1,75 @@
+name: Diagnose iOS analysis crash
+
+on:
+  push:
+    branches:
+      - codex/analysis-crash-diagnosis
+
+jobs:
+  runtime-smoke:
+    runs-on: macos-26
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      CI: "1"
+      EXPO_PUBLIC_RUNTIME_SMOKE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: 21.8.0
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Boot an iPhone simulator
+        shell: bash
+        run: |
+          SIMULATOR_UDID=$(xcrun simctl list devices available -j | node -e '
+            let input = "";
+            process.stdin.on("data", (chunk) => input += chunk);
+            process.stdin.on("end", () => {
+              const devices = Object.values(JSON.parse(input).devices).flat();
+              const phone = devices.find((device) => device.isAvailable && device.name.startsWith("iPhone"));
+              if (!phone) process.exit(1);
+              process.stdout.write(phone.udid);
+            });
+          ')
+          echo "SIMULATOR_UDID=$SIMULATOR_UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIMULATOR_UDID" || true
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+
+      - name: Build and install release app
+        shell: bash
+        run: eas env:exec production "npx expo run:ios --configuration Release --device '$SIMULATOR_UDID' --no-bundler"
+
+      - name: Exercise changed analysis components
+        shell: bash
+        run: |
+          mkdir -p runtime-evidence
+          xcrun simctl openurl "$SIMULATOR_UDID" "form:///runtime-smoke?component=model"
+          sleep 15
+          xcrun simctl io "$SIMULATOR_UDID" screenshot runtime-evidence/model.png
+          xcrun simctl spawn "$SIMULATOR_UDID" log show --last 3m --style compact --predicate 'process == "Formie" OR eventMessage CONTAINS "app.form.coach"' > runtime-evidence/model.log || true
+
+          xcrun simctl terminate "$SIMULATOR_UDID" app.form.coach || true
+          xcrun simctl openurl "$SIMULATOR_UDID" "form:///runtime-smoke?component=score"
+          sleep 10
+          xcrun simctl io "$SIMULATOR_UDID" screenshot runtime-evidence/score.png
+          xcrun simctl spawn "$SIMULATOR_UDID" log show --last 2m --style compact --predicate 'process == "Formie" OR eventMessage CONTAINS "app.form.coach"' > runtime-evidence/score.log || true
+
+          find "$HOME/Library/Logs/DiagnosticReports" "$HOME/Library/Developer/CoreSimulator/Devices/$SIMULATOR_UDID/data/Library/Logs/CrashReporter" -type f -iname 'Formie*' -exec cp {} runtime-evidence/ \; 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-runtime-evidence
+          path: runtime-evidence

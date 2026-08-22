@@ -48,6 +48,7 @@ function RootNavigator() {
         <Stack.Screen name="(auth)/email-code" />
       </Stack.Protected>
       <Stack.Screen name="subscription" />
+      {process.env.EXPO_PUBLIC_RUNTIME_SMOKE === "1" ? <Stack.Screen name="runtime-smoke" /> : null}
       <Stack.Protected guard={appUnlocked}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="account/send-feedback" options={{ headerShown: true, title: "Send Feedback", headerBackButtonDisplayMode: "minimal" }} />
