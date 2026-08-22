@@ -23,6 +23,8 @@ export default function IndexRoute() {
   const access = useAccess();
   const onboardingLaunchState = launchState(onboarding.status, onboarding.currentStep, onboarding.explicitLogoutAt);
 
+  if (process.env.EXPO_PUBLIC_RUNTIME_SMOKE === "1") return <Redirect href={"/runtime-smoke" as Href} />;
+
   if (auth.phase === "initializing" || !onboarding.hydrated) return <AuthLoadingScreen />;
   if (auth.phase === "authenticated" && profile.status === "loading") return <AuthLoadingScreen message="Preparing your Formie account…" />;
 

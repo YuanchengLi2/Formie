@@ -55,13 +55,13 @@ jobs:
         shell: bash
         run: |
           mkdir -p runtime-evidence
-          xcrun simctl openurl "$SIMULATOR_UDID" "form:///runtime-smoke?component=model"
+          xcrun simctl launch --terminate-running "$SIMULATOR_UDID" app.form.coach
           sleep 15
           xcrun simctl io "$SIMULATOR_UDID" screenshot runtime-evidence/model.png
           xcrun simctl spawn "$SIMULATOR_UDID" log show --last 3m --style compact --predicate 'process == "Formie" OR eventMessage CONTAINS "app.form.coach"' > runtime-evidence/model.log || true
 
           xcrun simctl terminate "$SIMULATOR_UDID" app.form.coach || true
-          xcrun simctl openurl "$SIMULATOR_UDID" "form:///runtime-smoke?component=score"
+          xcrun simctl launch "$SIMULATOR_UDID" app.form.coach
           sleep 10
           xcrun simctl io "$SIMULATOR_UDID" screenshot runtime-evidence/score.png
           xcrun simctl spawn "$SIMULATOR_UDID" log show --last 2m --style compact --predicate 'process == "Formie" OR eventMessage CONTAINS "app.form.coach"' > runtime-evidence/score.log || true
