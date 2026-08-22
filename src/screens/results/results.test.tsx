@@ -234,6 +234,17 @@ describe("ResultsScreen", () => {
     expect(screen.getAllByTestId(/timeline-evidence-marker-/)).toHaveLength(4);
   }, 10_000);
 
+  it("shows every movement score observation without a line clamp", async () => {
+    const value = result();
+    const fullObservation = "The handle begins on a consistent path, drifts outward through the middle repetitions, and finishes above the original endpoint during the final repetitions.";
+    value.movementScores![0].observed = fullObservation;
+
+    const screen = await renderResults(jest.fn(), value);
+    const observation = screen.getByText(fullObservation);
+
+    expect(observation.props.numberOfLines).toBeUndefined();
+  });
+
   it("renders What to do next as one complete white instruction without gray copy", async () => {
     const value = result();
     value.priorityCorrections[0].expandedCoaching!.whatToDo = "**Start the next rep with both shoulders level.**";

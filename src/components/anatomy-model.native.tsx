@@ -6,10 +6,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import {
+  ACESFilmicToneMapping,
   DirectionalLight,
   HemisphereLight,
   OrthographicCamera,
   Scene,
+  SRGBColorSpace,
   WebGLRenderer,
   type Group,
 } from "three";
@@ -113,18 +115,21 @@ export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: 
       });
       renderer.setPixelRatio(1);
       renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight, false);
+      renderer.outputColorSpace = SRGBColorSpace;
+      renderer.toneMapping = ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 0.92;
       renderer.setClearColor(colors.surface, 1);
 
       const scene = new Scene();
-      scene.add(new HemisphereLight("#FFF4DD", "#17130F", 1.7));
-      const keyLight = new DirectionalLight("#FFF5E0", 2.2);
-      keyLight.position.set(3, 4, 5);
+      scene.add(new HemisphereLight("#FFF2D2", "#20252D", 0.9));
+      const keyLight = new DirectionalLight("#FFF7E8", 2.4);
+      keyLight.position.set(4, 5, 6);
       scene.add(keyLight);
-      const goldLight = new DirectionalLight(colors.gold, 1.1);
-      goldLight.position.set(-4, 1, 2);
-      scene.add(goldLight);
-      const rimLight = new DirectionalLight("#6E7B91", 0.7);
-      rimLight.position.set(1, 1, -5);
+      const fillLight = new DirectionalLight("#9EB6D8", 0.75);
+      fillLight.position.set(-4, 1, 4);
+      scene.add(fillLight);
+      const rimLight = new DirectionalLight("#F5C879", 1);
+      rimLight.position.set(2, 3, -4);
       scene.add(rimLight);
 
       const aspect = gl.drawingBufferWidth / gl.drawingBufferHeight;

@@ -120,7 +120,7 @@ function ScoreRow({ score, last }: { score: MovementScore; last: boolean }) {
         <ScoreIcon score={score} />
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <Text selectable numberOfLines={1} style={{ color: colors.text, fontSize: 14, lineHeight: 18, fontWeight: "700" }}>{score.label}</Text>
-          <Text selectable numberOfLines={2} style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 15 }}>{score.observed}</Text>
+          <Text selectable style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 15 }}>{score.observed}</Text>
         </View>
         <View style={{ minWidth: 34, alignItems: "flex-end" }}>
           <Text selectable style={{ color: colors.gold, fontSize: 20, lineHeight: 23, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{rounded}</Text>

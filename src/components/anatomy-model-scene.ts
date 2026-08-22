@@ -4,7 +4,7 @@ import {
   Float32BufferAttribute,
   FrontSide,
   Mesh,
-  MeshStandardMaterial,
+  MeshPhysicalMaterial,
   Vector3,
   type BufferGeometry,
   type ColorRepresentation,
@@ -37,10 +37,13 @@ export function prepareAnatomyModel(source: Group) {
     if (!(object instanceof Mesh)) return;
     object.geometry = object.geometry.clone();
     object.geometry.computeVertexNormals();
-    object.material = new MeshStandardMaterial({
+    object.material = new MeshPhysicalMaterial({
       color: "#FFFFFF",
-      metalness: 0.03,
-      roughness: 0.72,
+      metalness: 0,
+      roughness: 0.58,
+      clearcoat: 0.08,
+      clearcoatRoughness: 0.85,
+      flatShading: false,
       vertexColors: true,
       transparent: false,
       opacity: 1,
