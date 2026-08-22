@@ -1,4 +1,5 @@
 import { parseSupportRequest } from "../../../lib/support-request";
+import { enforceSameOrigin, readBoundedBody } from "../../../lib/request-security";
 
 function json(payload: unknown, status: number) {
   return Response.json(payload, { status });
@@ -10,9 +11,11 @@ function observedClientIp(request: Request): string {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  const originFailure = enforceSameOrigin(request);
+  if (originFailure) return originFailure;
   let body;
   try {
-    body = parseSupportRequest(await request.json());
+    body = parseSupportRequest(await readBoundedBody(request, 8_192));
   } catch {
     return json({
       message: "Enter a valid email, choose a category, and write 20–2,000 characters.",
@@ -45,12 +48,9 @@ export async function POST(request: Request): Promise<Response> {
   const payload = await upstream.json().catch(() => null);
   if (!upstream.ok) {
     const safeStatus = upstream.status === 429 ? 429 : 502;
-    return json(
-      payload && typeof payload === "object"
-        ? payload
-        : { message: "Support is temporarily unavailable. Try again.", code: "SUPPORT_UNAVAILABLE" },
-      safeStatus,
-    );
+    return json(safeStatus === 429
+      ? { message: "Too many support requests. Please try again later.", code: "RATE_LIMITED" }
+      : { message: "Support is temporarily unavailable. Try again.", code: "SUPPORT_UNAVAILABLE" }, safeStatus);
   }
   return json(payload, 200);
 }

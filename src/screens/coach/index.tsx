@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, { FadeInUp, FadeOut, LinearTransition } from "react-native-reanimated";
@@ -15,6 +15,7 @@ import type { AnalysisHistoryItem } from "@/features/progress/group-sessions";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { getPhoneLayoutProfile } from "@/theme/responsive";
 
 import { CoachSidebar } from "./coach-sidebar";
 import { coachRecordingLabel, RecordingPicker } from "./recording-picker";
@@ -54,6 +55,8 @@ function newClientMessageId(): string {
 
 export function CoachScreen({ videos, initialSessionId = null, initialThreadId = null, listThreads = emptyThreads, createThread = unavailableCreate, loadConversation = emptyConversation, loadAnalysis, renameThread = unavailableRename, deleteThread = unavailableDelete, sendMessage = unavailableSend }: Props) {
   const insets = useSafeAreaInsets();
+  const window = useWindowDimensions();
+  const layout = getPhoneLayoutProfile({ ...window, insets });
   const availableVideos = useMemo(() => videos.filter((video) => video.status === "complete" || video.status === "partial"), [videos]);
   const [threads, setThreads] = useState<CoachThread[]>([]);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -233,18 +236,18 @@ export function CoachScreen({ videos, initialSessionId = null, initialThreadId =
 
   const selectedVideo = availableVideos.find((video) => video.sessionId === selectedSessionId) ?? null;
   if (!selectedThreadId || !selectedSessionId || !selectedVideo) {
-    return <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: "#101010" }}><BlurView testID="coach-blurred-backdrop" intensity={55} tint="dark" style={{ position: "absolute", inset: 0 }} /><View testID="coach-header" style={{ alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: "rgba(9,9,9,0.72)" }}><Text selectable style={[typography.heading, { color: colors.text }]}>Coach</Text></View><RecordingPicker videos={availableVideos} creating={creating} onChoose={(id) => void chooseRecording(id)} />{error ? <Text selectable style={[typography.caption, { padding: spacing.lg, color: colors.danger }]}>{error}</Text> : null}</View>;
+    return <View style={{ flex: 1, paddingTop: insets.top, backgroundColor: "#101010" }}><BlurView testID="coach-blurred-backdrop" intensity={55} tint="dark" style={{ position: "absolute", inset: 0 }} /><View testID="coach-header" style={{ width: "100%", maxWidth: layout.contentMaxWidth, alignSelf: "center", alignItems: "center", paddingHorizontal: layout.horizontalPadding, paddingVertical: spacing.md, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: "rgba(9,9,9,0.72)" }}><Text selectable style={[typography.heading, { color: colors.text }]}>Coach</Text></View><RecordingPicker videos={availableVideos} creating={creating} onChoose={(id) => void chooseRecording(id)} />{error ? <Text selectable style={[typography.caption, { padding: layout.horizontalPadding, color: colors.danger }]}>{error}</Text> : null}</View>;
   }
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: "#101010" }}>
       <BlurView testID="coach-blurred-backdrop" intensity={55} tint="dark" style={{ position: "absolute", inset: 0 }} />
-      <View testID="coach-header" style={{ paddingTop: insets.top + spacing.sm, paddingHorizontal: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderColor: colors.border, backgroundColor: "rgba(9,9,9,0.72)" }}>
+      <View testID="coach-header" style={{ width: "100%", maxWidth: layout.contentMaxWidth, alignSelf: "center", paddingTop: insets.top + spacing.sm, paddingHorizontal: layout.horizontalPadding, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderColor: colors.border, backgroundColor: "rgba(9,9,9,0.72)" }}>
         <Pressable accessibilityRole="button" accessibilityLabel="Open conversations" onPress={() => setSidebarOpen(true)} style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}><Text style={{ color: colors.text, fontSize: 20 }}>☰</Text></Pressable>
         <Text selectable style={[typography.heading, { color: colors.text }]}>Coach</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Start new chat" onPress={startNewChat} style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}><Text style={{ color: colors.gold, fontSize: 22 }}>＋</Text></Pressable>
       </View>
-      <ScrollView ref={workspaceScrollRef} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, gap: spacing.xl, padding: spacing.lg }}>
+      <ScrollView ref={workspaceScrollRef} keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={{ width: "100%", maxWidth: layout.contentMaxWidth, alignSelf: "center", flexGrow: 1, gap: layout.short ? spacing.md : spacing.xl, paddingHorizontal: layout.horizontalPadding, paddingVertical: spacing.lg }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
           <ExerciseFamilyIcon family={selectedVideo.exerciseFamily ?? "other"} size={40} />
           <View style={{ flex: 1, gap: 2 }}><Text selectable style={[typography.heading, { color: colors.text }]}>{coachRecordingLabel(selectedVideo)}</Text><Text selectable style={[typography.caption, { color: colors.textMuted }]}>{new Date(selectedVideo.createdAt).toLocaleDateString()}</Text><Text selectable numberOfLines={1} style={[typography.caption, { color: colors.gold }]}>{selectedVideo.priorityCorrectionTitles[0] ?? "View analysis"}</Text></View>
@@ -260,7 +263,7 @@ export function CoachScreen({ videos, initialSessionId = null, initialThreadId =
         </View>
       </ScrollView>
 
-      <View testID="coach-composer" style={{ gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: Math.max(insets.bottom, spacing.sm), paddingTop: spacing.sm, borderTopWidth: 1, borderColor: colors.border, backgroundColor: "rgba(9,9,9,0.78)" }}>
+      <View testID="coach-composer" style={{ width: "100%", maxWidth: layout.contentMaxWidth, alignSelf: "center", gap: spacing.sm, paddingHorizontal: layout.horizontalPadding, paddingBottom: Math.max(insets.bottom, spacing.sm), paddingTop: spacing.sm, borderTopWidth: 1, borderColor: colors.border, backgroundColor: "rgba(9,9,9,0.78)" }}>
         {showTargetIntent ? <TextInput accessibilityLabel="Target muscle or area" value={targetIntent} onChangeText={setTargetIntent} placeholder="Optional target, e.g. upper back" placeholderTextColor={colors.textMuted} maxLength={240} style={[typography.body, { minHeight: 42, paddingHorizontal: spacing.md, borderRadius: radii.sm, borderWidth: 1, borderColor: colors.border, color: colors.text }]} /> : null}
         <View style={{ flexDirection: "row", alignItems: "flex-end", gap: spacing.sm }}><Pressable accessibilityRole="button" accessibilityLabel="Set target area" onPress={() => setShowTargetIntent((value) => !value)} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 22, borderWidth: 1, borderColor: colors.border }}><Text style={{ color: colors.text, fontSize: 20 }}>＋</Text></Pressable><TextInput accessibilityLabel="Message your coach" multiline value={draft} onChangeText={changeDraft} placeholder="Ask about this set" placeholderTextColor={colors.textMuted} maxLength={2000} style={[typography.body, { flex: 1, maxHeight: 110, minHeight: 52, padding: spacing.md, borderRadius: radii.pill, borderWidth: 1, borderColor: error ? colors.danger : colors.border, color: colors.text, backgroundColor: colors.surface }]} /><View style={{ width: 82 }}><FormButton label={sending ? "Sending" : "Send"} disabled={!draft.trim() || sending} onPress={() => void submit()} /></View></View>
         <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Ask naturally about a rep, timestamp, movement, or the full set.</Text>

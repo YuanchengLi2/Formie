@@ -72,13 +72,14 @@ export function BillingProvider({ children }: PropsWithChildren) {
   const reconciliationGeneration = useRef(0);
   const purchaseOperation = useRef<string | null>(null);
   const authenticatedUserId = auth.phase === "authenticated" ? auth.user?.id ?? null : null;
+  const accessToken = auth.phase === "authenticated" ? auth.session?.access_token ?? null : null;
 
   const configure = useCallback(async () => {
     await purchasesClient.configure(auth.phase === "authenticated" ? auth.user?.id ?? null : null);
   }, [auth.phase, auth.user]);
 
   const reconcileEntitlement = useCallback(async (incomingCustomerInfo?: BillingCustomerInfo, purchasedProductIdentifier?: string): Promise<ReconciliationSnapshot> => {
-    if (auth.phase !== "authenticated" || !auth.session?.access_token) {
+    if (!accessToken) {
       setEntitlementResolution("idle");
       return { providerActive: false, serverActive: false, serverLifecycleState: "unknown", customerInfo: incomingCustomerInfo ?? null, providerProductIdentifier: incomingCustomerInfo?.subscription?.productIdentifier ?? null, serverProductIdentifier: null };
     }
@@ -91,7 +92,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
       const providerActive = customerHasEntitlement(customerInfo, REVENUECAT_ENTITLEMENT_ID);
       const providerProductIdentifier = customerInfo.subscription?.productIdentifier ?? purchasedProductIdentifier ?? null;
       setSubscription(customerInfo.subscription);
-      const refreshed = await refreshEntitlement(auth.session.access_token);
+      const refreshed = await refreshEntitlement(accessToken);
       if (generation !== reconciliationGeneration.current) return { providerActive, serverActive: false, serverLifecycleState: "unknown", customerInfo, providerProductIdentifier, serverProductIdentifier: null };
       await refreshAccess().catch(() => undefined);
       const serverActive = refreshed.access.status === "active";
@@ -104,7 +105,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
       setEntitlementResolution("error");
       throw failure;
     }
-  }, [auth.phase, auth.session?.access_token, completeAccess, configure, onboardingStatus, refreshAccess]);
+  }, [accessToken, completeAccess, configure, onboardingStatus, refreshAccess]);
 
   const finishPassiveReconciliation = useCallback((result: ReconciliationSnapshot, offeringAvailable: boolean): boolean => {
     if (purchaseOperation.current) return false;

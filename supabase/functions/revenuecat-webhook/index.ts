@@ -2,12 +2,15 @@ import { createAdminClient } from "../_shared/auth.ts";
 import { fetchRevenueCatSubscriber } from "../_shared/revenuecat.ts";
 import { applyRevenueCatLifecycleEvent, expireTransferredEntitlement, persistEntitlementLedger } from "../_shared/entitlement-ledger.ts";
 import { revenueCatWebhookHandler } from "./handler.ts";
+import { validateRequestSecurity, withRequestIdentifier } from "../_shared/request-security.ts";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 Deno.serve(async (request) => {
+  const security = await validateRequestSecurity(request, { methods: ["POST"], authentication: "webhook", maxBodyBytes: 262_144, allowBrowserOrigin: false });
+  if (security) return security;
   const admin = createAdminClient();
-  return revenueCatWebhookHandler(request, {
+  const response = await revenueCatWebhookHandler(request, {
     claimEvent: async (event) => {
       const { data, error } = await admin.rpc("claim_revenuecat_webhook_event", {
         p_event_id: event.id,
@@ -57,4 +60,5 @@ Deno.serve(async (request) => {
       if (error) throw error;
     },
   }, Deno.env.get("REVENUECAT_WEBHOOK_AUTH_TOKEN") ?? "");
+  return withRequestIdentifier(request, response);
 });

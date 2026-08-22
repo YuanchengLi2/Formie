@@ -1,5 +1,5 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { createGeminiTutorialClient, type TutorialVideo } from "../_shared/gemini-tutorial.ts";
 import { exerciseTutorialHandler } from "./handler.ts";
 
@@ -9,8 +9,8 @@ const tutorialClient = createGeminiTutorialClient({
 });
 
 Deno.serve(async (request) => {
-  const options = preflight(request);
-  if (options) return options;
+  const security = await secureBrowserRequest(request, { methods: ["POST"], authentication: "user", maxBodyBytes: 8_192 });
+  if (security) return security;
   const admin = createAdminClient();
   const response = await exerciseTutorialHandler(request, {
     authenticate: (incoming) => requireUserId(incoming, admin),
@@ -30,7 +30,5 @@ Deno.serve(async (request) => {
       if (error) throw error;
     },
   });
-  const headers = new Headers(response.headers);
-  Object.entries(corsHeaders).forEach(([key, value]) => headers.set(key, value));
-  return new Response(response.body, { status: response.status, headers });
+  return withCors(request, response);
 });

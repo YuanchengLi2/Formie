@@ -1,4 +1,5 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
+import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { handleAcquisitionSheetSync, type AcquisitionSheetRow } from "./handler.ts";
 
 const spreadsheetId = Deno.env.get("GOOGLE_SHEETS_SPREADSHEET_ID") ?? "";
@@ -50,10 +51,10 @@ async function sheetsRequest(path: string, init?: RequestInit): Promise<Response
 }
 
 Deno.serve(async (request) => {
-  if (request.method === "OPTIONS") return new Response("ok", { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type, apikey" } });
-  if (request.method !== "POST") return Response.json({ error: "Method not allowed" }, { status: 405 });
+  const security = await secureBrowserRequest(request, { methods: ["POST"], authentication: "user", maxBodyBytes: 4_096 });
+  if (security) return security;
   const admin = createAdminClient();
-  return handleAcquisitionSheetSync(request, {
+  const response = await handleAcquisitionSheetSync(request, {
     authenticate: async (incoming) => { await requireUserId(incoming, admin); },
     claimRows: async () => {
       const { data, error } = await admin.rpc("claim_onboarding_acquisition_sheet_rows", { p_limit: 100 });
@@ -77,4 +78,5 @@ Deno.serve(async (request) => {
       if (error) throw error;
     },
   }, { configured: Boolean(spreadsheetId && clientEmail && privateKey) });
+  return withCors(request, response);
 });

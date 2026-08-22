@@ -9,7 +9,11 @@ let mockAccess: Record<string, unknown>;
 jest.mock("expo-router", () => ({
   useRouter: () => ({ replace: mockReplace, back: jest.fn() }),
 }));
-jest.mock("react-native-safe-area-context", () => ({ useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }) }));
+jest.mock("react-native-safe-area-context", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
+  const insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  return { useSafeAreaInsets: () => insets, SafeAreaInsetsContext: React.createContext(insets) };
+});
 
 jest.mock("@/features/access/access-provider", () => ({
   useAccess: () => ({ access: mockAccess, reconcile: jest.fn() }),

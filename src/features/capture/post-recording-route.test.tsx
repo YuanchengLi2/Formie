@@ -175,7 +175,7 @@ describe("post-recording route invariants", () => {
     expect(addEventListener).toHaveBeenCalledWith("hardwareBackPress", expect.any(Function));
     const handler = addEventListener.mock.calls[0]?.[1];
     let handled = false;
-    await act(async () => { handled = handler?.() ?? false; });
+    await act(() => { handled = handler?.({ type: "hardwareBackPress", timeStamp: 0 }) ?? false; });
     expect(handled).toBe(true);
     expect(mockReplace).toHaveBeenCalledWith({
       pathname: "/recording-tips",
@@ -271,7 +271,7 @@ describe("post-recording route invariants", () => {
     await renderRoute(<AnalysisSetDetailsRoute />);
 
     const handler = addEventListener.mock.calls.at(-1)?.[1];
-    expect(handler?.()).toBe(true);
+    expect(handler?.({ type: "hardwareBackPress", timeStamp: 0 })).toBe(true);
     expect(mockReplace).toHaveBeenCalledWith("/analysis/review");
     expect(useCaptureStore.getState().recording).toEqual(recording);
     addEventListener.mockRestore();

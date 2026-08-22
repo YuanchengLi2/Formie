@@ -38,7 +38,7 @@ describe("CoachComingSoonScreen", () => {
       pointerEvents: "none",
     });
     expect(screen.getByTestId("coach-coming-soon-blur")).toHaveProp(
-      "experimentalBlurMethod",
+      "blurMethod",
       "dimezisBlurView",
     );
     expect(screen.getByTestId("coach-coming-soon-blur")).toHaveProp(

@@ -34,7 +34,7 @@ export function CoachComingSoonScreen({ videos }: Props) {
         pointerEvents="none"
         intensity={90}
         tint="systemMaterialDark"
-        experimentalBlurMethod="dimezisBlurView"
+        blurMethod="dimezisBlurView"
         blurReductionFactor={3}
         style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
       />

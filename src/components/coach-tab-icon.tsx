@@ -1,6 +1,6 @@
-import { View } from "react-native";
+import { type ColorValue, View } from "react-native";
 
-export function CoachTabIcon({ color, size = 30 }: { color: string; size?: number }) {
+export function CoachTabIcon({ color, size = 30 }: { color: ColorValue; size?: number }) {
   return (
     <View accessibilityLabel="Coach" style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
       <View style={{ width: size * 0.78, height: size * 0.58, borderRadius: size * 0.18, borderWidth: 2, borderColor: color }} />

@@ -17,6 +17,7 @@ import type { AnalysisResult, AnatomyRegion } from "@/features/analysis/result-s
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { getPhoneLayoutProfile } from "@/theme/responsive";
 
 type ResultsScreenProps = {
   result: AnalysisResult;
@@ -101,8 +102,10 @@ function declaredAmountLabel(result: AnalysisResult): string | null {
 
 export function ResultsScreen({ result, videoUrl = null, durationMs = null, playbackWindow = null, onRecordAnother, onAskCoach = () => undefined, onReanalyze, reanalyzing = false, reanalysisError = null, exampleState = "loading", onWatchExample, onRateAnalysis, analysisRating = null, ratingPending = false, ratingError = null }: ResultsScreenProps) {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
-  const wideWorkspace = width >= 820;
+  const window = useWindowDimensions();
+  const layout = getPhoneLayoutProfile({ ...window, insets });
+  const wideWorkspace = layout.width >= 820;
+  const contentMaxWidth = wideWorkspace ? 1160 : layout.contentMaxWidth;
   const presentation = getResultPresentation(result);
   const points = useMemo(() => buildCoachingReviewPoints(result), [result]);
   const synchronizedReviewFrames = useMemo(() => buildReviewFrames(result).observed, [result]);
@@ -195,7 +198,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
 
   if (presentation.status === "unable") {
     return (
-      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ flexGrow: 1, gap: spacing.xl, paddingTop: insets.top + spacing.lg, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ width: "100%", maxWidth: contentMaxWidth, alignSelf: "center", flexGrow: 1, gap: spacing.xl, paddingTop: insets.top + spacing.lg, paddingBottom: layout.bottomPadding, paddingHorizontal: layout.horizontalPadding }} style={{ flex: 1, backgroundColor: colors.background }}>
         <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.8 }]}>RECORDING UNUSABLE</Text>
         <View style={{ gap: spacing.lg, padding: spacing.xl, borderRadius: radii.lg, borderCurve: "continuous", borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.surface }}>
           <Text selectable style={[typography.heading, { color: colors.text }]}>{presentation.retryReason ?? "The movement could not be reviewed."}</Text>
@@ -256,7 +259,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
   );
 
   return (
-    <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ gap: spacing.xl, paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.xl, paddingHorizontal: spacing.lg }} style={{ flex: 1, backgroundColor: colors.background }}>
+    <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ width: "100%", maxWidth: contentMaxWidth, alignSelf: "center", gap: spacing.xl, paddingTop: insets.top + spacing.md, paddingBottom: layout.bottomPadding, paddingHorizontal: layout.horizontalPadding }} style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ gap: spacing.md }}>
         <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.8 }]}>YOUR ANALYSIS</Text>
       </View>
@@ -289,9 +292,9 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
 
       {presentation.comparison ? <View style={{ gap: spacing.sm, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.gold }}><Text selectable style={[typography.caption, { color: colors.gold }]}>SINCE YOUR LAST SET</Text><Text selectable style={[typography.body, { color: colors.text }]}>{presentation.comparison.summary}</Text></View> : null}
 
-      <View testID="result-actions" style={{ flexDirection: "row", borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
+      <View testID="result-actions" style={{ flexDirection: layout.stackControls ? "column" : "row", borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
         <Pressable accessibilityRole="button" onPress={onAskCoach} style={{ flex: 1, minHeight: 72, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.md }}><Text style={[typography.body, { color: colors.text, textAlign: "center" }]}>Ask Formie Coach</Text></Pressable>
-        <View style={{ width: 1, backgroundColor: colors.border }} />
+        <View style={layout.stackControls ? { height: 1, backgroundColor: colors.border } : { width: 1, backgroundColor: colors.border }} />
         <Pressable accessibilityRole="button" accessibilityState={{ disabled: exampleState === "loading" }} disabled={exampleState === "loading"} onPress={onWatchExample} style={{ flex: 1, minHeight: 72, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.md }}>
           <Text style={[typography.body, { color: exampleState === "error" ? colors.textMuted : colors.gold, textAlign: "center" }]}>{exampleState === "loading" ? "Loading Example…" : exampleState === "error" ? "Retry Example" : "Watch Example"}</Text>
         </Pressable>

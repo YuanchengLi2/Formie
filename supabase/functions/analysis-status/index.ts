@@ -1,13 +1,12 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
-import { preflight } from "../_shared/cors.ts";
+import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { errorResponse, jsonResponse } from "../_shared/responses.ts";
 import { resultPayload } from "../_shared/result-payload.ts";
 import { playbackWindowFromSession } from "../_shared/analysis-playback-window.ts";
 
-Deno.serve(async (request) => {
-  const options = preflight(request);
-  if (options) return options;
-  if (request.method !== "GET") return errorResponse("Method not allowed", 405, "METHOD_NOT_ALLOWED");
+async function handleAnalysisStatus(request: Request): Promise<Response> {
+  const security = await secureBrowserRequest(request, { methods: ["GET"], authentication: "user" });
+  if (security) return security;
 
   try {
     const admin = createAdminClient();
@@ -48,4 +47,6 @@ Deno.serve(async (request) => {
     if (error instanceof Error && error.message === "UNAUTHORIZED") return errorResponse("Sign in again", 401, "UNAUTHORIZED");
     return errorResponse("Analysis status could not be loaded", 500, "STATUS_FAILED");
   }
-});
+}
+
+Deno.serve(async (request) => withCors(request, await handleAnalysisStatus(request)));

@@ -1,4 +1,4 @@
-import { Alert } from "react-native";
+import { Alert, useWindowDimensions } from "react-native";
 import { Tabs, type Href, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -10,12 +10,15 @@ import { formatQuotaMessage, formatQuotaTitle } from "@/features/access/quota-me
 import { CoachTabIcon } from "@/components/coach-tab-icon";
 import { ProductionIcon } from "@/components/production-icon";
 import { colors } from "@/theme/colors";
+import { getPhoneLayoutProfile } from "@/theme/responsive";
 
 export default function TabsLayout() {
   const router = useRouter();
   const access = useAccess();
-  const insets = useSafeAreaInsets();
-  const bottomPadding = Math.max(insets.bottom, 10);
+  const window = useWindowDimensions();
+  const layout = getPhoneLayoutProfile({ ...window, insets: useSafeAreaInsets() });
+  const bottomPadding = Math.max(layout.insets.bottom, 10);
+  const tabContentHeight = layout.fontScale >= 1.3 ? 82 : 74;
   const analysisEntry = resolveAnalysisEntry(access.status, access.access);
   const centerLabel = formatAnalysisEntryLabel(analysisEntry, access.access.lifecycleState, access.access.remaining);
   const centerAccessibilityLabel = centerLabel === "Purchase"
@@ -37,7 +40,7 @@ export default function TabsLayout() {
         tabBarActiveTintColor: colors.gold,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          height: 74 + bottomPadding,
+          height: tabContentHeight + bottomPadding,
           paddingTop: 8,
           paddingBottom: bottomPadding,
           overflow: "visible",
@@ -45,7 +48,7 @@ export default function TabsLayout() {
           borderTopColor: colors.border,
           borderTopWidth: 1,
         },
-        tabBarItemStyle: { minHeight: 64, justifyContent: "center", overflow: "visible" },
+        tabBarItemStyle: { minHeight: tabContentHeight - 10, justifyContent: "center", overflow: "visible" },
         tabBarIconStyle: { width: 28, height: 28 },
         tabBarHideOnKeyboard: true,
       }}

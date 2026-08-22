@@ -1,11 +1,11 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { historicalAnalysisArtifactPaths } from "../_shared/legacy-analysis-artifacts.ts";
 import { deleteAnalysisHandler } from "./handler.ts";
 
 Deno.serve(async (request) => {
-  const options = preflight(request);
-  if (options) return options;
+  const security = await secureBrowserRequest(request, { methods: ["DELETE", "POST"], authentication: "user", maxBodyBytes: 4_096 });
+  if (security) return security;
   const admin = createAdminClient();
   const response = await deleteAnalysisHandler(request, {
     authenticate: (incoming) => requireUserId(incoming, admin),
@@ -35,7 +35,5 @@ Deno.serve(async (request) => {
     },
   });
 
-  const headers = new Headers(response.headers);
-  Object.entries(corsHeaders).forEach(([key, value]) => headers.set(key, value));
-  return new Response(response.body, { status: response.status, headers });
+  return withCors(request, response);
 });

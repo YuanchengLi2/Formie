@@ -3,6 +3,7 @@ import { Modal, ScrollView, Text, TextInput, View } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated";
 
+import { ResponsiveScreen } from "@/components/responsive-screen";
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";
 import { FormWordmark } from "@/components/form-wordmark";
 import type { ExerciseFamily } from "@/features/exercises/exercise-family";
@@ -35,7 +36,7 @@ export function ProgressScreen({ groups, onOpenSession, onOpenProfile = () => un
   const filtered = rows.filter((row) => (family === "all" || row.family === family) && row.label.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
 
   return (
-    <ScrollView alwaysBounceVertical bounces contentInsetAdjustmentBehavior="automatic" overScrollMode="auto" style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ gap: spacing.lg, padding: spacing.lg, paddingBottom: spacing.xl }}>
+    <ResponsiveScreen keyboardAware testID="progress-responsive-screen" contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.lg }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <FormWordmark />
         <Pressable accessibilityLabel="Open settings" accessibilityRole="button" onPress={onOpenProfile} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: radii.pill, borderWidth: 1, borderColor: colors.gold }}>
@@ -108,6 +109,6 @@ export function ProgressScreen({ groups, onOpenSession, onOpenProfile = () => un
           </Pressable>
         </Pressable>
       </Modal>
-    </ScrollView>
+    </ResponsiveScreen>
   );
 }

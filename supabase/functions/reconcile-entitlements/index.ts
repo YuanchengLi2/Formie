@@ -1,15 +1,19 @@
 import { createAdminClient } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { constantTimeEqual, validateRequestSecurity, withRequestIdentifier } from "../_shared/request-security.ts";
 import { fetchRevenueCatSubscriber } from "../_shared/revenuecat.ts";
 import { persistEntitlementLedger } from "../_shared/entitlement-ledger.ts";
 import { reconcileEntitlementsHandler } from "./handler.ts";
 
 Deno.serve(async (request) => {
-  const options = preflight(request);
-  if (options) return options;
+  const security = await validateRequestSecurity(request, { methods: ["POST"], authentication: "webhook", maxBodyBytes: 4_096, allowBrowserOrigin: false });
+  if (security) return security;
   const admin = createAdminClient();
   const response = await reconcileEntitlementsHandler(request, {
-    authenticateCron: (incoming) => incoming.headers.get("x-cron-secret") === Deno.env.get("RECONCILE_ENTITLEMENTS_SECRET"),
+    authenticateCron: (incoming) => {
+      const supplied = incoming.headers.get("x-cron-secret");
+      const configured = Deno.env.get("RECONCILE_ENTITLEMENTS_SECRET");
+      return Boolean(supplied && configured && constantTimeEqual(supplied, configured));
+    },
     listUsers: async ({ offset, limit }) => {
       const { data, error } = await admin
         .from("user_access_entitlements")
@@ -30,7 +34,5 @@ Deno.serve(async (request) => {
       return Number(data ?? 0);
     },
   });
-  const headers = new Headers(response.headers);
-  Object.entries(corsHeaders).forEach(([key, value]) => headers.set(key, value));
-  return new Response(response.body, { status: response.status, headers });
+  return withRequestIdentifier(request, response);
 });

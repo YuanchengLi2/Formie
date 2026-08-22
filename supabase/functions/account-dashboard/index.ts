@@ -1,11 +1,11 @@
 import { createAdminClient, requireUser } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { persistEntitlementLedger } from "../_shared/entitlement-ledger.ts";
 import { fetchRevenueCatSubscriber } from "../_shared/revenuecat.ts";
 import { accountDashboardHandler } from "./handler.ts";
 
 Deno.serve(async (request) => {
-  const options = preflight(request); if (options) return options;
+  const security = await secureBrowserRequest(request, { methods: ["GET", "POST"], authentication: "user", maxBodyBytes: 4_096 }); if (security) return security;
   const admin = createAdminClient();
   let caller: any = null;
   const response = await accountDashboardHandler(request, {
@@ -20,6 +20,7 @@ Deno.serve(async (request) => {
       return { displayName: profileResult.data?.display_name ?? "Formie Athlete", profileExists: Boolean(profileResult.data), access };
     },
   });
-  const headers = new Headers(response.headers); Object.entries(corsHeaders).forEach(([key, value]) => headers.set(key, value)); headers.set("Cache-Control", "no-store");
-  return new Response(response.body, { status: response.status, headers });
+  const secured = withCors(request, response);
+  secured.headers.set("Cache-Control", "no-store");
+  return secured;
 });

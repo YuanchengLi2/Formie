@@ -1,14 +1,16 @@
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, TextInput, View } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { ResponsiveScreen } from "@/components/responsive-screen";
+import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 export type EmailAuthIntent = "login" | "onboarding";
 
 function EmailShell({ children }: { children: React.ReactNode }) {
-  const insets = useSafeAreaInsets();
-  return <View style={styles.screen}><StatusBar style="light" /><View style={[styles.goldBar, { height: Math.max(insets.top, 12) + 6 }]} /><ScrollView testID="email-auth-scroll" contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 28) }]}>{children}</ScrollView></View>;
+  const layout = usePhoneLayoutProfile();
+  return <View style={styles.screen}><StatusBar style="light" /><View style={[styles.goldBar, { height: Math.max(layout.insets.top, 12) + 6 }]} /><ResponsiveScreen testID="email-auth-scroll" keyboardAware contentContainerStyle={[styles.content, layout.short && styles.contentShort]}>{children}</ResponsiveScreen></View>;
 }
 
 function BackButton({ onPress }: { onPress: () => void }) {
@@ -41,7 +43,8 @@ export function EmailCodeScreen({ email, intent, busy, error, onBack, onVerify, 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#030303" },
   goldBar: { width: "100%", backgroundColor: "#D9A83F" },
-  content: { flexGrow: 1, width: "100%", maxWidth: 620, alignSelf: "center", justifyContent: "center", gap: 34, paddingHorizontal: 24, paddingTop: 20 },
+  content: { justifyContent: "center", gap: 34, paddingTop: 20 },
+  contentShort: { justifyContent: "flex-start", gap: 22, paddingTop: 12 },
   back: { alignSelf: "flex-start", width: 52, height: 52, alignItems: "center", justifyContent: "center", borderRadius: 26, borderWidth: 1, borderColor: "#49443C" },
   backText: { color: "#F8F7F5", fontSize: 42, lineHeight: 43, fontWeight: "300" },
   copy: { gap: 14 },

@@ -17,12 +17,14 @@ test("the public website has no customer subscription-management surface", () =>
     "lib/supabase/server.ts",
     "lib/supabase/route.ts",
     "lib/subscription-intent.ts",
-    "proxy.ts",
   ];
 
   for (const path of removedPaths) {
     assert.equal(existsSync(resolve(websiteRoot, path)), false, `${path} must stay removed`);
   }
+
+  const proxy = readFileSync(resolve(websiteRoot, "proxy.ts"), "utf8");
+  assert.doesNotMatch(proxy, /manage-subscription|subscription-intent|account-portal/i);
 
   const siteShell = readFileSync(resolve(websiteRoot, "components/site-shell.tsx"), "utf8");
   assert.doesNotMatch(siteShell, /manage-subscription|Manage Subscription/i);

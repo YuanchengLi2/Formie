@@ -3,8 +3,8 @@ import { Image } from "expo-image";
 import { useState, type PropsWithChildren } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ResponsiveScreen } from "@/components/responsive-screen";
 import { useAccess } from "@/features/access/access-provider";
 import { useAuth } from "@/features/auth/auth-provider";
 import { useBilling } from "@/features/billing/billing-provider";
@@ -18,7 +18,6 @@ import { FormButton } from "./form-button";
 const logo = require("../../assets/images/form-logo-mark.png");
 
 export function SubscriptionAccessGate({ children }: PropsWithChildren) {
-  const insets = useSafeAreaInsets();
   const auth = useAuth();
   const profile = useProfile();
   const access = useAccess();
@@ -40,7 +39,7 @@ export function SubscriptionAccessGate({ children }: PropsWithChildren) {
   };
 
   const verifying = access.status === "loading";
-  return <View style={[styles.screen, { paddingTop: Math.max(insets.top, spacing.lg), paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+  return <ResponsiveScreen testID="subscription-access-responsive-screen" contentContainerStyle={styles.screen}>
     <Image accessibilityLabel="Formie" source={logo} contentFit="contain" style={styles.logo} />
     {verifying ? <>
       <ActivityIndicator color={colors.gold} size="large" />
@@ -55,11 +54,11 @@ export function SubscriptionAccessGate({ children }: PropsWithChildren) {
         <Pressable accessibilityRole="button" accessibilityLabel="Sign out" disabled={signingOut} onPress={() => void signOut()} style={styles.secondary}><Text style={styles.secondaryText}>{signingOut ? "Signing out…" : "Sign out"}</Text></Pressable>
       </View>
     </>}
-  </View>;
+  </ResponsiveScreen>;
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, justifyContent: "center", alignItems: "center", gap: spacing.lg, paddingHorizontal: spacing.xl, backgroundColor: colors.background },
+  screen: { justifyContent: "center", alignItems: "center", gap: spacing.lg, paddingTop: spacing.lg },
   logo: { width: 92, height: 92 },
   title: { maxWidth: 440, color: colors.text, textAlign: "center" },
   detail: { maxWidth: 440, color: colors.textSecondary, textAlign: "center" },

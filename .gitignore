@@ -23,6 +23,8 @@ form-ios-*-qr*.png
 formie-*-qr*.png
 /tmp/
 web-build/
+website/test-results/
+website/playwright-report/
 .form-scaffold/
 supabase/.branches/
 supabase/.temp/

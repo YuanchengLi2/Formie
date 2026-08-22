@@ -154,7 +154,7 @@ export function PremiumScreen({
               pressed && !ctaDisabled && styles.ctaPressed,
             ]}
           >
-            <Image accessibilityElementsHidden pointerEvents="none" source={goldGradient} contentFit="fill" style={StyleSheet.absoluteFillObject} />
+            <Image accessibilityElementsHidden pointerEvents="none" source={goldGradient} contentFit="fill" style={StyleSheet.absoluteFill} />
             <View style={styles.ctaContent}>
               <Text style={styles.ctaText}>{visibleCtaLabel}</Text>
               {reconciling ? <ActivityIndicator accessibilityLabel="Starting purchase" color="#080808" /> : <Text style={styles.ctaArrow}>→</Text>}

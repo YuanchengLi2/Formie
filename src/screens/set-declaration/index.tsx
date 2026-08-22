@@ -1,16 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  ScrollView,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Text, TextInput, View } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { VideoView, useVideoPlayer } from "expo-video";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormButton } from "@/components/form-button";
+import { ResponsiveScreen } from "@/components/responsive-screen";
 import { exerciseIsUnilateral } from "@/features/analysis/exercise-catalog";
 import {
   setDeclarationSchema,
@@ -94,7 +88,7 @@ function RecordedSetPreview({ localVideoUri }: { localVideoUri: string }) {
   });
 
   return (
-    <View style={{ height: 210, overflow: "hidden", borderRadius: radii.lg, backgroundColor: colors.cameraBlack }}>
+    <View style={{ width: "100%", maxHeight: 210, aspectRatio: 16 / 9, borderRadius: radii.lg, backgroundColor: colors.cameraBlack }}>
       <VideoView
         accessibilityLabel="Recorded set preview"
         contentFit="contain"
@@ -124,7 +118,6 @@ export function SetDeclarationScreen({
 }: SetDeclarationScreenProps) {
   const isFreshRecording = secondaryLabel === "Retake";
   const submitLabel = analyzeLabel ?? (isFreshRecording ? "Submit for Analysis" : "Analyze Set");
-  const insets = useSafeAreaInsets();
   const [exerciseQuery, setExerciseQuery] = useState(
     preselectedExercise?.canonicalName ?? initialExerciseName ?? initialDeclaration?.exercise.label ?? "",
   );
@@ -254,19 +247,12 @@ export function SetDeclarationScreen({
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={process.env.EXPO_OS === "ios" ? "padding" : undefined}
-      style={{ flex: 1, backgroundColor: colors.background }}
-    >
-      <ScrollView
+      <ResponsiveScreen
+        keyboardAware
         contentContainerStyle={{
           gap: spacing.xl,
-          paddingTop: insets.top + spacing.lg,
-          paddingBottom: insets.bottom + spacing.xxl,
-          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.lg,
         }}
-        contentInsetAdjustmentBehavior="automatic"
-        keyboardShouldPersistTaps="handled"
         testID="set-declaration-scroll"
       >
         {onBack ? (
@@ -427,7 +413,6 @@ export function SetDeclarationScreen({
           <FormButton label={submitting ? `${submitLabel}…` : submitLabel} disabled={submitting} onPress={analyze} />
           {!isFreshRecording ? <FormButton label={secondaryLabel} variant="secondary" onPress={onRetake} /> : null}
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </ResponsiveScreen>
   );
 }

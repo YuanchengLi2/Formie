@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { AppState } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 
 import { queryClient } from "@/lib/query-client";
@@ -8,6 +9,7 @@ import { deviceVideoStore } from "@/features/capture/device-video-store";
 
 import { AnalysisApiError, getAnalysisStatus, processAnalysis } from "./api";
 import { analysisRefetchInterval } from "./analysis-polling";
+import { bindAnalysisResume } from "./analysis-resume";
 
 export function useAnalysisStatus(sessionId: string, options: { includeVideoUrl?: boolean; mode?: "process" | "status" } = {}) {
   const includeVideoUrl = options.includeVideoUrl ?? false;
@@ -28,7 +30,7 @@ export function useAnalysisStatus(sessionId: string, options: { includeVideoUrl?
       });
   }, [mode, queryKey, sessionId]);
 
-  return useQuery({
+  const query = useQuery({
     queryKey,
     queryFn: async ({ signal }) => {
       const accessToken = await getAccessToken();
@@ -47,4 +49,19 @@ export function useAnalysisStatus(sessionId: string, options: { includeVideoUrl?
       return analysisRefetchInterval(status, query.state.data?.analysisNextRetryAt);
     },
   });
+
+  useEffect(() => bindAnalysisResume({
+    initialState: AppState.currentState,
+    addListener: (listener) => AppState.addEventListener("change", listener),
+    onActive: () => {
+      void queryClient.invalidateQueries({ queryKey });
+      if (mode !== "process" || !sessionId) return;
+      void getAccessToken()
+        .then((accessToken) => processAnalysis({ accessToken, sessionId }))
+        .then(() => queryClient.invalidateQueries({ queryKey }))
+        .catch(() => undefined);
+    },
+  }), [mode, queryKey, sessionId]);
+
+  return query;
 }

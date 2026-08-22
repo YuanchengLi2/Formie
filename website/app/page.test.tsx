@@ -35,12 +35,18 @@ test("document and responsive artwork stay bounded", () => {
   const globalCss = readFileSync(new URL("./globals.css", import.meta.url), "utf8");
   const css = readFileSync(new URL("./landing-v2.css", import.meta.url), "utf8");
   assert.doesNotMatch(globalCss, /(?:html|body)[^{]*\{[^}]*overflow-x:\s*hidden/);
-  assert.match(globalCss, /html\s*\{[^}]*overflow-x:\s*clip/);
-  assert.match(globalCss, /body\s*\{[^}]*overflow-x:\s*clip/);
+  assert.doesNotMatch(globalCss, /(?:html|body)[^{]*\{[^}]*overflow-x:\s*(?:hidden|clip)/);
+  assert.doesNotMatch(globalCss, /\.tabs\s*\{[^}]*width:\s*520px/);
   for (const selector of [".v2-hero-art", ".v2-journey-image", ".v2-pro-visual"]) {
     const rules = [...css.matchAll(new RegExp(`${selector.replace(".", "\\.")}[^\\{]*\\{([^}]+)\\}`, "g"))].map((match) => match[1]).join("\n");
     assert.doesNotMatch(rules, /width:\s*(?:1(?:0[1-9]|[1-9]\d)|[2-9]\d{2,})%/);
     assert.doesNotMatch(rules, /margin-left:\s*-/);
+  }
+  for (const selector of [".v2-setup-art", ".v2-coaching-art"]) {
+    const rules = [...css.matchAll(new RegExp(`${selector.replace(".", "\\.")}[^\\{]*\\{([^}]+)\\}`, "g"))].map((match) => match[1]).join("\n");
+    assert.doesNotMatch(rules, /width:\s*(?:1(?:0[1-9]|[1-9]\d)|[2-9]\d{2,})%/);
+    assert.doesNotMatch(rules, /margin-left:\s*-/);
+    assert.doesNotMatch(rules, /transform:\s*scale\([1-9]/);
   }
 });
 

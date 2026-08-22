@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { ScrollView, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 
 import { FormButton } from "@/components/form-button";
+import { ResponsiveScreen } from "@/components/responsive-screen";
 import type { FeedbackCategory } from "@/features/feedback/api";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
@@ -45,12 +46,7 @@ export function FeedbackScreen({
   };
 
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      keyboardShouldPersistTaps="handled"
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ gap: spacing.xl, padding: spacing.lg, paddingBottom: spacing.xxl }}
-    >
+    <ResponsiveScreen keyboardAware testID="feedback-responsive-screen" contentContainerStyle={{ gap: spacing.xl, paddingTop: spacing.lg }}>
       <Pressable accessibilityRole="button" onPress={onBack} style={{ minHeight: 44, alignSelf: "flex-start", justifyContent: "center" }}>
         <Text selectable style={[typography.label, { color: colors.gold }]}>Back</Text>
       </Pressable>
@@ -128,6 +124,6 @@ export function FeedbackScreen({
         disabled={!valid || busy}
         onPress={() => void submit()}
       />
-    </ScrollView>
+    </ResponsiveScreen>
   );
 }

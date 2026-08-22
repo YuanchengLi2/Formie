@@ -1,17 +1,17 @@
 import { createAdminClient } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { constantTimeEqual, validateRequestSecurity, withRequestIdentifier } from "../_shared/request-security.ts";
 import { retryAnalysisHandler } from "./handler.ts";
 import { isV49PrimaryRolloutEnabled } from "../_shared/v49-primary-rollout.ts";
 
 function requireScheduledRequest(request: Request): Promise<void> {
   const supplied = request.headers.get("x-cron-secret");
   const configured = Deno.env.get("ANALYSIS_RETRY_SECRET") ?? Deno.env.get("RETENTION_CLEANUP_SECRET");
-  return configured && supplied === configured ? Promise.resolve() : Promise.reject(new Error("UNAUTHORIZED"));
+  return configured && supplied && constantTimeEqual(supplied, configured) ? Promise.resolve() : Promise.reject(new Error("UNAUTHORIZED"));
 }
 
 Deno.serve(async (request) => {
-  const options = preflight(request);
-  if (options) return options;
+  const security = await validateRequestSecurity(request, { methods: ["POST"], authentication: "webhook", maxBodyBytes: 4_096, allowBrowserOrigin: false });
+  if (security) return security;
   const admin = createAdminClient();
   const primaryV49Enabled = isV49PrimaryRolloutEnabled(Deno.env.get("ANALYSIS_V49_PRIMARY_ENABLED"));
   const response = await retryAnalysisHandler(request, {
@@ -57,7 +57,5 @@ Deno.serve(async (request) => {
       return response.status;
     },
   });
-  const headers = new Headers(response.headers);
-  Object.entries(corsHeaders).forEach(([key, value]) => headers.set(key, value));
-  return new Response(response.body, { status: response.status, headers });
+  return withRequestIdentifier(request, response);
 });

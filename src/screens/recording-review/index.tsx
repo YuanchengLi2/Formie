@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CaptureReferenceIcon } from "@/components/capture-reference-icon";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
@@ -9,6 +8,7 @@ import { ReferenceVideoControls } from "@/components/reference-video-controls";
 import { colors } from "@/theme/colors";
 import { radii } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 type RecordingReviewScreenProps = {
   localVideoUri: string;
@@ -20,7 +20,7 @@ type RecordingReviewScreenProps = {
 type ReviewTab = "video" | "checks";
 
 export function RecordingReviewScreen({ localVideoUri, analysisRemaining, onUseRecording, onRetake }: RecordingReviewScreenProps) {
-  const insets = useSafeAreaInsets();
+  const layout = usePhoneLayoutProfile();
   const [tab, setTab] = useState<ReviewTab>("checks");
   const remaining = typeof analysisRemaining === "number" && Number.isFinite(analysisRemaining)
     ? Math.max(0, Math.floor(analysisRemaining))
@@ -28,7 +28,7 @@ export function RecordingReviewScreen({ localVideoUri, analysisRemaining, onUseR
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.cameraBlack }}>
-      <View style={{ paddingTop: insets.top + 8, paddingHorizontal: 16, gap: 12 }}>
+      <View style={{ width: "100%", maxWidth: layout.contentMaxWidth, alignSelf: "center", paddingTop: layout.insets.top + 8, paddingHorizontal: layout.horizontalPadding, gap: layout.short ? 8 : 12 }}>
         <View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12 }}>
           <Pressable
             accessibilityLabel="Go back from Check Recording"
@@ -49,14 +49,14 @@ export function RecordingReviewScreen({ localVideoUri, analysisRemaining, onUseR
       </View>
 
       {tab === "video" ? (
-        <View testID="recording-review-video-tab" style={{ flex: 1, minHeight: 0, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+        <View testID="recording-review-video-tab" style={{ flex: 1, minHeight: 0, width: "100%", maxWidth: layout.contentMaxWidth, alignSelf: "center", paddingHorizontal: layout.horizontalPadding, paddingTop: 12, paddingBottom: 8 }}>
           <ReferenceVideoControls fillAvailableSpace localVideoUri={localVideoUri} />
         </View>
       ) : (
         <ScrollView
           alwaysBounceVertical={false}
           contentInsetAdjustmentBehavior="never"
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 18, paddingBottom: 18 }}
+          contentContainerStyle={{ width: "100%", maxWidth: layout.contentMaxWidth, alignSelf: "center", paddingHorizontal: layout.horizontalPadding, paddingTop: layout.short ? 10 : 18, paddingBottom: 18 }}
           nestedScrollEnabled
           scrollEnabled
           showsVerticalScrollIndicator={false}
@@ -67,7 +67,7 @@ export function RecordingReviewScreen({ localVideoUri, analysisRemaining, onUseR
         </ScrollView>
       )}
 
-      <View testID="recording-review-footer" style={{ gap: 8, paddingHorizontal: 16, paddingTop: 9, paddingBottom: insets.bottom + 9, borderTopWidth: 1, borderTopColor: "#202020", backgroundColor: "#0B0B0B" }}>
+      <View testID="recording-review-footer" style={{ width: "100%", maxWidth: layout.contentMaxWidth, alignSelf: "center", gap: 8, paddingHorizontal: layout.horizontalPadding, paddingTop: 9, paddingBottom: layout.insets.bottom + 9, borderTopWidth: 1, borderTopColor: "#202020", backgroundColor: "#0B0B0B" }}>
         <View accessibilityRole="summary" style={{ minHeight: 22, flexDirection: "row", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 6 }}>
           <CaptureReferenceIcon name="quota" color={colors.gold} size={18} />
           <Text selectable style={[typography.label, { color: colors.gold, fontSize: 12, lineHeight: 16 }]}>1 analysis will be used</Text>

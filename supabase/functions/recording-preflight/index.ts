@@ -1,5 +1,5 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import {
   buildImageGenerateContentRequest,
   createGenerateContentClient,
@@ -27,8 +27,8 @@ const generation = createGenerateContentClient({
 });
 
 Deno.serve(async (request) => {
-  const options = preflight(request);
-  if (options) return options;
+  const security = await secureBrowserRequest(request, { methods: ["POST"], authentication: "user", maxBodyBytes: 1_048_576 });
+  if (security) return security;
   const admin = createAdminClient();
   const response = await recordingPreflightHandler(request, {
     authenticate: (incoming) => requireUserId(incoming, admin),
@@ -123,7 +123,5 @@ Deno.serve(async (request) => {
       }));
     },
   });
-  const headers = new Headers(response.headers);
-  Object.entries(corsHeaders).forEach(([key, value]) => headers.set(key, value));
-  return new Response(response.body, { status: response.status, headers });
+  return withCors(request, response);
 });

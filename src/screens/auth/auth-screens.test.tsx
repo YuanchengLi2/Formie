@@ -1,4 +1,5 @@
 import { fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AccountAccessScreen, isCompactAccountAccessLayout } from "@/components/account-access-screen";
@@ -28,6 +29,12 @@ describe("account access screens", () => {
     expect(screen.queryByText("Coming soon")).toBeNull();
     expect(screen.getByText("Create New Account")).toBeTruthy();
     expect(screen.getByTestId("account-access-scroll")).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId("account-access-scroll").props.contentContainerStyle)).toMatchObject({
+      width: "100%",
+      maxWidth: 560,
+      paddingHorizontal: 24,
+      paddingBottom: 50,
+    });
     expect(screen.getByTestId("provider-apple")).toHaveStyle({ minHeight: 58, backgroundColor: "#E5AD32" });
     expect(screen.queryByTestId("provider-google")).toBeNull();
     expect(screen.queryByTestId("provider-email")).toBeNull();

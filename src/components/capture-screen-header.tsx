@@ -1,10 +1,11 @@
-import { Text, View } from "react-native";
+import { Text, View, useWindowDimensions } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CaptureReferenceIcon } from "@/components/capture-reference-icon";
 import { colors } from "@/theme/colors";
 import { typography } from "@/theme/type";
+import { getPhoneLayoutProfile } from "@/theme/responsive";
 
 type CaptureScreenHeaderProps = {
   title: string;
@@ -13,15 +14,16 @@ type CaptureScreenHeaderProps = {
 };
 
 export function CaptureScreenHeader({ title, onBack, testID }: CaptureScreenHeaderProps) {
-  const insets = useSafeAreaInsets();
+  const window = useWindowDimensions();
+  const layout = getPhoneLayoutProfile({ ...window, insets: useSafeAreaInsets() });
 
   return (
     <View
       testID={testID}
       style={{
-        minHeight: insets.top + 56,
-        paddingTop: insets.top,
-        paddingHorizontal: 20,
+        minHeight: layout.insets.top + 56,
+        paddingTop: layout.insets.top,
+        paddingHorizontal: layout.horizontalPadding,
         justifyContent: "center",
         backgroundColor: colors.cameraBlack,
       }}
@@ -38,9 +40,9 @@ export function CaptureScreenHeader({ title, onBack, testID }: CaptureScreenHead
           hitSlop={6}
           onPress={onBack}
           style={({ pressed }) => ({
-            width: 42,
-            height: 42,
-            borderRadius: 21,
+            width: layout.touchTarget,
+            height: layout.touchTarget,
+            borderRadius: layout.touchTarget / 2,
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: colors.surface,

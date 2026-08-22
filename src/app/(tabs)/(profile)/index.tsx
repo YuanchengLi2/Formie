@@ -11,7 +11,7 @@ import { useCapturePreferences } from "@/features/capture/capture-preferences";
 import { useProfile } from "@/features/profile/profile-provider";
 import { useAccess, useBillingSurfaceRefresh } from "@/features/access/access-provider";
 import { createSubscriptionPresentation } from "@/features/billing/subscription-management-presentation";
-import { runSubscriptionTestControl, setSubscriptionTestRemaining } from "@/features/billing/subscription-test-controls";
+import { runSubscriptionTestControl } from "@/features/billing/subscription-test-controls";
 import { deleteAccount } from "@/features/account-deletion/api";
 
 export default function ProfileRoute() {
@@ -65,14 +65,8 @@ export default function ProfileRoute() {
         router.push("/account/manage-subscription" as Href);
       }}
       showTestControls={access.access.sandbox && access.access.store === "test_store"}
-      showAnalysisBalanceControl={access.access.sandbox}
-      testRemaining={access.access.remaining}
       onTestControl={async (action) => {
         await runSubscriptionTestControl(action);
-        await access.refresh();
-      }}
-      onSetTestRemaining={async (remaining) => {
-        await setSubscriptionTestRemaining(remaining);
         await access.refresh();
       }}
       termsUrl={legal?.termsUrl}

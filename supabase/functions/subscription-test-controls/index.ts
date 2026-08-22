@@ -1,12 +1,12 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { subscriptionTestControlsHandler, type SubscriptionTestCommand } from "./handler.ts";
 
 const MONTHLY_TEST_PERIOD_MS = 20 * 60 * 1000;
 const ANNUAL_TEST_PERIOD_MS = 60 * 60 * 1000;
 
 Deno.serve(async (request) => {
-  const options = preflight(request); if (options) return options;
+  const security = await secureBrowserRequest(request, { methods: ["POST"], authentication: "user", maxBodyBytes: 4_096 }); if (security) return security;
   const admin = createAdminClient();
   const response = await subscriptionTestControlsHandler(request, {
     enabled: () => Deno.env.get("SUBSCRIPTION_TEST_CONTROLS_ENABLED") === "true",
@@ -114,6 +114,5 @@ Deno.serve(async (request) => {
       return Array.isArray(data) ? data[0] : data;
     },
   });
-  const headers = new Headers(response.headers); Object.entries(corsHeaders).forEach(([key, value]) => headers.set(key, value));
-  return new Response(response.body, { status: response.status, headers });
+  return withCors(request, response);
 });

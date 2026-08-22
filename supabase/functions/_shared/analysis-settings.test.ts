@@ -1,4 +1,5 @@
 import {
+  ANALYSIS_RUNTIME_CONTRACT,
   ANALYST_THINKING_LEVEL,
   MAX_ANALYSIS_VIDEO_DURATION_MS,
   MIN_ANALYSIS_VIDEO_DURATION_MS,
@@ -18,5 +19,19 @@ describe("whole-video analysis settings", () => {
     expect(REQUESTED_ANALYSIS_MEDIA_RESOLUTION).toBe("MEDIA_RESOLUTION_HIGH");
     expect(ANALYST_THINKING_LEVEL).toBe("high");
     expect(WRITER_THINKING_LEVEL).toBe("low");
+  });
+
+  it("exposes one immutable versioned contract for request construction and telemetry", () => {
+    expect(Object.isFrozen(ANALYSIS_RUNTIME_CONTRACT)).toBe(true);
+    expect(ANALYSIS_RUNTIME_CONTRACT).toEqual({
+      pipelineVersion: "gemini-whole-video-v87-runtime-contract",
+      analystModel: "gemini-3.7-flash",
+      analystThinkingLevel: "high",
+      mediaResolution: "MEDIA_RESOLUTION_HIGH",
+      requestedFps: 12,
+      writerModel: "gemini-3.1-flash-lite",
+      writerThinkingLevel: "low",
+      requestedIssueScope: "4-6-highest-consequence",
+    });
   });
 });

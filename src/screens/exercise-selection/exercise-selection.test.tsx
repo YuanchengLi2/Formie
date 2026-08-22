@@ -78,17 +78,15 @@ describe("ExerciseSelectionScreen", () => {
     expect(screen.queryByText("Choose Exercise")).toBeNull();
     expect(screen.getByText("Choose your exercise before recording")).toBeTruthy();
     expect(screen.getByLabelText("Bench press exercise illustration")).toBeTruthy();
-    expect(screen.getByTestId("exercise-hero")).toHaveStyle({
-      height: 340,
-      backgroundColor: "transparent",
-    });
+    expect(screen.getByTestId("exercise-hero")).toHaveStyle({ width: "100%", backgroundColor: "transparent" });
     expect(screen.getByTestId("exercise-helper")).toHaveStyle({
       fontSize: 22,
       textAlign: "center",
     });
     expect(screen.getByTestId("exercise-hero-image")).toHaveStyle({
+      width: "100%",
+      height: "100%",
       opacity: 0.35,
-      transform: [{ translateY: 28 }],
     });
     const search = screen.getByTestId("exercise-search");
     const heroSection = screen.getByTestId("exercise-hero-section");

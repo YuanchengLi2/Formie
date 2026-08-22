@@ -1,6 +1,7 @@
 import type { AnalysisCandidate, ExerciseFamily } from "../_shared/analysis-contract.ts";
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
+import { constantTimeEqual } from "../_shared/request-security.ts";
 import { estimatedGeminiCost } from "../_shared/gemini-cost.ts";
 import { buildTextGenerateContentRequest, buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
 import { parseSetDeclaration, type SetDeclaration } from "../_shared/set-declaration.ts";
@@ -43,12 +44,6 @@ const generation = createGenerateContentClient({ apiKey });
 
 function json(value: unknown, status: number): Response {
   return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
-}
-
-function withCors(response: Response): Response {
-  const headers = new Headers(response.headers);
-  Object.entries(corsHeaders).forEach(([key, value]) => headers.set(key, value));
-  return new Response(response.body, { status: response.status, headers });
 }
 
 function row(value: unknown): JsonRecord | null {
@@ -220,22 +215,22 @@ async function executeRun(run: LoadedRun, admin: ReturnType<typeof createAdminCl
 }
 
 Deno.serve(async (request) => {
-  const options = preflight(request);
-  if (options) return options;
+  const security = await secureBrowserRequest(request, { methods: ["POST"], authentication: "service", maxBodyBytes: 8_192 });
+  if (security) return security;
   const admin = createAdminClient();
   try {
-    return withCors(await analyzeVideoV49Handler(request, {
+    return withCors(request, await analyzeVideoV49Handler(request, {
       authenticate: async (incoming) => {
         const retrySecret = incoming.headers.get("x-analysis-retry-secret");
         const configuredRetrySecret = Deno.env.get("ANALYSIS_RETRY_SECRET") ?? Deno.env.get("RETENTION_CLEANUP_SECRET");
-        if (configuredRetrySecret && retrySecret === configuredRetrySecret) {
+        if (configuredRetrySecret && retrySecret && constantTimeEqual(retrySecret, configuredRetrySecret)) {
           const userId = incoming.headers.get("x-analysis-retry-user-id");
           if (!userId) throw new Error("UNAUTHORIZED");
           return { userId, allowShadow: false };
         }
         const supplied = incoming.headers.get("x-analysis-shadow-secret");
         const configured = Deno.env.get("ANALYSIS_SHADOW_SECRET");
-        if (configured && supplied === configured) {
+        if (configured && supplied && constantTimeEqual(supplied, configured)) {
           const userId = incoming.headers.get("x-analysis-shadow-user-id");
           if (!userId) throw new Error("UNAUTHORIZED");
           return { userId, allowShadow: true };
@@ -257,8 +252,8 @@ Deno.serve(async (request) => {
     }));
   } catch (error) {
     const code = codeFor(error);
-    if (code === "ANALYSIS_STAGE_BUSY") return withCors(json({ status: "processing", stage: "processing", code }, 202));
+    if (code === "ANALYSIS_STAGE_BUSY") return withCors(request, json({ status: "processing", stage: "processing", code }, 202));
     console.error(JSON.stringify({ code, message: error instanceof Error ? error.message : String(error) }));
-    return withCors(json({ message: "Analysis failed", code }, 500));
+    return withCors(request, json({ message: "Analysis failed", code }, 500));
   }
 });

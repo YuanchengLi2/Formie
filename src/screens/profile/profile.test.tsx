@@ -1,4 +1,5 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 
 import { ProfileScreen } from ".";
 
@@ -16,6 +17,10 @@ describe("ProfileScreen", () => {
     expect(screen.getByRole("button", { name: "Log Out" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Manage subscription" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Delete Account" })).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId("profile-responsive-screen").props.contentContainerStyle)).toMatchObject({
+      width: "100%",
+      maxWidth: 560,
+    });
   });
 
   it("opens the authoritative native management flow without exposing client-side cancel mutations", async () => {
@@ -82,6 +87,8 @@ describe("ProfileScreen", () => {
     expect(screen.queryByText(/analyses left/i)).toBeNull();
     expect(screen.getByText("Active · Automatic renewal on · Next billing Sep 1, 2026 at 8:56 AM UTC")).toBeTruthy();
     expect(screen.queryByText(/Test period ends/i)).toBeNull();
+    expect(screen.queryByText("Analysis balance")).toBeNull();
+    expect(screen.queryByLabelText("Apply remaining analyses")).toBeNull();
     expect(screen.getByText("Test Store lifecycle")).toBeTruthy();
     expect(screen.queryByText("Undo Cancellation")).toBeNull();
     await fireEvent.press(screen.getByText("Start 20-minute Period"));
@@ -92,30 +99,6 @@ describe("ProfileScreen", () => {
     const screen = await render(<ProfileScreen subscription={{ plan: "Formie Monthly", stateLabel: "Canceled · Automatic renewal off · Access ends Sep 1, 2026 at 8:56 AM UTC" }} />);
     expect(screen.getByText("Canceled · Automatic renewal off · Access ends Sep 1, 2026 at 8:56 AM UTC")).toBeTruthy();
     expect(screen.queryByText(/Next billing/i)).toBeNull();
-  });
-
-  it("applies a chosen remaining balance and exposes the simulated period action", async () => {
-    const onSetTestRemaining = jest.fn().mockResolvedValue(undefined);
-    const screen = await render(<ProfileScreen subscription={{ plan: "Formie Monthly", stateLabel: "Active" }} testRemaining={6} showTestControls onSetTestRemaining={onSetTestRemaining} />);
-    await fireEvent.press(screen.getByLabelText("Decrease analyses remaining"));
-    expect(screen.getByText("Analyses remaining: 5")).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText("Apply remaining analyses"));
-    await waitFor(() => expect(onSetTestRemaining).toHaveBeenCalledWith(5));
-    expect(screen.getByText("Start 20-minute Period")).toBeTruthy();
-  });
-
-  it("shows only the analysis balance control for an Apple sandbox subscription", async () => {
-    const onSetTestRemaining = jest.fn().mockResolvedValue(undefined);
-    const screen = await render(<ProfileScreen subscription={{ plan: "Formie Monthly", stateLabel: "Active" }} testRemaining={9} showAnalysisBalanceControl onSetTestRemaining={onSetTestRemaining} />);
-    expect(screen.getByText("Analysis balance")).toBeTruthy();
-    expect(screen.getByText("Analyses remaining: 9")).toBeTruthy();
-    const rendered = JSON.stringify(screen.toJSON());
-    expect(rendered.indexOf("Analysis balance")).toBeLessThan(rendered.indexOf("Preferences"));
-    expect(screen.queryByText("Test Store lifecycle")).toBeNull();
-    expect(screen.queryByText("Renew Now")).toBeNull();
-    await fireEvent.press(screen.getByLabelText("Decrease analyses remaining"));
-    await fireEvent.press(screen.getByLabelText("Apply remaining analyses"));
-    await waitFor(() => expect(onSetTestRemaining).toHaveBeenCalledWith(8));
   });
 
   it("warns about Apple billing and requires exact typed confirmation", async () => {

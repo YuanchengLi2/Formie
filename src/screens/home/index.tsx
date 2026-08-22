@@ -1,8 +1,9 @@
 import { Image } from "expo-image";
-import { ScrollView, Text, useWindowDimensions, View } from "react-native";
+import { Text, View } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
+import { ResponsiveScreen } from "@/components/responsive-screen";
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";
 import { DashboardIcon } from "@/components/dashboard-icon";
 import { FormCard } from "@/components/form-card";
@@ -15,6 +16,7 @@ import type { ProgressMetrics } from "@/features/progress/metrics";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 const recordCard = require("../../../assets/production/home-record-card.png");
 
@@ -84,23 +86,23 @@ export function HomeScreen({
   analysisStatus = "checking",
   now = new Date(),
 }: HomeScreenProps) {
-  const viewport = useWindowDimensions();
+  const layout = usePhoneLayoutProfile();
   if (!historyResolved) {
     return (
-      <View accessibilityLabel="Loading recording history" style={{ flex: 1, gap: spacing.lg, padding: spacing.lg, backgroundColor: colors.background }}>
+      <ResponsiveScreen accessibilityLabel="Loading recording history" testID="home-responsive-screen" contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.lg }}>
         <HomeHeader onOpenProfile={onOpenProfile} analysisRemaining={analysisRemaining} analysisLimit={analysisLimit} analysisStatus={analysisStatus} />
         <View style={{ flex: 1, justifyContent: "center", gap: spacing.md, opacity: 0.52 }}>
           <View style={{ width: "72%", height: 38, borderRadius: radii.sm, backgroundColor: colors.surfaceRaised }} />
-          <View style={{ width: "92%", height: 300, borderRadius: radii.lg, backgroundColor: colors.surface }} />
+          <View style={{ width: "92%", height: layout.short ? 220 : 300, borderRadius: radii.lg, backgroundColor: colors.surface }} />
         </View>
-      </View>
+      </ResponsiveScreen>
     );
   }
 
-  const commonContentStyle = { gap: spacing.xl, padding: spacing.lg, paddingBottom: spacing.xxl };
+  const commonContentStyle = { gap: spacing.xl, paddingTop: spacing.lg };
   if (recentAnalyses.length === 0) {
     return (
-      <ScrollView accessibilityLabel="First recording hero" alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={commonContentStyle}>
+      <ResponsiveScreen accessibilityLabel="First recording hero" testID="home-responsive-screen" contentContainerStyle={commonContentStyle}>
         <HomeHeader onOpenProfile={onOpenProfile} analysisRemaining={analysisRemaining} analysisLimit={analysisLimit} analysisStatus={analysisStatus} />
         <Animated.View entering={FadeInDown.duration(220)} style={{ gap: spacing.sm }}>
           <Text selectable style={[typography.title, { color: colors.text }]}>Ready to move better?</Text>
@@ -108,9 +110,9 @@ export function HomeScreen({
         </Animated.View>
         <ProgressMetricsPanel layout="horizontal" metrics={metrics} loading={metricsLoading} />
         <Animated.View entering={FadeInDown.duration(260).delay(45)}>
-          <RecordingArtwork height={emptyHomeHeroHeight(viewport.width, viewport.height)} />
+          <RecordingArtwork height={Math.min(layout.artworkMaxHeight, emptyHomeHeroHeight(layout.width, layout.height))} />
         </Animated.View>
-      </ScrollView>
+      </ResponsiveScreen>
     );
   }
 
@@ -120,7 +122,7 @@ export function HomeScreen({
   const weekLabel = `${weeklyCount} ${weeklyCount === 1 ? "analysis" : "analyses"} this week`;
 
   return (
-    <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={commonContentStyle}>
+    <ResponsiveScreen testID="home-responsive-screen" contentContainerStyle={commonContentStyle}>
       <HomeHeader onOpenProfile={onOpenProfile} analysisRemaining={analysisRemaining} analysisLimit={analysisLimit} analysisStatus={analysisStatus} />
       <Animated.View entering={FadeInDown.duration(220)} style={{ gap: spacing.xs }}>
         <Text selectable style={[typography.title, { color: colors.text }]}>Your Formie dashboard</Text>
@@ -148,14 +150,14 @@ export function HomeScreen({
         </Pressable>
       </FormCard>
 
-      <View style={{ flexDirection: "row", gap: spacing.md }}>
+      <View style={{ flexDirection: layout.stackControls ? "column" : "row", gap: spacing.md }}>
         <Pressable accessibilityRole="button" onPress={onOpenCoach} testID="home-coach-action" style={({ pressed }) => ({ flex: 1, minHeight: 88, alignItems: "center", justifyContent: "center", gap: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 })}>
           <DashboardIcon label="Formie Coach icon" name="coach" size={32} />
-          <Text selectable numberOfLines={1} style={{ color: colors.text, fontSize: 18, lineHeight: 23, fontWeight: "600" }}>Ask Formie Coach</Text>
+          <Text selectable style={{ color: colors.text, fontSize: 18, lineHeight: 23, fontWeight: "600", textAlign: "center" }}>Ask Formie Coach</Text>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={onOpenProgress} testID="home-progress-action" style={({ pressed }) => ({ flex: 1, minHeight: 88, alignItems: "center", justifyContent: "center", gap: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 })}>
           <DashboardIcon label="View progress icon" name="progress" size={32} />
-          <Text selectable numberOfLines={1} style={{ color: colors.text, fontSize: 18, lineHeight: 23, fontWeight: "600" }}>View Progress</Text>
+          <Text selectable style={{ color: colors.text, fontSize: 18, lineHeight: 23, fontWeight: "600", textAlign: "center" }}>View Progress</Text>
         </Pressable>
       </View>
 
@@ -178,6 +180,6 @@ export function HomeScreen({
           </Pressable>
         ))}
       </View>
-    </ScrollView>
+    </ResponsiveScreen>
   );
 }

@@ -1,28 +1,28 @@
 import { Image } from "expo-image";
 import { type Href, useRouter } from "expo-router";
 import { useState } from "react";
-import { ImageBackground, Linking, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ImageBackground, Linking, StyleSheet, Text, View } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ResponsiveScreen } from "@/components/responsive-screen";
 import { SubscriptionBoundary } from "@/components/subscription-boundary";
 import { useAccess, useBillingSurfaceRefresh } from "@/features/access/access-provider";
 import { useBilling } from "@/features/billing/billing-provider";
 import { createSubscriptionPresentation } from "@/features/billing/subscription-management-presentation";
 import { colors } from "@/theme/colors";
+import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 const background = require("../../../assets/production/subscription/subscription-background.png");
 const mark = require("../../../assets/images/form-logo-mark.png");
 
 export function SubscriptionManagementScreen() {
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const insets = useSafeAreaInsets();
+  const layout = usePhoneLayoutProfile();
   const accessState = useAccess();
   const billing = useBilling();
   const access = accessState.access;
   const presentation = createSubscriptionPresentation(access);
-  const scale = Math.min(1.08, Math.max(0.82, width / 426.5));
+  const scale = Math.min(1.08, Math.max(0.82, layout.contentWidth / 426.5));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useBillingSurfaceRefresh();
@@ -46,11 +46,7 @@ export function SubscriptionManagementScreen() {
 
   return (
     <ImageBackground source={background} resizeMode="cover" style={styles.root}>
-      <ScrollView
-        contentInsetAdjustmentBehavior="never"
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: insets.top + 10 * scale, paddingBottom: Math.max(insets.bottom, 20) + 20 * scale, paddingHorizontal: 22 * scale }}
-      >
+      <ResponsiveScreen testID="subscription-management-responsive-screen" style={styles.transparent} contentContainerStyle={{ paddingTop: 10 * scale }}>
         <View style={[styles.header, { height: 48 * scale }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="Go back" hitSlop={10} onPress={() => router.back()} style={({ pressed }) => [styles.back, { width: 42 * scale, height: 42 * scale, borderRadius: 21 * scale, opacity: pressed ? 0.65 : 1 }]}>
             <Text style={{ color: colors.text, fontSize: 29 * scale, lineHeight: 31 * scale, marginTop: -2 * scale }}>‹</Text>
@@ -80,7 +76,7 @@ export function SubscriptionManagementScreen() {
         </View>
 
         <View style={[styles.planCard, { borderRadius: 26 * scale, marginTop: 25 * scale, padding: 20 * scale }]}>
-          <View style={styles.planTop}>
+          <View style={[styles.planTop, layout.stackControls && styles.planTopStack]}>
             <View style={styles.planIdentity}>
               <View style={[styles.crown, { width: 43 * scale, height: 43 * scale, borderRadius: 14 * scale }]}><Text style={{ color: colors.gold, fontSize: 22 * scale }}>♛</Text></View>
               <View>
@@ -122,11 +118,11 @@ export function SubscriptionManagementScreen() {
         ) : null}
         {error ? <Text accessibilityRole="alert" style={[styles.error, { marginTop: 10 * scale }]}>{error}</Text> : null}
 
-        <View style={[styles.supportCard, { borderRadius: 22 * scale, marginTop: 18 * scale, padding: 18 * scale }]}>
+        <View style={[styles.supportCard, layout.stackControls && styles.supportCardStack, { borderRadius: 22 * scale, marginTop: 18 * scale, padding: 18 * scale }]}>
           <View style={{ flex: 1 }}><Text style={[styles.supportTitle, { fontSize: 15 * scale }]}>Need help?</Text><Text style={[styles.supportCopy, { fontSize: 11.5 * scale, lineHeight: 17 * scale }]}>We can help with access, billing, or your Apple subscription.</Text></View>
           <Pressable accessibilityRole="link" onPress={() => void Linking.openURL("mailto:support@formie.app")}><Text style={[styles.supportLink, { fontSize: 12 * scale }]}>Contact support</Text></Pressable>
         </View>
-      </ScrollView>
+      </ResponsiveScreen>
     </ImageBackground>
   );
 }
@@ -137,6 +133,7 @@ function PlanRow({ label, value, scale, gold = false }: { label: string; value: 
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#050505" },
+  transparent: { backgroundColor: "transparent" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   back: { borderWidth: 1, borderColor: "rgba(255,255,255,0.13)", backgroundColor: "rgba(22,22,22,0.86)", alignItems: "center", justifyContent: "center" },
   headerTitle: { color: colors.gold, fontWeight: "700", letterSpacing: 0.25 },
@@ -145,6 +142,7 @@ const styles = StyleSheet.create({
   headline: { color: colors.text, textAlign: "center", fontWeight: "700", letterSpacing: -1.1 },
   planCard: { backgroundColor: "rgba(18,18,18,0.91)", borderWidth: 1, borderColor: "rgba(255,255,255,0.10)", shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 24, shadowOffset: { width: 0, height: 12 } },
   planTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  planTopStack: { flexDirection: "column", alignItems: "stretch" },
   planIdentity: { flexDirection: "row", alignItems: "center", gap: 11, flexShrink: 1 },
   crown: { backgroundColor: colors.goldSoft, borderWidth: 1, borderColor: "rgba(200,169,107,0.28)", alignItems: "center", justifyContent: "center" },
   planName: { color: colors.text, fontWeight: "700", letterSpacing: -0.35 },
@@ -165,6 +163,7 @@ const styles = StyleSheet.create({
   secondaryLabel: { color: colors.gold, fontWeight: "700" },
   error: { color: colors.danger, fontSize: 12, lineHeight: 18, textAlign: "center" },
   supportCard: { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "rgba(15,15,15,0.88)", borderWidth: 1, borderColor: "rgba(255,255,255,0.09)" },
+  supportCardStack: { flexDirection: "column", alignItems: "stretch" },
   supportTitle: { color: colors.text, fontWeight: "700" },
   supportCopy: { color: colors.textSecondary, marginTop: 4 },
   supportLink: { color: colors.gold, fontWeight: "700" },

@@ -6,6 +6,7 @@ import { analysisProgress } from "@/features/analysis/progress-stages";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 const GENERATED_MOVEMENT_FRAMES = [
   require("../../assets/production/analysis-curl-frame-1.png"),
@@ -16,6 +17,8 @@ const GENERATED_MOVEMENT_FRAMES = [
 const CONTINUOUS_FRAME_SEQUENCE = [0, 1, 2, 1] as const;
 
 export function AnalysisProgressMotion({ stage }: { stage: string | null }) {
+  const layout = usePhoneLayoutProfile();
+  const frameHeight = Math.min(310, Math.max(190, layout.artworkMaxHeight * 0.62));
   const [sequenceIndex, setSequenceIndex] = useState(0);
   const frameIndex = CONTINUOUS_FRAME_SEQUENCE[sequenceIndex];
   const progress = analysisProgress(stage);
@@ -30,15 +33,15 @@ export function AnalysisProgressMotion({ stage }: { stage: string | null }) {
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       testID="analysis-progress-native-motion"
-      style={{ minHeight: 350, justifyContent: "space-between", gap: spacing.md, paddingVertical: spacing.sm }}
+      style={{ minHeight: frameHeight + 40, justifyContent: "space-between", gap: spacing.md, paddingVertical: spacing.sm }}
     >
-      <View style={{ minHeight: 310, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ minHeight: frameHeight, alignItems: "center", justifyContent: "center" }}>
         <View
           testID="analysis-frame-surface"
           style={{
             width: "100%",
             maxWidth: 520,
-            height: 310,
+            height: frameHeight,
             overflow: "hidden",
             backgroundColor: colors.background,
           }}

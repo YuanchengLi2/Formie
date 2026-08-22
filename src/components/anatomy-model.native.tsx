@@ -28,6 +28,7 @@ import type { MuscleModelSelection } from "@/components/muscle-model-regions";
 import type { AnatomyRegion, MuscleRegion } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
+import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 export type AnatomyModelProps = {
   targetRegions: MuscleRegion[];
@@ -51,6 +52,8 @@ type RenderResources = {
 };
 
 export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: AnatomyModelProps) {
+  const layout = usePhoneLayoutProfile();
+  const surfaceHeight = Math.min(430, Math.max(300, layout.artworkMaxHeight));
   const { width } = useWindowDimensions();
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -220,9 +223,9 @@ export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: 
           accessibilityRole="adjustable"
           onAccessibilityAction={({ nativeEvent }) => rotateByAccessibility(nativeEvent.actionName === "decrement" ? -1 : 1)}
           testID="anatomy-gesture-surface"
-          style={{ height: 430, alignItems: "stretch", justifyContent: "center", overflow: "hidden", borderRadius: radii.lg, borderCurve: "continuous", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}
+          style={{ height: surfaceHeight, alignItems: "stretch", justifyContent: "center", overflow: "hidden", borderRadius: radii.lg, borderCurve: "continuous", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}
         >
-          <View pointerEvents="none" style={{ position: "absolute", alignSelf: "center", width: 260, height: 360, opacity: 0.32, borderRadius: 130, backgroundColor: colors.goldSoft, transform: [{ scaleX: 1.2 }] }} />
+          <View pointerEvents="none" style={{ position: "absolute", alignSelf: "center", width: Math.min(260, layout.artworkMaxWidth * 0.76), height: surfaceHeight * 0.84, opacity: 0.32, borderRadius: 130, backgroundColor: colors.goldSoft, transform: [{ scaleX: 1.2 }] }} />
           <View testID="native-muscle-map" style={{ flex: 1 }}>
             <GLView
               pointerEvents="none"

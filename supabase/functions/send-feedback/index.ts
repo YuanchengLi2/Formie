@@ -1,5 +1,5 @@
 import { createAdminClient } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { createSendFeedbackHandler } from "./handler.ts";
 
 async function authenticate(request: Request) {
@@ -45,8 +45,8 @@ async function sendEmail(input: {
 }
 
 Deno.serve(async (request) => {
-  const options = preflight(request);
-  if (options) return options;
+  const security = await secureBrowserRequest(request, { methods: ["POST"], authentication: "user", maxBodyBytes: 16_384 });
+  if (security) return security;
   const response = await createSendFeedbackHandler(request, {
     authenticate,
     hasPriorityAccess: async (userId) => {
@@ -57,7 +57,5 @@ Deno.serve(async (request) => {
     },
     sendEmail,
   });
-  const headers = new Headers(response.headers);
-  for (const [key, value] of Object.entries(corsHeaders)) headers.set(key, value);
-  return new Response(response.body, { status: response.status, headers });
+  return withCors(request, response);
 });

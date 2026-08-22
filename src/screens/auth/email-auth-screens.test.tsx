@@ -1,4 +1,5 @@
 import { fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { EmailCodeScreen, EmailEntryScreen } from "./email-auth-screens";
@@ -11,6 +12,13 @@ describe("Email OTP auth screens", () => {
     const onSubmit = jest.fn();
     const screen = await render(wrap(<EmailEntryScreen intent="login" busy={false} error={null} onBack={jest.fn()} onSubmit={onSubmit} />));
     expect(screen.getByTestId("email-auth-scroll")).toBeTruthy();
+    expect(screen.getByTestId("email-auth-scroll")).toHaveProp("keyboardShouldPersistTaps", "handled");
+    expect(StyleSheet.flatten(screen.getByTestId("email-auth-scroll").props.contentContainerStyle)).toMatchObject({
+      width: "100%",
+      maxWidth: 560,
+      paddingHorizontal: 24,
+      paddingBottom: 24,
+    });
     await fireEvent.changeText(screen.getByLabelText("Email address"), "not-email");
     await fireEvent.press(screen.getByText("Send my code"));
     expect(screen.getByRole("alert")).toHaveTextContent("Enter a valid email address.");

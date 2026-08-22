@@ -1,14 +1,15 @@
-import { ScrollView, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormButton } from "@/components/form-button";
 import { FormCard } from "@/components/form-card";
 import { AnalysisProgressMotion } from "@/components/analysis-progress-motion";
+import { ResponsiveScreen } from "@/components/responsive-screen";
 import { analysisProgress } from "@/features/analysis/progress-stages";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 type AnalysisProgressScreenProps = {
   stage: string | null;
@@ -22,20 +23,12 @@ type AnalysisProgressScreenProps = {
 };
 
 export function AnalysisProgressScreen({ stage, failureMessage, onRetryAnalysis, retryingAnalysis = false, retryAnalysisError = null, onRecordAgain, onGoHome, onRetryUpload }: AnalysisProgressScreenProps) {
-  const insets = useSafeAreaInsets();
+  const layout = usePhoneLayoutProfile();
   const progress = analysisProgress(stage);
   const durableRetry = stage === "retry_wait";
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <ScrollView
-        contentContainerStyle={{
-          flexGrow: 1,
-          paddingTop: insets.top + spacing.lg,
-          paddingBottom: insets.bottom + spacing.xl,
-          paddingHorizontal: spacing.xl,
-        }}
-      >
+    <ResponsiveScreen testID="analysis-progress-responsive-screen" contentContainerStyle={{ gap: spacing.xl, paddingTop: spacing.lg }}>
         <Animated.View entering={FadeInDown.duration(220)} style={{ flex: 1, justifyContent: "center", gap: spacing.xxl }}>
           <View style={{ gap: spacing.md }}>
             <Text selectable style={[typography.title, { color: colors.text }]}>Analyzing your movement</Text>
@@ -45,7 +38,7 @@ export function AnalysisProgressScreen({ stage, failureMessage, onRetryAnalysis,
           <View
             testID="analysis-progress-motion-surface"
             style={{
-              minHeight: 330,
+              minHeight: layout.short ? 240 : 330,
               overflow: "hidden",
               backgroundColor: colors.background,
             }}
@@ -97,9 +90,8 @@ export function AnalysisProgressScreen({ stage, failureMessage, onRetryAnalysis,
             ))}
           </View>
         </Animated.View>
-      </ScrollView>
       {failureMessage ? (
-        <View style={{ position: "absolute", left: spacing.lg, right: spacing.lg, bottom: insets.bottom + spacing.lg }}>
+        <View>
           <FormCard style={{ gap: spacing.md, borderColor: colors.danger, backgroundColor: "rgba(15,15,15,0.97)" }}>
             <Text selectable style={[typography.heading, { color: colors.text }]}>Analysis couldn’t finish</Text>
             <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{failureMessage}</Text>
@@ -114,6 +106,6 @@ export function AnalysisProgressScreen({ stage, failureMessage, onRetryAnalysis,
         </View>
       ) : null}
       <Text accessibilityElementsHidden style={{ position: "absolute", width: 1, height: 1, opacity: 0 }}>{stage}</Text>
-    </View>
+    </ResponsiveScreen>
   );
 }

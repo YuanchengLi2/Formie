@@ -53,7 +53,7 @@ export function CenterTabButton({
           <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: actionDisabled ? "#999999" : "#F8E9C3", borderWidth: 1, borderColor: actionDisabled ? "#777777" : colors.gold }} />
         </View>
       </View>
-      <Text selectable={false} style={{ marginTop: 1, color: actionDisabled ? "#888888" : colors.gold, fontSize: 11, lineHeight: 14, fontWeight: "700" }}>
+      <Text selectable={false} numberOfLines={2} style={{ marginTop: 1, color: actionDisabled ? "#888888" : colors.gold, fontSize: 11, lineHeight: 14, fontWeight: "700", textAlign: "center" }}>
         {label}
       </Text>
     </Pressable>

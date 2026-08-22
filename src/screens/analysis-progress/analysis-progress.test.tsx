@@ -1,4 +1,5 @@
 import { act, fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AnalysisProgressScreen } from ".";
@@ -21,7 +22,9 @@ describe("AnalysisProgressScreen", () => {
     expect(screen.queryByLabelText("Formie logo")).toBeNull();
     expect(screen.queryByText(/Your recording is ready/i)).toBeNull();
     expect(screen.getByTestId("analysis-progress-motion-surface")).toHaveStyle({ minHeight: 330 });
-    expect(screen.getByTestId("analysis-frame-surface", { includeHiddenElements: true })).toHaveStyle({ height: 310 });
+    const frameStyle = StyleSheet.flatten(screen.getByTestId("analysis-frame-surface", { includeHiddenElements: true }).props.style);
+    expect(frameStyle.height).toBeGreaterThanOrEqual(190);
+    expect(frameStyle.height).toBeLessThanOrEqual(310);
     expect(screen.queryByLabelText("FORM analysis progress animation")).toBeNull();
     expect(screen.queryByLabelText("Analysis figure")).toBeNull();
     expect(screen.queryByText("This usually takes a moment")).toBeNull();

@@ -1,18 +1,19 @@
 import { Image } from "expo-image";
 import { useEffect, useState } from "react";
-import { AccessibilityInfo, ScrollView, Text, View, useWindowDimensions } from "react-native";
+import { AccessibilityInfo, Text, View } from "react-native";
 import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from "react-native-reanimated";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CaptureReferenceIcon } from "@/components/capture-reference-icon";
 import { CaptureScreenHeader } from "@/components/capture-screen-header";
 import { FormButton } from "@/components/form-button";
+import { ResponsiveScreen } from "@/components/responsive-screen";
 import type { ExerciseGuide, TutorialVideo } from "@/features/analysis/api";
 import { formatExerciseFamily } from "@/features/exercises/exercise-family";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 type ExerciseGuideScreenProps = {
   exerciseName: string;
@@ -122,9 +123,8 @@ export function ExerciseGuideScreen({
   onOpenSpaceHelp,
   onOpenTutorial,
 }: ExerciseGuideScreenProps) {
-  const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
-  const compact = height < 760;
+  const layout = usePhoneLayoutProfile();
+  const compact = layout.compact || layout.short;
   const [activeTab, setActiveTab] = useState<GuideTab>("form");
   const steps = guide
     ? activeTab === "setup"
@@ -134,15 +134,16 @@ export function ExerciseGuideScreen({
   const cameraSummary = guide?.cameraPlacement.filter(Boolean).slice(0, 3).join("  ·  ") ?? "Side view  ·  Hip height  ·  Full body visible";
 
   return (
-    <ScrollView
+    <ResponsiveScreen
+      testID="exercise-guide-responsive-screen"
       alwaysBounceVertical={false}
       bounces={false}
       contentInsetAdjustmentBehavior="never"
-      contentContainerStyle={{ flexGrow: 1, paddingTop: Math.max(insets.top, 8), paddingBottom: insets.bottom + 32 }}
+      contentContainerStyle={{ gap: compact ? 10 : 14, paddingTop: Math.max(layout.insets.top, 8) }}
       style={{ flex: 1, backgroundColor: colors.cameraBlack }}
     >
       <CaptureScreenHeader title="Exercise Guide" onBack={onBack} testID="exercise-guide-header" />
-      <View style={{ gap: compact ? 12 : 16, paddingHorizontal: 20 }}>
+      <View style={{ gap: compact ? 12 : 16 }}>
         <View style={{ gap: 1 }}>
           <Text selectable style={[typography.title, { color: colors.text, fontSize: 26, lineHeight: 31, letterSpacing: -0.7 }]}>
             {exerciseName}
@@ -228,6 +229,6 @@ export function ExerciseGuideScreen({
 
         <FormButton label="Continue to Camera" onPress={onContinue} style={{ minHeight: 56, borderRadius: 13 }} />
       </View>
-    </ScrollView>
+    </ResponsiveScreen>
   );
 }

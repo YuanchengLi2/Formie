@@ -34,6 +34,7 @@ test("forwards a validated request with only the server-observed client IP", asy
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Origin: "https://useformie.com",
       "x-vercel-forwarded-for": "198.51.100.8, 10.0.0.1",
     },
     body: JSON.stringify(validRequest),
@@ -56,9 +57,20 @@ test("rejects invalid input before calling the support function", async (context
 
   const response = await POST(new Request("https://useformie.com/api/support", {
     method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "https://useformie.com" },
     body: JSON.stringify({ ...validRequest, message: "Too short" }),
   }));
 
   assert.equal(response.status, 400);
   assert.equal(called, false);
+});
+
+test("rejects cross-origin support submissions before parsing or forwarding", async () => {
+  const response = await POST(new Request("https://useformie.com/api/support", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: "https://evil.example" },
+    body: JSON.stringify(validRequest),
+  }));
+  assert.equal(response.status, 403);
+  assert.deepEqual(await response.json(), { message: "Request rejected.", code: "REQUEST_REJECTED" });
 });

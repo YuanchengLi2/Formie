@@ -1,12 +1,8 @@
 import type { AnalysisCandidate } from "../_shared/analysis-contract.ts";
-import {
-  ANALYST_THINKING_LEVEL,
-  REQUESTED_ANALYSIS_FPS,
-  REQUESTED_ANALYSIS_MEDIA_RESOLUTION,
-  WRITER_THINKING_LEVEL,
-} from "../_shared/analysis-settings.ts";
+import { ANALYSIS_RUNTIME_CONTRACT } from "../_shared/analysis-settings.ts";
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
+import { constantTimeEqual } from "../_shared/request-security.ts";
 import { buildTextGenerateContentRequest, buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
 import { createGeminiFilesClient, reuseOrUploadGeminiFile, waitForGeminiFile, type GeminiFile } from "../_shared/gemini-files.ts";
 import {
@@ -33,9 +29,9 @@ import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline
 import { writeValidatedCoaching } from "./coaching-writer.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 
-const PIPELINE_VERSION = "gemini-whole-video-v86-severity-scored";
-const ANALYST_MODEL = "gemini-3.7-flash";
-const WRITER_MODEL = "gemini-3.1-flash-lite";
+const PIPELINE_VERSION = ANALYSIS_RUNTIME_CONTRACT.pipelineVersion;
+const ANALYST_MODEL = ANALYSIS_RUNTIME_CONTRACT.analystModel;
+const WRITER_MODEL = ANALYSIS_RUNTIME_CONTRACT.writerModel;
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
 const files = createGeminiFilesClient({ apiKey });
 const generation = createGenerateContentClient({ apiKey });
@@ -45,12 +41,6 @@ type WholeVideoInput = { uri: string; mimeType: string } | { kind: "inline"; dat
 type StageName = "analyzing" | "finalizing";
 type ModelCallStage = StageName;
 type StageClaim = { resultStatus: string; stageRunId: string; leaseToken: string; output: unknown };
-
-function withCors(response: Response): Response {
-  const headers = new Headers(response.headers);
-  Object.entries(corsHeaders).forEach(([key, value]) => headers.set(key, value));
-  return new Response(response.body, { status: response.status, headers });
-}
 
 function errorCode(error: unknown): string {
   if (error && typeof error === "object" && "code" in error) {
@@ -90,8 +80,8 @@ function stageRow(data: unknown): JsonRecord | null {
 }
 
 Deno.serve(async (request) => {
-  const options = preflight(request);
-  if (options) return options;
+  const security = await secureBrowserRequest(request, { methods: ["POST"], authentication: "service", maxBodyBytes: 8_192 });
+  if (security) return security;
   const admin = createAdminClient();
 
   async function recordModelCall(input: {
@@ -287,7 +277,7 @@ Deno.serve(async (request) => {
       const retryUserId = incoming.headers.get("x-analysis-retry-user-id");
       if (
         retrySecret
-        && incoming.headers.get("x-analysis-retry-secret") === retrySecret
+        && constantTimeEqual(incoming.headers.get("x-analysis-retry-secret") ?? "", retrySecret)
         && retryUserId
         && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(retryUserId)
       ) {
@@ -410,18 +400,18 @@ Deno.serve(async (request) => {
         finalResult: rawSession.result,
       }, {
         analyzeWholeVideo: async ({ sessionId }) => {
-          const rawAnalysis = await runStage(sessionId, "analyzing", { kind: "video", durationMs, transport: "file", fps: REQUESTED_ANALYSIS_FPS }, async () => {
+          const rawAnalysis = await runStage(sessionId, "analyzing", { kind: "video", durationMs, transport: "file", fps: ANALYSIS_RUNTIME_CONTRACT.requestedFps }, async () => {
             const analysisVideo = await getGeminiVideo();
             await saveSessionStage("analyzing");
             const requestBody = buildVideoGenerateContentRequest({
               video: analysisVideo,
                   prompt: buildBoundaryFreeAnalysisPrompt(durationMs, declaration),
                   schema: BOUNDARY_FREE_ANALYSIS_SCHEMA,
-              fps: REQUESTED_ANALYSIS_FPS,
-                  thinkingLevel: ANALYST_THINKING_LEVEL,
-                  mediaResolution: REQUESTED_ANALYSIS_MEDIA_RESOLUTION,
+              fps: ANALYSIS_RUNTIME_CONTRACT.requestedFps,
+                  thinkingLevel: ANALYSIS_RUNTIME_CONTRACT.analystThinkingLevel,
+                  mediaResolution: ANALYSIS_RUNTIME_CONTRACT.mediaResolution,
                 });
-            const raw = await generate({ sessionId, stage: "analyzing", modelName: ANALYST_MODEL, request: requestBody, fps: REQUESTED_ANALYSIS_FPS, timeoutMs: deadline.timeoutFor("analyzing") }) as JsonRecord;
+            const raw = await generate({ sessionId, stage: "analyzing", modelName: ANALYST_MODEL, request: requestBody, fps: ANALYSIS_RUNTIME_CONTRACT.requestedFps, timeoutMs: deadline.timeoutFor("analyzing") }) as JsonRecord;
             return parseWholeVideoAnalysis(raw, durationMs) as unknown as JsonRecord;
           });
           // Structured analyst output is already durable in the successful
@@ -450,7 +440,7 @@ Deno.serve(async (request) => {
                 systemInstruction: WHOLE_VIDEO_WRITER_SYSTEM_INSTRUCTION,
                 prompt,
                 schema: WHOLE_VIDEO_WRITING_SCHEMA,
-                thinkingLevel: WRITER_THINKING_LEVEL,
+                thinkingLevel: ANALYSIS_RUNTIME_CONTRACT.writerThinkingLevel,
               });
               return generate({ sessionId, stage: "finalizing", modelName: WRITER_MODEL, request: writerRequest, timeoutMs });
             };
@@ -550,29 +540,6 @@ Deno.serve(async (request) => {
         },
       });
     },
-    markRetryable: async (session, code) => {
-      const { data: currentSession, error: currentSessionError } = await admin
-        .from("analysis_sessions")
-        .select("stage,analysis_retry_count")
-        .eq("id", session.id)
-        .single();
-      if (currentSessionError) throw databaseError("ANALYSIS_STATE_SAVE_FAILED", currentSessionError);
-      const nextRetryAt = new Date(Date.now() + 5_000).toISOString();
-      const retryStage = typeof currentSession.stage === "string" && ["video_processing", "analyzing", "finalizing"].includes(currentSession.stage)
-        ? currentSession.stage
-        : "video_processing";
-      await persistRetryState(session.id, {
-        status: "processing",
-        stage: retryStage,
-        pipeline_version: PIPELINE_VERSION,
-        failure_code: null,
-        analysis_retry_count: Math.max(0, Number(currentSession.analysis_retry_count ?? 0)) + 1,
-        analysis_next_retry_at: nextRetryAt,
-        analysis_last_error_code: code,
-        updated_at: new Date().toISOString(),
-      });
-      return { status: "processing", stage: "retry_wait", analysisNextRetryAt: nextRetryAt };
-    },
     persistFailure: async (sessionId, code, disposition) => {
       const { data: retryState, error: retryStateError } = await admin
         .from("analysis_sessions")
@@ -590,6 +557,7 @@ Deno.serve(async (request) => {
         if (typeof retryState?.gemini_file_name === "string") {
           await files.deleteFile(retryState.gemini_file_name).catch(() => undefined);
         }
+        const nextRetryAt = new Date(Date.now() + backoffSeconds * 1_000).toISOString();
         await persistRetryState(sessionId, {
           status: existingResult?.status ?? retryState?.status ?? "complete",
           stage: "complete",
@@ -617,11 +585,11 @@ Deno.serve(async (request) => {
           pipeline_version: PIPELINE_VERSION,
           failure_code: null,
           analysis_retry_count: nextRetryCount,
-          analysis_next_retry_at: new Date(Date.now() + backoffSeconds * 1_000).toISOString(),
+          analysis_next_retry_at: nextRetryAt,
           analysis_last_error_code: code,
           updated_at: new Date().toISOString(),
         });
-        return { status: "processing", stage: "retry_wait" };
+        return { status: "processing", stage: "retry_wait", analysisNextRetryAt: nextRetryAt };
       }
       await persistRetryState(sessionId, {
         status: "failed",
@@ -640,5 +608,5 @@ Deno.serve(async (request) => {
     },
   });
 
-  return withCors(response);
+  return withCors(request, response);
 });

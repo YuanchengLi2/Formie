@@ -1,5 +1,5 @@
 import { createAdminClient } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { constantTimeEqual, validateRequestSecurity, withRequestIdentifier } from "../_shared/request-security.ts";
 import { historicalAnalysisArtifactPaths } from "../_shared/legacy-analysis-artifacts.ts";
 import { cleanupExpiredAnalysesHandler, type RetentionCandidate } from "./handler.ts";
 
@@ -9,15 +9,15 @@ function requireScheduledRequest(request: Request): Promise<void> {
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const configuredCronSecret = Deno.env.get("RETENTION_CLEANUP_SECRET");
   const authorized = Boolean(
-    (serviceRoleKey && authorization === `Bearer ${serviceRoleKey}`)
-    || (configuredCronSecret && cronSecret === configuredCronSecret),
+    (serviceRoleKey && authorization && constantTimeEqual(authorization, `Bearer ${serviceRoleKey}`))
+    || (configuredCronSecret && cronSecret && constantTimeEqual(cronSecret, configuredCronSecret)),
   );
   return authorized ? Promise.resolve() : Promise.reject(new Error("UNAUTHORIZED"));
 }
 
 Deno.serve(async (request) => {
-  const options = preflight(request);
-  if (options) return options;
+  const security = await validateRequestSecurity(request, { methods: ["POST"], authentication: "webhook", maxBodyBytes: 4_096, allowBrowserOrigin: false });
+  if (security) return security;
   const admin = createAdminClient();
   const response = await cleanupExpiredAnalysesHandler(request, {
     authenticate: requireScheduledRequest,
@@ -80,7 +80,5 @@ Deno.serve(async (request) => {
     },
   });
 
-  const headers = new Headers(response.headers);
-  Object.entries(corsHeaders).forEach(([key, value]) => headers.set(key, value));
-  return new Response(response.body, { status: response.status, headers });
+  return withRequestIdentifier(request, response);
 });

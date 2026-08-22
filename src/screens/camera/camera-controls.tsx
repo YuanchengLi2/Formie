@@ -1,4 +1,4 @@
-import { Text, View } from "react-native";
+import { ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 
 import { FormButton } from "@/components/form-button";
@@ -9,6 +9,7 @@ import { captureVideoSettings } from "@/features/capture/video-settings";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { getPhoneLayoutProfile } from "@/theme/responsive";
 
 type CameraControlsProps = {
   phase: CapturePhase;
@@ -47,8 +48,16 @@ export function CameraControls({
   topInset = 0,
   bottomInset = 0,
 }: CameraControlsProps) {
+  const window = useWindowDimensions();
+  const layout = getPhoneLayoutProfile({
+    width: window.width,
+    height: window.height,
+    fontScale: window.fontScale,
+    insets: { top: topInset, right: 0, bottom: bottomInset, left: 0 },
+  });
+  const countdownSize = Math.min(220, layout.width - layout.horizontalPadding * 4, layout.availableHeight * 0.3);
   return (
-    <View pointerEvents="box-none" style={{ position: "absolute", inset: 0, justifyContent: "space-between", padding: spacing.xl }}>
+    <View pointerEvents="box-none" style={{ position: "absolute", inset: 0, justifyContent: "space-between", paddingHorizontal: layout.horizontalPadding, paddingVertical: layout.short ? spacing.md : spacing.xl }}>
       <View style={{ alignItems: "center", paddingTop: topInset + 76 }}>
         {phase === "recording" ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: radii.pill, backgroundColor: "rgba(0,0,0,0.64)" }}>
@@ -60,8 +69,8 @@ export function CameraControls({
 
       {phase === "countingDown" ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md }}>
-          <View style={{ width: 220, height: 220, alignItems: "center", justifyContent: "center", borderRadius: 110, borderWidth: 2, borderColor: colors.gold, backgroundColor: "rgba(0,0,0,0.24)" }}>
-            <Text selectable style={{ color: colors.text, fontSize: 104, lineHeight: 112, fontWeight: "200", fontVariant: ["tabular-nums"] }}>{countdown}</Text>
+          <View style={{ width: countdownSize, height: countdownSize, alignItems: "center", justifyContent: "center", borderRadius: countdownSize / 2, borderWidth: 2, borderColor: colors.gold, backgroundColor: "rgba(0,0,0,0.24)" }}>
+            <Text selectable style={{ color: colors.text, fontSize: countdownSize * 0.47, lineHeight: countdownSize * 0.51, fontWeight: "200", fontVariant: ["tabular-nums"] }}>{countdown}</Text>
           </View>
           <Text selectable style={[typography.heading, { color: colors.text }]}>Get into position</Text>
           <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Recording starts automatically</Text>
@@ -129,7 +138,7 @@ export function CameraControls({
         ) : null}
 
         {phase === "error" ? (
-          <View style={{ width: "100%", gap: spacing.md, padding: spacing.lg, borderRadius: radii.md, backgroundColor: "rgba(9,9,9,0.92)" }}>
+          <ScrollView contentContainerStyle={{ gap: spacing.md, padding: spacing.lg }} style={{ width: "100%", maxHeight: layout.availableHeight * 0.55, borderRadius: radii.md, backgroundColor: "rgba(9,9,9,0.92)" }}>
             <Text selectable style={[typography.body, { color: colors.text }]}>{error}</Text>
             {hasRecording ? (
               <Text selectable style={[typography.caption, { color: colors.textSecondary }]}>Your recording is still saved on this device.</Text>
@@ -138,7 +147,7 @@ export function CameraControls({
             )}
             <FormButton label={hasRecording ? "Retry Upload" : "Record Again"} onPress={hasRecording ? onRetryUpload : onRecord} />
             {hasRecording ? <FormButton label="Discard and Record Again" variant="ghost" onPress={onDiscardRecording} /> : null}
-          </View>
+          </ScrollView>
         ) : null}
       </View>
     </View>

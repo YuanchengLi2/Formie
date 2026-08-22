@@ -13,6 +13,7 @@ import { snappedMuscleMapRotation } from "@/components/muscle-map-rotation";
 import type { AnatomyRegion, MuscleRegion } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
+import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 export type AnatomyModelProps = {
   targetRegions: MuscleRegion[];
@@ -46,6 +47,10 @@ function bodyData(highlights: ReturnType<typeof muscleMapHighlightsForFace>): Ex
 
 export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: AnatomyModelProps) {
   const { width } = useWindowDimensions();
+  const layout = usePhoneLayoutProfile();
+  const surfaceHeight = Math.min(430, Math.max(300, layout.artworkMaxHeight));
+  const modelHeight = Math.min(400, surfaceHeight - spacing.lg * 2);
+  const modelWidth = Math.min(250, layout.artworkMaxWidth * 0.72);
   const regionKey = `${targetRegions.join(",")}|${secondaryRegions.join(",")}|${issueRegions.join(",")}`;
   const preferredFace = preferredMuscleMapFace(targetRegions, secondaryRegions, issueRegions);
   const rotation = useSharedValue(preferredFace === "back" ? Math.PI : 0);
@@ -120,10 +125,10 @@ export function AnatomyModel({ targetRegions, secondaryRegions, issueRegions }: 
           accessibilityRole="adjustable"
           onAccessibilityAction={({ nativeEvent }) => rotateByAccessibility(nativeEvent.actionName === "decrement" ? -1 : 1)}
           testID="anatomy-gesture-surface"
-          style={{ minHeight: 430, alignItems: "center", justifyContent: "center", overflow: "hidden", paddingVertical: spacing.md, borderRadius: radii.lg, borderCurve: "continuous", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}
+          style={{ height: surfaceHeight, alignItems: "center", justifyContent: "center", overflow: "hidden", paddingVertical: spacing.md, borderRadius: radii.lg, borderCurve: "continuous", borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}
         >
-          <View pointerEvents="none" style={{ position: "absolute", width: 240, height: 340, opacity: 0.42, borderRadius: 120, backgroundColor: colors.goldSoft, transform: [{ scaleX: 1.2 }] }} />
-          <View testID="native-muscle-map" style={{ width: 250, height: 400, alignItems: "center", justifyContent: "center" }}>
+          <View pointerEvents="none" style={{ position: "absolute", width: modelWidth * 0.96, height: modelHeight * 0.85, opacity: 0.42, borderRadius: modelWidth / 2, backgroundColor: colors.goldSoft, transform: [{ scaleX: 1.2 }] }} />
+          <View testID="native-muscle-map" style={{ width: modelWidth, height: modelHeight, alignItems: "center", justifyContent: "center" }}>
             <Animated.View pointerEvents="none" style={[{ position: "absolute", inset: 0, alignItems: "center", justifyContent: "center", backfaceVisibility: "hidden" }, frontStyle]}>
               <Body border={colors.textMuted} data={frontData} defaultFill={colors.surfaceRaised} defaultStroke={colors.textMuted} defaultStrokeWidth={1.1} gender="male" scale={scale} side="front" />
             </Animated.View>

@@ -1,14 +1,15 @@
-import { ActivityIndicator, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { VideoView, useVideoPlayer } from "expo-video";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormButton } from "@/components/form-button";
 import { ProductionIcon } from "@/components/production-icon";
+import { ResponsiveScreen } from "@/components/responsive-screen";
 import type { RecordingPreflightGuidance } from "@/features/capture/types";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 type RecordingPreflightScreenProps =
   | { mode: "checking"; onBack: () => void }
@@ -22,7 +23,7 @@ type RecordingPreflightScreenProps =
       onRetake?: () => void;
     };
 
-function RecordingIssueVideo({ localVideoUri }: { localVideoUri: string }) {
+function RecordingIssueVideo({ height, localVideoUri }: { height: number; localVideoUri: string }) {
   const player = useVideoPlayer(localVideoUri, (created) => {
     created.loop = true;
     created.muted = true;
@@ -30,7 +31,7 @@ function RecordingIssueVideo({ localVideoUri }: { localVideoUri: string }) {
   });
 
   return (
-    <View style={{ width: "100%", height: 220, overflow: "hidden", borderRadius: radii.lg, borderCurve: "continuous", backgroundColor: colors.cameraBlack }}>
+    <View style={{ width: "100%", height, overflow: "hidden", borderRadius: radii.lg, borderCurve: "continuous", backgroundColor: colors.cameraBlack }}>
       <VideoView
         accessibilityLabel="Recording tips preview"
         contentFit="contain"
@@ -44,19 +45,9 @@ function RecordingIssueVideo({ localVideoUri }: { localVideoUri: string }) {
 }
 
 export function RecordingPreflightScreen(props: RecordingPreflightScreenProps) {
-  const insets = useSafeAreaInsets();
+  const layout = usePhoneLayoutProfile();
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={{
-        flexGrow: 1,
-        gap: spacing.lg,
-        paddingTop: insets.top + spacing.sm,
-        paddingBottom: insets.bottom + spacing.xl,
-        paddingHorizontal: spacing.lg,
-      }}
-      style={{ flex: 1, backgroundColor: colors.background }}
-    >
+    <ResponsiveScreen testID="recording-preflight-responsive-screen" contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.sm }}>
       <Pressable
         accessibilityLabel="Back"
         accessibilityRole="button"
@@ -88,7 +79,7 @@ export function RecordingPreflightScreen(props: RecordingPreflightScreenProps) {
             <Text selectable style={[typography.body, { color: colors.textSecondary, textAlign: "center" }]}>These suggestions improve visual evidence, but they never block analysis.</Text>
           </View>
 
-          <RecordingIssueVideo localVideoUri={props.localVideoUri} />
+          <RecordingIssueVideo height={layout.short ? 180 : 220} localVideoUri={props.localVideoUri} />
 
           <View style={{ gap: spacing.md, padding: spacing.lg, borderRadius: radii.lg, borderCurve: "continuous", backgroundColor: colors.surface }}>
             {props.reason ? <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{props.reason}</Text> : null}
@@ -111,6 +102,6 @@ export function RecordingPreflightScreen(props: RecordingPreflightScreenProps) {
           </View>
         </View>
       )}
-    </ScrollView>
+    </ResponsiveScreen>
   );
 }

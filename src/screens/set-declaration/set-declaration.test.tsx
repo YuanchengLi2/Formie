@@ -133,9 +133,9 @@ describe("SetDeclarationScreen", () => {
     );
 
     expect(StyleSheet.flatten(screen.getByTestId("set-declaration-scroll").props.contentContainerStyle)).toMatchObject({
-      paddingTop: 63,
-      paddingBottom: 66,
-      paddingHorizontal: 16,
+      width: "100%",
+      maxWidth: 560,
+      paddingBottom: 50,
     });
     expect(screen.getByTestId("set-declaration-scroll").props.contentInsetAdjustmentBehavior).toBe("automatic");
   });

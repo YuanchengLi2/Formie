@@ -28,7 +28,16 @@ export async function createCookieClient() {
       getAll: () => cookieStore.getAll(),
       setAll: (values) => {
         for (const { name, value, options } of values) {
-          try { cookieStore.set(name, value, options); } catch { /* Server Components cannot mutate cookies. */ }
+          try {
+            cookieStore.set(name, value, {
+              ...options,
+              httpOnly: true,
+              sameSite: "lax",
+              secure: process.env.NODE_ENV === "production",
+              path: "/",
+              maxAge: Math.min(typeof options.maxAge === "number" ? options.maxAge : 8 * 60 * 60, 8 * 60 * 60),
+            });
+          } catch { /* Server Components cannot mutate cookies. */ }
         }
       },
     },

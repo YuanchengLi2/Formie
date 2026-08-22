@@ -1,10 +1,11 @@
 import { createAdminClient } from "../_shared/auth.ts";
+import { constantTimeEqual, validateRequestSecurity, withRequestIdentifier } from "../_shared/request-security.ts";
 import { createSendSupportHandler } from "./handler.ts";
 
 function authenticateInternalRequest(request: Request): boolean {
   const expected = Deno.env.get("FORMIE_SUPPORT_INTERNAL_TOKEN");
   const received = request.headers.get("Authorization");
-  return Boolean(expected && received === `Bearer ${expected}`);
+  return Boolean(expected && received && constantTimeEqual(received, `Bearer ${expected}`));
 }
 
 async function hashIdentifier(kind: "ip" | "email", value: string): Promise<string> {
@@ -82,11 +83,16 @@ async function sendEmail(input: {
   return { id: payload.id };
 }
 
-Deno.serve((request) => createSendSupportHandler(request, {
-  authenticateInternalRequest,
-  createRequestId: () => crypto.randomUUID(),
-  hashIdentifier,
-  reserveRequest,
-  updateRequestStatus,
-  sendEmail,
-}));
+Deno.serve(async (request) => {
+  const security = await validateRequestSecurity(request, { methods: ["POST"], authentication: "webhook", maxBodyBytes: 16_384, allowBrowserOrigin: false });
+  if (security) return security;
+  const response = await createSendSupportHandler(request, {
+    authenticateInternalRequest,
+    createRequestId: () => crypto.randomUUID(),
+    hashIdentifier,
+    reserveRequest,
+    updateRequestStatus,
+    sendEmail,
+  });
+  return withRequestIdentifier(request, response);
+});

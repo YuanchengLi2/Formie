@@ -1,5 +1,5 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { createGeminiFilesClient } from "../_shared/gemini-files.ts";
 import { reanalyzeVideoHandler, type ReanalysisResetOutcome } from "./handler.ts";
 import { verifyRetainedAnalysisInput } from "./reusable-input.ts";
@@ -9,8 +9,8 @@ const files = createGeminiFilesClient({
 });
 
 Deno.serve(async (request) => {
-  const options = preflight(request);
-  if (options) return options;
+  const security = await secureBrowserRequest(request, { methods: ["POST"], authentication: "user", maxBodyBytes: 4_096 });
+  if (security) return security;
   const admin = createAdminClient();
 
   const response = await reanalyzeVideoHandler(request, {
@@ -81,7 +81,5 @@ Deno.serve(async (request) => {
     },
   });
 
-  const headers = new Headers(response.headers);
-  Object.entries(corsHeaders).forEach(([key, value]) => headers.set(key, value));
-  return new Response(response.body, { status: response.status, headers });
+  return withCors(request, response);
 });

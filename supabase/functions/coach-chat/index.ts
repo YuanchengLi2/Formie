@@ -1,5 +1,5 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
-import { corsHeaders, preflight } from "../_shared/cors.ts";
+import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { createGeminiCoachClient } from "../_shared/gemini-coach.ts";
 import { createGeminiFilesClient } from "../_shared/gemini-files.ts";
 import { coachMessageSchema, type CoachMessage } from "../_shared/coach-contract.ts";
@@ -12,12 +12,6 @@ const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
 const files = createGeminiFilesClient({ apiKey });
 const coach = createGeminiCoachClient({ apiKey, model });
 const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
-
-function withCors(response: Response): Response {
-  const headers = new Headers(response.headers);
-  Object.entries(corsHeaders).forEach(([key, value]) => headers.set(key, value));
-  return new Response(response.body, { status: response.status, headers });
-}
 
 function mapThread(row: Record<string, unknown>): CoachThread {
   return {
@@ -46,8 +40,8 @@ function mapMessage(row: Record<string, unknown>): CoachMessage {
 }
 
 Deno.serve(async (request) => {
-  const options = preflight(request);
-  if (options) return options;
+  const security = await secureBrowserRequest(request, { methods: ["POST"], authentication: "user", maxBodyBytes: 65_536 });
+  if (security) return security;
   const admin = createAdminClient();
 
   const response = await coachChatHandler(request, {
@@ -147,5 +141,5 @@ Deno.serve(async (request) => {
       return { userMessage: coachMessageSchema.parse(payload.userMessage), assistantMessage: coachMessageSchema.parse(payload.assistantMessage) };
     },
   });
-  return withCors(response);
+  return withCors(request, response);
 });

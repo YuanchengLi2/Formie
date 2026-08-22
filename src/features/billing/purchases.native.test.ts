@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- the native module is loaded only after its store SDK mock is installed. */
+import { Linking, Platform } from "react-native";
+
 const mockShowManageSubscriptions = jest.fn<Promise<void>, []>();
 const mockGetCustomerInfo = jest.fn();
 const mockOpenURL = jest.fn<Promise<unknown>, [string]>();
@@ -5,6 +8,12 @@ const mockIsConfigured = jest.fn<Promise<boolean>, []>();
 const mockConfigure = jest.fn();
 const mockLogIn = jest.fn<Promise<unknown>, [string]>();
 const mockLogOut = jest.fn<Promise<unknown>, []>();
+
+Object.defineProperty(Platform, "OS", { configurable: true, value: "ios" });
+jest.spyOn(Linking, "openURL").mockImplementation(mockOpenURL);
+function loadNativePurchases(): typeof import("./purchases.native") {
+  return require("./purchases.native") as typeof import("./purchases.native");
+}
 
 jest.mock("react-native-purchases", () => ({
   __esModule: true,
@@ -18,14 +27,8 @@ jest.mock("react-native-purchases", () => ({
   },
 }));
 
-jest.mock("react-native", () => ({
-  Platform: { OS: "ios" },
-  Linking: { openURL: mockOpenURL },
-}));
-
 describe("native subscription management", () => {
   beforeEach(() => {
-    jest.resetModules();
     mockShowManageSubscriptions.mockReset().mockResolvedValue(undefined);
     mockGetCustomerInfo.mockReset().mockResolvedValue({
       entitlements: { all: {}, active: {} },
@@ -42,7 +45,7 @@ describe("native subscription management", () => {
   });
 
   it("uses Apple's native subscription sheet on iOS", async () => {
-    const { showNativeSubscriptionManagement } = require("./purchases.native") as typeof import("./purchases.native");
+    const { showNativeSubscriptionManagement } = loadNativePurchases();
     await showNativeSubscriptionManagement();
     expect(mockShowManageSubscriptions).toHaveBeenCalledTimes(1);
     expect(mockGetCustomerInfo).not.toHaveBeenCalled();
@@ -50,7 +53,7 @@ describe("native subscription management", () => {
   });
 
   it("identifies an authenticated Google session by its Supabase UUID before billing reads", async () => {
-    const { purchasesClient } = require("./purchases.native") as typeof import("./purchases.native");
+    const { purchasesClient } = loadNativePurchases();
 
     await purchasesClient.configure(null);
     await purchasesClient.configure("supabase-user-from-google");
@@ -61,7 +64,7 @@ describe("native subscription management", () => {
   });
 
   it("does not create a second RevenueCat identity when the same Supabase user configures again", async () => {
-    const { purchasesClient } = require("./purchases.native") as typeof import("./purchases.native");
+    const { purchasesClient } = loadNativePurchases();
 
     await purchasesClient.configure("shared-supabase-user");
     await purchasesClient.configure("shared-supabase-user");

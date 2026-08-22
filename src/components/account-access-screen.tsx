@@ -1,11 +1,12 @@
 import { StatusBar } from "expo-status-bar";
 import { useState, type ReactNode } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ResponsiveScreen } from "@/components/responsive-screen";
 import { SocialProviderButtons } from "@/components/social-provider-buttons";
 import type { SocialProvider } from "@/features/auth/auth-service";
+import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 type AccountAccessMode = "login" | "onboarding";
 
@@ -35,9 +36,8 @@ export function AccountAccessScreen({ mode = "login", onOAuth, onCreateAccount, 
   error?: string | null;
   notice?: string | null;
 }) {
-  const insets = useSafeAreaInsets();
-  const { height, width } = useWindowDimensions();
-  const compact = isCompactAccountAccessLayout(height, width, insets.top, insets.bottom);
+  const layout = usePhoneLayoutProfile();
+  const compact = layout.compact || layout.short;
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const disabled = busy || busyProvider !== null || (mode === "onboarding" && !legalAccepted);
@@ -45,8 +45,8 @@ export function AccountAccessScreen({ mode = "login", onOAuth, onCreateAccount, 
 
   return <View testID="social-account-access" style={styles.screen}>
     <StatusBar style="light" />
-    <View style={[styles.safeTop, { height: Math.max(insets.top, 12) }]} />
-    <ScrollView testID="account-access-scroll" contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, compact && styles.contentCompact, { paddingBottom: Math.max(insets.bottom, 24) }]} showsVerticalScrollIndicator={false}>
+    <View style={[styles.safeTop, { height: Math.max(layout.insets.top, 12) }]} />
+    <ResponsiveScreen testID="account-access-scroll" keyboardAware contentContainerStyle={[styles.content, compact && styles.contentCompact]}>
       <View testID="account-access-top-row" style={styles.topRow}>
         {onBack ? <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={styles.back}><Text style={styles.backGlyph}>‹</Text></Pressable> : <View style={styles.back} />}
         <View testID="account-access-gold-bar" style={styles.progressBar} />
@@ -63,7 +63,7 @@ export function AccountAccessScreen({ mode = "login", onOAuth, onCreateAccount, 
         <ConsentRow label="Agree to the Terms of Use and Privacy Policy" checked={legalAccepted} onPress={() => setLegalAccepted((value) => { const next = !value; onPrivacyConsentChange?.(next); return next; })}>{"I agree to Formie's "}<Text accessibilityRole="link" onPress={onOpenTerms} style={styles.link}>Terms of Use</Text> and <Text accessibilityRole="link" onPress={onOpenPrivacy} style={styles.link}>Privacy Policy</Text></ConsentRow>
         <ConsentRow label="Receive Formie tips and offers" checked={marketingOptIn} onPress={() => setMarketingOptIn((value) => { const next = !value; onMarketingOptInChange?.(next); return next; })}>Send me tips, new features, and personalized offers from Formie.</ConsentRow>
       </View> : null}
-    </ScrollView>
+    </ResponsiveScreen>
   </View>;
 }
 
@@ -72,8 +72,8 @@ const styles = StyleSheet.create({
   safeTop: { width: "100%", backgroundColor: "#050505" },
   topRow: { width: "100%", minHeight: 36, flexDirection: "row", alignItems: "center", gap: 14 },
   progressBar: { flex: 1, height: 3, backgroundColor: "#E5AD32", marginRight: 8 },
-  content: { flexGrow: 1, width: "100%", maxWidth: 520, alignSelf: "center", justifyContent: "flex-start", paddingHorizontal: 20, paddingTop: 14 },
-  contentCompact: { paddingHorizontal: 16, paddingTop: 8 },
+  content: { justifyContent: "flex-start", paddingTop: 14 },
+  contentCompact: { paddingTop: 8 },
   back: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#111110", borderWidth: 1, borderColor: "#E5AD32" },
   backGlyph: { color: "#E5AD32", fontSize: 30, lineHeight: 32 },
   hero: { alignItems: "flex-start" },

@@ -29,7 +29,6 @@ export type WholeVideoHandlerDependencies = {
   loadSession: (sessionId: string, userId: string) => Promise<WholeVideoSession | null>;
   advancePipeline: (session: WholeVideoSession) => Promise<WholeVideoPipelineResult>;
   persistFailure: (sessionId: string, code: string, disposition: AnalysisFailureDisposition) => Promise<WholeVideoPipelineResult>;
-  markRetryable?: (session: WholeVideoSession, code: string) => Promise<WholeVideoPipelineResult>;
   now?: () => Date;
 };
 
@@ -57,15 +56,16 @@ function failureCode(error: unknown): string {
   return detail ? `ANALYSIS_ERROR_${detail}`.slice(0, 64) : "ANALYSIS_FAILED";
 }
 
-function isRetryableFailure(code: string): boolean {
-  return code === "ANALYSIS_FILE_PROCESSING"
-    || /^GEMINI_HTTP_(?:400|408|409|425|429|5\d\d)$/.test(code)
-    || /^ANALYSIS_CONTRACT_/.test(code)
-    || /^ANALYSIS_(?:STATE|RESULT)_SAVE_FAILED/.test(code)
-    || code === "ANALYSIS_DEADLINE_EXCEEDED"
-    || code === "WRITER_DEADLINE_EXHAUSTED"
-    || code === "ANALYSIS_VIDEO_DOWNLOAD_FAILED"
-    || code === "ANALYSIS_FILE_METADATA_FAILED";
+function stringErrorProperty(error: unknown, property: string): string | undefined {
+  if (!error || typeof error !== "object" || !(property in error)) return undefined;
+  const value = (error as Record<string, unknown>)[property];
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function numericErrorProperty(error: unknown, property: string): number | undefined {
+  if (!error || typeof error !== "object" || !(property in error)) return undefined;
+  const value = (error as Record<string, unknown>)[property];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function payload(session: WholeVideoSession, state: WholeVideoPipelineResult) {
@@ -121,10 +121,6 @@ export async function analyzeWholeVideoHandler(request: Request, dependencies: W
         status: "processing",
         stage: session?.stage ?? "analyzing",
       }), 202);
-    }
-    if (isRetryableFailure(code) && session && dependencies.markRetryable) {
-      const retryState = await dependencies.markRetryable(session, code);
-      return json(payload(session, retryState), 202);
     }
     if (session) {
       try {

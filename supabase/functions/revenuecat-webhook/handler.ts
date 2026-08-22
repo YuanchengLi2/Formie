@@ -1,4 +1,5 @@
 import type { RevenueCatSubscriber } from "../_shared/revenuecat.ts";
+import { constantTimeEqual } from "../_shared/request-security.ts";
 
 export type WebhookEvent = {
   id: string;
@@ -36,13 +37,6 @@ function json(payload: unknown, status: number): Response {
   return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
 }
 
-function safeEqual(left: string, right: string): boolean {
-  if (left.length !== right.length) return false;
-  let mismatch = 0;
-  for (let index = 0; index < left.length; index += 1) mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
-  return mismatch === 0;
-}
-
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())) : [];
 }
@@ -56,7 +50,7 @@ function timestamp(value: unknown): string | null {
 export async function revenueCatWebhookHandler(request: Request, dependencies: RevenueCatWebhookDependencies, secret: string): Promise<Response> {
   if (request.method !== "POST") return json({ code: "METHOD_NOT_ALLOWED" }, 405);
   const authorization = request.headers.get("authorization") ?? "";
-  if (!secret || !safeEqual(authorization, `Bearer ${secret}`)) return json({ code: "UNAUTHORIZED" }, 401);
+  if (!secret || !constantTimeEqual(authorization, `Bearer ${secret}`)) return json({ code: "UNAUTHORIZED" }, 401);
 
   let event: WebhookEvent | null = null;
   try {

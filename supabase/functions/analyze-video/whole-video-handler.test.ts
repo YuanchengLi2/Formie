@@ -30,14 +30,14 @@ function dependencies(overrides: Partial<WholeVideoHandlerDependencies> = {}): W
 
 describe("whole-video handler failure disposition", () => {
   it("keeps a slow Gemini file activation in processing for durable retry", async () => {
-    const markRetryable = jest.fn(async () => ({
+    const persistFailure = jest.fn(async () => ({
       status: "processing",
       stage: "retry_wait",
       analysisNextRetryAt: "2026-08-12T23:00:05.000Z",
     }));
     const deps = dependencies({
       advancePipeline: jest.fn(async () => { throw Object.assign(new Error("still processing"), { code: "ANALYSIS_FILE_PROCESSING" }); }),
-      markRetryable,
+      persistFailure,
     });
     const response = await analyzeWholeVideoHandler(new Request("https://example/analyze-video", {
       method: "POST",
@@ -51,19 +51,18 @@ describe("whole-video handler failure disposition", () => {
       stage: "retry_wait",
       analysisNextRetryAt: "2026-08-12T23:00:05.000Z",
     });
-    expect(markRetryable).toHaveBeenCalledWith(expect.objectContaining({ id: "session-1" }), "ANALYSIS_FILE_PROCESSING");
-    expect(deps.persistFailure).not.toHaveBeenCalled();
+    expect(persistFailure).toHaveBeenCalledWith("session-1", "ANALYSIS_FILE_PROCESSING", expect.objectContaining({ disposition: "retry_video_file" }));
   });
 
   it("keeps a transient Gemini writer failure in processing for durable retry", async () => {
-    const markRetryable = jest.fn(async () => ({
+    const persistFailure = jest.fn(async () => ({
       status: "processing",
       stage: "retry_wait",
       analysisNextRetryAt: "2026-08-13T02:00:05.000Z",
     }));
     const deps = dependencies({
       advancePipeline: jest.fn(async () => { throw Object.assign(new Error("provider unavailable"), { code: "GEMINI_HTTP_503" }); }),
-      markRetryable,
+      persistFailure,
     });
     const response = await analyzeWholeVideoHandler(new Request("https://example/analyze-video", {
       method: "POST",
@@ -77,7 +76,23 @@ describe("whole-video handler failure disposition", () => {
       stage: "retry_wait",
       analysisNextRetryAt: "2026-08-13T02:00:05.000Z",
     });
-    expect(markRetryable).toHaveBeenCalledWith(expect.objectContaining({ id: "session-1" }), "GEMINI_HTTP_503");
-    expect(deps.persistFailure).not.toHaveBeenCalled();
+    expect(persistFailure).toHaveBeenCalledWith("session-1", "GEMINI_HTTP_503", expect.objectContaining({ disposition: "retry_video_file" }));
+  });
+
+  it("stops a transient provider failure after the bounded retry budget is exhausted", async () => {
+    const persistFailure = jest.fn(async () => ({ status: "failed", stage: "failed" }));
+    const deps = dependencies({
+      loadSession: jest.fn(async () => session({ analysisRetryCount: 3 })),
+      advancePipeline: jest.fn(async () => { throw Object.assign(new Error("provider unavailable"), { code: "GEMINI_HTTP_503", httpStatus: 503 }); }),
+      persistFailure,
+    });
+    const response = await analyzeWholeVideoHandler(new Request("https://example/analyze-video", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: "session-1" }),
+    }), deps);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ status: "failed", stage: "failed", failureCode: "GEMINI_HTTP_503" });
+    expect(persistFailure).toHaveBeenCalledWith("session-1", "GEMINI_HTTP_503", expect.objectContaining({ disposition: "terminal_failure", exhausted: true }));
   });
 });

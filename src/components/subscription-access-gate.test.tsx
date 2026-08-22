@@ -1,5 +1,5 @@
 import { fireEvent, render } from "@testing-library/react-native";
-import { Text } from "react-native";
+import { StyleSheet, Text } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { SubscriptionAccessGate } from "./subscription-access-gate";
@@ -48,6 +48,11 @@ describe("SubscriptionAccessGate", () => {
     const screen = await render(gated());
     expect(screen.queryByText("Subscription required")).toBeNull();
     expect(screen.getByText("We couldn’t verify your subscription")).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId("subscription-access-responsive-screen").props.contentContainerStyle)).toMatchObject({
+      width: "100%",
+      maxWidth: 560,
+      paddingBottom: 50,
+    });
     await fireEvent.press(screen.getByRole("button", { name: "Retry access check" }));
     await fireEvent.press(screen.getByRole("button", { name: "Sign out" }));
     expect(mockRefresh).toHaveBeenCalled();

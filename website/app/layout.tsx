@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Archivo_Black, Manrope } from "next/font/google";
+import { connection } from "next/server";
 
 import "./globals.css";
 import "./landing-v2.css";
@@ -25,7 +26,11 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // A request-specific CSP nonce can only be attached to Next's scripts during
+  // dynamic rendering. Keep this at the root so no public or admin route can
+  // accidentally ship static script tags without the proxy-generated nonce.
+  await connection();
   return (
     <html lang="en" className={`${body.variable} ${display.variable}`}>
       <body>{children}</body>

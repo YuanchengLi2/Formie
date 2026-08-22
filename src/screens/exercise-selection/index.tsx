@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Keyboard, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Keyboard, Text, TextInput, View } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { Image } from "expo-image";
 
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";
+import { ResponsiveScreen } from "@/components/responsive-screen";
 import { exerciseSearchHighlightTerms, normalizeExerciseSearch, type CatalogExercise } from "@/features/analysis/exercise-catalog";
 import { inferExerciseFamily, isExerciseFamily } from "@/features/exercises/exercise-family";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 type ExerciseSelectionScreenProps = {
   initialExercise?: CatalogExercise | null;
@@ -36,6 +38,7 @@ export function ExerciseSelectionScreen({
   onSelect,
   onGenerateCustomGuide,
 }: ExerciseSelectionScreenProps) {
+  const layout = usePhoneLayoutProfile();
   const [query, setQuery] = useState(initialExercise?.name ?? "");
   const [results, setResults] = useState<CatalogExercise[]>(initialExercise ? [initialExercise] : []);
   const [loading, setLoading] = useState(false);
@@ -85,14 +88,13 @@ export function ExerciseSelectionScreen({
   }, [initialExercise, onSearch, query]);
 
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
+    <ResponsiveScreen
+      keyboardAware
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       onScrollBeginDrag={Keyboard.dismiss}
       testID="exercise-selection-scroll"
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={{ gap: spacing.lg, padding: spacing.lg, paddingBottom: spacing.xxl }}
+      contentContainerStyle={{ gap: spacing.lg, paddingTop: spacing.lg }}
     >
       <TextInput
         testID="exercise-search"
@@ -183,7 +185,7 @@ export function ExerciseSelectionScreen({
             testID="exercise-hero"
             style={{
             width: "100%",
-            height: 340,
+            height: Math.min(340, layout.artworkMaxHeight),
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: "transparent",
@@ -195,10 +197,9 @@ export function ExerciseSelectionScreen({
               contentFit="contain"
               source={benchPressHero}
               style={{
-                width: "128%",
-                height: "128%",
+                width: "100%",
+                height: "100%",
                 opacity: 0.35,
-                transform: [{ translateY: 28 }],
               }}
             />
           </View>
@@ -210,6 +211,6 @@ export function ExerciseSelectionScreen({
           </Text>
         </View>
       ) : null}
-    </ScrollView>
+    </ResponsiveScreen>
   );
 }
