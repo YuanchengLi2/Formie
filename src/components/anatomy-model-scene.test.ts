@@ -5,7 +5,6 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshPhysicalMaterial,
-  MeshStandardMaterial,
 } from "three";
 
 import {
@@ -28,15 +27,16 @@ function sourceModel() {
 }
 
 describe("native anatomy model scene", () => {
-  it("creates an opaque clone and paints its classified vertices", () => {
+  it("creates an opaque clone and paints its complete tagged mesh", () => {
     const source = sourceModel();
+    source.userData.muscle = "abs";
     const model = prepareAnatomyModel(source);
-    const mesh = model.children[0] as Mesh;
+    const mesh = model.getObjectByProperty("type", "Mesh") as Mesh;
 
     expect(mesh).not.toBe(source.children[0]);
-    expect(mesh.material).toBeInstanceOf(MeshStandardMaterial);
-    expect((mesh.material as MeshStandardMaterial).transparent).toBe(false);
-    expect((mesh.material as MeshStandardMaterial).depthWrite).toBe(true);
+    expect(mesh.material).toBeInstanceOf(MeshPhysicalMaterial);
+    expect((mesh.material as MeshPhysicalMaterial).transparent).toBe(false);
+    expect((mesh.material as MeshPhysicalMaterial).depthWrite).toBe(true);
 
     paintAnatomyModel(model, {
       targetRegions: ["abs"],
@@ -49,17 +49,15 @@ describe("native anatomy model scene", () => {
       issue: "#ff3300",
     });
 
-    const color = mesh.geometry.getAttribute("color");
-    expect(Array.from(color.array)).toEqual([
-      0.005181516520678997, 0.005181516520678997, 0.005181516520678997,
-      0.005181516520678997, 0.005181516520678997, 0.005181516520678997,
-      1, 0.6038273572921753, 0,
-    ]);
+    expect((mesh.material as MeshPhysicalMaterial).color.getHexString()).toBe("ffcc00");
+    expect(mesh.geometry.getAttribute("color")).toBeUndefined();
   });
 
   it("uses a softly reflective physical surface so body contours remain visible", () => {
-    const model = prepareAnatomyModel(sourceModel());
-    const material = (model.children[0] as Mesh).material as MeshPhysicalMaterial;
+    const source = sourceModel();
+    source.userData.muscle = "abs";
+    const model = prepareAnatomyModel(source);
+    const material = (model.getObjectByProperty("type", "Mesh") as Mesh).material as MeshPhysicalMaterial;
 
     expect(material).toBeInstanceOf(MeshPhysicalMaterial);
     expect(material.metalness).toBe(0);
@@ -70,13 +68,36 @@ describe("native anatomy model scene", () => {
     expect(material.flatShading).toBe(false);
   });
 
+  it("colors a complete tagged muscle mesh instead of painting coordinate bands", () => {
+    const source = sourceModel();
+    source.userData.muscle = "deltoids";
+    const model = prepareAnatomyModel(source);
+    const mesh = model.getObjectByProperty("type", "Mesh") as Mesh;
+
+    paintAnatomyModel(model, {
+      targetRegions: ["front_shoulders"],
+      secondaryRegions: [],
+      issueRegions: [],
+    }, {
+      base: "#101010",
+      target: "#ffcc00",
+      secondary: "#cc9900",
+      issue: "#ff3300",
+    });
+
+    expect((mesh.material as MeshPhysicalMaterial).color.getHexString()).toBe("ffcc00");
+    expect(mesh.geometry.getAttribute("color")).toBeUndefined();
+  });
+
   it("disposes cloned geometry and materials", () => {
-    const model = prepareAnatomyModel(sourceModel());
-    const mesh = model.children[0] as Mesh;
+    const source = sourceModel();
+    source.userData.muscle = "abs";
+    const model = prepareAnatomyModel(source);
+    const mesh = model.getObjectByProperty("type", "Mesh") as Mesh;
     let geometryDisposals = 0;
     let materialDisposals = 0;
     mesh.geometry.addEventListener("dispose", () => geometryDisposals += 1);
-    (mesh.material as MeshStandardMaterial).addEventListener("dispose", () => materialDisposals += 1);
+    (mesh.material as MeshPhysicalMaterial).addEventListener("dispose", () => materialDisposals += 1);
 
     disposeAnatomyModel(model);
 

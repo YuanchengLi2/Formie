@@ -118,15 +118,13 @@ function ScoreRow({ score, last }: { score: MovementScore; last: boolean }) {
     <View testID={`movement-score-row-${score.id}`} style={{ gap: 6, paddingVertical: 8, borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.border }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
         <ScoreIcon score={score} />
-        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <Text selectable numberOfLines={1} style={{ color: colors.text, fontSize: 14, lineHeight: 18, fontWeight: "700" }}>{score.label}</Text>
-          <Text selectable style={{ color: colors.textSecondary, fontSize: 11, lineHeight: 15 }}>{score.observed}</Text>
-        </View>
+        <Text selectable style={{ flex: 1, minWidth: 0, color: colors.text, fontSize: 14, lineHeight: 18, fontWeight: "700" }}>{score.label}</Text>
         <View style={{ minWidth: 34, alignItems: "flex-end" }}>
           <Text selectable style={{ color: colors.gold, fontSize: 20, lineHeight: 23, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{rounded}</Text>
           <Text selectable style={{ color: colors.textMuted, fontSize: 9, lineHeight: 11, fontWeight: "600", fontVariant: ["tabular-nums"] }}>/100</Text>
         </View>
       </View>
+      <Text selectable style={{ alignSelf: "stretch", color: colors.textSecondary, fontSize: 11, lineHeight: 15 }}>{score.observed}</Text>
       <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: rounded }} style={{ height: 4, overflow: "hidden", borderRadius: 2, backgroundColor: colors.border }}>
         <View style={{ width: `${Math.max(0, Math.min(100, score.score))}%`, height: 4, borderRadius: 2, backgroundColor: colors.gold }} />
       </View>
@@ -136,8 +134,8 @@ function ScoreRow({ score, last }: { score: MovementScore; last: boolean }) {
 
 export function MovementScoreCard({ score, movementScores }: { score: number | null; movementScores: MovementScore[] }) {
   const { width } = useWindowDimensions();
-  const overallWidth = width < 360 ? 104 : 124;
-  const breakdownHeight = width < 360 ? 150 : 176;
+  const overallWidth = width < 360 ? 96 : 108;
+  const breakdownHeight = width < 360 ? 190 : 210;
   if (score === null && movementScores.length === 0) return null;
 
   return (

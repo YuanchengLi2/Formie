@@ -36,7 +36,7 @@ export type AnatomyModelProps = {
   mode?: "muscles" | "form";
 };
 
-const MODEL_ASSET = require("../../assets/models/formie-athlete-body.glb") as number;
+const MODEL_ASSET = require("../../assets/models/formie-segmented-muscles.glb") as number;
 const MODEL_PALETTE: AnatomyModelPalette = {
   base: colors.textMuted,
   target: colors.gold,

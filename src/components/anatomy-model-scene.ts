@@ -1,42 +1,57 @@
 import {
   Box3,
   Color,
-  Float32BufferAttribute,
-  FrontSide,
+  DoubleSide,
+  Group,
   Mesh,
   MeshPhysicalMaterial,
   Vector3,
-  type BufferGeometry,
   type ColorRepresentation,
-  type Group,
   type Material,
   type Object3D,
 } from "three";
 
 import {
-  muscleModelHighlightForPart,
-  muscleModelPartAtPosition,
+  isAnatomyMuscleTag,
+  muscleModelHighlightForTag,
+  type AnatomyMuscleTag,
   type MuscleModelHighlightKind,
-  type MuscleModelPart,
   type MuscleModelSelection,
 } from "@/components/muscle-model-regions";
 
 export type AnatomyModelPalette = Record<MuscleModelHighlightKind, ColorRepresentation>;
 
-type PaintableGeometry = BufferGeometry & { userData: { formieParts?: MuscleModelPart[] } };
+function muscleTagForObject(object: Object3D): AnatomyMuscleTag | null {
+  let current: Object3D | null = object;
+  while (current) {
+    if (isAnatomyMuscleTag(current.userData.muscle)) return current.userData.muscle;
+    current = current.parent;
+  }
+  return null;
+}
 
 export function prepareAnatomyModel(source: Group) {
-  const model = source.clone(true);
-  model.updateMatrixWorld(true);
-  const bounds = new Box3().setFromObject(model);
+  const content = source.clone(true);
+  content.updateMatrixWorld(true);
+  const bounds = new Box3().setFromObject(content);
   const center = bounds.getCenter(new Vector3());
   const size = bounds.getSize(new Vector3());
-  const vertex = new Vector3();
+  content.position.sub(center);
 
-  model.traverse((object) => {
+  const model = new Group();
+  model.add(content);
+  if (size.z > size.x && size.z > size.y) model.rotation.x = -Math.PI / 2;
+  else if (size.x > size.y) model.rotation.z = Math.PI / 2;
+  model.scale.setScalar(3.45 / Math.max(size.x, size.y, size.z));
+
+  content.traverse((object) => {
     if (!(object instanceof Mesh)) return;
+    const muscle = muscleTagForObject(object);
+    object.visible = muscle !== null;
+    if (!muscle) return;
+
     object.geometry = object.geometry.clone();
-    object.geometry.computeVertexNormals();
+    if (!object.geometry.getAttribute("normal")) object.geometry.computeVertexNormals();
     object.material = new MeshPhysicalMaterial({
       color: "#FFFFFF",
       metalness: 0,
@@ -44,25 +59,13 @@ export function prepareAnatomyModel(source: Group) {
       clearcoat: 0.08,
       clearcoatRoughness: 0.85,
       flatShading: false,
-      vertexColors: true,
+      vertexColors: false,
       transparent: false,
       opacity: 1,
       depthWrite: true,
-      side: FrontSide,
+      side: DoubleSide,
     });
-
-    const geometry = object.geometry as PaintableGeometry;
-    const position = geometry.getAttribute("position");
-    const parts: MuscleModelPart[] = [];
-    for (let index = 0; index < position.count; index += 1) {
-      vertex.fromBufferAttribute(position, index).applyMatrix4(object.matrixWorld);
-      parts.push(muscleModelPartAtPosition(
-        (vertex.x - center.x) / size.x,
-        (vertex.y - center.y) / size.y,
-        (vertex.z - center.z) / size.z,
-      ));
-    }
-    geometry.userData.formieParts = parts;
+    object.userData.formieMuscle = muscle;
   });
   return model;
 }
@@ -73,28 +76,16 @@ export function paintAnatomyModel(model: Object3D, selection: MuscleModelSelecti
   ) as Record<MuscleModelHighlightKind, Color>;
 
   model.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    const geometry = object.geometry as PaintableGeometry;
-    const position = geometry.getAttribute("position");
-    const parts = geometry.userData.formieParts;
-    if (!parts || parts.length !== position.count) return;
-
-    let colorAttribute = geometry.getAttribute("color") as Float32BufferAttribute | undefined;
-    if (!colorAttribute || colorAttribute.count !== position.count) {
-      colorAttribute = new Float32BufferAttribute(new Float32Array(position.count * 3), 3);
-      geometry.setAttribute("color", colorAttribute);
-    }
-    parts.forEach((part, index) => {
-      const color = resolvedPalette[muscleModelHighlightForPart(part, selection)];
-      colorAttribute.setXYZ(index, color.r, color.g, color.b);
-    });
-    colorAttribute.needsUpdate = true;
+    if (!(object instanceof Mesh) || !(object.material instanceof MeshPhysicalMaterial)) return;
+    const muscle = object.userData.formieMuscle;
+    if (!isAnatomyMuscleTag(muscle)) return;
+    object.material.color.copy(resolvedPalette[muscleModelHighlightForTag(muscle, selection)]);
   });
 }
 
 export function disposeAnatomyModel(model: Object3D) {
   model.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
+    if (!(object instanceof Mesh) || !isAnatomyMuscleTag(object.userData.formieMuscle)) return;
     object.geometry.dispose();
     const materials = (Array.isArray(object.material) ? object.material : [object.material]) as Material[];
     materials.forEach((material) => material.dispose());

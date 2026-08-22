@@ -1,4 +1,4 @@
-import { muscleModelHighlightForPart, muscleModelPartAtPosition } from "./muscle-model-regions";
+import { isAnatomyMuscleTag, muscleModelHighlightForTag } from "./muscle-model-regions";
 
 describe("3D muscle model region highlights", () => {
   it("colors target, supporting, and issue geometry with issue priority", () => {
@@ -8,23 +8,21 @@ describe("3D muscle model region highlights", () => {
       issueRegions: ["shoulders"] as const,
     };
 
-    expect(muscleModelHighlightForPart("left-lat", selection)).toBe("target");
-    expect(muscleModelHighlightForPart("right-biceps", selection)).toBe("secondary");
-    expect(muscleModelHighlightForPart("left-deltoid", selection)).toBe("issue");
+    expect(muscleModelHighlightForTag("lats", selection)).toBe("target");
+    expect(muscleModelHighlightForTag("biceps", selection)).toBe("secondary");
+    expect(muscleModelHighlightForTag("deltoids", selection)).toBe("issue");
   });
 
   it("keeps unselected body geometry on the opaque base material", () => {
-    expect(muscleModelHighlightForPart("left-quad", {
+    expect(muscleModelHighlightForTag("quads", {
       targetRegions: [],
       secondaryRegions: [],
       issueRegions: [],
     })).toBe("base");
   });
 
-  it("maps front and back vertices to different anatomical surfaces", () => {
-    expect(muscleModelPartAtPosition(-0.18, 0.18, 0.3)).toBe("left-chest");
-    expect(muscleModelPartAtPosition(-0.18, 0.18, -0.3)).toBe("left-lat");
-    expect(muscleModelPartAtPosition(0.18, -0.2, 0.3)).toBe("right-quad");
-    expect(muscleModelPartAtPosition(0.18, -0.2, -0.3)).toBe("right-hamstring");
+  it("accepts only muscle tags carried by the segmented asset", () => {
+    expect(isAnatomyMuscleTag("deltoids")).toBe(true);
+    expect(isAnatomyMuscleTag("rough-shoulder-zone")).toBe(false);
   });
 });

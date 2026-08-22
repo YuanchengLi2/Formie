@@ -203,9 +203,9 @@ describe("ResultsScreen", () => {
     expect(screen.getByTestId("overall-analysis-score").props.accessibilityLabel).toBe("Overall score 75 out of 100");
     expect(screen.getByTestId("score-grade-stamp").props.accessibilityLabel).toBe("Letter grade C");
     expect(screen.getByTestId("overall-score-ring")).toBeTruthy();
-    expect(screen.getByTestId("overall-score-ring")).toHaveStyle({ width: 124, height: 124 });
+    expect(screen.getByTestId("overall-score-ring")).toHaveStyle({ width: 108, height: 108 });
     expect(screen.getByTestId("movement-score-card-layout")).toHaveStyle({ flexDirection: "row", alignItems: "stretch" });
-    expect(screen.getByTestId("movement-score-overall")).toHaveStyle({ width: 124 });
+    expect(screen.getByTestId("movement-score-overall")).toHaveStyle({ width: 108 });
     expect(screen.getByText("Overall Performance")).toBeTruthy();
     expect(screen.getByText("SCORE BREAKDOWN")).toBeTruthy();
     expect(screen.getByText("FORM GRADE")).toBeTruthy();
@@ -213,7 +213,7 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("MOVEMENT SCORE")).toBeTruthy();
     expect(screen.queryByText("Your early repetitions establish a controlled path.")).toBeNull();
     expect(screen.queryByTestId("coach-score-gauge")).toBeNull();
-    expect(screen.getByTestId("movement-score-list")).toHaveStyle({ height: 176 });
+    expect(screen.getByTestId("movement-score-list")).toHaveStyle({ height: 210 });
     const scoreRows = screen.getAllByTestId(/^movement-score-row-/);
     expect(scoreRows).toHaveLength(4);
     expect(scoreRows[0]).toHaveStyle({ paddingVertical: 8 });
@@ -243,6 +243,19 @@ describe("ResultsScreen", () => {
     const observation = screen.getByText(fullObservation);
 
     expect(observation.props.numberOfLines).toBeUndefined();
+    expect(observation.parent?.props.testID).toBe("movement-score-row-handle-path");
+  });
+
+  it("lets long movement titles wrap and gives the breakdown more room", async () => {
+    const value = result();
+    const fullTitle = "Controlled Handle Movement Path";
+    value.movementScores![0].label = fullTitle;
+
+    const screen = await renderResults(jest.fn(), value);
+
+    expect(screen.getByText(fullTitle).props.numberOfLines).toBeUndefined();
+    expect(screen.getByTestId("movement-score-overall")).toHaveStyle({ width: 108 });
+    expect(screen.getByTestId("movement-score-list")).toHaveStyle({ height: 210 });
   });
 
   it("renders What to do next as one complete white instruction without gray copy", async () => {
