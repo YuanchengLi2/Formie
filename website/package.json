@@ -7,7 +7,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint .",
-    "test": "tsx --test app/**/*.test.ts app/**/*.test.tsx components/**/*.test.ts components/**/*.test.tsx lib/**/*.test.ts lib/**/*.test.tsx",
+    "test": "node scripts/run-tests.mjs",
     "test:e2e": "playwright test",
     "test:responsive": "playwright test tests/responsive.spec.ts"
   },
