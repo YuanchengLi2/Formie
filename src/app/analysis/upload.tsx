@@ -43,7 +43,7 @@ export default function AnalysisUploadRoute() {
   }, [declaration, dispatch, phase, previousSessionId, recording, router]);
 
   const discard = () => {
-    void analysisUploadCoordinator.cancelReservation().finally(() => {
+    void analysisUploadCoordinator.cancelUpload().finally(() => {
       dispatch({ type: "discard_recording" });
       router.replace("/camera");
     });
@@ -54,6 +54,7 @@ export default function AnalysisUploadRoute() {
 
   return (
     <AnalysisProgressScreen
+      mode="upload"
       stage={uploadSubstage ?? "creating_session"}
       failureMessage={failureMessage}
       onRetryUpload={phase === "error" && recording ? () => dispatch({ type: "retry_upload" }) : undefined}

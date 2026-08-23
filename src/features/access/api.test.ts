@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
-import { asAccess, refreshProviderAccess, refreshProviderAccessUntilChanged } from "./api";
+import { asAccess, cancelAnalysis, refreshProviderAccess, refreshProviderAccessUntilChanged } from "./api";
+import { subscribeAccessMutations } from "./access-events";
 import type { AccessStatus } from "./types";
 
 const mockInvoke = jest.fn();
@@ -71,5 +72,32 @@ describe("provider access refresh", () => {
     await expect(refreshProviderAccessUntilChanged("jwt", unchanged, refresh, [0, 1], wait)).resolves.toMatchObject({ lifecycleState: "active_cancelled" });
     expect(refresh).toHaveBeenCalledTimes(2);
     expect(wait).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("analysis cancellation", () => {
+  beforeEach(() => mockInvoke.mockReset());
+
+  it("sends the session-aware upload failure and publishes authoritative quota", async () => {
+    const mutations: unknown[] = [];
+    const unsubscribe = subscribeAccessMutations((mutation) => mutations.push(mutation));
+    mockInvoke.mockResolvedValue({
+      data: { sessionFailed: true, reservationCancelled: true, access: { remaining: 9, period_ends_at: "2026-09-01T00:00:00Z" } },
+      error: null,
+    });
+
+    await cancelAnalysis({ sessionId: "session-1", reservationId: "reservation-1", reason: "upload_failed" });
+
+    expect(mockInvoke).toHaveBeenCalledWith("cancel-analysis", {
+      body: { sessionId: "session-1", reservationId: "reservation-1", reason: "upload_failed" },
+    });
+    expect(mutations).toEqual([{ remaining: 9, periodEndsAt: "2026-09-01T00:00:00Z" }]);
+    unsubscribe();
+  });
+
+  it("keeps reservation-only cancellation compatible with released clients", async () => {
+    mockInvoke.mockResolvedValue({ data: { cancelled: true, access: null }, error: null });
+    await expect(cancelAnalysis({ reservationId: "reservation-legacy" })).resolves.toBeUndefined();
+    expect(mockInvoke).toHaveBeenCalledWith("cancel-analysis", { body: { reservationId: "reservation-legacy" } });
   });
 });

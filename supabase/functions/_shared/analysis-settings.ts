@@ -2,7 +2,7 @@ export const MIN_ANALYSIS_VIDEO_DURATION_MS = 3_000;
 export const MAX_ANALYSIS_VIDEO_DURATION_MS = 15_000;
 
 export type AnalysisRuntimeContract = Readonly<{
-  pipelineVersion: "gemini-whole-video-v87-runtime-contract";
+  pipelineVersion: "gemini-whole-video-v88-evidence-scoring";
   analystModel: "gemini-3.7-flash";
   analystThinkingLevel: "high";
   mediaResolution: "MEDIA_RESOLUTION_HIGH";
@@ -13,7 +13,7 @@ export type AnalysisRuntimeContract = Readonly<{
 }>;
 
 export const ANALYSIS_RUNTIME_CONTRACT: AnalysisRuntimeContract = Object.freeze({
-  pipelineVersion: "gemini-whole-video-v87-runtime-contract",
+  pipelineVersion: "gemini-whole-video-v88-evidence-scoring",
   analystModel: "gemini-3.7-flash",
   analystThinkingLevel: "high",
   mediaResolution: "MEDIA_RESOLUTION_HIGH",

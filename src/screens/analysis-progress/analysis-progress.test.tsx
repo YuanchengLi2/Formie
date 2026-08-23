@@ -8,7 +8,7 @@ describe("AnalysisProgressScreen", () => {
   it("shows native persisted stages and never a fake percentage", async () => {
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-        <AnalysisProgressScreen stage="video_processing" failureMessage={null} />
+        <AnalysisProgressScreen mode="analysis" stage="video_processing" failureMessage={null} />
       </SafeAreaProvider>,
     );
     expect(screen.queryByText(/%/)).toBeNull();
@@ -23,8 +23,8 @@ describe("AnalysisProgressScreen", () => {
     expect(screen.queryByText(/Your recording is ready/i)).toBeNull();
     expect(screen.getByTestId("analysis-progress-motion-surface")).toHaveStyle({ minHeight: 330 });
     const frameStyle = StyleSheet.flatten(screen.getByTestId("analysis-frame-surface", { includeHiddenElements: true }).props.style);
-    expect(frameStyle.height).toBeGreaterThanOrEqual(190);
-    expect(frameStyle.height).toBeLessThanOrEqual(310);
+    expect(frameStyle.height).toBe(310);
+    expect(screen.getByTestId("analysis-progress-native-motion", { includeHiddenElements: true })).toHaveStyle({ minHeight: 350 });
     expect(screen.queryByLabelText("FORM analysis progress animation")).toBeNull();
     expect(screen.queryByLabelText("Analysis figure")).toBeNull();
     expect(screen.queryByText("This usually takes a moment")).toBeNull();
@@ -34,7 +34,7 @@ describe("AnalysisProgressScreen", () => {
     jest.useFakeTimers();
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-        <AnalysisProgressScreen stage="analyzing" failureMessage={null} />
+        <AnalysisProgressScreen mode="analysis" stage="analyzing" failureMessage={null} />
       </SafeAreaProvider>,
     );
     await act(async () => undefined);
@@ -62,7 +62,7 @@ describe("AnalysisProgressScreen", () => {
     const onGoHome = jest.fn();
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-        <AnalysisProgressScreen stage="video_processing" failureMessage="FORM couldn't finish this analysis. Your recording is still saved." onRetryAnalysis={onRetryAnalysis} onRecordAgain={onRecordAgain} onGoHome={onGoHome} />
+        <AnalysisProgressScreen mode="analysis" stage="video_processing" failureMessage="FORM couldn't finish this analysis. Your recording is still saved." onRetryAnalysis={onRetryAnalysis} onRecordAgain={onRecordAgain} onGoHome={onGoHome} />
       </SafeAreaProvider>,
     );
     expect(screen.getByText("Analysis couldn’t finish")).toBeTruthy();
@@ -77,13 +77,22 @@ describe("AnalysisProgressScreen", () => {
     expect(onGoHome).toHaveBeenCalledTimes(1);
   });
 
-  it("offers upload retry on the analysis surface", async () => {
+  it("uses upload-specific copy and offers retry before the motion surface", async () => {
     const onRetryUpload = jest.fn();
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-        <AnalysisProgressScreen stage="uploading" failureMessage="Video upload failed" onRetryUpload={onRetryUpload} />
+        <AnalysisProgressScreen mode="upload" stage="uploading" failureMessage="Video upload failed" onRetryUpload={onRetryUpload} />
       </SafeAreaProvider>,
     );
+    expect(screen.getByText("Uploading your recording")).toBeTruthy();
+    expect(screen.getByText("Upload couldn’t finish")).toBeTruthy();
+    expect(screen.getByText("Keep Formie open while your recording uploads securely.")).toBeTruthy();
+    const failureCard = screen.getByTestId("analysis-progress-failure");
+    const motionSurface = screen.getByTestId("analysis-progress-motion-surface");
+    const failureIndex = failureCard.parent?.children.indexOf(failureCard) ?? -1;
+    const motionIndex = failureCard.parent?.children.indexOf(motionSurface) ?? -1;
+    expect(failureIndex).toBeGreaterThanOrEqual(0);
+    expect(failureIndex).toBeLessThan(motionIndex);
     await fireEvent.press(screen.getByText("Retry Upload"));
     expect(onRetryUpload).toHaveBeenCalledTimes(1);
   });

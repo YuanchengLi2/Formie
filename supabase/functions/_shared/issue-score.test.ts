@@ -42,4 +42,15 @@ describe("authoritative issue severity scoring", () => {
     expect(result.score).toBeLessThanOrEqual(65);
     expect(result.issues.every((detail) => detail.penalty > 0 && detail.scoringConfidence >= 0.85)).toBe(true);
   });
+
+  it("scores the exact inspected production evidence at 57 instead of 92", () => {
+    const result = scoreIssues([
+      issue({ id: "important-throughout-a", prevalence: "throughout", confidence: 0.7 }),
+      issue({ id: "important-throughout-b", prevalence: "throughout", confidence: 0.68 }),
+      issue({ id: "important-repeated", prevalence: "repeated", confidence: 0.67 }),
+      issue({ id: "note-throughout", severity: "note", prevalence: "throughout", confidence: 0.68 }),
+    ]);
+    expect(result.score).toBe(57);
+    expect(result.issues).toHaveLength(4);
+  });
 });

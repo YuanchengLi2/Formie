@@ -183,4 +183,33 @@ describe("AnalysisProgressRoute declaration authority", () => {
 
     expect(mockReplace).not.toHaveBeenCalledWith("/results/session-1");
   });
+
+  it("navigates to results only when a terminal session has its result payload", async () => {
+    mockStatus.data = {
+      ...mockStatus.data,
+      status: "complete",
+      stage: "complete",
+      failureCode: null,
+      result: { status: "complete" },
+    };
+
+    await render(<AnalysisProgressRoute />);
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/results/session-1"));
+  });
+
+  it("surfaces a missing terminal result instead of leaving the analysis animation running", async () => {
+    mockStatus.data = {
+      ...mockStatus.data,
+      status: "complete",
+      stage: "complete",
+      failureCode: null,
+      result: null,
+    };
+
+    const screen = await render(<AnalysisProgressRoute />);
+
+    expect(screen.getByText("Your analysis finished, but its result could not be loaded. Retry the analysis or record again.")).toBeTruthy();
+    expect(mockReplace).not.toHaveBeenCalledWith("/results/session-1");
+  });
 });

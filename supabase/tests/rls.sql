@@ -223,6 +223,20 @@ select has_function(
   array['uuid', 'jsonb', 'jsonb'],
   'analysis result persistence and terminal session state commit atomically'
 );
+select has_function(
+  'public',
+  'fail_preprocessing_analysis',
+  array['uuid', 'uuid', 'uuid', 'text'],
+  'pre-processing upload failure and credit release are atomic'
+);
+select ok(
+  not has_function_privilege('authenticated', 'public.fail_preprocessing_analysis(uuid,uuid,uuid,text)', 'EXECUTE'),
+  'authenticated clients cannot invoke the service-role preprocessing failure function'
+);
+select ok(
+  not has_function_privilege('anon', 'public.fail_preprocessing_analysis(uuid,uuid,uuid,text)', 'EXECUTE'),
+  'anonymous clients cannot invoke the service-role preprocessing failure function'
+);
 
 select ok((select relrowsecurity from pg_class where oid = 'public.analysis_sessions'::regclass), 'analysis_sessions has RLS');
 select ok((select relrowsecurity from pg_class where oid = 'public.analysis_results'::regclass), 'analysis_results has RLS');

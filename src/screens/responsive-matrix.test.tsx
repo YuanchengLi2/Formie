@@ -30,7 +30,7 @@ const SCREEN_CASES = [
   ["recording tips", <RecordingTipsScreen key="recording-tips" onContinue={() => undefined} onOpenSpaceHelp={() => undefined} />, "recording-tips-responsive-screen"],
   ["phone placement help", <NoPhoneSpaceScreen key="phone-placement" onDone={() => undefined} />, "no-phone-space-responsive-screen"],
   ["recording preflight", <RecordingPreflightScreen key="recording-preflight" mode="checking" onBack={() => undefined} />, "recording-preflight-responsive-screen"],
-  ["analysis progress", <AnalysisProgressScreen key="analysis-progress" stage="uploading" failureMessage={null} />, "analysis-progress-responsive-screen"],
+  ["analysis progress", <AnalysisProgressScreen key="analysis-progress" mode="upload" stage="uploading" failureMessage={null} />, "analysis-progress-responsive-screen"],
   ["feedback", <FeedbackScreen key="feedback" onSubmit={async () => ({ submitted: true, requestId: "request-1" })} />, "feedback-responsive-screen"],
   ["account access", <AccountAccessScreen key="account-access" onOAuth={() => undefined} />, "account-access-scroll"],
   ["email authentication", <EmailEntryScreen key="email-auth" intent="login" busy={false} error={null} onBack={() => undefined} onSubmit={() => undefined} />, "email-auth-scroll"],

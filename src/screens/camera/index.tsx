@@ -179,7 +179,8 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     if (!lensIsLocked) setSelectedLens(resolved.lens);
   }, [availableLenses, magnificationShared, phase, selectedLens, selectedLensIsCompoundShared, selectedLensUsesHalfXBaseShared]);
 
-  const applyAvailableLenses = useCallback((lenses: string[]) => {
+  const applyAvailableLenses = useCallback((lenses: string[], discoveryEpoch = lensDiscoveryEpochRef.current) => {
+    if (discoveryEpoch !== lensDiscoveryEpochRef.current) return;
     const mergedLenses = mergeCameraLensInventory(availableLensesRef.current, lenses);
     availableLensesRef.current = mergedLenses;
     setAvailableLenses(mergedLenses);
@@ -194,15 +195,31 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     }
   }, [hasHalfXShared, magnificationShared, pinchPhysicalDetentShared, selectedLens, selectedLensIsCompoundShared, selectedLensUsesHalfXBaseShared, setCameraMagnification]);
 
-  const discoverAvailableLenses = useCallback(async () => {
-    const discoveryEpoch = lensDiscoveryEpochRef.current;
+  const discoverAvailableLenses = useCallback(async (discoveryEpoch: number) => {
     try {
       const lenses = await cameraRef.current?.getAvailableLensesAsync();
-      if (lenses && discoveryEpoch === lensDiscoveryEpochRef.current) applyAvailableLenses(lenses);
+      if (lenses) applyAvailableLenses(lenses, discoveryEpoch);
     } catch {
       // Lens presets are optional; preview and recording must remain usable.
     }
   }, [applyAvailableLenses]);
+
+  const flipCamera = useCallback(() => {
+    lensDiscoveryEpochRef.current += 1;
+    setTorch(false);
+    setFacing((value) => (value === "back" ? "front" : "back"));
+    availableLensesRef.current = [];
+    setAvailableLenses([]);
+    setSelectedLens(undefined);
+    setActiveZoomLabel("1x");
+    setMagnification(1);
+    hasHalfXShared.value = false;
+    selectedLensUsesHalfXBaseShared.value = false;
+    selectedLensIsCompoundShared.value = false;
+    pinchPhysicalDetentShared.value = "wide";
+    magnificationShared.value = 1;
+    pinchStartMagnificationShared.value = 1;
+  }, [hasHalfXShared, magnificationShared, pinchPhysicalDetentShared, pinchStartMagnificationShared, selectedLensIsCompoundShared, selectedLensUsesHalfXBaseShared]);
 
   const beginPinch = useCallback(() => {
     setPinching(true);
@@ -276,6 +293,8 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const animatedMagnificationLabelProps = useAnimatedProps(() => ({
     text: `${magnificationShared.value.toFixed(1)}x`,
   })) as unknown as Partial<TextInputProps>;
+  const cameraGeneration = lensDiscoveryEpochRef.current;
+  const cameraNativeId = `camera-preview-${facing}-${cameraGeneration}`;
 
   if (permission && !permission.granted) {
     return (
@@ -299,16 +318,18 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     <View style={{ flex: 1, backgroundColor: colors.cameraBlack }}>
       <GestureDetector gesture={pinchGesture}>
         <AnimatedCameraView
+          key={cameraNativeId}
           ref={cameraRef}
           accessibilityLabel="Camera preview"
+          nativeID={cameraNativeId}
           active
           enableTorch={torch}
           facing={facing}
           mirror={facing === "front"}
           mode="video"
           mute
-          onAvailableLensesChanged={({ lenses }) => applyAvailableLenses(lenses)}
-          onCameraReady={() => void discoverAvailableLenses()}
+          onAvailableLensesChanged={({ lenses }) => applyAvailableLenses(lenses, cameraGeneration)}
+          onCameraReady={() => void discoverAvailableLenses(cameraGeneration)}
           selectedLens={selectedLens}
           style={{ flex: 1 }}
           animatedProps={animatedCameraProps}
@@ -341,19 +362,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
           <Pressable accessibilityLabel="Toggle light" onPress={() => setTorch((value) => !value)} style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)" }}>
             <Text selectable style={{ color: torch ? colors.gold : colors.text, fontSize: 18 }}>ϟ</Text>
           </Pressable>
-          <Pressable accessibilityLabel="Flip camera" accessibilityState={{ disabled: phase !== "idle" }} disabled={phase !== "idle"} onPress={() => {
-            lensDiscoveryEpochRef.current += 1;
-            setFacing((value) => (value === "back" ? "front" : "back"));
-            availableLensesRef.current = [];
-            setAvailableLenses([]);
-            setSelectedLens(undefined);
-            setActiveZoomLabel("1x");
-            hasHalfXShared.value = false;
-            selectedLensUsesHalfXBaseShared.value = false;
-            selectedLensIsCompoundShared.value = false;
-            magnificationShared.value = 1;
-            setCameraMagnification(1, [], false);
-          }} style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)", opacity: phase === "idle" ? 1 : 0.45 }}>
+          <Pressable accessibilityLabel="Flip camera" accessibilityState={{ disabled: phase !== "idle" }} disabled={phase !== "idle"} onPress={flipCamera} style={{ width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(0,0,0,0.58)", opacity: phase === "idle" ? 1 : 0.45 }}>
             <Text selectable style={{ color: colors.text, fontSize: 18 }}>↻</Text>
           </Pressable>
         </View>

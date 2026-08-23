@@ -4,8 +4,15 @@ import { fileURLToPath } from "node:url";
 import { scoreForIssueIds, scoreIssues, type ScoredIssueInput } from "../supabase/functions/_shared/issue-score";
 
 type JsonRecord = Record<string, unknown>;
-type StageRow = { session_id: string; pipeline_version: string; input_checksum: string; stage: "analyzing" | "finalizing"; output: unknown; updated_at: string };
+export type StageRow = { session_id: string; pipeline_version: string; input_checksum: string; stage: "analyzing" | "finalizing"; output: unknown; updated_at: string };
 type StageGroup = { analyzing: StageRow[]; finalizing: StageRow[] };
+export type CompatibleStagePair = {
+  sessionId: string;
+  pipelineVersion: string;
+  inputChecksum: string;
+  analyzingOutput: unknown;
+  finalizingOutput: unknown;
+};
 type CompatibleResult = {
   score: number;
   movementScores: { id: string; label: string; score: number; observed: string; evidenceIds: string[] }[];
@@ -104,7 +111,57 @@ export function compatibleResult(analyzingOutput: unknown, finalizingOutput: unk
   };
 }
 
-export async function recalculateCompatibleAnalysisScores(options: { apply: boolean; client: SupabaseClient }): Promise<{ scanned: number; compatible: number; updated: number }> {
+export function compatibleStagePairs(stageRows: readonly StageRow[]): CompatibleStagePair[] {
+  const grouped = new Map<string, StageGroup>();
+  for (const raw of stageRows) {
+    const groupKey = `${raw.session_id}:${raw.pipeline_version}:${raw.input_checksum}`;
+    const current = grouped.get(groupKey) ?? { analyzing: [], finalizing: [] };
+    current[raw.stage].push(raw);
+    grouped.set(groupKey, current);
+  }
+  const candidates: (CompatibleStagePair & { updatedAt: string })[] = [];
+  for (const stages of grouped.values()) {
+    const finalizing = stages.finalizing.find((stage) => analysisFrom(stage.output) && writingFrom(stage.output));
+    if (!finalizing) continue;
+    // A successful finalizing payload is self-contained: it stores the analyst
+    // evidence and the writer movement mapping from the same attempt. Do not
+    // join it to an analyzing row, whose checksum intentionally describes a
+    // different stage input.
+    candidates.push({
+      sessionId: finalizing.session_id,
+      pipelineVersion: finalizing.pipeline_version,
+      inputChecksum: finalizing.input_checksum,
+      analyzingOutput: finalizing.output,
+      finalizingOutput: finalizing.output,
+      updatedAt: finalizing.updated_at,
+    });
+  }
+  candidates.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  const seenSessions = new Set<string>();
+  return candidates.filter((candidate) => {
+    if (seenSessions.has(candidate.sessionId)) return false;
+    seenSessions.add(candidate.sessionId);
+    return true;
+  }).map(({ updatedAt: _updatedAt, ...candidate }) => candidate);
+}
+
+export function hasScoreApplyConfirmation(args: readonly string[]): boolean {
+  return args.includes("--apply") && args.includes("--confirm-rubric=severity-v1");
+}
+
+export type ScoreRecalculationSummary = {
+  scanned: number;
+  compatible: number;
+  changed: number;
+  unchanged: number;
+  skipped: number;
+  updated: number;
+  oldScoreRange: { min: number; max: number } | null;
+  newScoreRange: { min: number; max: number } | null;
+};
+
+export async function recalculateCompatibleAnalysisScores(options: { apply: boolean; confirmed?: boolean; client: SupabaseClient }): Promise<ScoreRecalculationSummary> {
+  if (options.apply && !options.confirmed) throw new Error("Applying score recalculation requires --confirm-rubric=severity-v1.");
   const pageSize = 1_000;
   const stageRows: StageRow[] = [];
   for (let offset = 0; ; offset += pageSize) {
@@ -121,33 +178,61 @@ export async function recalculateCompatibleAnalysisScores(options: { apply: bool
     stageRows.push(...page);
     if (page.length < pageSize) break;
   }
-  const grouped = new Map<string, StageGroup>();
-  for (const raw of stageRows) {
-    const groupKey = `${raw.session_id}:${raw.pipeline_version}`;
-    const current = grouped.get(groupKey) ?? { analyzing: [], finalizing: [] };
-    current[raw.stage].push(raw);
-    grouped.set(groupKey, current);
+  const scanned = new Set(stageRows.map((row) => `${row.session_id}:${row.pipeline_version}:${row.input_checksum}`)).size;
+  const pairs = compatibleStagePairs(stageRows);
+  const sessionIds = Array.from(new Set(pairs.map((pair) => pair.sessionId)));
+  const currentResults = new Map<string, { score: number | null; movement_scores: unknown; score_rationale: unknown }>();
+  for (let offset = 0; offset < sessionIds.length; offset += 200) {
+    const chunk = sessionIds.slice(offset, offset + 200);
+    const { data, error } = await options.client
+      .from("analysis_results")
+      .select("session_id,score,movement_scores,score_rationale")
+      .in("session_id", chunk);
+    if (error) throw error;
+    for (const row of data ?? []) currentResults.set(String(row.session_id), row as { score: number | null; movement_scores: unknown; score_rationale: unknown });
   }
   let compatible = 0;
+  let changed = 0;
+  let unchanged = 0;
   let updated = 0;
-  for (const stages of grouped.values()) {
-    const analyzingOutput = stages.analyzing.find((stage) => analysisFrom(stage.output))?.output;
-    const finalizingOutput = stages.finalizing.find((stage) => analysisFrom(stage.output) && writingFrom(stage.output))?.output;
-    const result = compatibleResult(analyzingOutput, finalizingOutput);
+  const oldScores: number[] = [];
+  const newScores: number[] = [];
+  for (const pair of pairs) {
+    const result = compatibleResult(pair.analyzingOutput, pair.finalizingOutput);
     if (!result) continue;
+    const current = currentResults.get(pair.sessionId);
+    if (!current) continue;
     compatible += 1;
+    const isChanged = Number(current.score) !== result.score
+      || JSON.stringify(current.movement_scores ?? []) !== JSON.stringify(result.movementScores)
+      || JSON.stringify(current.score_rationale ?? []) !== JSON.stringify(result.scoreRationale);
+    if (!isChanged) {
+      unchanged += 1;
+      continue;
+    }
+    changed += 1;
+    if (typeof current.score === "number") oldScores.push(current.score);
+    newScores.push(result.score);
     if (!options.apply) continue;
-    const sessionId = stages.finalizing[0]?.session_id ?? stages.analyzing[0]?.session_id;
-    if (!sessionId) continue;
     const { error } = await options.client.from("analysis_results").update({
       score: result.score,
       movement_scores: result.movementScores,
       score_rationale: result.scoreRationale,
-    }).eq("session_id", sessionId);
+    }).eq("session_id", pair.sessionId);
     if (error) throw error;
     updated += 1;
   }
-  return { scanned: grouped.size, compatible, updated };
+  const range = (values: number[]) => values.length > 0 ? { min: Math.min(...values), max: Math.max(...values) } : null;
+  return {
+    scanned,
+    compatible,
+    changed,
+    unchanged,
+    skipped: scanned - compatible,
+    updated,
+    oldScoreRange: range(oldScores),
+    newScoreRange: range(newScores),
+  };
 }
 
 async function main() {
@@ -155,12 +240,13 @@ async function main() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) throw new Error("Set SUPABASE_URL (or EXPO_PUBLIC_SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY.");
   const apply = process.argv.includes("--apply");
+  const confirmed = hasScoreApplyConfirmation(process.argv.slice(2));
   const client = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const summary = await recalculateCompatibleAnalysisScores({ apply, client });
+  const summary = await recalculateCompatibleAnalysisScores({ apply, confirmed, client });
   console.log(JSON.stringify({ mode: apply ? "apply" : "dry-run", ...summary }));
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+if (process.argv[1] && import.meta.url && fileURLToPath(import.meta.url) === process.argv[1]) {
   void main().catch((error) => {
     console.error(error instanceof Error ? error.message : "Score recalculation failed");
     process.exitCode = 1;

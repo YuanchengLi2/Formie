@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { publishAccessMutation } from "./access-events";
 
 import { unknownAccess, type AccessStatus, type AnalysisReservation } from "./types";
 
@@ -97,10 +98,9 @@ export async function cancelAnalysisReservation(reservationId: string): Promise<
   await cancelAnalysis({ reservationId });
 }
 
-export async function cancelAnalysis(input: { reservationId?: string; sessionId?: string }): Promise<void> {
+export async function cancelAnalysis(input: { reservationId?: string; sessionId?: string; reason?: "upload_failed" | "user_discarded" }): Promise<void> {
   const { data, error } = await supabase.functions.invoke("cancel-analysis", { body: input });
   if (error) throw error;
   const access = data && typeof data === "object" ? (data as { access?: Record<string, unknown> }).access : null;
-  const { publishAccessMutation } = await import("./access-events");
   publishAccessMutation({ remaining: typeof access?.remaining === "number" ? access.remaining : null, periodEndsAt: typeof access?.period_ends_at === "string" ? access.period_ends_at : null });
 }

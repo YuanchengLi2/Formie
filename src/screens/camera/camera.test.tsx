@@ -201,6 +201,30 @@ describe("CameraScreen capture lifecycle", () => {
     expect(screen.queryByLabelText("Camera zoom 0.5x")).toBeNull();
   });
 
+  it("remounts the native preview and rejects stale native lens callbacks after a flip", async () => {
+    const screen = await render(<CameraScreen />);
+    const rearPreview = screen.getByLabelText("Camera preview");
+    const staleNativeLensCallback = rearPreview.props.onAvailableLensesChanged;
+    const rearNativeId = rearPreview.props.nativeID;
+
+    await act(async () => staleNativeLensCallback({ lenses: ["wideAngleCamera", "ultraWideCamera"] }));
+    await fireEvent.press(screen.getByLabelText("Toggle light"));
+    await fireEvent.press(screen.getByLabelText("Camera zoom 0.5x"));
+    await fireEvent.press(screen.getByLabelText("Flip camera"));
+
+    const frontPreview = screen.getByLabelText("Camera preview");
+    expect(frontPreview.props.facing).toBe("front");
+    expect(frontPreview.props.nativeID).not.toBe(rearNativeId);
+    expect(frontPreview.props.enableTorch).toBe(false);
+    expect(frontPreview.props.selectedLens).toBeUndefined();
+
+    await act(async () => staleNativeLensCallback({ lenses: ["wideAngleCamera", "ultraWideCamera"] }));
+    expect(screen.queryByLabelText("Camera zoom 0.5x")).toBeNull();
+
+    await act(async () => frontPreview.props.onAvailableLensesChanged({ lenses: ["frontCamera"] }));
+    expect(screen.getByLabelText("Camera preview").props.facing).toBe("front");
+  });
+
   it("lets a pinch cross from 1x onto the ultrawide camera", async () => {
     const screen = await render(<CameraScreen />);
     await act(async () => screen.getByLabelText("Camera preview").props.onAvailableLensesChanged({ lenses: ["wideAngleCamera", "ultraWideCamera"] }));

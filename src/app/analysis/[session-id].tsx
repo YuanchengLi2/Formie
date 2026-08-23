@@ -53,7 +53,13 @@ export default function AnalysisProgressRoute() {
     if (terminal && status.data?.result) router.replace(`/results/${sessionId}` as Href);
   }, [router, sessionId, status.data?.result, status.data?.status]);
 
-  const failureMessage = status.data?.status === "failed"
+  const terminalWithoutResult = (status.data?.status === "complete"
+    || status.data?.status === "partial"
+    || status.data?.status === "unable")
+    && !status.data?.result;
+  const failureMessage = terminalWithoutResult
+    ? "Your analysis finished, but its result could not be loaded. Retry the analysis or record again."
+    : status.data?.status === "failed"
     ? status.data.failureReason
       ?? (status.data.failureCode === "GEMINI_FILE_FAILED"
       ? "The video could not be processed. Record again with the full set visible."
@@ -66,9 +72,10 @@ export default function AnalysisProgressRoute() {
 
   return (
     <AnalysisProgressScreen
+      mode="analysis"
       stage={status.data?.stage ?? null}
       failureMessage={failureMessage}
-      onRetryAnalysis={status.data?.status === "failed" ? () => reanalysis.mutate(undefined) : undefined}
+      onRetryAnalysis={status.data?.status === "failed" || terminalWithoutResult ? () => reanalysis.mutate(undefined) : undefined}
       retryingAnalysis={reanalysis.isPending}
       retryAnalysisError={reanalysis.error instanceof Error ? reanalysis.error.message : null}
       onRecordAgain={failureMessage ? () => {

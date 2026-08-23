@@ -10,7 +10,6 @@ import { inferExerciseFamily, isExerciseFamily } from "@/features/exercises/exer
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
-import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 type ExerciseSelectionScreenProps = {
   initialExercise?: CatalogExercise | null;
@@ -38,7 +37,6 @@ export function ExerciseSelectionScreen({
   onSelect,
   onGenerateCustomGuide,
 }: ExerciseSelectionScreenProps) {
-  const layout = usePhoneLayoutProfile();
   const [query, setQuery] = useState(initialExercise?.name ?? "");
   const [results, setResults] = useState<CatalogExercise[]>(initialExercise ? [initialExercise] : []);
   const [loading, setLoading] = useState(false);
@@ -185,7 +183,7 @@ export function ExerciseSelectionScreen({
             testID="exercise-hero"
             style={{
             width: "100%",
-            height: Math.min(340, layout.artworkMaxHeight),
+            height: 340,
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: "transparent",
@@ -197,9 +195,10 @@ export function ExerciseSelectionScreen({
               contentFit="contain"
               source={benchPressHero}
               style={{
-                width: "100%",
-                height: "100%",
+                width: "128%",
+                height: "128%",
                 opacity: 0.35,
+                transform: [{ translateY: 28 }],
               }}
             />
           </View>

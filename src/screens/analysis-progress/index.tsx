@@ -9,9 +9,9 @@ import { analysisProgress } from "@/features/analysis/progress-stages";
 import { colors } from "@/theme/colors";
 import { radii, spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
-import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 type AnalysisProgressScreenProps = {
+  mode: "upload" | "analysis";
   stage: string | null;
   failureMessage: string | null;
   onRetryAnalysis?: () => void;
@@ -22,23 +22,44 @@ type AnalysisProgressScreenProps = {
   onRetryUpload?: () => void;
 };
 
-export function AnalysisProgressScreen({ stage, failureMessage, onRetryAnalysis, retryingAnalysis = false, retryAnalysisError = null, onRecordAgain, onGoHome, onRetryUpload }: AnalysisProgressScreenProps) {
-  const layout = usePhoneLayoutProfile();
+export function AnalysisProgressScreen({ mode, stage, failureMessage, onRetryAnalysis, retryingAnalysis = false, retryAnalysisError = null, onRecordAgain, onGoHome, onRetryUpload }: AnalysisProgressScreenProps) {
   const progress = analysisProgress(stage);
   const durableRetry = stage === "retry_wait";
+  const heading = mode === "upload" ? "Uploading your recording" : "Analyzing your movement";
+  const guidance = mode === "upload"
+    ? "Keep Formie open while your recording uploads securely."
+    : durableRetry
+      ? "Finishing your coaching. You can leave this screen; we’ll continue automatically."
+      : "Keep Formie open and stay on this page until your coaching is ready.";
 
   return (
     <ResponsiveScreen testID="analysis-progress-responsive-screen" contentContainerStyle={{ gap: spacing.xl, paddingTop: spacing.lg }}>
         <Animated.View entering={FadeInDown.duration(220)} style={{ flex: 1, justifyContent: "center", gap: spacing.xxl }}>
           <View style={{ gap: spacing.md }}>
-            <Text selectable style={[typography.title, { color: colors.text }]}>Analyzing your movement</Text>
-            <Text selectable style={[typography.label, { maxWidth: 560, color: colors.gold }]}>{durableRetry ? "Finishing your coaching. You can leave this screen; we’ll continue automatically." : "Keep Formie open and stay on this page until your coaching is ready."}</Text>
+            <Text selectable style={[typography.title, { color: colors.text }]}>{heading}</Text>
+            <Text selectable style={[typography.label, { maxWidth: 560, color: colors.gold }]}>{guidance}</Text>
           </View>
+
+          {failureMessage ? (
+            <View testID="analysis-progress-failure">
+              <FormCard style={{ gap: spacing.md, borderColor: colors.danger, backgroundColor: "rgba(15,15,15,0.97)" }}>
+                <Text selectable style={[typography.heading, { color: colors.text }]}>{mode === "upload" ? "Upload couldn’t finish" : "Analysis couldn’t finish"}</Text>
+                <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{failureMessage}</Text>
+                <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Your recording is still saved securely.</Text>
+                <Text selectable style={[typography.caption, { color: colors.textMuted }]}>This failed attempt did not use an analysis credit.</Text>
+                {retryAnalysisError ? <Text accessibilityRole="alert" selectable style={[typography.caption, { color: colors.danger }]}>{retryAnalysisError}</Text> : null}
+                {onRetryAnalysis ? <FormButton label={retryingAnalysis ? "Retrying…" : "Retry Analysis"} disabled={retryingAnalysis} onPress={onRetryAnalysis} /> : null}
+                {onRetryUpload ? <FormButton label="Retry Upload" onPress={onRetryUpload} /> : null}
+                {onRecordAgain ? <FormButton label="Record Again" onPress={onRecordAgain} /> : null}
+                {onGoHome ? <FormButton label="Back to Home" variant="ghost" onPress={onGoHome} /> : null}
+              </FormCard>
+            </View>
+          ) : null}
 
           <View
             testID="analysis-progress-motion-surface"
             style={{
-              minHeight: layout.short ? 240 : 330,
+              minHeight: 330,
               overflow: "hidden",
               backgroundColor: colors.background,
             }}
@@ -90,21 +111,6 @@ export function AnalysisProgressScreen({ stage, failureMessage, onRetryAnalysis,
             ))}
           </View>
         </Animated.View>
-      {failureMessage ? (
-        <View>
-          <FormCard style={{ gap: spacing.md, borderColor: colors.danger, backgroundColor: "rgba(15,15,15,0.97)" }}>
-            <Text selectable style={[typography.heading, { color: colors.text }]}>Analysis couldn’t finish</Text>
-            <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{failureMessage}</Text>
-            <Text selectable style={[typography.caption, { color: colors.textMuted }]}>Your recording is still saved securely.</Text>
-            <Text selectable style={[typography.caption, { color: colors.textMuted }]}>This failed attempt did not use an analysis credit.</Text>
-            {retryAnalysisError ? <Text accessibilityRole="alert" selectable style={[typography.caption, { color: colors.danger }]}>{retryAnalysisError}</Text> : null}
-            {onRetryAnalysis ? <FormButton label={retryingAnalysis ? "Retrying…" : "Retry Analysis"} disabled={retryingAnalysis} onPress={onRetryAnalysis} /> : null}
-            {onRetryUpload ? <FormButton label="Retry Upload" onPress={onRetryUpload} /> : null}
-            {onRecordAgain ? <FormButton label="Record Again" onPress={onRecordAgain} /> : null}
-            {onGoHome ? <FormButton label="Back to Home" variant="ghost" onPress={onGoHome} /> : null}
-          </FormCard>
-        </View>
-      ) : null}
       <Text accessibilityElementsHidden style={{ position: "absolute", width: 1, height: 1, opacity: 0 }}>{stage}</Text>
     </ResponsiveScreen>
   );

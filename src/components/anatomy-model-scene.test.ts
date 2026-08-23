@@ -104,4 +104,37 @@ describe("native anatomy model scene", () => {
     expect(geometryDisposals).toBe(1);
     expect(materialDisposals).toBe(1);
   });
+
+  it("repaints tagged meshes without reloading and preserves issue then secondary then target precedence", () => {
+    const source = sourceModel();
+    source.userData.muscle = "deltoids";
+    const model = prepareAnatomyModel(source);
+    const mesh = model.getObjectByProperty("type", "Mesh") as Mesh;
+    const geometry = mesh.geometry;
+    const material = mesh.material as MeshPhysicalMaterial;
+    const palette = { base: "#101010", target: "#ffcc00", secondary: "#cc9900", issue: "#ff3300" };
+
+    paintAnatomyModel(model, {
+      targetRegions: ["front_shoulders"],
+      secondaryRegions: ["rear_shoulders"],
+      issueRegions: ["shoulders"],
+    }, palette);
+    expect(material.color.getHexString()).toBe("ff3300");
+
+    paintAnatomyModel(model, {
+      targetRegions: ["front_shoulders"],
+      secondaryRegions: ["rear_shoulders"],
+      issueRegions: [],
+    }, palette);
+    expect(material.color.getHexString()).toBe("cc9900");
+
+    paintAnatomyModel(model, {
+      targetRegions: ["front_shoulders"],
+      secondaryRegions: [],
+      issueRegions: [],
+    }, palette);
+    expect(material.color.getHexString()).toBe("ffcc00");
+    expect(mesh.geometry).toBe(geometry);
+    expect(mesh.material).toBe(material);
+  });
 });

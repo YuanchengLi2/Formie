@@ -1,4 +1,4 @@
-import { cancelAnalysisReservation } from "@/features/access/api";
+import { cancelAnalysis } from "@/features/access/api";
 import { publishAccessMutation } from "@/features/access/access-events";
 import { completeAnalysisUpload, createAnalysisSession, uploadAnalysisVideo as uploadVideoArtifact } from "@/features/analysis/api";
 import { getAccessToken } from "@/features/auth/access-token";
@@ -30,10 +30,9 @@ export const analysisUploadCoordinator = createUploadCoordinator({
       },
     };
   },
-  // A user-triggered retry may follow a timeout after Storage accepted all
-  // bytes but before the client received the response. Upsert makes replaying
-  // this same, session-scoped signed target idempotent without adding a silent
-  // automatic upload attempt.
+  // A timeout can arrive after Storage accepted all bytes but before the client
+  // received the response. Upsert makes the bounded retry against this same,
+  // session-scoped signed target idempotent.
   uploadVideo: (recording, target, signal) => uploadVideoArtifact({ localUri: recording.localUri, signedUrl: target.signedUrl, uploadToken: target.uploadToken, upsert: true, signal }),
   normalizeVideo: normalizeVideoForAnalysis,
   prepareAnalysisVideo: normalizeVideoForAnalysis.prepare,
@@ -53,5 +52,5 @@ export const analysisUploadCoordinator = createUploadCoordinator({
       analysisInput: { kind: "capture_ready_video", durationPreserved: true, byteLength: preparedByteLength },
     });
   },
-  cancelReservation: cancelAnalysisReservation,
+  cancelUpload: cancelAnalysis,
 });
