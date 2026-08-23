@@ -1,0 +1,34 @@
+name: iOS release runtime smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  launch-release:
+    runs-on: macos-26
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: 21.8.0
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Launch release app on iOS simulator
+        run: eas env:exec production 'bash scripts/ios-runtime-smoke.sh' --non-interactive
