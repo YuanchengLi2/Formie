@@ -23,6 +23,21 @@ function record(value: unknown): JsonRecord | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : null;
 }
 
+function canonicalJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalJsonValue);
+  const object = record(value);
+  if (!object) return value;
+  return Object.fromEntries(
+    Object.keys(object)
+      .sort()
+      .map((key) => [key, canonicalJsonValue(object[key])]),
+  );
+}
+
+export function jsonValuesEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(canonicalJsonValue(left)) === JSON.stringify(canonicalJsonValue(right));
+}
+
 function analysisFrom(value: unknown): JsonRecord | null {
   const root = record(value);
   if (!root) return null;
@@ -204,8 +219,8 @@ export async function recalculateCompatibleAnalysisScores(options: { apply: bool
     if (!current) continue;
     compatible += 1;
     const isChanged = Number(current.score) !== result.score
-      || JSON.stringify(current.movement_scores ?? []) !== JSON.stringify(result.movementScores)
-      || JSON.stringify(current.score_rationale ?? []) !== JSON.stringify(result.scoreRationale);
+      || !jsonValuesEqual(current.movement_scores ?? [], result.movementScores)
+      || !jsonValuesEqual(current.score_rationale ?? [], result.scoreRationale);
     if (!isChanged) {
       unchanged += 1;
       continue;

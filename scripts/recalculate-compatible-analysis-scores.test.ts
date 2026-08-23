@@ -2,6 +2,7 @@ import {
   compatibleResult,
   compatibleStagePairs,
   hasScoreApplyConfirmation,
+  jsonValuesEqual,
   type StageRow,
 } from "./recalculate-compatible-analysis-scores";
 
@@ -63,5 +64,12 @@ describe("compatible score recalculation", () => {
     expect(hasScoreApplyConfirmation(["--apply"])).toBe(false);
     expect(hasScoreApplyConfirmation(["--apply", "--confirm-rubric=severity-v1"])).toBe(true);
     expect(hasScoreApplyConfirmation(["--confirm-rubric=severity-v1"])).toBe(false);
+  });
+
+  it("treats JSONB key reordering as unchanged", () => {
+    expect(jsonValuesEqual(
+      [{ criterion: "issue-1", impact: 18, evidenceIds: ["issue-1:3000"] }],
+      [{ evidenceIds: ["issue-1:3000"], impact: 18, criterion: "issue-1" }],
+    )).toBe(true);
   });
 });
