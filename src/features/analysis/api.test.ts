@@ -127,15 +127,18 @@ describe("analysis API", () => {
     );
   });
 
-  it("returns a saved completed analysis without reparsing its nested result", async () => {
+  it("parses a saved completed analysis into the installed result contract", async () => {
     const savedResult = {
-      movementScores: [{ label: "A server-authored label that is intentionally longer than an old client display limit" }],
-      muscleFocus: {
-        primary: [
-          { region: "quadriceps", activation: 0.8 },
-          { region: "quadriceps", activation: 0.7 },
-        ],
-      },
+      status: "complete",
+      recognition: { label: "Standing Curl", variation: null, equipment: [], confidence: 1, alternatives: [], catalogExerciseId: null, exerciseFamily: "curl" },
+      overallAssessment: "The set was reviewed.",
+      score: 80,
+      scoreRationale: [],
+      muscleFocus: ["Biceps", "Forearms"],
+      didWell: [],
+      priorityCorrections: [],
+      coachingCues: [],
+      comparison: null,
     };
     const fetcher = jest.fn(async () => new Response(JSON.stringify({
       sessionId: "saved-session",
@@ -149,7 +152,30 @@ describe("analysis API", () => {
       baseUrl: "https://example.supabase.co/functions/v1",
       fetcher,
       sessionId: "saved-session",
-    })).resolves.toMatchObject({ result: savedResult });
+    })).resolves.toMatchObject({
+      result: expect.objectContaining({
+        status: "complete",
+        videoCheck: { outcome: "usable", usableObservations: [], limitations: [], retryReason: null, retryInstruction: null },
+        muscleFocus: { primary: [], secondary: [], unclassified: ["Biceps", "Forearms"] },
+        setContext: { cameraView: null, visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: null },
+      }),
+    });
+  });
+
+  it("returns INVALID_RESPONSE when a saved result is irreparably malformed", async () => {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({
+      sessionId: "saved-session",
+      status: "complete",
+      stage: "complete",
+      result: { status: "complete", recognition: null, overallAssessment: 42 },
+    }), { status: 200 }));
+
+    await expect(getAnalysisStatus({
+      accessToken: "user-jwt",
+      baseUrl: "https://example.supabase.co/functions/v1",
+      fetcher,
+      sessionId: "saved-session",
+    })).rejects.toMatchObject({ code: "INVALID_RESPONSE", status: 200 });
   });
 
   it("requests an AI-generated guide by custom exercise name without inventing a catalog ID", async () => {

@@ -2,28 +2,9 @@ import type { AnalysisCandidate } from "../_shared/analysis-contract.ts";
 import { normalizeEquipmentLoad } from "../_shared/equipment-load.ts";
 import { parseSetDeclaration } from "../_shared/set-declaration.ts";
 import { calibratedTechniqueScore } from "./score-calibration.ts";
+import { normalizeMuscleFocus } from "../_shared/result-compatibility.ts";
 
-const MUSCLE_REGIONS = new Set(["chest", "front_shoulders", "rear_shoulders", "upper_back", "lats", "biceps", "triceps", "forearms", "abs", "obliques", "lower_back", "glutes", "quads", "hamstrings", "adductors", "calves"]);
 const ANATOMY_REGIONS = new Set(["chest", "shoulders", "upper_back", "lats", "upper_arms", "elbows", "forearms", "wrists", "torso", "lower_back", "hips", "glutes", "quads", "hamstrings", "adductors", "knees", "calves", "ankles"]);
-
-function normalizeMuscleFocus(value: unknown): AnalysisCandidate["muscleFocus"] {
-  if (Array.isArray(value)) return { primary: [], secondary: [], unclassified: value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim()) };
-  if (!value || typeof value !== "object") return { primary: [], secondary: [], unclassified: [] };
-  const source = value as Record<string, unknown>;
-  const targets = (input: unknown): AnalysisCandidate["muscleFocus"]["primary"] => Array.isArray(input) ? input.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const target = item as Record<string, unknown>;
-    return typeof target.name === "string" && target.name.trim() && typeof target.region === "string" && MUSCLE_REGIONS.has(target.region)
-      ? [{ name: target.name.trim(), region: target.region as AnalysisCandidate["muscleFocus"]["primary"][number]["region"] }]
-      : [];
-  }) : [];
-  const unique = (items: AnalysisCandidate["muscleFocus"]["primary"]) => items.filter((target, index) => items.findIndex((candidate) => candidate.region === target.region) === index);
-  const primary = unique(targets(source.primary));
-  const primaryRegions = new Set(primary.map((target) => target.region));
-  const secondary = unique(targets(source.secondary)).filter((target) => !primaryRegions.has(target.region));
-  const unclassified = Array.isArray(source.unclassified) ? source.unclassified.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim()) : [];
-  return { primary, secondary, unclassified };
-}
 
 function normalizeFindings(findings: AnalysisCandidate["priorityCorrections"], requireActionable = false): AnalysisCandidate["priorityCorrections"] {
   return findings.map((finding) => ({

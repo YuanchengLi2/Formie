@@ -32,6 +32,7 @@ export function MuscleFocusFigure({ focus, issueRegions }: { focus: MuscleFocus 
   const [view, setView] = useState<"targets" | "form">(issueRegions.length > 0 ? "form" : "targets");
   const primary = focus?.primary ?? [];
   const secondary = focus?.secondary ?? [];
+  const unclassified = focus?.unclassified ?? [];
   const targets = [...primary, ...secondary];
   const targetRegions = Array.from(new Set(primary.map((target) => target.region)));
   const secondaryRegions = Array.from(new Set(secondary.map((target) => target.region)));
@@ -41,7 +42,7 @@ export function MuscleFocusFigure({ focus, issueRegions }: { focus: MuscleFocus 
         {([
           ["targets", "Target Muscles"],
           ["form", "Your Form"],
-        ] as const).filter(([value]) => value !== "targets" || targets.length > 0).map(([value, label]) => {
+        ] as const).filter(([value]) => value !== "targets" || targets.length > 0 || unclassified.length > 0).map(([value, label]) => {
           const selected = view === value;
           return (
             <Pressable key={value} accessibilityLabel={label} accessibilityRole="tab" accessibilityState={{ selected }} onPress={() => setView(value)} style={{ flex: 1, minHeight: 44, alignItems: "center", justifyContent: "center", borderRadius: 9, backgroundColor: selected ? (value === "targets" ? TARGET_COLOR : ISSUE_COLOR) : "transparent" }}>
@@ -60,6 +61,7 @@ export function MuscleFocusFigure({ focus, issueRegions }: { focus: MuscleFocus 
         ? <View style={{ gap: spacing.sm }}>
           <LegendLine color={TARGET_COLOR} label="Primary muscles" names={primary.map((target) => target.name)} />
           <LegendLine color={SECONDARY_COLOR} label="Supporting muscles" names={secondary.map((target) => target.name)} />
+          {unclassified.length > 0 ? <LegendLine color={colors.textMuted} label="Other reported targets" names={unclassified} /> : null}
         </View>
         : <LegendLine color={ISSUE_COLOR} label="Observed issue areas" names={issueRegions.map(displayRegion)} />}
       <Text selectable style={[typography.caption, { color: colors.textMuted, textAlign: "center", letterSpacing: 0.4 }]}>Drag to rotate</Text>

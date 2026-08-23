@@ -3,7 +3,7 @@ import { publishAccessMutation } from "@/features/access/access-events";
 import { File } from "expo-file-system";
 
 import { exerciseFamilies } from "@/features/exercises/exercise-family";
-import type { AnalysisResult } from "./result-schema";
+import { analysisResultSchema, type AnalysisResult } from "./result-schema";
 import { setDeclarationSchema, type SetDeclaration } from "./set-declaration";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -50,10 +50,9 @@ const statusResponseSchema = z.object({
   }).nullable().optional().default(null),
   videoUrl: z.string().url().nullable().optional().default(null),
   setDeclaration: setDeclarationSchema.nullable().optional(),
-  // The server owns the persisted analysis contract. Do not make a completed
-  // video inaccessible because a nested presentation field is newer than the
-  // client-side schema bundled with the installed app.
-  result: z.unknown().transform((value) => value as AnalysisResult | null),
+  // Additive server fields remain compatible, while fields consumed by the
+  // installed client are runtime-validated before React receives the result.
+  result: analysisResultSchema.nullable(),
   retrying: z.boolean().optional(),
   attempt: z.number().int().positive().optional(),
 });

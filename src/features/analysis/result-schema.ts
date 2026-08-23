@@ -78,7 +78,7 @@ const muscleFocusSchema = z.union([
   z.array(z.string().min(1)).max(8).transform((unclassified) => ({
     primary: [],
     secondary: [],
-    unclassified,
+    unclassified: [...new Set(unclassified)],
   })),
 ]).optional().default({ primary: [], secondary: [], unclassified: [] });
 
@@ -283,10 +283,14 @@ const comparisonSchema = z.object({
 });
 
 const setSummarySchema = z.object({
-  totalReps: z.number().int().positive().nullable(),
-  consistentReps: z.number().int().nonnegative().nullable(),
-  verdict: z.string().min(1).nullable(),
-}).refine((summary) => summary.totalReps === null || summary.consistentReps === null || summary.consistentReps <= summary.totalReps, {
+  totalReps: z.number().int().positive().nullable().optional(),
+  consistentReps: z.number().int().nonnegative().nullable().optional(),
+  verdict: z.string().min(1).nullable().optional(),
+}).transform((summary) => ({
+  totalReps: summary.totalReps ?? null,
+  consistentReps: summary.consistentReps ?? null,
+  verdict: summary.verdict ?? null,
+})).refine((summary) => summary.totalReps === null || summary.consistentReps === null || summary.consistentReps <= summary.totalReps, {
   message: "Consistent repetitions cannot exceed total repetitions",
   path: ["consistentReps"],
 });
@@ -300,12 +304,24 @@ const legacySetContext = {
 };
 
 const setContextSchema = z.object({
-  cameraView: z.string().min(1).nullable(),
-  visibleReferences: z.array(z.string().min(1)),
-  sequenceSummary: z.string().min(1).nullable(),
-  changeAcrossSet: z.string().min(1).nullable(),
-  coachingBasis: z.string().min(1).nullable(),
-});
+  cameraView: z.string().min(1).nullable().optional(),
+  visibleReferences: z.array(z.string().min(1)).optional(),
+  sequenceSummary: z.string().min(1).nullable().optional(),
+  changeAcrossSet: z.string().min(1).nullable().optional(),
+  coachingBasis: z.string().min(1).nullable().optional(),
+}).transform((context) => ({
+  cameraView: context.cameraView ?? null,
+  visibleReferences: context.visibleReferences ?? [],
+  sequenceSummary: context.sequenceSummary ?? null,
+  changeAcrossSet: context.changeAcrossSet ?? null,
+  coachingBasis: context.coachingBasis ?? null,
+}));
+
+const legacySetSummary = {
+  totalReps: null,
+  consistentReps: null,
+  verdict: null,
+};
 
 const repTimelineItemSchema = z.object({
   repNumber: z.number().int().positive(),
@@ -388,7 +404,7 @@ export const analysisResultSchema = z
     priorityCorrections: z.array(coachingFindingSchema),
     coachingCues: z.array(coachingFindingSchema),
     setContext: setContextSchema.optional().default(legacySetContext),
-    setSummary: setSummarySchema.optional(),
+    setSummary: setSummarySchema.optional().default(legacySetSummary),
     repTimeline: z.array(repTimelineItemSchema).optional(),
     nextSetPlan: z.array(nextSetPlanItemSchema).max(20).optional(),
     precisionRequest: precisionRequestSchema.optional(),

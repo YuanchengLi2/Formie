@@ -113,7 +113,7 @@ export type AnalysisCandidate = {
   viewNotes?: string[];
   generalGuidance?: string[];
   recognition: { label: string | null; variation: string | null; equipment: string[]; confidence: number; alternatives: string[]; catalogExerciseId: number | null; exerciseFamily: ExerciseFamily; source?: "user_declared" | "legacy_model" };
-  /** Historical result compatibility. The active pipeline exposes analysisBasis/viewNotes instead. */
+  /** Legacy video-review metadata. Current pipeline candidates may omit it; public results may not. */
   videoCheck?: { outcome: "usable" | "partial" | "unable"; usableObservations: string[]; limitations: string[]; retryReason: string | null; retryInstruction: string | null };
   overallAssessment: string | null;
   muscleFocus: MuscleFocus;
@@ -147,4 +147,16 @@ export type AnalysisCandidate = {
   precisionRequest: { requestedRuns: number; reason: string | null; targets: Array<{ kind: "recognition" | "timestamp" | "technique"; findingId: string | null; startMs: number | null; endMs: number | null; question: string }> };
   comparison: { previousSessionId: string; summary: string; priorityIssueImproved: boolean | null } | null;
   setDeclaration?: import("./set-declaration.ts").SetDeclaration | null;
+};
+
+/**
+ * The wire contract published by analysis-status. Pipeline candidates are
+ * intentionally more permissive while an analysis is being assembled, but a
+ * result returned to a client has normalized nested fields.
+ */
+export type PublicAnalysisResult = Omit<AnalysisCandidate, "videoCheck" | "muscleFocus" | "setContext" | "setSummary"> & {
+  videoCheck: NonNullable<AnalysisCandidate["videoCheck"]>;
+  muscleFocus: AnalysisCandidate["muscleFocus"];
+  setContext: AnalysisCandidate["setContext"];
+  setSummary: AnalysisCandidate["setSummary"];
 };

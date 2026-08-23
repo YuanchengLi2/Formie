@@ -1,8 +1,9 @@
 import { resultPayload } from "./result-payload";
 import { analysisResultSchema } from "../../../src/features/analysis/result-schema";
+import { getResultPresentation } from "../../../src/features/analysis/presentation";
 
 describe("resultPayload", () => {
-  it("returns an isolated v49 public result directly without legacy normalization", () => {
+  it("normalizes an isolated v49 public result at the final public boundary", () => {
     const v49 = {
       status: "complete",
       analysisBasis: "observed",
@@ -13,7 +14,9 @@ describe("resultPayload", () => {
       setContext: { cameraView: null, visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: "Full video" },
       setSummary: { totalReps: 10, consistentReps: null, verdict: "Fix pull direction." }, nextSetPlan: [], precisionRequest: { requestedRuns: 0, reason: null, targets: [] }, comparison: null,
     };
-    expect(resultPayload({ pipeline_version: "gemini-problem-finder-v49", active_v49_run_id: "run-1" }, null, v49)).toBe(v49);
+    const payload = resultPayload({ pipeline_version: "gemini-problem-finder-v49", active_v49_run_id: "run-1" }, null, v49);
+    expect(payload).toMatchObject(v49);
+    expect(payload).not.toBe(v49);
   });
 
   it("treats the severity-scored whole-video pipeline as a current result", () => {
@@ -60,7 +63,7 @@ describe("resultPayload", () => {
     expect(payload?.score).toBe(93);
     expect(payload?.movementScores).toHaveLength(4);
     expect(payload?.priorityCorrections).toBe(result.priority_corrections);
-    expect(payload).not.toHaveProperty("videoCheck");
+    expect(payload?.videoCheck).toEqual({ outcome: "usable", usableObservations: ["Full set"], limitations: [], retryReason: null, retryInstruction: null });
     expect(payload).not.toHaveProperty("repTimeline");
     expect(resultPayload(
       { pipeline_version: "gemini-whole-video-v48", detected_label: "Squat", detected_equipment: [], exercise_family: "squat" },
@@ -102,6 +105,63 @@ describe("resultPayload", () => {
       { pipeline_version: "gemini-whole-video-v46", detected_label: "Squat", detected_equipment: [], exercise_family: "squat" },
       { ...result, analysis_basis: "mixed" },
     )?.analysisBasis).toBe("observed");
+  });
+
+  it("normalizes the affected current-pipeline saved result before it reaches presentation", () => {
+    const payload = resultPayload(
+      { pipeline_version: "gemini-whole-video-v84-short-issue-titles", detected_label: "Standing Curl", detected_equipment: [], exercise_family: "curl" },
+      {
+        status: "complete",
+        overall_assessment: "The set was reviewed and the movement stayed readable.",
+        score: 84,
+        score_rationale: [],
+        muscle_focus: ["Biceps", "Forearms", "Biceps"],
+        did_well: [],
+        priority_corrections: [],
+        coaching_cues: [],
+        set_context: { cameraView: "front" },
+        set_summary: { totalReps: 8 },
+        comparison: null,
+      },
+    );
+
+    expect(payload).toBeTruthy();
+    expect(payload?.videoCheck).toEqual({
+      outcome: "usable",
+      usableObservations: [],
+      limitations: [],
+      retryReason: null,
+      retryInstruction: null,
+    });
+    expect(payload?.muscleFocus).toEqual({ primary: [], secondary: [], unclassified: ["Biceps", "Forearms"] });
+    expect(payload?.setContext).toEqual({ cameraView: "front", visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: null });
+    expect(payload?.setSummary).toEqual({ totalReps: 8, consistentReps: null, verdict: null });
+    expect(analysisResultSchema.safeParse(payload).success).toBe(true);
+    expect(() => getResultPresentation(payload! as never)).not.toThrow();
+  });
+
+  it("normalizes the historical branch after branch selection", () => {
+    const payload = resultPayload(
+      { pipeline_version: "gemini-analyst-coach-v33", detected_label: "Curl", detected_equipment: [], exercise_family: "curl" },
+      { status: "partial", overall_assessment: "Partially visible.", score: null, score_rationale: [], muscle_focus: [], did_well: [], priority_corrections: [], coaching_cues: [], comparison: null },
+    );
+    expect(payload?.videoCheck).toEqual(expect.objectContaining({ outcome: "partial", retryReason: null, retryInstruction: null }));
+    expect(payload?.muscleFocus).toEqual({ primary: [], secondary: [], unclassified: [] });
+    expect(payload?.setContext).toEqual(expect.objectContaining({ visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: null }));
+    expect(payload?.setSummary).toEqual(expect.objectContaining({ consistentReps: null, verdict: null }));
+  });
+
+  it("normalizes the v49 branch after branch selection", () => {
+    const v49 = {
+      status: "complete",
+      recognition: { label: "Row", variation: null, equipment: [], confidence: 1, alternatives: [], catalogExerciseId: null, exerciseFamily: "row" },
+      overallAssessment: "Reviewed.", score: 70, scoreRationale: [], muscleFocus: ["Lats"], didWell: [], priorityCorrections: [], coachingCues: [], setContext: {}, setSummary: {}, comparison: null,
+    };
+    const payload = resultPayload({ pipeline_version: "gemini-problem-finder-v49", active_v49_run_id: "run-2" }, null, v49);
+    expect(payload?.videoCheck).toEqual(expect.objectContaining({ outcome: "usable", retryReason: null, retryInstruction: null }));
+    expect(payload?.muscleFocus).toEqual({ primary: [], secondary: [], unclassified: ["Lats"] });
+    expect(payload?.setContext).toEqual(expect.objectContaining({ visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: null }));
+    expect(payload?.setSummary).toEqual(expect.objectContaining({ consistentReps: null, verdict: null }));
   });
 
   it("maps persisted Gemini recognition and coaching into the app contract", () => {

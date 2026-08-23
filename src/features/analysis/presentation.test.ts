@@ -56,6 +56,7 @@ function result(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
     priorityCorrections: [finding("Elbow drift", "high")],
     coachingCues: [finding("Wall cue", "important")],
     setContext: { cameraView: null, visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: null },
+    setSummary: { totalReps: null, consistentReps: null, verdict: null },
     comparison: null,
     ...overrides,
     muscleFocus: overrides.muscleFocus ?? { primary: [], secondary: [], unclassified: [] },

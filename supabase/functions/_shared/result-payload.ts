@@ -1,6 +1,7 @@
-import type { AnalysisCandidate } from "./analysis-contract.ts";
+import type { AnalysisCandidate, PublicAnalysisResult } from "./analysis-contract.ts";
 import { historicalResultPayload } from "../_historical/legacy-result-payload.ts";
 import { parseSetDeclaration } from "./set-declaration.ts";
+import { normalizeMuscleFocus, normalizePublicAnalysisResult, normalizeSetContext, normalizeSetSummary, normalizeVideoCheck } from "./result-compatibility.ts";
 
 const WHOLE_VIDEO_PIPELINES = new Set([
   "gemini-whole-video-v46",
@@ -54,8 +55,9 @@ function currentResultPayload(session: Record<string, unknown>, result: Record<s
       exerciseFamily: (session.exercise_family ?? "other") as AnalysisCandidate["recognition"]["exerciseFamily"],
       ...(declaration ? { source: "user_declared" as const } : {}),
     },
+    ...(result.video_check !== undefined ? { videoCheck: normalizeVideoCheck(result.status, result.video_check) } : {}),
     overallAssessment: (result.overall_assessment ?? null) as string | null,
-    muscleFocus: result.muscle_focus as AnalysisCandidate["muscleFocus"],
+    muscleFocus: normalizeMuscleFocus(result.muscle_focus),
     coachNote: (result.coach_note ?? null) as string | null,
     score: (result.score ?? null) as number | null,
     scoreRationale: (result.score_rationale ?? []) as AnalysisCandidate["scoreRationale"],
@@ -66,8 +68,8 @@ function currentResultPayload(session: Record<string, unknown>, result: Record<s
     didWell: (result.did_well ?? []) as AnalysisCandidate["didWell"],
     priorityCorrections: (result.priority_corrections ?? []) as AnalysisCandidate["priorityCorrections"],
     coachingCues: (result.coaching_cues ?? []) as AnalysisCandidate["coachingCues"],
-    setContext: result.set_context as AnalysisCandidate["setContext"],
-    setSummary: result.set_summary as AnalysisCandidate["setSummary"],
+    setContext: normalizeSetContext(result.set_context),
+    setSummary: normalizeSetSummary(result.set_summary),
     nextSetPlan: (result.next_set_plan ?? []) as AnalysisCandidate["nextSetPlan"],
     precisionRequest: { requestedRuns: 0, reason: null, targets: [] },
     comparison: (result.comparison ?? null) as AnalysisCandidate["comparison"],
@@ -75,12 +77,16 @@ function currentResultPayload(session: Record<string, unknown>, result: Record<s
   };
 }
 
-export function resultPayload(session: Record<string, unknown>, result: Record<string, unknown> | null, v49Result?: Record<string, unknown> | null): AnalysisCandidate | null {
+export function resultPayload(session: Record<string, unknown>, result: Record<string, unknown> | null, v49Result?: Record<string, unknown> | null): PublicAnalysisResult | null {
+  let candidate: AnalysisCandidate | Record<string, unknown> | null;
   if (session.pipeline_version === "gemini-problem-finder-v49" || session.active_v49_run_id) {
-    return (v49Result ?? null) as AnalysisCandidate | null;
+    candidate = v49Result ?? null;
+  } else if (!result) {
+    candidate = null;
+  } else {
+    candidate = isWholeVideoPipeline(session.pipeline_version)
+      ? currentResultPayload(session, result)
+      : historicalResultPayload(session, result);
   }
-  if (!result) return null;
-  return isWholeVideoPipeline(session.pipeline_version)
-    ? currentResultPayload(session, result)
-    : historicalResultPayload(session, result);
+  return candidate ? normalizePublicAnalysisResult(candidate) : null;
 }

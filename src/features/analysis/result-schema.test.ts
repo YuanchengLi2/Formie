@@ -221,6 +221,21 @@ describe("analysisResultSchema", () => {
     });
   });
 
+  it("keeps the nested result shapes stable when persisted compatibility fields are missing or partial", () => {
+    const result = validResult() as unknown as Record<string, unknown>;
+    delete result.videoCheck;
+    result.muscleFocus = ["Biceps", "Forearms"];
+    result.setContext = { cameraView: "front" };
+    result.setSummary = { totalReps: 8 };
+
+    expect(analysisResultSchema.parse(result)).toMatchObject({
+      videoCheck: { outcome: "usable", usableObservations: [], limitations: [], retryReason: null, retryInstruction: null },
+      muscleFocus: { primary: [], secondary: [], unclassified: ["Biceps", "Forearms"] },
+      setContext: { cameraView: "front", visibleReferences: [], sequenceSummary: null, changeAcrossSet: null, coachingBasis: null },
+      setSummary: { totalReps: 8, consistentReps: null, verdict: null },
+    });
+  });
+
   it("rejects a muscle region classified as both primary and supporting", () => {
     const result = validResult();
     result.muscleFocus.secondary = [{ name: "Biceps support", region: "biceps" }];

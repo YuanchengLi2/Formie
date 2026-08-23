@@ -2,7 +2,7 @@ import { fireEvent, render } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import type { AnalysisResult, CoachingFinding } from "@/features/analysis/result-schema";
+import { analysisResultSchema, type AnalysisResult, type CoachingFinding } from "@/features/analysis/result-schema";
 import { colors } from "@/theme/colors";
 import { conciseCopy, formatAnalysisTimestamp, plainCoachingText, ResultsScreen } from ".";
 
@@ -144,6 +144,25 @@ function renderedTestIds(node: unknown, ids: string[] = []): string[] {
 }
 
 describe("ResultsScreen", () => {
+  it("opens a normalized production-style saved result with legacy muscle data", async () => {
+    const raw = {
+      ...result(),
+      videoCheck: undefined,
+      muscleFocus: ["Biceps", "Forearms"],
+      setContext: { cameraView: "front" },
+      setSummary: { totalReps: 8 },
+    } as unknown as Record<string, unknown>;
+    const normalized = analysisResultSchema.parse(raw);
+    const screen = await renderResults(jest.fn(), normalized);
+
+    expect(screen.getByText("YOUR ANALYSIS")).toBeTruthy();
+    expect(screen.getByTestId("overall-analysis-score")).toBeTruthy();
+    expect(screen.getByTestId("coaching-workspace")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Target Muscles"));
+    expect(screen.getByText("Biceps, Forearms")).toBeTruthy();
+    expect(screen.getByTestId("muscle-focus-section")).toBeTruthy();
+  });
+
   it("dismisses the analysis feedback prompt after one rating", async () => {
     const onRateAnalysis = jest.fn();
     const screen = await render(
