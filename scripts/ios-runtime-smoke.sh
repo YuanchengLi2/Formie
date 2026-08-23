@@ -42,10 +42,11 @@ xcrun simctl install "$simulator_udid" "$app_path"
 launch_output="$(xcrun simctl launch --terminate-running-process --stdout="$runtime_stdout" --stderr="$runtime_stderr" "$simulator_udid" app.form.coach)"
 echo "$launch_output"
 app_pid="${launch_output##*: }"
-sleep 15
+wait_seconds="${FORMIE_RUNTIME_SMOKE_WAIT_SECONDS:-15}"
+sleep "$wait_seconds"
 
 if [[ "$app_pid" =~ ^[0-9]+$ ]] && kill -0 "$app_pid" 2>/dev/null; then
-  echo "Formie remained alive for 15 seconds after release launch (pid $app_pid)."
+  echo "Formie remained alive for $wait_seconds seconds after release launch (pid $app_pid)."
   exit 0
 fi
 

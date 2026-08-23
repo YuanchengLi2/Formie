@@ -2,6 +2,15 @@ name: iOS release runtime smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: Release surface to mount
+        required: true
+        default: launch
+        type: choice
+        options:
+          - launch
+          - analysis
 
 jobs:
   launch-release:
@@ -31,4 +40,7 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Launch release app on iOS simulator
+        env:
+          EXPO_PUBLIC_FORMIE_RUNTIME_SMOKE: ${{ inputs.target == 'analysis' && 'analysis' || '' }}
+          FORMIE_RUNTIME_SMOKE_WAIT_SECONDS: ${{ inputs.target == 'analysis' && '30' || '15' }}
         run: eas env:exec production 'bash scripts/ios-runtime-smoke.sh' --non-interactive

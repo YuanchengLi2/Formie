@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { StatusBar } from "expo-status-bar";
 
 import { AppProviders } from "@/components/app-providers";
+import { AnalysisRuntimeSmoke } from "@/components/analysis-runtime-smoke";
 import { SubscriptionAccessGate } from "@/components/subscription-access-gate";
 import { AccessProvider, useAccess } from "@/features/access/access-provider";
 import { canOpenCompletedAccount } from "@/features/access/account-access";
@@ -67,5 +68,8 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
+  if (process.env.EXPO_PUBLIC_FORMIE_RUNTIME_SMOKE === "analysis") {
+    return <AppProviders><AnalysisRuntimeSmoke /></AppProviders>;
+  }
   return <AppProviders><AuthProvider><OnboardingProvider><AccessProvider><BillingProvider><ProfileProvider><SubscriptionAccessGate><RootNavigator /></SubscriptionAccessGate></ProfileProvider></BillingProvider></AccessProvider></OnboardingProvider></AuthProvider></AppProviders>;
 }
