@@ -1,4 +1,4 @@
-import { accountStorageBuckets, type AccountStorageBucket } from "./storage";
+import { accountStorageBuckets, type AccountStorageBucket } from "./storage.ts";
 
 export type DeleteAccountStage = "storage" | "analytics" | "auth_user";
 

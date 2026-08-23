@@ -1,4 +1,4 @@
-import type { SubscriptionPlanCode } from "./subscription-state";
+import type { SubscriptionPlanCode } from "./subscription-state.ts";
 
 export type QuotaPeriodInput = {
   planCode: SubscriptionPlanCode;
