@@ -16,7 +16,7 @@ if [[ -z "$workspace" ]]; then
   exit 1
 fi
 
-scheme="$(xcodebuild -workspace "$workspace" -list -json | python3 -c 'import json,sys; data=json.load(sys.stdin); print(data["workspace"]["schemes"][0])')"
+scheme="Formie"
 simulator_udid="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; data=json.load(sys.stdin); devices=[d for group in data["devices"].values() for d in group if d.get("isAvailable") and d.get("deviceTypeIdentifier", "").startswith("com.apple.CoreSimulator.SimDeviceType.iPhone")]; print(devices[0]["udid"])')"
 
 xcrun simctl boot "$simulator_udid" 2>/dev/null || true
