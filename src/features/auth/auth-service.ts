@@ -11,6 +11,7 @@ export type AuthClient = {
     options: { redirectTo: string; skipBrowserRedirect: true };
   }) => Promise<AuthResult>;
   exchangeCodeForSession: (code: string) => Promise<AuthResult>;
+  signInWithPassword: (input: { email: string; password: string }) => Promise<AuthResult>;
   signInWithOtp: (input: { email: string; options: { shouldCreateUser: true } }) => Promise<AuthResult>;
   verifyOtp: (input: { email: string; token: string; type: "email" }) => Promise<AuthResult>;
   signOut: (options: { scope: "local" }) => Promise<AuthResult>;
@@ -43,6 +44,13 @@ export function createAuthService(client: AuthClient, redirectUrl: string) {
     },
     async completeOAuth(code: string) {
       const result = await requireSuccess(client.exchangeCodeForSession(code));
+      return authenticatedSession(result);
+    },
+    async signInWithPassword(email: string, password: string) {
+      const result = await requireSuccess(client.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      }));
       return authenticatedSession(result);
     },
     async sendEmailCode(email: string): Promise<void> {

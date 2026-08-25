@@ -24,6 +24,7 @@ export default function LoginRoute() {
   return <SocialLoginScreen busyProvider={auth.signingIn} error={auth.error ?? (Array.isArray(routeError) ? routeError[0] : routeError) ?? null} notice={deletionNotice}
     onBack={() => router.back()}
     onOAuth={() => void beginAppleSignIn()}
+    onEmailPassword={() => router.push("/(auth)/password" as Href)}
     onCreateAccount={() => void onboarding.startNewAccount().then(() => router.replace("/onboarding/welcome" as Href))}
     onOpenTerms={() => { if (legal) void Linking.openURL(legal.termsUrl); }}
     onOpenPrivacy={() => { if (legal) void Linking.openURL(legal.privacyUrl); }} />;

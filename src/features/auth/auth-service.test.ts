@@ -4,6 +4,7 @@ function authClient() {
   return {
     signInWithOAuth: jest.fn(),
     exchangeCodeForSession: jest.fn(),
+    signInWithPassword: jest.fn(),
     signInWithOtp: jest.fn(),
     verifyOtp: jest.fn(),
     signOut: jest.fn(),
@@ -76,5 +77,24 @@ describe("social auth service", () => {
     const client = authClient();
     client.verifyOtp.mockResolvedValue({ data: { session: null }, error: null });
     await expect(createAuthService(client, redirectUrl).verifyEmailCode("athlete@example.com", "123456")).rejects.toThrow(/authenticated session/i);
+  });
+
+  it("signs an existing account in with normalized email and password", async () => {
+    const client = authClient();
+    const session = { user: { id: "review-user", email: "appreview@formie.app" } };
+    client.signInWithPassword.mockResolvedValue({ data: { session }, error: null });
+
+    await expect(createAuthService(client, redirectUrl).signInWithPassword(" AppReview@Formie.app ", "review-password")).resolves.toBe(session);
+    expect(client.signInWithPassword).toHaveBeenCalledWith({
+      email: "appreview@formie.app",
+      password: "review-password",
+    });
+  });
+
+  it("rejects a password response without an authenticated user", async () => {
+    const client = authClient();
+    client.signInWithPassword.mockResolvedValue({ data: { session: null }, error: null });
+
+    await expect(createAuthService(client, redirectUrl).signInWithPassword("appreview@formie.app", "review-password")).rejects.toThrow(/authenticated session/i);
   });
 });

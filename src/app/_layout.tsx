@@ -44,6 +44,7 @@ function RootNavigator() {
       <Stack.Protected guard={onboardingAllowed}><Stack.Screen name="onboarding" /></Stack.Protected>
       <Stack.Protected guard={auth.phase === "signed_out"}>
         <Stack.Screen name="(auth)/login" />
+        <Stack.Screen name="(auth)/password" />
         <Stack.Screen name="(auth)/email" />
         <Stack.Screen name="(auth)/email-code" />
       </Stack.Protected>

@@ -40,6 +40,20 @@ export function EmailCodeScreen({ email, intent, busy, error, onBack, onVerify, 
   return <EmailShell><BackButton onPress={onBack} /><View style={styles.copy}><Text style={styles.title}>{intent === "onboarding" ? "Save your account with the code we sent" : "Enter your sign-in code"}</Text><Text style={styles.message}>Sent to {email}. The code expires, so use the newest email if you requested it more than once.</Text></View><View style={styles.form}><Text style={styles.label}>SIX-DIGIT CODE</Text><TextInput accessibilityLabel="Six digit code" autoComplete="one-time-code" inputMode="numeric" keyboardType="number-pad" maxLength={6} value={code} onChangeText={(value) => setCode(value.replace(/\D/g, "").slice(0, 6))} onSubmitEditing={verify} placeholder="000000" placeholderTextColor="#77736E" style={[styles.input, styles.code]} />{validation || error ? <Text accessibilityRole="alert" style={styles.error}>{validation ?? error}</Text> : null}<SubmitButton label={intent === "onboarding" ? "Verify and save my account" : "Verify and sign in"} disabled={busy || code.length !== 6} busy={busy} onPress={verify} /><Pressable accessibilityRole="button" disabled={busy} onPress={onResend} style={({ pressed }) => [styles.resend, pressed && styles.pressed]}><Text style={styles.resendText}>Send a new code</Text></Pressable></View></EmailShell>;
 }
 
+export function PasswordSignInScreen({ busy, error, onBack, onSubmit }: { busy: boolean; error: string | null; onBack: () => void; onSubmit: (email: string, password: string) => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [validation, setValidation] = useState<string | null>(null);
+  const submit = () => {
+    const normalized = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) { setValidation("Enter a valid email address."); return; }
+    if (!password) { setValidation("Enter your password."); return; }
+    setValidation(null);
+    onSubmit(normalized, password);
+  };
+  return <EmailShell><BackButton onPress={onBack} /><View style={styles.copy}><Text style={styles.title}>Sign in with email</Text><Text style={styles.message}>Use the email and password for your existing Formie account.</Text></View><View style={styles.form}><Text style={styles.label}>EMAIL ADDRESS</Text><TextInput accessibilityLabel="Email address" autoCapitalize="none" autoComplete="email" inputMode="email" keyboardType="email-address" returnKeyType="next" value={email} onChangeText={setEmail} placeholder="you@example.com" placeholderTextColor="#77736E" style={styles.input} /><Text style={styles.label}>PASSWORD</Text><TextInput accessibilityLabel="Password" autoCapitalize="none" autoComplete="current-password" secureTextEntry value={password} onChangeText={setPassword} onSubmitEditing={submit} returnKeyType="go" placeholder="Password" placeholderTextColor="#77736E" style={styles.input} />{validation || error ? <Text accessibilityRole="alert" style={styles.error}>{validation ?? error}</Text> : null}<SubmitButton label="Sign in" disabled={busy || !email.trim() || !password} busy={busy} onPress={submit} /></View></EmailShell>;
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#030303" },
   goldBar: { width: "100%", backgroundColor: "#D9A83F" },

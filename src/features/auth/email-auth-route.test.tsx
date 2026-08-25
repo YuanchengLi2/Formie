@@ -7,6 +7,7 @@ const mockReplace = jest.fn();
 const mockBack = jest.fn();
 const mockSendEmailCode = jest.fn();
 const mockVerifyEmailCode = jest.fn();
+const mockSignInWithPassword = jest.fn();
 let mockParams: Record<string, string> = {};
 
 jest.mock("expo-router", () => ({
@@ -22,11 +23,13 @@ jest.mock("@/features/auth/auth-provider", () => ({
     clearError: jest.fn(),
     sendEmailCode: mockSendEmailCode,
     verifyEmailCode: mockVerifyEmailCode,
+    signInWithPassword: mockSignInWithPassword,
   }),
 }));
 
 import EmailCodeRoute from "@/app/(auth)/email-code";
 import EmailRoute from "@/app/(auth)/email";
+import PasswordRoute from "@/app/(auth)/password";
 
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };
 const wrap = (node: React.ReactNode) => <SafeAreaProvider initialMetrics={metrics}>{node}</SafeAreaProvider>;
@@ -36,6 +39,7 @@ describe("Email OTP routes", () => {
     jest.clearAllMocks();
     mockSendEmailCode.mockResolvedValue(true);
     mockVerifyEmailCode.mockResolvedValue(true);
+    mockSignInWithPassword.mockResolvedValue(true);
   });
 
   it("sends a code and preserves onboarding intent on the dedicated code route", async () => {
@@ -52,6 +56,15 @@ describe("Email OTP routes", () => {
     await fireEvent.changeText(screen.getByLabelText("Six digit code"), "123456");
     await fireEvent.press(screen.getByText("Verify and sign in"));
     await waitFor(() => expect(mockVerifyEmailCode).toHaveBeenCalledWith("athlete@example.com", "123456"));
+    expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+
+  it("signs in with an existing password account and routes through the root resolver", async () => {
+    const screen = await render(wrap(<PasswordRoute />));
+    await fireEvent.changeText(screen.getByLabelText("Email address"), "appreview@formie.app");
+    await fireEvent.changeText(screen.getByLabelText("Password"), "review-password");
+    await fireEvent.press(screen.getByText("Sign in"));
+    await waitFor(() => expect(mockSignInWithPassword).toHaveBeenCalledWith("appreview@formie.app", "review-password"));
     expect(mockReplace).toHaveBeenCalledWith("/");
   });
 });

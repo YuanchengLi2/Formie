@@ -9,6 +9,7 @@ const mockGetInitialURL = jest.fn();
 const mockAddEventListener = jest.fn();
 const mockSignInWithOAuth = jest.fn();
 const mockExchangeCodeForSession = jest.fn();
+const mockSignInWithPassword = jest.fn();
 const mockSignInWithOtp = jest.fn();
 const mockVerifyOtp = jest.fn();
 const mockSignOut = jest.fn();
@@ -21,6 +22,7 @@ jest.mock("@/lib/supabase", () => ({
     onAuthStateChange: (...args: unknown[]) => mockOnAuthStateChange(...args),
     signInWithOAuth: (...args: unknown[]) => mockSignInWithOAuth(...args),
     exchangeCodeForSession: (...args: unknown[]) => mockExchangeCodeForSession(...args),
+    signInWithPassword: (...args: unknown[]) => mockSignInWithPassword(...args),
     signInWithOtp: (...args: unknown[]) => mockSignInWithOtp(...args),
     verifyOtp: (...args: unknown[]) => mockVerifyOtp(...args),
     signOut: (...args: unknown[]) => mockSignOut(...args),
@@ -48,6 +50,7 @@ function Probe() {
     <Text>{auth.phase}</Text>
     <Text>{auth.error ?? "no-error"}</Text>
     <Pressable accessibilityRole="button" onPress={() => void auth.signInWithProvider("google")}><Text>Google</Text></Pressable>
+    <Pressable accessibilityRole="button" onPress={() => void auth.signInWithPassword(" AppReview@Formie.app ", "review-password")}><Text>Password sign in</Text></Pressable>
     <Pressable accessibilityRole="button" onPress={() => void auth.sendEmailCode("athlete@example.com")}><Text>Send email code</Text></Pressable>
     <Pressable accessibilityRole="button" onPress={() => void auth.verifyEmailCode("athlete@example.com", "123456")}><Text>Verify email code</Text></Pressable>
     <Pressable accessibilityRole="button" onPress={() => void auth.logOut()}><Text>Log out</Text></Pressable>
@@ -63,6 +66,7 @@ describe("AuthProvider", () => {
     mockOnAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
     mockSignInWithOAuth.mockResolvedValue({ data: { url: "https://accounts.google.test" }, error: null });
     mockExchangeCodeForSession.mockResolvedValue({ data: { session: { user: { id: "user-1", is_anonymous: false } } }, error: null });
+    mockSignInWithPassword.mockResolvedValue({ data: { session: { user: { id: "review-user", email: "appreview@formie.app" } } }, error: null });
     mockSignInWithOtp.mockResolvedValue({ data: {}, error: null });
     mockVerifyOtp.mockResolvedValue({ data: { session: { user: { id: "email-user", email: "athlete@example.com" } } }, error: null });
     mockSignOut.mockResolvedValue({ data: {}, error: null });
@@ -142,6 +146,23 @@ describe("AuthProvider", () => {
     await act(async () => fireEvent.press(screen.getByText("Verify email code")));
     expect(mockVerifyOtp).toHaveBeenCalledWith({ email: "athlete@example.com", token: "123456", type: "email" });
     expect(await screen.findByText("authenticated")).toBeTruthy();
+  });
+
+  it("signs an existing password account in and hydrates its session", async () => {
+    const screen = await render(<AuthProvider><Probe /></AuthProvider>);
+    expect(await screen.findByText("signed_out")).toBeTruthy();
+    await act(async () => fireEvent.press(screen.getByText("Password sign in")));
+    expect(mockSignInWithPassword).toHaveBeenCalledWith({ email: "appreview@formie.app", password: "review-password" });
+    expect(await screen.findByText("authenticated")).toBeTruthy();
+  });
+
+  it("does not expose Supabase credential details when password sign-in fails", async () => {
+    mockSignInWithPassword.mockResolvedValue({ data: { session: null }, error: { message: "Invalid login credentials" } });
+    const screen = await render(<AuthProvider><Probe /></AuthProvider>);
+    expect(await screen.findByText("signed_out")).toBeTruthy();
+    await act(async () => fireEvent.press(screen.getByText("Password sign in")));
+    expect(screen.getByText("The email or password is incorrect.")).toBeTruthy();
+    expect(screen.queryByText("Invalid login credentials")).toBeNull();
   });
 
   it("surfaces a provider callback error instead of leaving Google unsettled", async () => {

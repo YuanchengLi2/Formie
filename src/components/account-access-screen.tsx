@@ -21,10 +21,11 @@ function ConsentRow({ label, checked, onPress, children }: { label: string; chec
   </View>;
 }
 
-export function AccountAccessScreen({ mode = "login", onOAuth, onCreateAccount, onBack, onOpenTerms, onOpenPrivacy, onPrivacyConsentChange, onMarketingOptInChange, busyProvider = null, busy = false, error, notice }: {
+export function AccountAccessScreen({ mode = "login", onOAuth, onEmailPassword, onCreateAccount, onBack, onOpenTerms, onOpenPrivacy, onPrivacyConsentChange, onMarketingOptInChange, busyProvider = null, busy = false, error, notice }: {
   mode?: AccountAccessMode;
   personalizedMessage?: string;
   onOAuth: (provider: "apple") => void;
+  onEmailPassword?: () => void;
   onCreateAccount?: () => void;
   onBack?: () => void;
   onOpenTerms?: () => void;
@@ -57,6 +58,7 @@ export function AccountAccessScreen({ mode = "login", onOAuth, onCreateAccount, 
         {busy && !busyProvider ? <View style={styles.busy}><ActivityIndicator color="#E5AD32" /><Text style={styles.busyText}>Connecting…</Text></View> : null}
         {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+        {mode === "login" && onEmailPassword ? <Pressable accessibilityRole="button" accessibilityLabel="Sign in with email" disabled={disabled} onPress={onEmailPassword} style={({ pressed }) => [styles.emailSignIn, (pressed || disabled) && styles.pressed]}><Text style={styles.emailSignInText}>Sign in with email</Text></Pressable> : null}
         {mode === "login" && onCreateAccount ? <Pressable accessibilityRole="button" onPress={onCreateAccount} style={({ pressed }) => [styles.createAccount, pressed && styles.pressed]}><Text style={styles.createAccountText}>Create New Account</Text></Pressable> : null}
       </View>
       {mode === "onboarding" ? <View style={styles.consents}>
@@ -85,6 +87,8 @@ const styles = StyleSheet.create({
   busyText: { color: "#D8D3C8", fontSize: 14 },
   error: { color: "#FF8A82", fontSize: 14, lineHeight: 20, fontWeight: "600", textAlign: "center" },
   notice: { color: "#D8D3C8", fontSize: 14, lineHeight: 20, fontWeight: "600", textAlign: "center" },
+  emailSignIn: { minHeight: 52, alignItems: "center", justifyContent: "center", borderRadius: 26, borderCurve: "continuous", borderWidth: 1, borderColor: "#E5AD32", backgroundColor: "#111110" },
+  emailSignInText: { color: "#E5AD32", fontSize: 16, fontWeight: "700" },
   createAccount: { minHeight: 48, alignItems: "center", justifyContent: "center" },
   createAccountText: { color: "#E5AD32", fontSize: 16, fontWeight: "700", textDecorationLine: "underline" },
   consents: { width: "100%", maxWidth: 296, alignSelf: "center", gap: 10, marginTop: 20 },

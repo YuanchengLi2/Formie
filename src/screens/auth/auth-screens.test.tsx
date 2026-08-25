@@ -15,7 +15,8 @@ describe("account access screens", () => {
   it("matches the approved white account-access reference on login", async () => {
     const onOAuth = jest.fn();
     const onCreateAccount = jest.fn();
-    const screen = await render(withSafeArea(<SocialLoginScreen onOAuth={onOAuth} onCreateAccount={onCreateAccount} busyProvider={null} />));
+    const onEmailPassword = jest.fn();
+    const screen = await render(withSafeArea(<SocialLoginScreen onOAuth={onOAuth} onEmailPassword={onEmailPassword} onCreateAccount={onCreateAccount} busyProvider={null} />));
 
     expect(screen.getByTestId("account-access-top-row")).toBeTruthy();
     expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#050505" });
@@ -25,7 +26,7 @@ describe("account access screens", () => {
     expect(screen.queryByText(/Create or restore|profile stays private/i)).toBeNull();
     expect(screen.getByText("Sign in with Apple")).toBeTruthy();
     expect(screen.queryByText("Sign in with Google")).toBeNull();
-    expect(screen.queryByText("Sign in with Email")).toBeNull();
+    expect(screen.getByText("Sign in with email")).toBeTruthy();
     expect(screen.queryByText("Coming soon")).toBeNull();
     expect(screen.getByText("Create New Account")).toBeTruthy();
     expect(screen.getByTestId("account-access-scroll")).toBeTruthy();
@@ -37,15 +38,16 @@ describe("account access screens", () => {
     });
     expect(screen.getByTestId("provider-apple")).toHaveStyle({ minHeight: 58, backgroundColor: "#E5AD32" });
     expect(screen.queryByTestId("provider-google")).toBeNull();
-    expect(screen.queryByTestId("provider-email")).toBeNull();
+    await fireEvent.press(screen.getByText("Sign in with email"));
+    expect(onEmailPassword).toHaveBeenCalledTimes(1);
 
     await fireEvent.press(screen.getByText("Create New Account"));
     expect(onCreateAccount).toHaveBeenCalledTimes(1);
   });
 
-  it("shows Apple as the only production sign-in action", async () => {
+  it("keeps password access separate from account creation", async () => {
     const onOAuth = jest.fn();
-    const screen = await render(withSafeArea(<SocialLoginScreen onOAuth={onOAuth} onCreateAccount={jest.fn()} busyProvider={null} />));
+    const screen = await render(withSafeArea(<SocialLoginScreen onOAuth={onOAuth} onEmailPassword={jest.fn()} onCreateAccount={jest.fn()} busyProvider={null} />));
 
     const apple = screen.getByLabelText("Sign in with Apple");
     expect(apple.props.accessibilityState.disabled).toBe(false);
@@ -53,7 +55,8 @@ describe("account access screens", () => {
     expect(onOAuth).toHaveBeenCalledWith("apple");
     expect(screen.queryByLabelText("Agree to the Terms of Use")).toBeNull();
     expect(screen.queryByLabelText("Acknowledge the Privacy Policy")).toBeNull();
-    expect(screen.queryByLabelText(/Google|Email|Coming soon/i)).toBeNull();
+    expect(screen.getByLabelText("Sign in with email")).toBeTruthy();
+    expect(screen.queryByLabelText(/Google|Coming soon/i)).toBeNull();
   });
 
   it("announces confirmed account deletion without claiming Apple authorization was revoked", async () => {

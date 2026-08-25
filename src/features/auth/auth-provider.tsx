@@ -22,9 +22,10 @@ type AuthContextValue = {
   email: string | null;
   error: string | null;
   signingIn: SocialProvider | null;
-  emailBusy: "sending" | "verifying" | null;
+  emailBusy: "sending" | "verifying" | "password" | null;
   signInWithProvider: (provider: SocialProvider) => Promise<boolean>;
   completeOAuthCode: (code: string) => Promise<boolean>;
+  signInWithPassword: (email: string, password: string) => Promise<boolean>;
   sendEmailCode: (email: string) => Promise<boolean>;
   verifyEmailCode: (email: string, code: string) => Promise<boolean>;
   logOut: (reason?: SessionExitReason) => Promise<void>;
@@ -58,6 +59,13 @@ function friendlyEmailError(error: unknown): string {
   return message || "Email sign-in could not be completed. Try again.";
 }
 
+function friendlyPasswordError(error: unknown): string {
+  const message = error instanceof Error ? error.message : typeof error === "object" && error && "message" in error ? String(error.message) : "";
+  if (/invalid login credentials|email not confirmed/i.test(message)) return "The email or password is incorrect.";
+  if (/network|fetch/i.test(message)) return "Check your connection and try signing in again.";
+  return message || "Email and password sign-in could not be completed. Try again.";
+}
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const redirectUrl = Linking.createURL("auth/callback");
   const service = useMemo(() => createAuthService(supabase.auth as unknown as AuthClient, redirectUrl), [redirectUrl]);
@@ -65,7 +73,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState<SocialProvider | null>(null);
-  const [emailBusy, setEmailBusy] = useState<"sending" | "verifying" | null>(null);
+  const [emailBusy, setEmailBusy] = useState<"sending" | "verifying" | "password" | null>(null);
   const callbackTasksRef = useRef(new Map<string, Promise<boolean>>());
   const completedCodesRef = useRef(new Set<string>());
   const [sessionExitReason, setSessionExitReason] = useState<SessionExitReason | null>(null);
@@ -213,6 +221,22 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return true;
       } catch (failure) {
         setError(friendlyEmailError(failure));
+        return false;
+      } finally {
+        setEmailBusy(null);
+      }
+    },
+    async signInWithPassword(email, password) {
+      if (emailBusy || signingIn) return false;
+      setEmailBusy("password");
+      setError(null);
+      try {
+        const returnedSession = await service.signInWithPassword(email, password) as Session;
+        setSession(returnedSession);
+        setSessionExitReason(null);
+        return true;
+      } catch (failure) {
+        setError(friendlyPasswordError(failure));
         return false;
       } finally {
         setEmailBusy(null);
