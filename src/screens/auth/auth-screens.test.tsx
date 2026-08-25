@@ -25,9 +25,9 @@ describe("account access screens", () => {
     expect(screen.queryByText("Welcome back. Your coaching history is ready when you are.")).toBeNull();
     expect(screen.queryByText(/Create or restore|profile stays private/i)).toBeNull();
     expect(screen.getByText("Sign in with Apple")).toBeTruthy();
-    expect(screen.queryByText("Sign in with Google")).toBeNull();
+    expect(screen.getByText("Sign in with Google")).toBeTruthy();
     expect(screen.getByText("Sign in with email")).toBeTruthy();
-    expect(screen.queryByText("Coming soon")).toBeNull();
+    expect(screen.getByText("Coming soon")).toBeTruthy();
     expect(screen.getByText("Create New Account")).toBeTruthy();
     expect(screen.getByTestId("account-access-scroll")).toBeTruthy();
     expect(StyleSheet.flatten(screen.getByTestId("account-access-scroll").props.contentContainerStyle)).toMatchObject({
@@ -37,7 +37,7 @@ describe("account access screens", () => {
       paddingBottom: 50,
     });
     expect(screen.getByTestId("provider-apple")).toHaveStyle({ minHeight: 58, backgroundColor: "#E5AD32" });
-    expect(screen.queryByTestId("provider-google")).toBeNull();
+    expect(screen.getByTestId("provider-google")).toHaveStyle({ minHeight: 58, backgroundColor: "#111110", borderColor: "#E5AD32" });
     await fireEvent.press(screen.getByText("Sign in with email"));
     expect(onEmailPassword).toHaveBeenCalledTimes(1);
 
@@ -56,7 +56,10 @@ describe("account access screens", () => {
     expect(screen.queryByLabelText("Agree to the Terms of Use")).toBeNull();
     expect(screen.queryByLabelText("Acknowledge the Privacy Policy")).toBeNull();
     expect(screen.getByLabelText("Sign in with email")).toBeTruthy();
-    expect(screen.queryByLabelText(/Google|Coming soon/i)).toBeNull();
+    const google = screen.getByLabelText("Sign in with Google — Coming soon");
+    expect(google.props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(google);
+    expect(onOAuth).not.toHaveBeenCalledWith("google");
   });
 
   it("announces confirmed account deletion without claiming Apple authorization was revoked", async () => {
@@ -86,7 +89,8 @@ describe("account access screens", () => {
     expect(screen.getByText("Save your progress")).toBeTruthy();
     expect(screen.queryByText(/225 lb bench/)).toBeNull();
     expect(screen.getByText("Sign in with Apple")).toBeTruthy();
-    expect(screen.queryByText("Sign in with Google")).toBeNull();
+    expect(screen.getByText("Sign in with Google")).toBeTruthy();
+    expect(screen.getByText("Coming soon")).toBeTruthy();
     expect(screen.queryByText("Continue with email")).toBeNull();
     expect(screen.queryByText("Create New Account")).toBeNull();
     expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#050505" });

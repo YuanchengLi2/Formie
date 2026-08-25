@@ -386,7 +386,7 @@ describe("approved onboarding screen", () => {
     expect(onAnswerChange).toHaveBeenCalledWith("acquisitionSourceOther", "Local trainer");
   });
 
-  it("keeps Apple as the only visible account action", async () => {
+  it("keeps Apple active while showing Google as a blurred coming-soon action", async () => {
     const { screen, props } = await renderStep("create-account", { answers: { ...initialOnboardingAnswers, acceptedPrivacy: true } });
 
     await fireEvent.press(screen.getByLabelText("Agree to the Terms of Use and Privacy Policy"));
@@ -394,9 +394,13 @@ describe("approved onboarding screen", () => {
 
     expect(props.onOAuth).toHaveBeenCalledTimes(1);
     expect(props.onOAuth).toHaveBeenCalledWith("apple");
-    expect(screen.queryByText("Sign in with Google")).toBeNull();
+    const google = screen.getByLabelText("Sign in with Google — Coming soon");
+    expect(screen.getByText("Sign in with Google")).toBeTruthy();
+    expect(google.props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(google);
+    expect(props.onOAuth).toHaveBeenCalledTimes(1);
     expect(screen.queryByText("Continue with email")).toBeNull();
-    expect(screen.queryByText("Coming soon")).toBeNull();
+    expect(screen.getByText("Coming soon")).toBeTruthy();
     expect(screen.queryByText("Restore account")).toBeNull();
     expect(screen.queryByLabelText("Password")).toBeNull();
   });
