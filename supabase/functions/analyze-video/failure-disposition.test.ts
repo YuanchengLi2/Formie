@@ -1,6 +1,17 @@
-import { classifyAnalysisFailure } from "./failure-disposition";
+import { analysisRetrySchedule, classifyAnalysisFailure } from "./failure-disposition";
 
 describe("analysis failure disposition", () => {
+  it("schedules each transient retry from the current attempt without an undefined timestamp", () => {
+    expect(analysisRetrySchedule(1, new Date("2026-08-27T20:00:00.000Z"))).toEqual({
+      backoffSeconds: 5,
+      nextRetryAt: "2026-08-27T20:00:05.000Z",
+    });
+    expect(analysisRetrySchedule(5, new Date("2026-08-27T20:00:00.000Z"))).toEqual({
+      backoffSeconds: 60,
+      nextRetryAt: "2026-08-27T20:01:00.000Z",
+    });
+  });
+
   it.each([
     ["ANALYSIS_FILE_PROCESSING", undefined, undefined],
     ["ANALYSIS_TIMEOUT", undefined, undefined],

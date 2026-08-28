@@ -30,6 +30,14 @@ const PERMANENT_CODES = new Set([
 const FINALIZATION_CODES = /(?:CONTRACT|PARSE|WRITER|FINALIZ|RESULT_SAVE|COACHING)/;
 const TRANSIENT_CODES = /(?:TIMEOUT|DEADLINE|NETWORK|FETCH|PROCESSING|RATE_LIMIT|TOO_MANY_REQUESTS|UNAVAILABLE|TEMPORAR|STAGE_BUSY)/;
 
+export function analysisRetrySchedule(retryCount: number, now = new Date()): { backoffSeconds: number; nextRetryAt: string } {
+  const backoffSeconds = Math.min(5 * 2 ** Math.max(0, retryCount - 1), 60);
+  return {
+    backoffSeconds,
+    nextRetryAt: new Date(now.getTime() + backoffSeconds * 1_000).toISOString(),
+  };
+}
+
 export function classifyAnalysisFailure(input: AnalysisFailureContext): AnalysisFailureDisposition {
   const exhausted = input.retryCount >= input.maxRetries;
   const providerFailed = input.providerStatus?.toUpperCase() === "FAILED";

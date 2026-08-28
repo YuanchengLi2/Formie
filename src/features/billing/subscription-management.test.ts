@@ -20,7 +20,7 @@ describe("native subscription management copy", () => {
 describe("shared subscription presentation", () => {
   it.each([
     ["active_renewing", "is on", "Active", false],
-    ["active_cancelled", "is off", "Canceled", false],
+    ["active_cancelled", "is off", "Renewal off", false],
     ["renewal_pending", "renewal", "Checking", false],
     ["expired", "has ended", "Expired", true],
     ["not_subscribed", "Formie Pro", "Available", true],

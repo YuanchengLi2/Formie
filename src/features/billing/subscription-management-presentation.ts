@@ -25,7 +25,7 @@ type PresentationAccess = {
 export function createSubscriptionPresentation(access: PresentationAccess): SubscriptionPresentation {
   if (access.lifecycleState === "active_cancelled") return {
     headlineLead: "Automatic renewal", headlineAccent: "is off", heroDetail: "Your confirmed access and remaining analyses stay available through the paid period.",
-    badgeLabel: "Canceled", boundaryRowLabel: "Access ends", automaticRenewalValue: "Off", showManage: true, showPurchase: false,
+    badgeLabel: "Renewal off", boundaryRowLabel: "Access ends", automaticRenewalValue: "Off", showManage: true, showPurchase: false,
   };
   if (access.lifecycleState === "renewal_pending") return {
     headlineLead: "Checking your", headlineAccent: "renewal", heroDetail: "Formie is checking the next provider period while keeping your last confirmed access.",

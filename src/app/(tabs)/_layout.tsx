@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CenterTabButton } from "@/components/center-tab-button";
 import { triggerInteractionHaptic } from "@/components/haptic-pressable";
 import { useAccess } from "@/features/access/access-provider";
-import { formatAnalysisEntryLabel, resolveAnalysisEntry } from "@/features/access/account-access";
+import { analysisEntryHref, formatAnalysisEntryLabel, resolveAnalysisEntry } from "@/features/access/account-access";
 import { formatQuotaMessage, formatQuotaTitle } from "@/features/access/quota-message";
 import { CoachTabIcon } from "@/components/coach-tab-icon";
 import { ProductionIcon } from "@/components/production-icon";
@@ -60,12 +60,9 @@ export default function TabsLayout() {
         options={{
           title: "Record",
           tabBarButton: () => <CenterTabButton variant={analysisEntry} label={centerLabel} accessibilityLabel={centerAccessibilityLabel} disabled={analysisEntry === "quota_exhausted"} onPress={() => {
-            if (analysisEntry === "purchase") {
-              router.push("/subscription" as Href);
-              return;
-            }
-            if (analysisEntry === "analysis_pending" && access.access.pendingAnalysisSessionId) {
-              router.push(`/analysis/${access.access.pendingAnalysisSessionId}` as Href);
+            const href = analysisEntryHref(analysisEntry, access.access.pendingAnalysisSessionId);
+            if (href) {
+              router.push(href as Href);
               return;
             }
             if (analysisEntry === "renewal_pending") {
@@ -92,7 +89,6 @@ export default function TabsLayout() {
               ] : [{ text: "OK" }]);
               return;
             }
-            router.push("/exercise-selection" as Href);
           }} />,
         }}
       />

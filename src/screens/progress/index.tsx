@@ -5,6 +5,7 @@ import Animated, { FadeInDown, LinearTransition } from "react-native-reanimated"
 
 import { ResponsiveScreen } from "@/components/responsive-screen";
 import { ExerciseFamilyIcon } from "@/components/exercise-family-icon";
+import { FormButton } from "@/components/form-button";
 import { FormWordmark } from "@/components/form-wordmark";
 import type { ExerciseFamily } from "@/features/exercises/exercise-family";
 import type { AnalysisHistoryGroup, AnalysisHistoryItem, AnalysisHistoryStatus } from "@/features/progress/group-sessions";
@@ -17,12 +18,13 @@ type ExerciseRow = AnalysisHistoryItem & { family: ExerciseFamily; label: string
 type ProgressScreenProps = {
   groups: AnalysisHistoryGroup[];
   onOpenSession: (sessionId: string, status: AnalysisHistoryStatus) => void;
+  onStartAnalysis?: () => void;
   onOpenProfile?: () => void;
   onTogglePin?: (sessionId: string, pinned: boolean) => void | Promise<void>;
   onDeleteSession?: (sessionId: string) => void | Promise<void>;
 };
 
-export function ProgressScreen({ groups, onOpenSession, onOpenProfile = () => undefined, onTogglePin = () => undefined, onDeleteSession = () => undefined }: ProgressScreenProps) {
+export function ProgressScreen({ groups, onOpenSession, onStartAnalysis = () => undefined, onOpenProfile = () => undefined, onTogglePin = () => undefined, onDeleteSession = () => undefined }: ProgressScreenProps) {
   const [query, setQuery] = useState("");
   const [family, setFamily] = useState<ExerciseFamily | "all">("all");
   const [actionRow, setActionRow] = useState<ExerciseRow | null>(null);
@@ -48,6 +50,22 @@ export function ProgressScreen({ groups, onOpenSession, onOpenProfile = () => un
         <Text selectable style={[typography.title, { color: colors.text }]}>Progress</Text>
         <Text selectable style={[typography.body, { color: colors.textSecondary }]}>{rows.length === 0 ? "Your exercise history will appear here." : `${rows.length} saved ${rows.length === 1 ? "analysis" : "analyses"}`}</Text>
       </View>
+      {rows.length === 0 ? (
+        <Animated.View
+          entering={FadeInDown.duration(220)}
+          testID="progress-empty-state"
+          style={{ flex: 1, minHeight: 390, alignItems: "center", justifyContent: "center", gap: spacing.lg, padding: spacing.xl, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}
+        >
+          <View style={{ width: 112, height: 112, alignItems: "center", justifyContent: "center", borderRadius: radii.pill, backgroundColor: colors.goldSoft }}>
+            <ExerciseFamilyIcon family="other" size={82} />
+          </View>
+          <View style={{ alignItems: "center", gap: spacing.sm }}>
+            <Text selectable style={[typography.title, { color: colors.text, textAlign: "center" }]}>Your saved analyses will live here</Text>
+            <Text selectable style={[typography.body, { maxWidth: 330, color: colors.textSecondary, textAlign: "center" }]}>Start with one set. Formie will save the coaching, score, and exercise here automatically.</Text>
+          </View>
+          <FormButton label="Start your first analysis" onPress={onStartAnalysis} style={{ width: "100%", maxWidth: 360 }} />
+        </Animated.View>
+      ) : <>
       <TextInput
         accessibilityLabel="Search exercise history"
         autoCapitalize="none"
@@ -70,8 +88,8 @@ export function ProgressScreen({ groups, onOpenSession, onOpenProfile = () => un
         <Text selectable style={[typography.heading, { color: colors.text }]}>Exercises</Text>
         {filtered.length === 0 ? (
           <Animated.View entering={FadeInDown.duration(220)} style={{ gap: spacing.md, paddingVertical: spacing.xl, alignItems: "center" }}>
-            <Text selectable style={[typography.heading, { color: colors.text }]}>{rows.length === 0 ? "No analyses yet" : "No matching exercises"}</Text>
-            <Text selectable style={[typography.body, { color: colors.textSecondary, textAlign: "center" }]}>{rows.length === 0 ? "Record a set and Formie will save it here automatically." : "Try another search or filter."}</Text>
+            <Text selectable style={[typography.heading, { color: colors.text }]}>No matching exercises</Text>
+            <Text selectable style={[typography.body, { color: colors.textSecondary, textAlign: "center" }]}>Try another search or filter.</Text>
           </Animated.View>
         ) : filtered.map((row) => (
           <Animated.View layout={LinearTransition.duration(180)} key={row.sessionId}>
@@ -89,6 +107,7 @@ export function ProgressScreen({ groups, onOpenSession, onOpenProfile = () => un
           </Animated.View>
         ))}
       </View>
+      </>}
 
       <Modal animationType="fade" onRequestClose={() => setActionRow(null)} transparent visible={Boolean(actionRow)}>
         <Pressable accessibilityLabel="Close analysis actions" onPress={() => setActionRow(null)} style={{ flex: 1, justifyContent: "flex-end", padding: spacing.lg, backgroundColor: "rgba(0,0,0,0.66)" }}>

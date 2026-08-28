@@ -9,6 +9,13 @@ export function formatAnalysisEntryLabel(entry: AnalysisEntry, lifecycleState: A
   return "Record";
 }
 
+export function analysisEntryHref(entry: AnalysisEntry, pendingAnalysisSessionId: string | null): string | null {
+  if (entry === "record") return "/exercise-selection";
+  if (entry === "purchase") return "/subscription?returnTo=%2Fexercise-selection";
+  if (entry === "analysis_pending" && pendingAnalysisSessionId) return `/analysis/${pendingAnalysisSessionId}`;
+  return null;
+}
+
 export function canOpenCompletedAccount({
   authenticated,
   profileComplete,

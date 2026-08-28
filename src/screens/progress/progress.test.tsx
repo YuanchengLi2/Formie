@@ -22,12 +22,23 @@ const group: AnalysisHistoryGroup = {
 
 describe("ProgressScreen", () => {
   it("uses search and filters without rendering dashboard metrics", async () => {
-    const screen = await render(<ProgressScreen groups={[]} onOpenSession={jest.fn()} />);
+    const screen = await render(<ProgressScreen groups={[group]} onOpenSession={jest.fn()} />);
     expect(screen.getByPlaceholderText("Search exercises")).toBeTruthy();
     expect(screen.getByText("All")).toBeTruthy();
     expect(screen.queryByText("Movement Quality")).toBeNull();
     expect(screen.queryByTestId("progress-metrics-grid")).toBeNull();
     expect(screen.queryByLabelText("Progress rewards")).toBeNull();
+  });
+
+  it("gives a new account a focused empty state that starts its first analysis", async () => {
+    const onStartAnalysis = jest.fn();
+    const screen = await render(<ProgressScreen groups={[]} onOpenSession={jest.fn()} onStartAnalysis={onStartAnalysis} />);
+
+    expect(screen.getByText("Your saved analyses will live here")).toBeTruthy();
+    expect(screen.queryByPlaceholderText("Search exercises")).toBeNull();
+    expect(screen.queryByText("All")).toBeNull();
+    await fireEvent.press(screen.getByRole("button", { name: "Start your first analysis" }));
+    expect(onStartAnalysis).toHaveBeenCalledTimes(1);
   });
 
   it("renders every saved exercise separately and filters the list", async () => {

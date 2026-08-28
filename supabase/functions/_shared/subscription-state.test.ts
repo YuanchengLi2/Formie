@@ -60,6 +60,20 @@ describe("reduceSubscriptionState", () => {
     });
   });
 
+  it("checks provider recovery after a billing issue instead of treating it as cancellation", () => {
+    expect(reduceSubscriptionState(active, {
+      id: "billing-issue",
+      type: "BILLING_ISSUE",
+      eventAt: "2026-08-06T23:32:17.000Z",
+      productIdentifier: "formie_monthly",
+    })).toEqual({
+      ...active,
+      lifecycleState: "renewal_pending",
+      latestEventAt: "2026-08-06T23:32:17.000Z",
+      latestEventId: "billing-issue",
+    });
+  });
+
   it("ignores an old expiration after a newer renewal", () => {
     const current = { ...active, billingPeriodStart: "2026-08-06T23:32:16.000Z", billingPeriodEnd: "2026-08-06T23:37:16.000Z", latestEventAt: "2026-08-06T23:32:17.000Z", latestEventId: "renewal" };
     expect(reduceSubscriptionState(current, {

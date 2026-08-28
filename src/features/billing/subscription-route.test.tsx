@@ -10,9 +10,11 @@ const mockPurchase = jest.fn();
 const mockRefresh = jest.fn();
 const mockCompleteAccess = jest.fn();
 let capturedProps: Record<string, unknown> | null = null;
+let mockReturnTo: string | undefined;
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ replace: mockReplace, back: mockBack }),
+  useLocalSearchParams: () => ({ returnTo: mockReturnTo }),
 }));
 jest.mock("expo-linking", () => ({ openURL: (...args: unknown[]) => mockOpenUrl(...args) }));
 jest.mock("@/features/auth/auth-provider", () => ({
@@ -59,6 +61,7 @@ describe("SubscriptionRoute", () => {
     mockPurchase.mockReset().mockResolvedValue("inactive");
     mockRefresh.mockReset().mockResolvedValue(undefined);
     mockCompleteAccess.mockReset().mockResolvedValue(undefined);
+    mockReturnTo = undefined;
   });
 
   it("forwards the live price, restore state, and production legal actions", async () => {
@@ -74,5 +77,18 @@ describe("SubscriptionRoute", () => {
     expect(mockRestore).toHaveBeenCalledTimes(1);
     expect(mockOpenUrl).toHaveBeenNthCalledWith(1, "https://useformie.com/terms");
     expect(mockOpenUrl).toHaveBeenNthCalledWith(2, "https://useformie.com/privacy");
+  });
+
+  it("continues a new account into exercise selection after purchase", async () => {
+    mockReturnTo = "/exercise-selection";
+    mockPurchase.mockResolvedValue("active");
+    render(<SubscriptionRoute />);
+    await waitFor(() => expect(capturedProps).not.toBeNull());
+
+    await act(async () => { await (capturedProps?.onPurchase as () => Promise<void>)(); });
+
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    expect(mockCompleteAccess).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith("/exercise-selection");
   });
 });

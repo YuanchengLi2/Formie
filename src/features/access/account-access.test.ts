@@ -1,4 +1,4 @@
-import { canOpenCompletedAccount, canOpenSubscriptionScreen, formatAnalysisBalance, formatAnalysisEntryLabel, formatAnalysisFraction, formatBillingTimestamp, formatSubscriptionDate, formatSubscriptionStateLabel, resolveAnalysisEntry } from "./account-access";
+import { analysisEntryHref, canOpenCompletedAccount, canOpenSubscriptionScreen, formatAnalysisBalance, formatAnalysisEntryLabel, formatAnalysisFraction, formatBillingTimestamp, formatSubscriptionDate, formatSubscriptionStateLabel, resolveAnalysisEntry } from "./account-access";
 import type { AccessStatus } from "./types";
 
 const access = (status: AccessStatus["status"], canAnalyze: boolean, remaining: number | null): AccessStatus => ({
@@ -57,6 +57,13 @@ describe("subscription screen admission", () => {
 });
 
 describe("analysis entry policy", () => {
+  it("preserves a new account's intent to start an analysis through purchase", () => {
+    expect(analysisEntryHref("purchase", null)).toBe("/subscription?returnTo=%2Fexercise-selection");
+    expect(analysisEntryHref("record", null)).toBe("/exercise-selection");
+    expect(analysisEntryHref("analysis_pending", "session-1")).toBe("/analysis/session-1");
+    expect(analysisEntryHref("quota_exhausted", null)).toBeNull();
+  });
+
   it("records only with confirmed usable access", () => {
     expect(resolveAnalysisEntry("ready", access("active", true, 8))).toBe("record");
   });

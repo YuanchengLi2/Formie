@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import * as Linking from "expo-linking";
-import { type Href, useRouter } from "expo-router";
+import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { ActivityIndicator, Text, View } from "react-native";
 
 import { useAccess } from "@/features/access/access-provider";
@@ -17,6 +17,8 @@ import { setAuthReturnTarget } from "@/features/auth/auth-return-target";
 
 export default function SubscriptionRoute() {
   const router = useRouter();
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
+  const completionTarget: Href = returnTo === "/exercise-selection" ? "/exercise-selection" : "/(tabs)/(home)";
   const auth = useAuth();
   const billing = useBilling();
   const access = useAccess();
@@ -35,16 +37,16 @@ export default function SubscriptionRoute() {
   useEffect(() => {
     if (view.mode !== "completed_account") return;
     if (onboarding.status === "premium_required") {
-      void completeAccess().then(() => router.replace("/(tabs)/(home)" as Href));
+      void completeAccess().then(() => router.replace(completionTarget));
       return;
     }
-    router.replace("/(tabs)/(home)" as Href);
-  }, [completeAccess, onboarding.status, router, view.mode]);
+    router.replace(completionTarget);
+  }, [completeAccess, completionTarget, onboarding.status, router, view.mode]);
 
   const completePurchase = async () => {
     await access.refresh().catch(() => undefined);
     await onboarding.completeAccess();
-    router.replace("/(tabs)/(home)" as Href);
+    router.replace(completionTarget);
   };
 
   const finish = async () => {

@@ -53,7 +53,10 @@ export function reduceSubscriptionState(current: SubscriptionLedgerState, event:
     if (current.lifecycleState === "expired" || current.lifecycleState === "not_subscribed") return current;
     return withEvent({ ...current, lifecycleState: "active_renewing", willRenew: true }, event);
   }
-  if (event.type === "BILLING_ISSUE") return withEvent(current, event);
+  if (event.type === "BILLING_ISSUE") {
+    if (current.lifecycleState === "expired" || current.lifecycleState === "not_subscribed") return withEvent(current, event);
+    return withEvent({ ...current, lifecycleState: "renewal_pending" }, event);
+  }
   if (event.type === "PRODUCT_CHANGE") return withEvent(current, event);
   if (event.type === "EXPIRATION") {
     const currentEnd = time(current.billingPeriodEnd);
