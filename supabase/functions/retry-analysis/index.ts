@@ -20,7 +20,7 @@ Deno.serve(async (request) => {
     findDueSessions: async (now, limit) => {
       let query = admin
         .from("analysis_sessions")
-        .select("id,user_id,active_v49_run_id,pipeline_version,analysis_next_retry_at")
+        .select("id,user_id,active_v49_run_id,pipeline_version,analysis_next_retry_at,updated_at")
         .eq("status", "processing");
       if (!primaryV49Enabled) query = query.is("active_v49_run_id", null);
       const stages = ["input_ready", "video_processing", "problem_finding", "coaching", "committing", "analyzing", "finalizing", "retry_wait"];
@@ -30,13 +30,41 @@ Deno.serve(async (request) => {
         .order("analysis_next_retry_at", { ascending: true })
         .limit(limit);
       if (error) throw error;
-          return (data ?? []).map((session) => ({
+      const sessions = data ?? [];
+      const failedStageBySession = new Map<string, { pipelineVersion: string | null; updatedAt: string }>();
+      if (sessions.length > 0) {
+        const { data: failedStages, error: failedStagesError } = await admin
+          .from("analysis_stage_runs")
+          .select("session_id,pipeline_version,updated_at")
+          .in("session_id", sessions.map((session) => session.id))
+          .eq("status", "failed")
+          .order("updated_at", { ascending: false });
+        if (failedStagesError) throw failedStagesError;
+        for (const stage of failedStages ?? []) {
+          if (!failedStageBySession.has(stage.session_id)) {
+            failedStageBySession.set(stage.session_id, {
+              pipelineVersion: stage.pipeline_version ?? null,
+              updatedAt: stage.updated_at,
+            });
+          }
+        }
+      }
+      return sessions.map((session) => {
+        const failedStage = failedStageBySession.get(session.id);
+        const hasUnreconciledStageFailure = Boolean(
+          failedStage
+          && failedStage.pipelineVersion === session.pipeline_version
+          && Date.parse(failedStage.updatedAt) >= Date.parse(session.updated_at),
+        );
+        return {
             id: session.id,
             userId: session.user_id,
             activeV49RunId: session.active_v49_run_id ?? null,
             pipelineVersion: session.pipeline_version ?? null,
-        analysisNextRetryAt: session.analysis_next_retry_at ?? null,
-      }));
+            analysisNextRetryAt: session.analysis_next_retry_at ?? null,
+            hasUnreconciledStageFailure,
+          };
+      });
     },
     invokeAnalysis: async (session) => {
       const endpoint = primaryV49Enabled && session.activeV49RunId ? "analyze-video-v49" : "analyze-video";

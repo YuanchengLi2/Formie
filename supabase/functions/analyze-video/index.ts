@@ -287,16 +287,23 @@ Deno.serve(async (request) => {
       return requireUserId(incoming, admin);
     },
     loadSession: async (sessionId, userId) => {
-      const [{ data: session, error }, { data: result, error: resultError }, { data: storedStage, error: storedStageError }] = await Promise.all([
+      const [{ data: session, error }, { data: result, error: resultError }, { data: storedStage, error: storedStageError }, { data: failedStage, error: failedStageError }] = await Promise.all([
         admin.from("analysis_sessions").select("*").eq("id", sessionId).eq("user_id", userId).maybeSingle(),
         admin.from("analysis_results").select("*").eq("session_id", sessionId).maybeSingle(),
         admin.from("analysis_stage_runs").select("output,pipeline_version").eq("session_id", sessionId).eq("stage", "analyzing").eq("status", "succeeded").not("output", "is", null).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+        admin.from("analysis_stage_runs").select("error_code,pipeline_version,updated_at").eq("session_id", sessionId).eq("status", "failed").not("error_code", "is", null).order("updated_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (error) throw error;
       if (resultError) throw resultError;
       if (storedStageError) throw storedStageError;
+      if (failedStageError) throw failedStageError;
       if (!session) return null;
       const currentPipeline = session.pipeline_version === PIPELINE_VERSION;
+      const failedStageIsNewer = failedStage?.pipeline_version === PIPELINE_VERSION
+        && session.stage !== "retry_wait"
+        && typeof failedStage.updated_at === "string"
+        && typeof session.updated_at === "string"
+        && Date.parse(failedStage.updated_at) >= Date.parse(session.updated_at);
       const declaration = session.set_declaration ? parseSetDeclaration(session.set_declaration) : null;
       return {
         ...session,
@@ -316,6 +323,7 @@ Deno.serve(async (request) => {
         result: resultPayload(session, result),
         analysisRetryCount: Number(session.analysis_retry_count ?? 0),
         hasStoredVideoEvidence: Boolean(storedStage?.output),
+        failedStageErrorCode: failedStageIsNewer && typeof failedStage?.error_code === "string" ? failedStage.error_code : null,
         analysisDecision: currentPipeline && session.analysis_draft && typeof session.analysis_draft === "object" ? session.analysis_draft : null,
         setDeclaration: declaration,
       } as WholeVideoSession;

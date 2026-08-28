@@ -95,4 +95,31 @@ describe("whole-video handler failure disposition", () => {
     await expect(response.json()).resolves.toMatchObject({ status: "failed", stage: "failed", failureCode: "GEMINI_HTTP_503" });
     expect(persistFailure).toHaveBeenCalledWith("session-1", "GEMINI_HTTP_503", expect.objectContaining({ disposition: "terminal_failure", exhausted: true }));
   });
+
+  it("reconciles an orphaned failed stage before attempting the pipeline again", async () => {
+    const advancePipeline = jest.fn(async () => ({ status: "complete", stage: "complete" }));
+    const persistFailure = jest.fn(async () => ({ status: "failed", stage: "failed" }));
+    const deps = dependencies({
+      loadSession: jest.fn(async () => session({ failedStageErrorCode: "GEMINI_PROHIBITED_CONTENT" })),
+      advancePipeline,
+      persistFailure,
+    });
+    const response = await analyzeWholeVideoHandler(new Request("https://example/analyze-video", {
+      method: "POST",
+      body: JSON.stringify({ sessionId: "session-1" }),
+    }), deps);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      status: "failed",
+      stage: "failed",
+      failureCode: "GEMINI_PROHIBITED_CONTENT",
+    });
+    expect(advancePipeline).not.toHaveBeenCalled();
+    expect(persistFailure).toHaveBeenCalledWith(
+      "session-1",
+      "GEMINI_PROHIBITED_CONTENT",
+      expect.objectContaining({ disposition: "terminal_failure" }),
+    );
+  });
 });

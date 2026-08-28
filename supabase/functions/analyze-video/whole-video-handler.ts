@@ -14,6 +14,7 @@ export type WholeVideoSession = {
   result: Record<string, unknown> | null;
   analysisRetryCount?: number;
   hasStoredVideoEvidence?: boolean;
+  failedStageErrorCode?: string | null;
   [key: string]: unknown;
 };
 
@@ -99,6 +100,26 @@ export async function analyzeWholeVideoHandler(request: Request, dependencies: W
     if (!session) return json({ message: "Analysis not found", code: "NOT_FOUND" }, 404);
     if (terminalStatuses.has(session.status)) {
       return json(payload(session, { status: session.status, stage: session.stage ?? session.status, ...(session.result ? { result: session.result } : {}) }), 200);
+    }
+    if (session.failedStageErrorCode) {
+      const code = session.failedStageErrorCode;
+      const disposition = classifyAnalysisFailure({
+        code,
+        completedStage: session.stage === "finalizing" ? "analyzing" : null,
+        hasStoredVideoEvidence: Boolean(session.hasStoredVideoEvidence),
+        retryCount: session.analysisRetryCount ?? 0,
+        maxRetries: 3,
+      });
+      const reconciled = await dependencies.persistFailure(session.id, code, disposition);
+      const reconciledSession = {
+        ...session,
+        status: reconciled.status,
+        stage: reconciled.stage,
+        failureCode: reconciled.status === "failed" ? code : null,
+        analysisNextRetryAt: reconciled.analysisNextRetryAt ?? null,
+        result: reconciled.result ?? null,
+      };
+      return json(payload(reconciledSession, reconciled), terminalStatuses.has(reconciled.status) ? 200 : 202);
     }
     const retryAt = session.analysisNextRetryAt ? Date.parse(session.analysisNextRetryAt) : NaN;
     const now = dependencies.now?.() ?? new Date();

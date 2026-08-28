@@ -27,7 +27,7 @@ describe("analysis failure disposition", () => {
     });
   });
 
-  it.each(["VIDEO_NOT_FOUND", "ANALYSIS_VIDEO_EMPTY", "ANALYSIS_VIDEO_INVALID_TYPE", "GEMINI_FILE_FAILED", "UNAUTHORIZED"])(
+  it.each(["VIDEO_NOT_FOUND", "ANALYSIS_VIDEO_EMPTY", "ANALYSIS_VIDEO_INVALID_TYPE", "GEMINI_FILE_FAILED", "GEMINI_PROHIBITED_CONTENT", "UNAUTHORIZED"])(
     "terminally rejects permanent input/provider failure %s",
     (code) => {
       expect(classifyAnalysisFailure({ code, completedStage: null, retryCount: 0, maxRetries: 3 }).disposition).toBe("terminal_failure");

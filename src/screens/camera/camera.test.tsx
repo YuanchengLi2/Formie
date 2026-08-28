@@ -4,6 +4,10 @@ import { act, fireEvent, render } from "@testing-library/react-native";
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
 const mockGetAvailableLensesAsync = jest.fn<Promise<string[]>, []>();
+const mockRecordAsync = jest.fn<Promise<{ uri: string }>, [Record<string, unknown>]>();
+const mockStopRecording = jest.fn();
+const mockPersistRecording = jest.fn();
+let finishNativeRecording: ((result: { uri: string }) => void) | undefined;
 let mockPinchBegin: (() => void) | undefined;
 let mockPinchUpdate: ((event: { scale: number }) => void) | undefined;
 let mockPinchEnd: ((event: { scale: number }) => void) | undefined;
@@ -16,7 +20,11 @@ jest.mock("expo-camera", () => {
   const React = require("react");
   const { View } = require("react-native");
   const CameraView = React.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
-    React.useImperativeHandle(ref, () => ({ getAvailableLensesAsync: mockGetAvailableLensesAsync }));
+    React.useImperativeHandle(ref, () => ({
+      getAvailableLensesAsync: mockGetAvailableLensesAsync,
+      recordAsync: mockRecordAsync,
+      stopRecording: mockStopRecording,
+    }));
     return React.createElement(View, props);
   });
   CameraView.displayName = "CameraView";
@@ -54,6 +62,12 @@ jest.mock("@/features/capture/analysis-upload-coordinator", () => ({
   },
 }));
 
+jest.mock("@/features/capture/device-video-store", () => ({
+  deviceVideoStore: {
+    persist: (...args: unknown[]) => mockPersistRecording(...args),
+  },
+}));
+
 import { analysisUploadCoordinator } from "@/features/capture/analysis-upload-coordinator";
 import { useCapturePreferences } from "@/features/capture/capture-preferences";
 import { useCaptureStore } from "@/features/capture/capture-store";
@@ -66,6 +80,10 @@ describe("CameraScreen capture lifecycle", () => {
     mockBack.mockClear();
     mockReplace.mockClear();
     mockGetAvailableLensesAsync.mockReset();
+    mockRecordAsync.mockReset().mockImplementation(() => new Promise((resolve) => { finishNativeRecording = resolve; }));
+    mockStopRecording.mockReset().mockImplementation(() => finishNativeRecording?.({ uri: "file:///captured.mp4" }));
+    mockPersistRecording.mockReset().mockImplementation(async (recording) => recording);
+    finishNativeRecording = undefined;
     mockPinchBegin = undefined;
     mockPinchUpdate = undefined;
     mockPinchEnd = undefined;
@@ -201,7 +219,7 @@ describe("CameraScreen capture lifecycle", () => {
     expect(screen.queryByLabelText("Camera zoom 0.5x")).toBeNull();
   });
 
-  it("remounts the native preview and rejects stale native lens callbacks after a flip", async () => {
+  it("keeps one native preview mounted and rejects stale native lens callbacks after a flip", async () => {
     const screen = await render(<CameraScreen />);
     const rearPreview = screen.getByLabelText("Camera preview");
     const staleNativeLensCallback = rearPreview.props.onAvailableLensesChanged;
@@ -214,7 +232,7 @@ describe("CameraScreen capture lifecycle", () => {
 
     const frontPreview = screen.getByLabelText("Camera preview");
     expect(frontPreview.props.facing).toBe("front");
-    expect(frontPreview.props.nativeID).not.toBe(rearNativeId);
+    expect(frontPreview.props.nativeID).toBe(rearNativeId);
     expect(frontPreview.props.enableTorch).toBe(false);
     expect(frontPreview.props.selectedLens).toBeUndefined();
 
@@ -223,6 +241,26 @@ describe("CameraScreen capture lifecycle", () => {
 
     await act(async () => frontPreview.props.onAvailableLensesChanged({ lenses: ["frontCamera"] }));
     expect(screen.getByLabelText("Camera preview").props.facing).toBe("front");
+  });
+
+  it("finishes the native recording lifecycle and opens review when stop resolves", async () => {
+    jest.useFakeTimers();
+    useCapturePreferences.setState({ preferences: { countdownSeconds: 5, recordingVibrationEnabled: false, interactionHapticsEnabled: true }, hydrated: true });
+    const screen = await render(<CameraScreen />);
+
+    await fireEvent.press(screen.getByLabelText("Start countdown"));
+    await act(async () => { jest.advanceTimersByTime(5_000); });
+    expect(mockRecordAsync).toHaveBeenCalledTimes(1);
+
+    await act(async () => { jest.advanceTimersByTime(3_000); });
+
+    await fireEvent.press(screen.getByLabelText("Stop recording"));
+    await act(async () => { await Promise.resolve(); });
+
+    expect(mockStopRecording).toHaveBeenCalledTimes(1);
+    expect(mockPersistRecording).toHaveBeenCalledWith(expect.objectContaining({ localUri: "file:///captured.mp4" }));
+    expect(mockReplace).toHaveBeenCalledWith("/analysis/review");
+    expect(useCaptureStore.getState().phase).toBe("recorded");
   });
 
   it("lets a pinch cross from 1x onto the ultrawide camera", async () => {

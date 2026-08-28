@@ -4,6 +4,7 @@ export type RetryAnalysisSession = {
   activeV49RunId?: string | null;
   pipelineVersion: string | null;
   analysisNextRetryAt?: string | null;
+  hasUnreconciledStageFailure?: boolean;
 };
 
 const FIRST_NON_RETRYABLE_WHOLE_VIDEO_VERSION = 56;
@@ -15,6 +16,7 @@ export function canAutomaticallyRetry(session: RetryAnalysisSession, now = new D
   const version = Number(match[1]);
   if (version < FIRST_NON_RETRYABLE_WHOLE_VIDEO_VERSION) return true;
   if (version < FIRST_LEASED_RETRYABLE_WHOLE_VIDEO_VERSION) return false;
+  if (session.hasUnreconciledStageFailure) return true;
   const retryAt = session.analysisNextRetryAt ? Date.parse(session.analysisNextRetryAt) : NaN;
   return Number.isFinite(retryAt) && retryAt <= now.getTime();
 }

@@ -29,6 +29,7 @@ const PERMANENT_CODES = new Set([
 
 const FINALIZATION_CODES = /(?:CONTRACT|PARSE|WRITER|FINALIZ|RESULT_SAVE|COACHING)/;
 const TRANSIENT_CODES = /(?:TIMEOUT|DEADLINE|NETWORK|FETCH|PROCESSING|RATE_LIMIT|TOO_MANY_REQUESTS|UNAVAILABLE|TEMPORAR|STAGE_BUSY)/;
+const PERMANENT_CONTENT_BLOCK_CODES = /^GEMINI_(?:PROHIBITED_CONTENT|SAFETY|BLOCKLIST|IMAGE_SAFETY)$/;
 
 export function analysisRetrySchedule(retryCount: number, now = new Date()): { backoffSeconds: number; nextRetryAt: string } {
   const backoffSeconds = Math.min(5 * 2 ** Math.max(0, retryCount - 1), 60);
@@ -41,7 +42,7 @@ export function analysisRetrySchedule(retryCount: number, now = new Date()): { b
 export function classifyAnalysisFailure(input: AnalysisFailureContext): AnalysisFailureDisposition {
   const exhausted = input.retryCount >= input.maxRetries;
   const providerFailed = input.providerStatus?.toUpperCase() === "FAILED";
-  const permanent = PERMANENT_CODES.has(input.code) || providerFailed || input.httpStatus === 401 || input.httpStatus === 403 || input.httpStatus === 404 || input.httpStatus === 415;
+  const permanent = PERMANENT_CODES.has(input.code) || PERMANENT_CONTENT_BLOCK_CODES.test(input.code) || providerFailed || input.httpStatus === 401 || input.httpStatus === 403 || input.httpStatus === 404 || input.httpStatus === 415;
   if (permanent || exhausted) {
     return { disposition: "terminal_failure", preserveGeminiFile: false, preserveStageOutput: Boolean(input.hasStoredVideoEvidence), exhausted };
   }

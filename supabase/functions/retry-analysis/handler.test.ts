@@ -60,6 +60,7 @@ describe("retry-analysis worker", () => {
         { id: "current", userId: "user-3", pipelineVersion: "gemini-whole-video-v64-durable-retry" },
         { id: "legacy", userId: "user-2", pipelineVersion: "gemini-whole-video-v55-single-pass-coaching" },
         { id: "leased-active", userId: "user-5", pipelineVersion: "gemini-whole-video-v72-leased-direct-ai-coaching", analysisNextRetryAt: null },
+        { id: "leased-orphan", userId: "user-7", pipelineVersion: "gemini-whole-video-v88-evidence-scoring", analysisNextRetryAt: null, hasUnreconciledStageFailure: true },
         { id: "leased", userId: "user-6", pipelineVersion: "gemini-whole-video-v72-leased-direct-ai-coaching", analysisNextRetryAt: "2026-08-02T15:59:59.000Z" },
       ]),
     });
@@ -67,10 +68,11 @@ describe("retry-analysis worker", () => {
     const response = await retryAnalysisHandler(new Request("https://example/retry-analysis", { method: "POST" }), deps);
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ processed: 2, succeeded: 2, failed: 0 });
-    expect(deps.invokeAnalysis).toHaveBeenCalledTimes(2);
+    await expect(response.json()).resolves.toEqual({ processed: 3, succeeded: 3, failed: 0 });
+    expect(deps.invokeAnalysis).toHaveBeenCalledTimes(3);
     expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "legacy", userId: "user-2", pipelineVersion: "gemini-whole-video-v55-single-pass-coaching" });
     expect(deps.invokeAnalysis).not.toHaveBeenCalledWith(expect.objectContaining({ id: "leased-active" }));
+    expect(deps.invokeAnalysis).toHaveBeenCalledWith(expect.objectContaining({ id: "leased-orphan" }));
     expect(deps.invokeAnalysis).toHaveBeenCalledWith({ id: "leased", userId: "user-6", pipelineVersion: "gemini-whole-video-v72-leased-direct-ai-coaching", analysisNextRetryAt: "2026-08-02T15:59:59.000Z" });
   });
 });
