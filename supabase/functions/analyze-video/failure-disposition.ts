@@ -15,6 +15,16 @@ export type AnalysisFailureContext = {
   maxRetries: number;
 };
 
+export function analysisFailurePersistenceState(
+  currentRetryCount: number,
+  disposition: AnalysisFailureDisposition,
+): { nextRetryCount: number; terminal: boolean } {
+  return {
+    nextRetryCount: currentRetryCount + 1,
+    terminal: disposition.disposition === "terminal_failure",
+  };
+}
+
 const PERMANENT_CODES = new Set([
   "VIDEO_NOT_FOUND",
   "VIDEO_TOO_LONG",

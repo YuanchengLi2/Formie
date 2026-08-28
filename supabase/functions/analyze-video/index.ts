@@ -27,7 +27,7 @@ import { advanceWholeVideoPipeline } from "./whole-video-runner.ts";
 import { analyzeWholeVideoHandler, type WholeVideoSession } from "./whole-video-handler.ts";
 import { AnalysisDeadline, analysisDeadlineStartedAt } from "./analysis-deadline.ts";
 import { writeValidatedCoaching } from "./coaching-writer.ts";
-import { analysisRetrySchedule } from "./failure-disposition.ts";
+import { analysisFailurePersistenceState, analysisRetrySchedule } from "./failure-disposition.ts";
 import { runClaimedStage, stageFailurePersistenceError } from "./stage-execution.ts";
 
 const PIPELINE_VERSION = ANALYSIS_RUNTIME_CONTRACT.pipelineVersion;
@@ -580,8 +580,10 @@ Deno.serve(async (request) => {
         });
         return { status: existingResult?.status ?? retryState?.status ?? "complete", stage: "complete" };
       }
-      const nextRetryCount = Number(retryState?.analysis_retry_count ?? 0) + 1;
-      const terminal = disposition.disposition === "terminal_failure" || nextRetryCount > MAX_DURABLE_RETRIES;
+      const { nextRetryCount, terminal } = analysisFailurePersistenceState(
+        Number(retryState?.analysis_retry_count ?? 0),
+        disposition,
+      );
       if (terminal && typeof retryState?.gemini_file_name === "string") {
         await files.deleteFile(retryState.gemini_file_name).catch(() => undefined);
       }

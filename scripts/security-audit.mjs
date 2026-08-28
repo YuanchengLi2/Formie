@@ -56,4 +56,12 @@ scanTrackedSecrets();
 run(npm, ["audit", "--omit=dev", "--audit-level=high"]);
 run(npm, ["audit", "--omit=dev", "--audit-level=high"], `${process.cwd()}/website`);
 run(npx, ["expo-doctor"]);
-run(npx, ["jest", "--runInBand", "supabase/functions/_shared/request-security.test.ts", "supabase/functions/_shared/request-security-wiring.test.ts", "supabase/functions/revenuecat-webhook/handler.test.ts", "supabase/functions/_shared/entitlement-ledger.test.ts"]);
+const jestArgs = ["jest", "--runInBand"];
+if (process.platform === "win32") jestArgs.push("--no-watchman");
+jestArgs.push(
+  "supabase/functions/_shared/request-security.test.ts",
+  "supabase/functions/_shared/request-security-wiring.test.ts",
+  "supabase/functions/revenuecat-webhook/handler.test.ts",
+  "supabase/functions/_shared/entitlement-ledger.test.ts",
+);
+run(npx, jestArgs);

@@ -1,4 +1,8 @@
-import { analysisRetrySchedule, classifyAnalysisFailure } from "./failure-disposition";
+import {
+  analysisFailurePersistenceState,
+  analysisRetrySchedule,
+  classifyAnalysisFailure,
+} from "./failure-disposition";
 
 describe("analysis failure disposition", () => {
   it("schedules each transient retry from the current attempt without an undefined timestamp", () => {
@@ -47,6 +51,22 @@ describe("analysis failure disposition", () => {
   it("bounds unknown provider failures before making them terminal", () => {
     expect(classifyAnalysisFailure({ code: "PROVIDER_UNKNOWN", completedStage: null, retryCount: 1, maxRetries: 3 }).disposition).toBe("retry_video_file");
     expect(classifyAnalysisFailure({ code: "PROVIDER_UNKNOWN", completedStage: null, retryCount: 3, maxRetries: 3 })).toMatchObject({ disposition: "terminal_failure", exhausted: true });
+  });
+
+  it("derives persistence from the classified disposition without a second retry limit", () => {
+    expect(analysisFailurePersistenceState(2, {
+      disposition: "retry_video_file",
+      preserveGeminiFile: true,
+      preserveStageOutput: false,
+      exhausted: false,
+    })).toEqual({ nextRetryCount: 3, terminal: false });
+
+    expect(analysisFailurePersistenceState(3, {
+      disposition: "terminal_failure",
+      preserveGeminiFile: false,
+      preserveStageOutput: false,
+      exhausted: true,
+    })).toEqual({ nextRetryCount: 4, terminal: true });
   });
 
   it("does not permanently fail an opaque Gemini HTTP 400 without an explicit invalid-input code", () => {
