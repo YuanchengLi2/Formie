@@ -31,4 +31,5 @@ test("privacy policy discloses the shipped data and processor boundaries", () =>
     /RevenueCat/i,
     /Supabase/i,
   ]) assert.match(html, subject);
+  for (const subject of [/random first-party install identifier/i,/does not contain your name, email/i,/video URI or content/i,/device fingerprint/i,/cross-app/i,/removed after 30 days/i]) assert.match(html, subject);
 });

@@ -136,3 +136,6 @@ verify_jwt = true
 
 [functions.delete-account]
 verify_jwt = true
+
+[functions.record-product-analytics]
+verify_jwt = false

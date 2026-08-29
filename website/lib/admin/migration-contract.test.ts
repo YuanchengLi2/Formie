@@ -31,3 +31,15 @@ test("accuracy-first reporting prices known token usage and builds an ordered pr
   assert.match(sql, /'unpricedCalls'/i);
   assert.match(sql, /sandbox\s*=\s*false/i);
 });
+
+test("v2 reporting is service-only, maturity-aware, filterable, and uses one SQL calculator", () => {
+  const sql = readFileSync(resolve(__dirname, "../../../supabase/migrations/202608290002_founder_dashboard_v2.sql"), "utf8");
+  assert.match(sql, /get_founder_dashboard_snapshot_v2\(p_window text, p_exercise_id integer/i);
+  assert.match(sql, /America\/New_York/i);
+  assert.match(sql, /interval '7 days'/i);
+  assert.match(sql, /interval '14 days'/i);
+  assert.match(sql, /interval '30 days'/i);
+  assert.match(sql, /app_store_commission_rate[\s\S]*0\.15/i);
+  assert.match(sql, /grant execute on function public\.get_founder_dashboard_snapshot_v2\(text,integer\) to service_role/i);
+  assert.doesNotMatch(sql, /grant execute[\s\S]*authenticated/i);
+});

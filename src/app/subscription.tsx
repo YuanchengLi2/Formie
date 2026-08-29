@@ -14,6 +14,7 @@ import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
 import { setAuthReturnTarget } from "@/features/auth/auth-return-target";
+import { trackProductEvent } from "@/features/analytics/product-analytics";
 
 export default function SubscriptionRoute() {
   const router = useRouter();
@@ -42,6 +43,7 @@ export default function SubscriptionRoute() {
     }
     router.replace(completionTarget);
   }, [completeAccess, completionTarget, onboarding.status, router, view.mode]);
+  useEffect(() => { if (auth.phase === "authenticated" && view.mode !== "completed_account" && view.mode !== "verify") trackProductEvent("paywall_viewed", { offerId: "monthly", source: "subscription_route" }); }, [auth.phase, view.mode]);
 
   const completePurchase = async () => {
     await access.refresh().catch(() => undefined);
@@ -55,7 +57,10 @@ export default function SubscriptionRoute() {
       router.replace("/login?returnTo=%2Fsubscription" as Href);
       return;
     }
+    trackProductEvent("purchase_started", { offerId: "subscription_route", productId: "monthly" });
     const outcome = await billing.purchase("monthly");
+    if (outcome === "cancelled") trackProductEvent("purchase_cancelled", { offerId: "subscription_route", productId: "monthly", errorCategory: "user_cancelled" });
+    else if (outcome !== "active") trackProductEvent("purchase_failed", { offerId: "subscription_route", productId: "monthly", errorCategory: "sync_required" });
     if (outcome === "active") await completePurchase();
   };
 
@@ -94,7 +99,7 @@ export default function SubscriptionRoute() {
     error={billing.error}
     restoreMessage={billing.restoreMessage}
     onBack={() => router.back()}
-    onRestore={() => void billing.restore().then((active) => active ? completePurchase() : undefined)}
+    onRestore={() => { trackProductEvent("purchase_restored", { productId: "restore_attempt" }); void billing.restore().then((active) => active ? completePurchase() : undefined); }}
     onOpenTerms={() => { if (legal) void Linking.openURL(legal.termsUrl); }}
     onOpenPrivacy={() => { if (legal) void Linking.openURL(legal.privacyUrl); }}
     onRetrySync={() => void billing.retryPurchaseSync().then((active) => active ? completePurchase() : undefined)}

@@ -18,7 +18,7 @@ export type CreateAnalysisDependencies = {
   authenticate: (request: Request) => Promise<string>;
   ownsSession: (sessionId: string, userId: string) => Promise<boolean>;
   findCatalogExercise: (exerciseId: number) => Promise<{ id: number; name: string } | null>;
-  createSession: (input: { userId: string; previousSessionId: string | null; clientRequestId: string | null; declaration: SetDeclaration }) => Promise<CreatedSession>;
+  createSession: (input: { userId: string; previousSessionId: string | null; clientRequestId: string | null; declaration: SetDeclaration; analyticsContext: { captureFlowId: string; appSessionId: string } | null }) => Promise<CreatedSession>;
   reserveCredit?: (input: { userId: string; clientRequestId: string; kind: "analysis" }) => Promise<CreditReservation>;
   attachCredit?: (reservationId: string, sessionId: string) => Promise<void>;
   cancelCredit?: (userId: string, reservationId: string) => Promise<void>;
@@ -47,7 +47,7 @@ export async function createAnalysisHandler(request: Request, dependencies: Crea
 
   if (!body || typeof body !== "object" || Array.isArray(body)) return json({ message: "Invalid request body", code: "INVALID_BODY" }, 400);
   const keys = Object.keys(body);
-  if (keys.some((key) => key !== "previousSessionId" && key !== "clientRequestId" && key !== "declaration" && key !== "privacySafeFallback" && key !== "uploadProfile")) return json({ message: "Invalid request body", code: "INVALID_BODY" }, 400);
+  if (keys.some((key) => key !== "previousSessionId" && key !== "clientRequestId" && key !== "declaration" && key !== "privacySafeFallback" && key !== "uploadProfile" && key !== "analyticsContext")) return json({ message: "Invalid request body", code: "INVALID_BODY" }, 400);
   const uploadProfile = (body as Record<string, unknown>).uploadProfile;
   if (uploadProfile !== undefined && uploadProfile !== "single_analysis_v1") {
     return json({ message: "Invalid upload profile", code: "INVALID_BODY" }, 400);
@@ -68,6 +68,15 @@ export async function createAnalysisHandler(request: Request, dependencies: Crea
     || clientRequestId.length > 128
   )) {
     return json({ message: "clientRequestId must be between 8 and 128 characters", code: "INVALID_BODY" }, 400);
+  }
+  const rawAnalyticsContext = (body as Record<string, unknown>).analyticsContext;
+  let analyticsContext: { captureFlowId: string; appSessionId: string } | null = null;
+  if (rawAnalyticsContext !== undefined) {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!rawAnalyticsContext || typeof rawAnalyticsContext !== "object" || Array.isArray(rawAnalyticsContext) || Object.keys(rawAnalyticsContext).some((key) => key !== "captureFlowId" && key !== "appSessionId")) return json({ message: "Invalid analytics context", code: "INVALID_BODY" }, 400);
+    const candidate = rawAnalyticsContext as Record<string, unknown>;
+    if (typeof candidate.captureFlowId !== "string" || !uuid.test(candidate.captureFlowId) || typeof candidate.appSessionId !== "string" || !uuid.test(candidate.appSessionId)) return json({ message: "Invalid analytics context", code: "INVALID_BODY" }, 400);
+    analyticsContext = { captureFlowId: candidate.captureFlowId, appSessionId: candidate.appSessionId };
   }
   let declaration: SetDeclaration;
   try {
@@ -109,6 +118,7 @@ export async function createAnalysisHandler(request: Request, dependencies: Crea
         previousSessionId: normalizedPreviousId,
         clientRequestId: typeof clientRequestId === "string" ? clientRequestId.trim() : dependencies.reserveCredit ? requestKey : null,
         declaration,
+        analyticsContext,
       });
       if (reservation?.reservationId && dependencies.attachCredit) await dependencies.attachCredit(reservation.reservationId, session.id);
       const shouldCreateFallback = privacySafeFallback === true

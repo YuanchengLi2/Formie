@@ -304,7 +304,7 @@ async function requestJson<T>(
 }
 
 export async function createAnalysisSession(
-  input: RequestContext & { previousSessionId?: string; clientRequestId?: string; declaration: SetDeclaration; privacySafeFallback?: boolean; uploadProfile?: "single_analysis_v1" },
+  input: RequestContext & { previousSessionId?: string; clientRequestId?: string; declaration: SetDeclaration; privacySafeFallback?: boolean; uploadProfile?: "single_analysis_v1"; analyticsContext?: { captureFlowId: string; appSessionId: string } },
 ): Promise<CreateAnalysisSessionResponse> {
   const declaration = setDeclarationSchema.parse(input.declaration);
   return requestJson(
@@ -318,6 +318,7 @@ export async function createAnalysisSession(
         declaration,
         ...(input.uploadProfile ? { uploadProfile: input.uploadProfile } : {}),
         ...(input.privacySafeFallback !== undefined ? { privacySafeFallback: input.privacySafeFallback } : {}),
+        ...(input.analyticsContext ? { analyticsContext: input.analyticsContext } : {}),
       }),
     },
     createSessionResponseSchema,

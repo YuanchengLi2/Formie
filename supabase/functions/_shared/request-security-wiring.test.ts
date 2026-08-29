@@ -42,6 +42,7 @@ describe("edge request security wiring", () => {
     "exercise-tutorial",
     "reanalyze-video",
     "recording-preflight",
+    "record-product-analytics",
     "refresh-entitlement",
     "send-feedback",
     "subscription-test-controls",

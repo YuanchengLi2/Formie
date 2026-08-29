@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type Href, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Text, View } from "react-native";
@@ -21,6 +21,7 @@ import { SetDeclarationScreen } from "@/screens/set-declaration";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { trackProductEvent } from "@/features/analytics/product-analytics";
 
 export default function ResultsRoute() {
   const router = useRouter();
@@ -34,6 +35,7 @@ export default function ResultsRoute() {
   const [reanalysisPreparationError, setReanalysisPreparationError] = useState<string | null>(null);
   const resetCapture = useCaptureStore((state) => state.dispatch);
   const feedbackQueryKey = ["analysis-feedback", sessionId] as const;
+  const viewedResult = useRef(false);
   const persistedFeedback = useQuery({
     queryKey: feedbackQueryKey,
     queryFn: () => getAnalysisFeedback(sessionId),
@@ -43,6 +45,7 @@ export default function ResultsRoute() {
   useEffect(() => navigation.addListener("beforeRemove", createResultsExitHandler(() => {
     router.dismissTo("/(tabs)/(home)" as Href);
   })), [navigation, router]);
+  useEffect(() => { if (status.data?.result && !viewedResult.current) { viewedResult.current = true; trackProductEvent("analysis_result_viewed", { analysisType: status.data.setDeclaration ? "initial" : "unknown" }, { analysisSessionId: sessionId }); } }, [sessionId, status.data?.result, status.data?.setDeclaration]);
   const reanalysis = useMutation({
     mutationFn: async (declaration?: SetDeclaration) => {
       if (!declaration) throw new Error("Set details are required");
@@ -83,6 +86,7 @@ export default function ResultsRoute() {
     },
   });
   const prepareReanalysis = async () => {
+    trackProductEvent("reanalysis_started", { analysisType: "reanalysis", source: "results" }, { analysisSessionId: sessionId });
     setPreparingReanalysis(true);
     setReanalysisPreparationError(null);
     setReanalysisRecording(null);
@@ -155,10 +159,13 @@ export default function ResultsRoute() {
       }}
       onAskCoach={() => router.push({ pathname: "/(tabs)/(coach)", params: { sessionId } })}
       onRateAnalysis={(helpful) => feedback.mutate(helpful)}
+      onFeedbackPromptViewed={() => trackProductEvent("feedback_prompt_viewed", { analysisType: "initial" }, { analysisSessionId: sessionId })}
+      onCoachingSectionViewed={(sectionId) => trackProductEvent("coaching_section_viewed", { sectionId, analysisType: "initial" }, { analysisSessionId: sessionId })}
       analysisRating={feedback.data ?? persistedFeedback.data ?? null}
       ratingPending={feedback.isPending}
       ratingError={feedback.error instanceof Error ? feedback.error.message : null}
       onRecordAnother={() => {
+        trackProductEvent("record_another_set_clicked", { analysisType: "initial" }, { analysisSessionId: sessionId });
         resetCapture({ type: "reset" });
         const previousExercise = status.data.setDeclaration?.exercise;
         if (previousExercise?.source === "catalog") {

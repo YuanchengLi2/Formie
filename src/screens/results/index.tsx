@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ScrollView, Text, useWindowDimensions, View } from "react-native";
 import { HapticPressable as Pressable } from "@/components/haptic-pressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -35,6 +35,8 @@ type ResultsScreenProps = {
   analysisRating?: boolean | null;
   ratingPending?: boolean;
   ratingError?: string | null;
+  onFeedbackPromptViewed?: () => void;
+  onCoachingSectionViewed?: (sectionId: "what_happened" | "why_it_matters" | "what_to_do_next") => void;
 };
 
 const summaryTextStyle = { fontSize: 16, lineHeight: 23, fontWeight: "400" as const };
@@ -100,7 +102,7 @@ function declaredAmountLabel(result: AnalysisResult): string | null {
     : `${amount.value} reps${amount.countScope === "per_side" ? " per side" : ""}`;
 }
 
-export function ResultsScreen({ result, videoUrl = null, durationMs = null, playbackWindow = null, onRecordAnother, onAskCoach = () => undefined, onReanalyze, reanalyzing = false, reanalysisError = null, exampleState = "loading", onWatchExample, onRateAnalysis, analysisRating = null, ratingPending = false, ratingError = null }: ResultsScreenProps) {
+export function ResultsScreen({ result, videoUrl = null, durationMs = null, playbackWindow = null, onRecordAnother, onAskCoach = () => undefined, onReanalyze, reanalyzing = false, reanalysisError = null, exampleState = "loading", onWatchExample, onRateAnalysis, analysisRating = null, ratingPending = false, ratingError = null, onFeedbackPromptViewed, onCoachingSectionViewed }: ResultsScreenProps) {
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const layout = getPhoneLayoutProfile({ ...window, insets });
@@ -112,6 +114,8 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
   const [pointIndex, setPointIndex] = useState(0);
   const [purpose, setPurpose] = useState<ReviewPurpose>("observed");
   const [feedbackDismissed, setFeedbackDismissed] = useState(analysisRating !== null);
+  const feedbackY = useRef<number | null>(null); const viewport = useRef({ y: 0, height: 0 }); const feedbackSeen = useRef(false);
+  const checkFeedbackVisibility = () => { const y = feedbackY.current; const view = viewport.current; if (!feedbackSeen.current && y !== null && view.height > 0 && y < view.y + view.height && y + 1 >= view.y) { feedbackSeen.current = true; onFeedbackPromptViewed?.(); } };
   const movementScores = result.movementScores ?? [];
   const hasMovementScores = movementScores.length > 0;
   const hasScoreContent = presentation.score !== null || hasMovementScores;
@@ -227,7 +231,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
             ["why", "Why it matters"],
             ["next", "What to do next"],
           ] as [ReviewPurpose, string][]).map(([value, label]) => (
-            <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: purpose === value }} accessibilityLabel={label} onPress={() => setPurpose(value)} style={{ flex: 1, minHeight: 54, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.xs, borderBottomWidth: 2, borderBottomColor: purpose === value ? colors.gold : "transparent" }}>
+            <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: purpose === value }} accessibilityLabel={label} onPress={() => { if (purpose !== value) onCoachingSectionViewed?.(value === "observed" ? "what_happened" : value === "why" ? "why_it_matters" : "what_to_do_next"); setPurpose(value); }} style={{ flex: 1, minHeight: 54, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.xs, borderBottomWidth: 2, borderBottomColor: purpose === value ? colors.gold : "transparent" }}>
               <Text style={[typography.caption, { color: purpose === value ? colors.gold : colors.textMuted, textAlign: "center" }]}>{label}</Text>
             </Pressable>
           ))}
@@ -259,7 +263,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
   );
 
   return (
-    <ScrollView alwaysBounceVertical bounces overScrollMode="auto" contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ width: "100%", maxWidth: contentMaxWidth, alignSelf: "center", gap: spacing.xl, paddingTop: insets.top + spacing.md, paddingBottom: layout.bottomPadding, paddingHorizontal: layout.horizontalPadding }} style={{ flex: 1, backgroundColor: colors.background }}>
+    <ScrollView alwaysBounceVertical bounces overScrollMode="auto" scrollEventThrottle={100} onScroll={(event) => { viewport.current = { y: event.nativeEvent.contentOffset.y, height: event.nativeEvent.layoutMeasurement.height }; checkFeedbackVisibility(); }} onLayout={(event) => { viewport.current.height = event.nativeEvent.layout.height; checkFeedbackVisibility(); }} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ width: "100%", maxWidth: contentMaxWidth, alignSelf: "center", gap: spacing.xl, paddingTop: insets.top + spacing.md, paddingBottom: layout.bottomPadding, paddingHorizontal: layout.horizontalPadding }} style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ gap: spacing.md }}>
         <Text selectable style={[typography.caption, { color: colors.gold, letterSpacing: 1.8 }]}>YOUR ANALYSIS</Text>
       </View>
@@ -300,7 +304,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
         </Pressable>
       </View>
 
-      {onRateAnalysis && analysisRating === null && !feedbackDismissed ? <View testID="analysis-feedback" style={{ gap: spacing.md, alignItems: "center", padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
+      {onRateAnalysis && analysisRating === null && !feedbackDismissed ? <View testID="analysis-feedback" onLayout={(event) => { feedbackY.current = event.nativeEvent.layout.y; checkFeedbackVisibility(); }} style={{ gap: spacing.md, alignItems: "center", padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>
         <Text selectable style={[typography.heading, { color: colors.text, textAlign: "center" }]}>Was this analysis helpful?</Text>
         <Text selectable style={[typography.caption, { color: colors.textMuted, textAlign: "center" }]}>Your rating helps improve Formie&apos;s coaching.</Text>
         <View style={{ width: "100%", flexDirection: "row", gap: spacing.sm }}>

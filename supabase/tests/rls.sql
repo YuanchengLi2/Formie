@@ -1,5 +1,5 @@
 begin;
-select plan(72);
+select plan(75);
 
 select has_table('public', 'analysis_sessions', 'analysis_sessions exists');
 select has_table('public', 'analysis_results', 'analysis_results exists');
@@ -14,6 +14,9 @@ select has_column('public', 'analysis_sessions', 'detected_label', 'detected lab
 select has_column('public', 'analysis_sessions', 'detected_variation', 'detected variation is persisted');
 select has_column('public', 'analysis_sessions', 'recognition_confidence', 'recognition confidence is persisted');
 select has_column('public', 'analysis_sessions', 'previous_session_id', 'repeat recordings link to a prior session');
+select has_column('public', 'analysis_sessions', 'capture_flow_id', 'analysis links to a privacy-safe capture flow');
+select has_column('public', 'analysis_sessions', 'app_session_id', 'analysis links to an app session');
+select has_table('public', 'analytics_identity_links', 'privacy-limited anonymous identity links exist');
 select has_column('public', 'analysis_sessions', 'corrected_label', 'label correction is stored separately');
 select has_column('public', 'analysis_sessions', 'capture_orientation', 'capture orientation is persisted');
 select has_column('public', 'analysis_sessions', 'requested_fps', 'Gemini sampling rate is persisted');

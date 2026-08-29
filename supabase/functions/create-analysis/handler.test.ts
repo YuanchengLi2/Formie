@@ -45,7 +45,7 @@ describe("create analysis handler", () => {
 
     expect(response.status).toBe(201);
     expect(deps.ownsSession).toHaveBeenCalledWith("prior-1", "user-123");
-    expect(deps.createSession).toHaveBeenCalledWith({ userId: "user-123", previousSessionId: "prior-1", clientRequestId: "upload-request-1", declaration });
+    expect(deps.createSession).toHaveBeenCalledWith({ userId: "user-123", previousSessionId: "prior-1", clientRequestId: "upload-request-1", declaration, analyticsContext: null });
     expect(deps.createSignedUpload).toHaveBeenCalledWith("user-123/session-456/original.mp4", { upsert: false });
     expect(deps.createSignedUpload).toHaveBeenCalledWith("user-123/session-456/analysis-input.mp4", { upsert: false });
     expect(deps.createSignedUpload).toHaveBeenCalledWith("user-123/session-456/privacy-safe-upper-body.mp4", { upsert: false });
@@ -56,6 +56,16 @@ describe("create analysis handler", () => {
       privacySafeUpload: expect.objectContaining({ path: "user-123/session-456/privacy-safe-upper-body.mp4" }),
     });
     expect(deps.createSignedUpload).toHaveBeenCalledTimes(3);
+  });
+
+  it("validates and persists optional analytics context", async () => {
+    const deps = dependencies();
+    const analyticsContext = { captureFlowId: "00000000-0000-4000-8000-000000000011", appSessionId: "00000000-0000-4000-8000-000000000012" };
+    const response = await createAnalysisHandler(new Request("https://example.test", { method: "POST", body: JSON.stringify({ declaration, analyticsContext, uploadProfile: "single_analysis_v1" }) }), deps);
+    expect(response.status).toBe(201);
+    expect(deps.createSession).toHaveBeenCalledWith(expect.objectContaining({ analyticsContext }));
+    const invalid = await createAnalysisHandler(new Request("https://example.test", { method: "POST", body: JSON.stringify({ declaration, analyticsContext: { captureFlowId: "bad", appSessionId: analyticsContext.appSessionId } }) }), dependencies());
+    expect(invalid.status).toBe(400);
   });
 
   it("creates only one analysis upload for the single-analysis profile", async () => {
@@ -146,7 +156,7 @@ describe("create analysis handler", () => {
       deps,
     );
     expect(response.status).toBe(201);
-    expect(deps.createSession).toHaveBeenCalledWith({ userId: "user-123", previousSessionId: null, clientRequestId: null, declaration });
+    expect(deps.createSession).toHaveBeenCalledWith({ userId: "user-123", previousSessionId: null, clientRequestId: null, declaration, analyticsContext: null });
   });
 
   it("rejects a catalog declaration whose exercise no longer exists", async () => {

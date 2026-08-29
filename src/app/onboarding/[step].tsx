@@ -9,6 +9,7 @@ import { useOnboarding } from "@/features/onboarding/onboarding-store";
 import { isOnboardingStep, nextOnboardingStep, previousOnboardingStep } from "@/features/onboarding/types";
 import { useProfile } from "@/features/profile/profile-provider";
 import { ApprovedOnboardingScreen } from "@/screens/onboarding";
+import { trackProductEvent } from "@/features/analytics/product-analytics";
 
 export default function OnboardingStepRoute() {
   const { step: rawStep } = useLocalSearchParams<{ step?: string }>();
@@ -23,6 +24,8 @@ export default function OnboardingStepRoute() {
     if (step === "create-account" && auth.phase === "authenticated" && onboarding.status === "premium_required") router.replace("/subscription" as Href);
     if (step === "premium" && onboarding.status === "complete") router.replace("/(tabs)/(home)" as Href);
   }, [auth.phase, onboarding.status, router, step]);
+
+  useEffect(() => { if (isOnboardingStep(step)) trackProductEvent("onboarding_screen_viewed", { screenId: step, step: String(step), onboardingVersion: "approved_v1" }); }, [step]);
 
   if (!isOnboardingStep(step)) return <Redirect href={"/onboarding/welcome" as Href} />;
   const legal = (() => { try { return getLegalLinks(); } catch { return null; } })();
@@ -39,7 +42,7 @@ export default function OnboardingStepRoute() {
     step={step}
     answers={onboarding.answers}
     onAnswerChange={(field, value) => void onboarding.updateAnswer(field, value)}
-    onNext={() => { if (next) void go(next); }}
+    onNext={() => { trackProductEvent("onboarding_cta_pressed", { screenId: step, step: String(step), onboardingVersion: "approved_v1" }); if (next) void go(next); }}
     onBack={() => { if (previous) void go(previous); }}
     onLoadingComplete={() => void finishLoading()}
     onOAuth={(provider) => void onboarding.startOAuth("create_account").then(() => auth.signInWithProvider(provider))}
@@ -47,12 +50,12 @@ export default function OnboardingStepRoute() {
     onSignIn={() => router.replace("/login" as Href)}
     onOpenTerms={() => { if (legal) void Linking.openURL(legal.termsUrl); }}
     onOpenPrivacy={() => { if (legal) void Linking.openURL(legal.privacyUrl); }}
-    onPurchase={() => void billing.purchase("monthly").then((outcome) => outcome === "active" ? onboarding.completeAccess() : undefined)}
+    onPurchase={() => { trackProductEvent("purchase_started", { productId: "monthly", offerId: "onboarding" }); void billing.purchase("monthly").then((outcome) => outcome === "active" ? onboarding.completeAccess() : undefined); }}
     price={billing.plans.monthly?.priceString ?? "Unavailable"}
     purchaseAvailable={Boolean(billing.plans.monthly)}
     purchaseState={billing.state}
     restoreMessage={billing.restoreMessage}
-    onRestore={() => void billing.restore().then((active) => active ? onboarding.completeAccess() : undefined)}
+    onRestore={() => { trackProductEvent("purchase_restored", { productId: "restore_attempt" }); void billing.restore().then((active) => active ? onboarding.completeAccess() : undefined); }}
     onRetrySync={() => void billing.retryPurchaseSync().then((active) => active ? onboarding.completeAccess() : undefined)}
     busyProvider={auth.signingIn}
     busy={auth.signingIn !== null || (step === "create-account" && onboarding.status === "profile_sync_required" && profile.status === "loading") || billing.state === "loading" || billing.state === "purchasing" || billing.state === "reconciling" || billing.state === "restoring"}

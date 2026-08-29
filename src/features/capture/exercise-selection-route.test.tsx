@@ -77,6 +77,7 @@ describe("ExerciseSelectionRoute", () => {
     await fireEvent.press(screen.getByLabelText("Select catalog exercise"));
     expect(mockDispatch).toHaveBeenCalledWith({
       type: "exercise_selected",
+      captureFlowId: expect.any(String),
       exercise: {
         catalogExerciseId: 88,
         canonicalName: "One-Arm Dumbbell Row",
@@ -89,6 +90,7 @@ describe("ExerciseSelectionRoute", () => {
     expect(mockDispatch).toHaveBeenCalledWith({
       type: "exercise_customized",
       canonicalName: "Jefferson curl",
+      captureFlowId: expect.any(String),
     });
     expect(mockPush).toHaveBeenLastCalledWith({ pathname: "/exercise-guide", params: {} });
   });

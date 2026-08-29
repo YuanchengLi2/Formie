@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { searchExerciseCatalog, type CatalogExercise } from "@/features/analysis/exercise-catalog";
 import { useCaptureStore } from "@/features/capture/capture-store";
 import { ExerciseSelectionScreen } from "@/screens/exercise-selection";
+import { randomAnalyticsUuid } from "@/features/analytics/analytics-session";
+import { analyticsExerciseId, trackProductEvent } from "@/features/analytics/product-analytics";
 
 export default function ExerciseSelectionRoute() {
   const router = useRouter();
@@ -33,21 +35,26 @@ export default function ExerciseSelectionRoute() {
         initialExercise={initialExercise}
         onSearch={onSearch}
         onSelect={(exercise) => {
+          const captureFlowId = randomAnalyticsUuid();
           dispatch({
             type: "exercise_selected",
+            captureFlowId,
             exercise: {
               catalogExerciseId: exercise.id,
               canonicalName: exercise.name,
               mechanics: exercise.mechanics,
             },
           });
+          trackProductEvent("exercise_selected", { exerciseId: analyticsExerciseId(exercise.id), source: "catalog", hasPreviousAnalysis: Boolean(previousSessionId) }, { captureFlowId });
           router.push({
             pathname: "/exercise-guide",
             params: guideParams,
           });
         }}
         onGenerateCustomGuide={(canonicalName) => {
-          dispatch({ type: "exercise_customized", canonicalName });
+          const captureFlowId = randomAnalyticsUuid();
+          dispatch({ type: "exercise_customized", canonicalName, captureFlowId });
+          trackProductEvent("exercise_selected", { exerciseId: "custom", source: "custom", hasPreviousAnalysis: Boolean(previousSessionId) }, { captureFlowId });
           router.push({
             pathname: "/exercise-guide",
             params: guideParams,

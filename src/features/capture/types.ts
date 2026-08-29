@@ -105,6 +105,7 @@ export type CaptureExerciseChoice =
   | ({ kind: "selected" } & SelectedCaptureExercise);
 
 export type CaptureState = {
+  captureFlowId: string | null;
   phase: CapturePhase;
   exerciseChoice: CaptureExerciseChoice;
   exerciseGuide: ExerciseGuide | null;
@@ -124,8 +125,8 @@ export type CaptureState = {
 export type CaptureCountdownSeconds = 5 | 10 | 15;
 
 export type CaptureEvent =
-  | { type: "exercise_selected"; exercise: SelectedCaptureExercise }
-  | { type: "exercise_customized"; canonicalName: string }
+  | { type: "exercise_selected"; exercise: SelectedCaptureExercise; captureFlowId?: string }
+  | { type: "exercise_customized"; canonicalName: string; captureFlowId?: string }
   | { type: "exercise_selection_cleared" }
   | { type: "exercise_guide_loaded"; key: string; guide: ExerciseGuide }
   | { type: "begin_countdown"; previousSessionId?: string | null; countdownSeconds?: CaptureCountdownSeconds }

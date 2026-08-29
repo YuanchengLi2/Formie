@@ -11,6 +11,7 @@ import { canOpenCompletedAccount } from "@/features/access/account-access";
 import { consumeAuthReturnTarget } from "@/features/auth/auth-return-target";
 import { AuthProvider, useAuth } from "@/features/auth/auth-provider";
 import { BillingProvider } from "@/features/billing/billing-provider";
+import { AnalyticsProvider } from "@/features/analytics/analytics-provider";
 import { OnboardingProvider, useOnboarding } from "@/features/onboarding/onboarding-store";
 import { ProfileProvider, useProfile } from "@/features/profile/profile-provider";
 import { colors } from "@/theme/colors";
@@ -72,5 +73,5 @@ export default function RootLayout() {
   if (process.env.EXPO_PUBLIC_FORMIE_RUNTIME_SMOKE === "analysis") {
     return <AppProviders><AnalysisRuntimeSmoke /></AppProviders>;
   }
-  return <AppProviders><AuthProvider><OnboardingProvider><AccessProvider><BillingProvider><ProfileProvider><SubscriptionAccessGate><RootNavigator /></SubscriptionAccessGate></ProfileProvider></BillingProvider></AccessProvider></OnboardingProvider></AuthProvider></AppProviders>;
+  return <AppProviders><AuthProvider><AnalyticsProvider><OnboardingProvider><AccessProvider><BillingProvider><ProfileProvider><SubscriptionAccessGate><RootNavigator /></SubscriptionAccessGate></ProfileProvider></BillingProvider></AccessProvider></OnboardingProvider></AnalyticsProvider></AuthProvider></AppProviders>;
 }

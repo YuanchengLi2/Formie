@@ -1,0 +1,18 @@
+begin;
+select plan(12);
+select has_function('public','get_founder_dashboard_snapshot_v2',array['text','integer'],'v2 founder snapshot exists');
+select function_privs_are('public','get_founder_dashboard_snapshot_v2',array['text','integer'],'service_role',array['EXECUTE'],'service role alone can execute reporting');
+select function_privs_are('public','get_founder_dashboard_snapshot_v2',array['text','integer'],'authenticated',array[]::text[],'authenticated users cannot execute reporting');
+set local role service_role;
+create temp table dashboard_snapshot as select public.get_founder_dashboard_snapshot_v2('30d',null) value;
+select ok((select value ?& array['generatedAt','filters','headline','cohorts','activity','funnel','breakdowns','operations','recentUsers','recentAnalyses'] from dashboard_snapshot),'snapshot exposes every reporting section');
+select is((select value#>>'{filters,window}' from dashboard_snapshot),'30d','selected window is returned');
+select is((select value#>>'{headline,newSignups,quality}' from dashboard_snapshot),'exact','canonical signup quality is exact');
+select ok((select value#>'{headline,sevenDayRepeatRate}' ?& array['value','quality','numerator','denominator','observedSince','detail'] from dashboard_snapshot),'metric wrapper includes evidence metadata');
+select is((select value#>>'{headline,newSignups,scope}' from dashboard_snapshot),'global','signup scope stays global');
+select is((select value#>>'{headline,estimatedMrr,scope}' from dashboard_snapshot),'global','MRR scope stays global');
+select ok((select jsonb_typeof(value->'funnel')='array' from dashboard_snapshot),'funnel is ordered JSON');
+select throws_ok($$select public.get_founder_dashboard_snapshot_v2('1y',null)$$,'INVALID_WINDOW','unsupported windows fail closed');
+select throws_ok($$select public.get_founder_dashboard_snapshot_v2('30d',-1)$$,'INVALID_EXERCISE','invalid exercise ids fail closed');
+select * from finish();
+rollback;

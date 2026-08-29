@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { analysisUploadCoordinator } from "@/features/capture/analysis-upload-coordinator";
 import { useCaptureStore } from "@/features/capture/capture-store";
 import { AnalysisProgressScreen } from "@/screens/analysis-progress";
+import { getAnalyticsContext } from "@/features/analytics/product-analytics";
 
 export default function AnalysisUploadRoute() {
   const router = useRouter();
@@ -11,6 +12,7 @@ export default function AnalysisUploadRoute() {
   const recording = useCaptureStore((state) => state.recording);
   const declaration = useCaptureStore((state) => state.declaration);
   const previousSessionId = useCaptureStore((state) => state.previousSessionId);
+  const captureFlowId = useCaptureStore((state) => state.captureFlowId);
   const uploadSubstage = useCaptureStore((state) => state.uploadSubstage);
   const error = useCaptureStore((state) => state.error);
   const dispatch = useCaptureStore((state) => state.dispatch);
@@ -22,7 +24,7 @@ export default function AnalysisUploadRoute() {
       if (!active) return;
       dispatch({ type: "upload_progress", substage: progress.substage, target: progress.target });
     });
-    void analysisUploadCoordinator.run(recording, declaration, previousSessionId ?? undefined)
+    void analysisUploadCoordinator.run(recording, declaration, previousSessionId ?? undefined, getAnalyticsContext(captureFlowId))
       .then(({ sessionId, target }) => {
         if (!active) return;
         if (!useCaptureStore.getState().uploadTarget) dispatch({ type: "upload_target_created", target });
@@ -40,7 +42,7 @@ export default function AnalysisUploadRoute() {
       active = false;
       unsubscribe();
     };
-  }, [declaration, dispatch, phase, previousSessionId, recording, router]);
+  }, [captureFlowId, declaration, dispatch, phase, previousSessionId, recording, router]);
 
   const discard = () => {
     void analysisUploadCoordinator.cancelUpload().finally(() => {

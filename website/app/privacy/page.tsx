@@ -7,7 +7,7 @@ export const metadata: Metadata = { title: "Privacy Policy", alternates: { canon
 
 export default function PrivacyPage() {
   return (
-    <LegalPage eyebrow="Your privacy" title="Privacy Policy" updated="August 15, 2026">
+    <LegalPage eyebrow="Your privacy" title="Privacy Policy" updated="August 29, 2026">
       <p>This policy explains how Formie handles information when you use the app or website.</p>
       <h2>Information Formie handles</h2>
       <p>Formie handles your name, email, user ID, profile and fitness inputs, exercise declarations, purchase and entitlement status, exercise recordings you upload, support content, analysis results, coaching conversations, product interaction analytics, and diagnostics such as app version, build, platform, and OS version. In-app feedback never automatically includes a recording, analysis content, or device identifier.</p>
@@ -18,7 +18,8 @@ export default function PrivacyPage() {
       <h2>Service providers</h2>
       <p>Supabase provides authentication, database, private storage, and server functions. Google Gemini processes the video and related prompts needed for requested AI analysis. RevenueCat and Apple provide purchase and entitlement state. Vercel hosts the Formie website. Resend delivers feedback or support messages that you choose to submit. These providers process information to perform their services for Formie and may apply their own required operational or legal retention.</p>
       <h2>Linkage and tracking</h2>
-      <p>Account, purchase, content, support, diagnostic, and product interaction data may be linked to your Formie user ID. Formie does not use this information for cross-company advertising tracking.</p>
+      <p>Formie creates a random first-party install identifier and records limited product interactions such as app sessions, onboarding steps, exercise selection, recording and upload milestones, results views, and button or coaching-section use. After signup or sign-in, that anonymous history may be linked to your Formie account so Formie can measure whether the product works across the full journey.</p>
+      <p>This product analytics stream does not contain your name, email, video URI or content, analysis result, coaching text, search text, advertising identifier, or device fingerprint. Formie does not use it for cross-app or cross-company advertising tracking. Unlinked interaction events are removed after 30 days; linked events are removed with account deletion, subject to the separate limits below.</p>
       <h2>Retention and deletion</h2>
       <p>You can delete an individual analysis using its in-app control. You can delete your account in Settings &gt; Delete Account, which removes Formie-controlled account data after the server confirms deletion. See the <Link href="/retention">Retention Policy</Link> and <Link href="/privacy-choices">Privacy Choices</Link> for details.</p>
       <h2>Deletion limits and separate controls</h2>

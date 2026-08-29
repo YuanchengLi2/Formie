@@ -10,7 +10,7 @@ export const analysisUploadCoordinator = createUploadCoordinator({
   getAccessToken,
   createRequestId: () => globalThis.crypto?.randomUUID?.()
     ?? `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  createSession: async (accessToken, declaration, previousSessionId, clientRequestId, signal) => {
+  createSession: async (accessToken, declaration, previousSessionId, clientRequestId, signal, analyticsContext) => {
     const session = await createAnalysisSession({
       accessToken,
       declaration,
@@ -18,6 +18,7 @@ export const analysisUploadCoordinator = createUploadCoordinator({
       clientRequestId,
       uploadProfile: "single_analysis_v1",
       signal,
+      analyticsContext,
     });
     publishAccessMutation({ remaining: session.remaining ?? null, periodEndsAt: session.periodEndsAt ?? null });
     return {

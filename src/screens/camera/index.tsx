@@ -23,6 +23,7 @@ import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
 
 import { CameraControls } from "./camera-controls";
+import { analyticsExerciseId, trackProductEvent } from "@/features/analytics/product-analytics";
 
 const cameraPermissionArt = require("../../../assets/production/camera-permission.png");
 const AnimatedCameraView = Animated.createAnimatedComponent(CameraView);
@@ -64,6 +65,8 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const startedAt = useCaptureStore((state) => state.startedAt);
   const recording = useCaptureStore((state) => state.recording);
   const error = useCaptureStore((state) => state.error);
+  const captureFlowId = useCaptureStore((state) => state.captureFlowId);
+  const exerciseChoice = useCaptureStore((state) => state.exerciseChoice);
   const dispatch = useCaptureStore((state) => state.dispatch);
 
   useEffect(() => {
@@ -102,6 +105,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     const actualStart = Date.now();
     requestedStopAtRef.current = null;
     dispatch({ type: "recording_started", startedAt: actualStart });
+    trackProductEvent("recording_started", { exerciseId: analyticsExerciseId(exerciseChoice.kind === "selected" ? exerciseChoice.catalogExerciseId : null), source: exerciseChoice.kind === "selected" ? "catalog" : "custom" }, captureFlowId ? { captureFlowId } : undefined);
     if (capturePreferences.recordingVibrationEnabled) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
@@ -121,6 +125,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         mimeType: "video/mp4",
       } satisfies RecordedSet);
       dispatch({ type: "recording_finished", recording: saved });
+      trackProductEvent("recording_completed", { exerciseId: analyticsExerciseId(exerciseChoice.kind === "selected" ? exerciseChoice.catalogExerciseId : null), source: exerciseChoice.kind === "selected" ? "catalog" : "custom", durationBucket: saved.durationMs < 8_000 ? "under_8s" : "8s_plus" }, captureFlowId ? { captureFlowId } : undefined);
       router.replace("/analysis/review");
     } catch (recordingError) {
       if (exitRequestedRef.current) return;
@@ -128,9 +133,10 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
       if (current.phase === "recording") {
         const message = recordingError instanceof Error ? recordingError.message : "Recording could not be saved";
         dispatch({ type: "recording_failed", message });
+        trackProductEvent("recording_failed", { exerciseId: analyticsExerciseId(exerciseChoice.kind === "selected" ? exerciseChoice.catalogExerciseId : null), source: exerciseChoice.kind === "selected" ? "catalog" : "custom", errorCategory: /permission/i.test(message) ? "permission" : /save|persist/i.test(message) ? "save_failed" : "camera_failed" }, captureFlowId ? { captureFlowId } : undefined);
       }
     }
-  }, [capturePreferences.recordingVibrationEnabled, dispatch, router]);
+  }, [captureFlowId, capturePreferences.recordingVibrationEnabled, dispatch, exerciseChoice, router]);
 
   useEffect(() => {
     if (phase !== "countingDown" || countdown === null) return;

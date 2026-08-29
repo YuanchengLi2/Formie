@@ -30,6 +30,7 @@ export type UploadCoordinatorDependencies = {
     previousSessionId: string | undefined,
     clientRequestId: string,
     signal: AbortSignal,
+    analyticsContext?: { captureFlowId: string; appSessionId: string },
   ) => Promise<UploadTarget>;
   uploadVideo: (recording: RecordedSet, target: UploadArtifactTarget, signal: AbortSignal) => Promise<void>;
   normalizeVideo: (recording: RecordedSet) => Promise<RecordedSet>;
@@ -114,6 +115,7 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
     recording: RecordedSet,
     declaration: SetDeclaration,
     previousSessionId?: string,
+    analyticsContext?: { captureFlowId: string; appSessionId: string },
   ): Promise<{ sessionId: string; target: UploadTarget }> => {
     if (activeRun) return activeRun;
     userDiscarded = false;
@@ -141,6 +143,7 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
           previousSessionId,
           requestId,
           signal,
+          analyticsContext,
         ));
         declarationKey = nextDeclarationKey;
       }

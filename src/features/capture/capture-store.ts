@@ -5,6 +5,7 @@ import { getCaptureExerciseGuideKey } from "./exercise-guide-key";
 import { captureVideoSettings } from "./video-settings";
 
 export const initialCaptureState: CaptureState = {
+  captureFlowId: null,
   phase: "idle",
   exerciseChoice: { kind: "unselected" },
   exerciseGuide: null,
@@ -34,6 +35,7 @@ export function captureReducer(state: CaptureState, event: CaptureEvent): Captur
       const selectedExerciseChanged = getCaptureExerciseGuideKey(state.exerciseChoice) !== selectedGuideKey;
       return {
         ...state,
+        captureFlowId: event.captureFlowId ?? state.captureFlowId,
         exerciseChoice: selectedChoice,
         exerciseGuide: state.exerciseGuideKey === selectedGuideKey ? state.exerciseGuide : null,
         exerciseGuideKey: state.exerciseGuideKey === selectedGuideKey ? state.exerciseGuideKey : null,
@@ -48,6 +50,7 @@ export function captureReducer(state: CaptureState, event: CaptureEvent): Captur
       const customExerciseChanged = getCaptureExerciseGuideKey(state.exerciseChoice) !== customGuideKey;
       return {
         ...state,
+        captureFlowId: event.captureFlowId ?? state.captureFlowId,
         exerciseChoice: customChoice,
         exerciseGuide: state.exerciseGuideKey === customGuideKey ? state.exerciseGuide : null,
         exerciseGuideKey: state.exerciseGuideKey === customGuideKey ? state.exerciseGuideKey : null,
@@ -76,6 +79,7 @@ export function captureReducer(state: CaptureState, event: CaptureEvent): Captur
       }
       return {
         ...initialCaptureState,
+        captureFlowId: state.captureFlowId,
         exerciseChoice: state.exerciseChoice,
         exerciseGuide: state.exerciseGuide,
         exerciseGuideKey: state.exerciseGuideKey,
@@ -124,6 +128,7 @@ export function captureReducer(state: CaptureState, event: CaptureEvent): Captur
       const canReuseGuide = state.exerciseGuideKey === reanalysisGuideKey;
       return {
         ...initialCaptureState,
+        captureFlowId: state.captureFlowId,
         phase: "recorded",
         exerciseChoice: reanalysisChoice,
         exerciseGuide: canReuseGuide ? state.exerciseGuide : null,
@@ -164,6 +169,7 @@ export function captureReducer(state: CaptureState, event: CaptureEvent): Captur
     case "discard_recording":
       return {
         ...initialCaptureState,
+        captureFlowId: state.captureFlowId,
         exerciseChoice: state.exerciseChoice,
         exerciseGuide: state.exerciseGuide,
         exerciseGuideKey: state.exerciseGuideKey,

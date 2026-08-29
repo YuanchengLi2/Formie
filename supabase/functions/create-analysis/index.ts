@@ -46,7 +46,7 @@ Deno.serve(async (request) => {
       if (error) throw error;
       return data;
     },
-    createSession: async ({ userId, previousSessionId, clientRequestId, declaration }) => {
+    createSession: async ({ userId, previousSessionId, clientRequestId, declaration, analyticsContext }) => {
       const { data, error } = await admin
         .from("analysis_sessions")
         .upsert({
@@ -60,6 +60,8 @@ Deno.serve(async (request) => {
           set_declaration: declaration,
           exercise_variant_v2_id: declaration.exercise.catalogExerciseId,
           detected_label: declaration.exercise.label,
+          capture_flow_id: analyticsContext?.captureFlowId ?? null,
+          app_session_id: analyticsContext?.appSessionId ?? null,
           recognition_confidence: 1,
         }, { onConflict: "user_id,client_request_id" })
         .select("id")

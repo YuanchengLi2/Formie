@@ -86,7 +86,7 @@ describe("upload coordinator", () => {
 
     expect(result).toEqual({ sessionId: "session-1", target });
     expect(deps.createSession).toHaveBeenCalledTimes(1);
-    expect(deps.createSession).toHaveBeenCalledWith("user-jwt", declaration, "previous-1", "upload-request-1", expect.any(AbortSignal));
+    expect(deps.createSession).toHaveBeenCalledWith("user-jwt", declaration, "previous-1", "upload-request-1", expect.any(AbortSignal), undefined);
     expect((deps.uploadVideo as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(
       (deps.completeUpload as jest.Mock).mock.invocationCallOrder[0],
     );
