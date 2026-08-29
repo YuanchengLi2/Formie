@@ -34,7 +34,7 @@ test("accuracy-first reporting prices known token usage and builds an ordered pr
 
 test("v2 reporting is service-only, maturity-aware, filterable, and uses one SQL calculator", () => {
   const sql = readFileSync(resolve(__dirname, "../../../supabase/migrations/202608290002_founder_dashboard_v2.sql"), "utf8");
-  assert.match(sql, /get_founder_dashboard_snapshot_v2\(p_window text, p_exercise_id integer/i);
+  assert.match(sql, /get_founder_dashboard_snapshot_v2\(\s*p_window text,\s*p_exercise_id integer/i);
   assert.match(sql, /America\/New_York/i);
   assert.match(sql, /interval '7 days'/i);
   assert.match(sql, /interval '14 days'/i);
