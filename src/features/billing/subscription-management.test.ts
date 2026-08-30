@@ -25,11 +25,29 @@ describe("shared subscription presentation", () => {
     ["expired", "has ended", "Expired", true],
     ["not_subscribed", "Formie Pro", "Available", true],
   ] as const)("maps %s to stable screen geometry and lifecycle copy", (lifecycleState, accent, badge, showPurchase) => {
-    expect(createSubscriptionPresentation({ lifecycleState, willRenew: lifecycleState === "active_renewing", paidThrough: "2026-08-11T02:34:50Z", status: lifecycleState === "expired" || lifecycleState === "not_subscribed" ? "expired" : "active" })).toMatchObject({ headlineAccent: accent, badgeLabel: badge, showPurchase });
+    expect(createSubscriptionPresentation({ lifecycleState, willRenew: lifecycleState === "active_renewing", paidThrough: "2026-08-11T02:34:50Z", status: lifecycleState === "expired" || lifecycleState === "not_subscribed" ? "expired" : "active", sandbox: false })).toMatchObject({ headlineAccent: accent, badgeLabel: badge, showPurchase });
   });
 
   it("does not render explanatory hero copy below the renewal headline", () => {
     expect(routeSource).not.toContain("presentation.heroDetail");
+  });
+
+  it("does not claim another automatic renewal during an Apple sandbox test period", () => {
+    const sandboxAccess = {
+      lifecycleState: "active_renewing",
+      willRenew: true,
+      paidThrough: "2026-08-31T15:04:01Z",
+      status: "active",
+      sandbox: true,
+    } as Parameters<typeof createSubscriptionPresentation>[0] & { sandbox: boolean };
+
+    expect(createSubscriptionPresentation(sandboxAccess)).toMatchObject({
+      headlineLead: "Sandbox subscription",
+      headlineAccent: "is active",
+      badgeLabel: "Sandbox active",
+      boundaryRowLabel: "Current period ends",
+      automaticRenewalValue: "Test-limited",
+    });
   });
 });
 

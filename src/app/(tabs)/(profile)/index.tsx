@@ -47,7 +47,7 @@ export default function ProfileRoute() {
       email={auth.user?.email ?? null}
       subscription={{
         plan: access.access.planCode === "annual" ? "Formie Annual" : "Formie Monthly",
-        stateLabel: `${subscriptionPresentation.badgeLabel} · Automatic renewal ${access.access.willRenew ? "on" : access.access.lifecycleState === "renewal_pending" ? "checking" : "off"}`,
+        stateLabel: `${subscriptionPresentation.badgeLabel} · Automatic renewal ${subscriptionPresentation.automaticRenewalValue.toLowerCase()}`,
         access: { lifecycleState: access.access.lifecycleState, willRenew: access.access.willRenew, paidThrough: access.access.paidThrough, sandbox: access.access.sandbox },
       }}
       onSubscriptionBoundary={() => void access.reconcile()}

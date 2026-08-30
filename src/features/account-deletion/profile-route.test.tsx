@@ -30,7 +30,6 @@ jest.mock("@/features/access/access-provider", () => ({
   useAccess: () => ({ access: mockAccess, reconcile: jest.fn(), refresh: jest.fn() }),
   useBillingSurfaceRefresh: jest.fn(),
 }));
-jest.mock("@/features/billing/subscription-management-presentation", () => ({ createSubscriptionPresentation: () => ({ badgeLabel: "Active" }) }));
 jest.mock("@/features/billing/subscription-test-controls", () => ({ runSubscriptionTestControl: jest.fn(), setSubscriptionTestRemaining: jest.fn() }));
 jest.mock("@/features/auth/legal-config", () => ({ getLegalLinks: () => ({}) }));
 
@@ -112,5 +111,12 @@ describe("ProfileRoute account deletion", () => {
     mockAccess = { ...mockAccess, store, lifecycleState };
     render(<ProfileRoute />);
     await waitFor(() => expect(capturedProps?.hasManagedSubscription).toBe(expected));
+  });
+
+  it("labels Apple sandbox renewal as test-limited in Settings", async () => {
+    render(<ProfileRoute />);
+    await waitFor(() => expect(capturedProps?.subscription).toMatchObject({
+      stateLabel: "Sandbox active · Automatic renewal test-limited",
+    }));
   });
 });

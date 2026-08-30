@@ -10,7 +10,7 @@ export type SubscriptionPresentation = {
   heroDetail: string;
   badgeLabel: string;
   boundaryRowLabel: string;
-  automaticRenewalValue: "On" | "Off" | "Checking";
+  automaticRenewalValue: "On" | "Off" | "Checking" | "Test-limited";
   showManage: boolean;
   showPurchase: boolean;
 };
@@ -20,6 +20,7 @@ type PresentationAccess = {
   lifecycleState: "active_renewing" | "active_cancelled" | "renewal_pending" | "expired" | "not_subscribed" | "unknown";
   willRenew: boolean;
   paidThrough: string | null;
+  sandbox: boolean;
 };
 
 export function createSubscriptionPresentation(access: PresentationAccess): SubscriptionPresentation {
@@ -38,6 +39,10 @@ export function createSubscriptionPresentation(access: PresentationAccess): Subs
   if (access.lifecycleState === "not_subscribed" || access.status === "expired") return {
     headlineLead: "Choose", headlineAccent: "Formie Pro", heroDetail: "Start Formie Monthly with Apple to unlock recording and ten analyses per period.",
     badgeLabel: "Available", boundaryRowLabel: "Billing starts", automaticRenewalValue: "Off", showManage: false, showPurchase: true,
+  };
+  if (access.sandbox) return {
+    headlineLead: "Sandbox subscription", headlineAccent: "is active", heroDetail: "Your current Apple test period is active. Sandbox renewal limits can end it without another renewal.",
+    badgeLabel: "Sandbox active", boundaryRowLabel: "Current period ends", automaticRenewalValue: "Test-limited", showManage: true, showPurchase: false,
   };
   return {
     headlineLead: "Automatic renewal", headlineAccent: "is on", heroDetail: "Apple reports that Formie Monthly will renew automatically at the current billing boundary.",

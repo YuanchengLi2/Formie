@@ -11,7 +11,7 @@ export type BillingBoundary = {
   exactTimestamp: string;
   timeZone: string;
   relativeCountdown: string;
-  boundaryVerb: "Renews" | "Access ends" | "Access ended" | "Billing";
+  boundaryVerb: "Renews" | "Test period ends" | "Access ends" | "Access ended" | "Billing";
   reconciliationState: "stable" | "checking" | "expired" | "provider_delayed" | "unavailable";
   remainingMs: number | null;
 };
@@ -35,7 +35,7 @@ export function resolveBillingBoundary(
   const exactTimestamp = formatExactTimestamp(paidThrough, locale, timeZone);
   if (remainingMs > 0) {
     const renewing = input.lifecycleState === "active_renewing" && input.willRenew;
-    const boundaryVerb = renewing ? "Renews" : "Access ends";
+    const boundaryVerb = input.sandbox && renewing ? "Test period ends" : renewing ? "Renews" : "Access ends";
     return { exactTimestamp, timeZone, relativeCountdown: `${boundaryVerb} in ${formatDuration(remainingMs)}`, boundaryVerb, reconciliationState: "stable", remainingMs };
   }
 

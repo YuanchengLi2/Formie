@@ -57,4 +57,13 @@ describe("ManageSubscriptionRoute", () => {
     await fireEvent.press(screen.getByRole("button", { name: "Resubscribe in Formie" }));
     expect(mockReplace).toHaveBeenCalledWith("/subscription");
   });
+
+  it("shows an active Apple sandbox period without promising another renewal", async () => {
+    mockAccess = { ...mockAccess, sandbox: true };
+    const screen = await render(<ManageSubscriptionRoute />);
+
+    expect(screen.getByText("Sandbox subscription is active")).toBeTruthy();
+    expect(screen.getByText("Test-limited")).toBeTruthy();
+    expect(screen.queryByText("Automatic renewal is on")).toBeNull();
+  });
 });
