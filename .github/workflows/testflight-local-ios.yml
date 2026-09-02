@@ -47,8 +47,11 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
+
+      - name: Use lockfile-compatible npm
+        run: npm install --global npm@10.9.8
 
       - name: Set up EAS CLI
         uses: expo/expo-github-action@v8
@@ -137,8 +140,11 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
+
+      - name: Use lockfile-compatible npm
+        run: npm install --global npm@10.9.8
 
       - name: Set up EAS CLI
         uses: expo/expo-github-action@v8
