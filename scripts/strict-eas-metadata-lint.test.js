@@ -35,6 +35,28 @@ test("fails closed when any secure review input is missing", () => {
   );
 });
 
+test("allows TestFlight-only structural lint without weakening final review mode", () => {
+  const source = { configVersion: 0, apple: { review: { notes: "Reviewer flow" } } };
+  const populated = injectReviewMetadata(
+    source,
+    { APP_REVIEW_FIRST_NAME: "", APP_REVIEW_EMAIL: "support@useformie.com", APP_REVIEW_DEMO_USERNAME: "appreview@useformie.com" },
+    { mode: "testflight" },
+  );
+  assert.equal(populated.apple.review.firstName, "TestFlight");
+  assert.equal(populated.apple.review.phone, "+1 202 555 0100");
+  assert.equal(populated.apple.review.email, "support@useformie.com");
+  assert.equal(populated.apple.review.demoUsername, "appreview@useformie.com");
+  assert.equal(source.apple.review.firstName, undefined);
+  assert.throws(
+    () => injectReviewMetadata(source, { APP_REVIEW_EMAIL: "support@useformie.com" }),
+    /APP_REVIEW_FIRST_NAME/,
+  );
+});
+
+test("rejects unknown metadata lint modes", () => {
+  assert.throws(() => injectReviewMetadata({ apple: { review: {} } }, environment, { mode: "submission" }), /Unsupported metadata lint mode/);
+});
+
 test("treats EAS severity-2 metadata findings as blocking", () => {
   assert.equal(metadataLintErrors(JSON.stringify([{ severity: 1 }, { severity: 2, message: "missing" }])).length, 1);
 });

@@ -85,6 +85,7 @@ jobs:
       - name: Validate App Store metadata
         env:
           EAS_CLI_EXECUTABLE: eas
+          APP_STORE_METADATA_LINT_MODE: testflight
           APP_REVIEW_FIRST_NAME: ${{ secrets.APP_REVIEW_FIRST_NAME }}
           APP_REVIEW_LAST_NAME: ${{ secrets.APP_REVIEW_LAST_NAME }}
           APP_REVIEW_EMAIL: ${{ secrets.APP_REVIEW_EMAIL }}
