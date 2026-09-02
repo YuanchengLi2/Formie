@@ -83,6 +83,9 @@ test("screenshot release plan fixes the angled-benefits image first and preserve
 test("TestFlight workflow records signed-archive and Apple processing evidence", () => {
   const workflow = readFileSync(new URL("../.github/workflows/testflight-local-ios.yml", import.meta.url), "utf8");
   assert.match(workflow, /node-version:\s*22/, "CI must satisfy the website Supabase Node 22 engine requirement");
+  assert.match(workflow, /release-gates:[\s\S]*runs-on: ubuntu-latest/);
+  assert.match(workflow, /build-and-submit:[\s\S]*needs: release-gates[\s\S]*runs-on: macos-26/);
+  assert.match(workflow, /run: npm run test:release-critical/);
   for (const required of [
     "NSMicrophoneUsageDescription must not be present",
     "com.apple.developer.applesignin",

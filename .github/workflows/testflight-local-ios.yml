@@ -17,10 +17,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-submit:
-    name: Build signed IPA and submit
-    runs-on: macos-26
-    timeout-minutes: 60
+  release-gates:
+    name: Verify release-critical app and submission flows
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
 
@@ -105,6 +105,50 @@ jobs:
       - name: Build website
         working-directory: website
         run: npm run build
+
+  build-and-submit:
+    name: Build signed IPA and submit
+    needs: release-gates
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: read
+
+    steps:
+      - name: Validate exact release commit
+        env:
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+        run: |
+          if [[ ! "$RELEASE_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "release_commit must be an exact 40-character Git commit SHA"
+            exit 1
+          fi
+
+      - name: Check out exact release commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_commit }}
+
+      - name: Verify checked-out release commit
+        env:
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+        run: test "$(git rev-parse HEAD)" = "$(printf '%s' "$RELEASE_COMMIT" | tr '[:upper:]' '[:lower:]')"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: 23.2.0
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
 
       - name: Validate production payment and auth environment
         run: >-
