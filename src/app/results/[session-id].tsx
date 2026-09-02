@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { type Href, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Text, View } from "react-native";
-import * as WebBrowser from "expo-web-browser";
+import { Linking, Text, View } from "react-native";
+import { AiProcessingConsentModal } from "@/components/ai-processing-consent-modal";
 
 import { declarationForReanalysis } from "@/features/analysis/reanalysis-declaration";
 import type { SetDeclaration } from "@/features/analysis/set-declaration";
@@ -16,6 +16,8 @@ import { useCaptureStore } from "@/features/capture/capture-store";
 import { deviceVideoStore } from "@/features/capture/device-video-store";
 import type { RecordedSet } from "@/features/capture/types";
 import { queryClient } from "@/lib/query-client";
+import { supabase } from "@/lib/supabase";
+import { acceptAiProcessingConsent, currentAiProcessingConsent, isCurrentAiProcessingConsent, type AiConsentClient } from "@/features/privacy/ai-consent";
 import { ResultsScreen } from "@/screens/results";
 import { SetDeclarationScreen } from "@/screens/set-declaration";
 import { colors } from "@/theme/colors";
@@ -32,6 +34,10 @@ export default function ResultsRoute() {
   const [reanalysisRecording, setReanalysisRecording] = useState<RecordedSet | null>(null);
   const [preparingReanalysis, setPreparingReanalysis] = useState(false);
   const [reanalysisPreparationError, setReanalysisPreparationError] = useState<string | null>(null);
+  const [pendingReanalysis, setPendingReanalysis] = useState<SetDeclaration | null>(null);
+  const [consentVisible, setConsentVisible] = useState(false);
+  const [consentAgreeing, setConsentAgreeing] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
   const resetCapture = useCaptureStore((state) => state.dispatch);
   const feedbackQueryKey = ["analysis-feedback", sessionId] as const;
   const persistedFeedback = useQuery({
@@ -72,6 +78,12 @@ export default function ResultsRoute() {
       }
       router.replace(result.kind === "server" ? `/analysis/${sessionId}` : "/analysis/review");
     },
+    onError: (error, declaration) => {
+      if (error instanceof AnalysisApiError && error.code === "AI_CONSENT_REQUIRED" && declaration) {
+        setPendingReanalysis(declaration);
+        setConsentVisible(true);
+      }
+    },
   });
   const feedback = useMutation({
     mutationFn: async (helpful: boolean) => {
@@ -97,6 +109,38 @@ export default function ResultsRoute() {
       setPreparingReanalysis(false);
     }
   };
+  const submitReanalysis = async (declaration: SetDeclaration) => {
+    setPendingReanalysis(declaration);
+    setConsentError(null);
+    try {
+      const current = await currentAiProcessingConsent(supabase as unknown as AiConsentClient);
+      if (!isCurrentAiProcessingConsent(current)) {
+        setConsentVisible(true);
+        return;
+      }
+      setPendingReanalysis(null);
+      reanalysis.mutate(declaration);
+    } catch {
+      setConsentError("AI processing consent could not be checked. Try again.");
+      setConsentVisible(true);
+    }
+  };
+  const agreeAndReanalyze = async () => {
+    if (!pendingReanalysis || consentAgreeing) return;
+    setConsentAgreeing(true);
+    setConsentError(null);
+    try {
+      await acceptAiProcessingConsent(supabase as unknown as AiConsentClient);
+      const declaration = pendingReanalysis;
+      setConsentVisible(false);
+      setPendingReanalysis(null);
+      reanalysis.mutate(declaration);
+    } catch {
+      setConsentError("AI processing consent could not be saved. Try again.");
+    } finally {
+      setConsentAgreeing(false);
+    }
+  };
   if (!status.data?.result) {
     const failureMessage = status.data?.status === "failed"
       ? status.data.failureCode === "GEMINI_FILE_FAILED"
@@ -117,7 +161,7 @@ export default function ResultsRoute() {
   );
 
   if (confirmingReanalysis) {
-    return (
+    return (<>
       <SetDeclarationScreen
         localVideoUri={reanalysisRecording?.localUri ?? ""}
         initialDeclaration={initialReanalysisDeclaration}
@@ -127,13 +171,14 @@ export default function ResultsRoute() {
         submitting={reanalysis.isPending}
         showSide={false}
         showVideoPreview={Boolean(reanalysisRecording)}
-        onAnalyze={(declaration) => reanalysis.mutate(declaration)}
+        onAnalyze={(declaration) => void submitReanalysis(declaration)}
         onRetake={() => {
           setConfirmingReanalysis(false);
           setReanalysisRecording(null);
         }}
       />
-    );
+      <AiProcessingConsentModal visible={consentVisible} agreeing={consentAgreeing} error={consentError} onAgree={() => void agreeAndReanalyze()} onDismiss={() => { if (!consentAgreeing) { setConsentVisible(false); setPendingReanalysis(null); } }} />
+    </>);
   }
 
   return (
@@ -145,10 +190,11 @@ export default function ResultsRoute() {
       onReanalyze={() => void prepareReanalysis()}
       reanalyzing={preparingReanalysis || reanalysis.isPending}
       reanalysisError={reanalysisPreparationError ?? (reanalysis.error instanceof Error ? reanalysis.error.message : null)}
-      exampleState={tutorial.isPending ? "loading" : tutorial.data ? "ready" : "error"}
+      tutorial={tutorial.data ?? null}
+      exampleState={tutorial.isPending ? "loading" : tutorial.isError ? "error" : tutorial.data ? "ready" : "empty"}
       onWatchExample={() => {
         if (tutorial.data) {
-          void WebBrowser.openBrowserAsync(tutorial.data.url);
+          void Linking.openURL(tutorial.data.url);
         } else {
           void tutorial.refetch();
         }

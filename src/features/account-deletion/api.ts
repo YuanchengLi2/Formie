@@ -2,14 +2,16 @@ import { z } from "zod";
 
 type Fetcher = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
-const successSchema = z.object({ deleted: z.literal(true) }).strict();
-const deletionStageSchema = z.enum(["storage", "analytics", "auth_user"]);
+const successSchema = z.object({ deleted: z.literal(true), externalCleanup: z.enum(["complete", "queued"]) }).strict();
+const deletionStageSchema = z.enum(["external", "storage", "analytics", "auth_user"]);
 const safeErrorSchema = z.object({
   message: z.string().min(1).max(250),
   code: z.enum([
     "METHOD_NOT_ALLOWED",
     "INVALID_BODY",
     "UNAUTHORIZED",
+    "APPLE_REAUTH_REQUIRED",
+    "EXTERNAL_DELETE_FAILED",
     "STORAGE_DELETE_FAILED",
     "ANALYTICS_DELETE_FAILED",
     "AUTH_USER_DELETE_FAILED",
@@ -46,7 +48,7 @@ export async function deleteAccount(input: {
   baseUrl?: string;
   fetcher?: Fetcher;
   signal?: AbortSignal;
-}): Promise<{ deleted: true }> {
+}): Promise<{ deleted: true; externalCleanup: "complete" | "queued" }> {
   let response: Response;
   try {
     response = await (input.fetcher ?? fetch)(`${resolveBaseUrl(input.baseUrl)}/delete-account`, {

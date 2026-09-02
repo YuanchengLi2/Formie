@@ -1,4 +1,5 @@
 import { completeUploadHandler, type CompleteUploadDependencies } from "./handler";
+import { AiEligibilityError } from "../_shared/ai-eligibility";
 
 function request(body: unknown) {
   return new Request("https://example.test/complete-upload", {
@@ -20,6 +21,14 @@ function dependencies(overrides: Partial<CompleteUploadDependencies> = {}): Comp
 }
 
 describe("completeUploadHandler", () => {
+  it("requires current AI consent before reading or marking an upload", async () => {
+    const deps = dependencies({ authenticate: jest.fn(async () => { throw new AiEligibilityError("AI_CONSENT_REQUIRED"); }) });
+    const response = await completeUploadHandler(request({ sessionId: "session-1", durationMs: 12_000 }), deps);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: "AI_CONSENT_REQUIRED" });
+    expect(deps.findSession).not.toHaveBeenCalled();
+    expect(deps.markProcessing).not.toHaveBeenCalled();
+  });
   it("identifies the active upload contract on every response", async () => {
     const response = await completeUploadHandler(
       request({

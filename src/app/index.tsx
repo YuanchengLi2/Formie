@@ -31,6 +31,7 @@ export default function IndexRoute() {
     onboarding: onboardingLaunchState,
     currentStep: onboarding.currentStep,
     profileComplete: profile.profile?.onboardingCompleted === true,
+    adultEligible: typeof profile.profile?.ageYears === "number" && profile.profile.ageYears >= 18,
     accessStatus: access.access.status,
   });
   return destination ? <Redirect href={destination as Href} /> : <AuthLoadingScreen />;

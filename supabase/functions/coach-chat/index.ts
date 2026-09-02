@@ -1,7 +1,9 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
+import { requireCurrentAiEligibility } from "../_shared/ai-eligibility.ts";
 import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { createGeminiCoachClient } from "../_shared/gemini-coach.ts";
 import { createGeminiFilesClient } from "../_shared/gemini-files.ts";
+import { geminiGovernanceFromEnvironment } from "../_shared/gemini-governance.ts";
 import { coachMessageSchema, type CoachMessage } from "../_shared/coach-contract.ts";
 import { ensureCoachVideoFile } from "../_shared/coach-video-file.ts";
 import { resultPayload } from "../_shared/result-payload.ts";
@@ -9,8 +11,7 @@ import { coachChatHandler, type CoachThread } from "./handler.ts";
 
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
 const model = Deno.env.get("GEMINI_MODEL") ?? "gemini-3.5-flash";
-const files = createGeminiFilesClient({ apiKey });
-const coach = createGeminiCoachClient({ apiKey, model });
+const coachEnabled = Deno.env.get("FORMIE_COACH_ENABLED") === "true";
 const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 function mapThread(row: Record<string, unknown>): CoachThread {
@@ -42,10 +43,18 @@ function mapMessage(row: Record<string, unknown>): CoachMessage {
 Deno.serve(async (request) => {
   const security = await secureBrowserRequest(request, { methods: ["POST"], authentication: "user", maxBodyBytes: 65_536 });
   if (security) return security;
+  if (!coachEnabled) return withCors(request, Response.json({ message: "Formie Coach is a preview and is not available yet.", code: "FEATURE_NOT_AVAILABLE" }, { status: 404 }));
+  const governance = geminiGovernanceFromEnvironment((name) => Deno.env.get(name));
+  const files = createGeminiFilesClient({ apiKey, governance });
+  const coach = createGeminiCoachClient({ apiKey, model, governance });
   const admin = createAdminClient();
 
   const response = await coachChatHandler(request, {
-    authenticate: (incoming) => requireUserId(incoming, admin),
+    authenticate: async (incoming) => {
+      const userId = await requireUserId(incoming, admin);
+      await requireCurrentAiEligibility(admin, userId);
+      return userId;
+    },
     loadSession: async (sessionId, userId) => {
       const { data: session, error } = await admin.from("analysis_sessions").select("*").eq("id", sessionId).eq("user_id", userId).maybeSingle();
       if (error) throw error;

@@ -95,6 +95,16 @@ export const purchasesClient: PurchasesClient = {
     configuredUserId = null;
     currentPackages = [];
   },
+  async prepareForAccountDeletion(appUserId) {
+    await ensureConfigured(appUserId);
+    if (purchases) purchases.close();
+    purchases = null;
+    configuredUserId = null;
+    currentPackages = [];
+  },
+  async restoreAfterFailedAccountDeletion(appUserId) {
+    await ensureConfigured(appUserId);
+  },
   async getOfferings() {
     const client = await getPurchases();
     return mapOffering((await client.getOfferings()).current);

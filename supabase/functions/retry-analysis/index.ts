@@ -1,4 +1,5 @@
 import { createAdminClient } from "../_shared/auth.ts";
+import { AiEligibilityError, requireCurrentAiEligibility } from "../_shared/ai-eligibility.ts";
 import { constantTimeEqual, validateRequestSecurity, withRequestIdentifier } from "../_shared/request-security.ts";
 import { retryAnalysisHandler } from "./handler.ts";
 import { isV49PrimaryRolloutEnabled } from "../_shared/v49-primary-rollout.ts";
@@ -17,6 +18,15 @@ Deno.serve(async (request) => {
   const response = await retryAnalysisHandler(request, {
     primaryV49Enabled,
     authenticate: requireScheduledRequest,
+    eligibleForAi: async (userId) => {
+      try {
+        await requireCurrentAiEligibility(admin, userId);
+        return true;
+      } catch (error) {
+        if (error instanceof AiEligibilityError) return false;
+        throw error;
+      }
+    },
     findDueSessions: async (now, limit) => {
       let query = admin
         .from("analysis_sessions")

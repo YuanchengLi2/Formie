@@ -4,23 +4,23 @@ import {
   buildTextGenerateContentRequest,
   createGenerateContentClient,
 } from "../_shared/gemini-generate.ts";
+import { geminiGovernanceFromEnvironment } from "../_shared/gemini-governance.ts";
 import {
   exerciseGuideHandler,
   parseExerciseGuide,
   type ExerciseGuideSource,
 } from "./handler.ts";
-import { createGeminiTutorialClient } from "../_shared/gemini-tutorial.ts";
+import { createYouTubeTutorialClient } from "../_shared/youtube-tutorial.ts";
+import { resolveYouTubeTutorial } from "../_shared/youtube-tutorial-cache.ts";
 
 const GUIDE_VERSION = "catalog-guide-v2";
 const MODEL = Deno.env.get("EXERCISE_GUIDE_MODEL") ?? "gemini-3.1-flash-lite";
-const TUTORIAL_MODEL = Deno.env.get("GEMINI_TUTORIAL_MODEL") ?? "gemini-3.1-flash-lite";
+const governance = geminiGovernanceFromEnvironment((name) => Deno.env.get(name));
 const generation = createGenerateContentClient({
   apiKey: Deno.env.get("GEMINI_API_KEY") ?? "",
+  governance,
 });
-const tutorialSearch = createGeminiTutorialClient({
-  apiKey: Deno.env.get("GEMINI_API_KEY") ?? "",
-  model: TUTORIAL_MODEL,
-});
+const tutorialSearch = createYouTubeTutorialClient({ apiKey: Deno.env.get("YOUTUBE_DATA_API_KEY") ?? "" });
 
 const guideSchema = {
   type: "object",
@@ -117,7 +117,22 @@ Deno.serve(async (request) => {
       }, { onConflict: "exercise_id,guide_version" });
       if (error) throw error;
     },
-    findTutorial: (exerciseName) => tutorialSearch.findTutorial(exerciseName),
+    findTutorial: (exerciseName) => resolveYouTubeTutorial(exerciseName, {
+      load: async (canonicalExercise) => {
+        const { data, error } = await admin.from("youtube_tutorial_cache").select("payload,source_version,verified_at,expires_at").eq("canonical_exercise", canonicalExercise).maybeSingle();
+        if (error) throw error;
+        return data ? { payload: data.payload, sourceVersion: data.source_version, verifiedAt: data.verified_at, expiresAt: data.expires_at } : null;
+      },
+      save: async (canonicalExercise, entry) => {
+        const { error } = await admin.from("youtube_tutorial_cache").upsert({ canonical_exercise: canonicalExercise, payload: entry.payload, source_version: entry.sourceVersion, verified_at: entry.verifiedAt, expires_at: entry.expiresAt, updated_at: new Date().toISOString() });
+        if (error) throw error;
+      },
+      remove: async (canonicalExercise) => {
+        const { error } = await admin.from("youtube_tutorial_cache").delete().eq("canonical_exercise", canonicalExercise);
+        if (error) throw error;
+      },
+      find: (canonicalExercise) => tutorialSearch.findTutorial(canonicalExercise),
+    }),
   });
   return withCors(request, response);
 });

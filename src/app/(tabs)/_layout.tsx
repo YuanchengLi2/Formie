@@ -54,7 +54,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="(home)" options={{ title: "Home", tabBarIcon: ({ color }) => <ProductionIcon name="tabHome" label="Home" size={26} tintColor={color} /> }} />
-      <Tabs.Screen name="(coach)" options={{ title: "Coach", href: "/(tabs)/(coach)", tabBarIcon: ({ color }) => <CoachTabIcon color={color} size={26} /> }} />
+      <Tabs.Screen name="(coach)" options={{ title: "Coach Preview", href: "/(tabs)/(coach)", tabBarIcon: ({ color }) => <CoachTabIcon color={color} size={26} /> }} />
       <Tabs.Screen
         name="(record)"
         options={{

@@ -1,9 +1,11 @@
 import type { AnalysisCandidate, ExerciseFamily } from "../_shared/analysis-contract.ts";
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
+import { requireCurrentAiEligibility } from "../_shared/ai-eligibility.ts";
 import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { constantTimeEqual } from "../_shared/request-security.ts";
 import { estimatedGeminiCost } from "../_shared/gemini-cost.ts";
 import { buildTextGenerateContentRequest, buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
+import { geminiGovernanceFromEnvironment } from "../_shared/gemini-governance.ts";
 import { parseSetDeclaration, type SetDeclaration } from "../_shared/set-declaration.ts";
 import { analyzeVideoV49Handler, type V49Run } from "./handler.ts";
 import { canonicalSha256 } from "./canonical-json.ts";
@@ -40,7 +42,8 @@ type LoadedRun = V49Run & {
 };
 
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
-const generation = createGenerateContentClient({ apiKey });
+const governance = geminiGovernanceFromEnvironment((name) => Deno.env.get(name));
+const generation = createGenerateContentClient({ apiKey, governance });
 
 function json(value: unknown, status: number): Response {
   return new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
@@ -226,6 +229,7 @@ Deno.serve(async (request) => {
         if (configuredRetrySecret && retrySecret && constantTimeEqual(retrySecret, configuredRetrySecret)) {
           const userId = incoming.headers.get("x-analysis-retry-user-id");
           if (!userId) throw new Error("UNAUTHORIZED");
+          await requireCurrentAiEligibility(admin, userId);
           return { userId, allowShadow: false };
         }
         const supplied = incoming.headers.get("x-analysis-shadow-secret");
@@ -233,9 +237,12 @@ Deno.serve(async (request) => {
         if (configured && supplied && constantTimeEqual(supplied, configured)) {
           const userId = incoming.headers.get("x-analysis-shadow-user-id");
           if (!userId) throw new Error("UNAUTHORIZED");
+          await requireCurrentAiEligibility(admin, userId);
           return { userId, allowShadow: true };
         }
-        return { userId: await requireUserId(incoming, admin), allowShadow: false };
+        const userId = await requireUserId(incoming, admin);
+        await requireCurrentAiEligibility(admin, userId);
+        return { userId, allowShadow: false };
       },
       loadRun: async (sessionId, userId, requestedRunId) => {
         const { data: session, error: sessionError } = await admin.from("analysis_sessions").select("id,user_id,active_v49_run_id,video_path,analysis_video_path,analysis_input_strategy,duration_ms,exercise_variant_v2_id").eq("id", sessionId).eq("user_id", userId).maybeSingle();

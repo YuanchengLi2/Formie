@@ -9,19 +9,24 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": false,
+      "usesAppleSignIn": true,
       "bundleIdentifier": "app.form.coach",
+      "entitlements": {
+        "com.apple.developer.applesignin": [
+          "Default"
+        ]
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "Formie uses the camera to record your exercise set for private technique analysis.",
-        "NSMicrophoneUsageDescription": "Formie can include ambient audio in your exercise recording."
+        "NSCameraUsageDescription": "Formie uses the camera to record your exercise set for private technique analysis."
       }
     },
     "android": {
       "package": "app.form.coach",
       "permissions": [
-        "CAMERA",
-        "RECORD_AUDIO",
-        "android.permission.CAMERA",
+        "CAMERA"
+      ],
+      "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
@@ -44,8 +49,7 @@
         "expo-camera",
         {
           "cameraPermission": "Allow Formie to record your exercise set for private technique analysis.",
-          "microphonePermission": "Allow Formie to record audio with your set.",
-          "recordAudioAndroid": true
+          "recordAudioAndroid": false
         }
       ],
       [
@@ -57,6 +61,7 @@
         }
       ],
       "expo-video",
+      "expo-apple-authentication",
       "expo-secure-store",
       "expo-web-browser",
       "expo-asset",

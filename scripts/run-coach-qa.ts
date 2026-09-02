@@ -3,6 +3,7 @@ import path from "node:path";
 import { buildCoachGrounding, normalizeCoachLocation, parseCoachAnswer, parseCoachLocation, renderCoachAnswer } from "../supabase/functions/_shared/coach-analysis.ts";
 import { createGeminiCoachClient } from "../supabase/functions/_shared/gemini-coach.ts";
 import { createGeminiFilesClient, type GeminiFile } from "../supabase/functions/_shared/gemini-files.ts";
+import { geminiGovernanceFromEnvironment } from "../supabase/functions/_shared/gemini-governance.ts";
 import { buildCoachAnswerPrompt, buildCoachLocatorPrompt } from "../supabase/functions/_shared/coach-prompt.ts";
 
 type BenchmarkCase = {
@@ -49,8 +50,9 @@ async function main() {
   const model = process.env.GEMINI_MODEL?.trim() || "gemini-3.5-flash";
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as Manifest;
   if (manifest.cases.length !== 20) throw new Error("Coach QA manifest must contain exactly 20 cases");
-  const files = createGeminiFilesClient({ apiKey });
-  const coach = createGeminiCoachClient({ apiKey, model });
+  const governance = geminiGovernanceFromEnvironment((name) => process.env[name]);
+  const files = createGeminiFilesClient({ apiKey, governance });
+  const coach = createGeminiCoachClient({ apiKey, model, governance });
   const results: Array<Record<string, unknown>> = [];
   const groups = new Map<string, BenchmarkCase[]>();
   for (const item of manifest.cases) groups.set(item.video.id, [...(groups.get(item.video.id) ?? []), item]);

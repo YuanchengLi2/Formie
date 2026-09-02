@@ -11,7 +11,9 @@ function request(body: unknown = { confirmation: "DELETE" }, method = "POST") {
 
 function dependencies(overrides: Partial<AccountDeletionDependencies> = {}): AccountDeletionDependencies {
   return {
-    authenticate: async () => "user-1",
+    authenticate: async () => ({ userId: "user-1", appleLinked: false }),
+    loadExternalResources: async (_userId, appleLinked) => ({ appleLinked, encryptedAppleRefreshToken: null, geminiFileNames: ["files/video-1"], revenueCatCustomerId: "user-1" }),
+    cleanupExternal: async () => "complete",
     listUserFiles: async (bucket) => [`user-1/${bucket}/file.bin`],
     removeFiles: async () => undefined,
     deleteAnalytics: async () => undefined,
@@ -24,7 +26,9 @@ describe("delete account handler", () => {
   it("deletes both storage buckets, linked analytics, and the Auth user in order", async () => {
     const events: string[] = [];
     const response = await deleteAccountHandler(request(), dependencies({
-      authenticate: async () => { events.push("authenticate"); return "user-1"; },
+      authenticate: async () => { events.push("authenticate"); return { userId: "user-1", appleLinked: false }; },
+      loadExternalResources: async (_userId, appleLinked) => { events.push("load:external"); return { appleLinked, encryptedAppleRefreshToken: null, geminiFileNames: ["files/video-1"], revenueCatCustomerId: "user-1" }; },
+      cleanupExternal: async () => { events.push("delete:external"); return "complete"; },
       listUserFiles: async (bucket) => { events.push(`list:${bucket}`); return [`user-1/${bucket}/file.bin`]; },
       removeFiles: async (bucket, userId, paths) => {
         expect(userId).toBe("user-1");
@@ -36,9 +40,11 @@ describe("delete account handler", () => {
     }));
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ deleted: true });
+    expect(await response.json()).toEqual({ deleted: true, externalCleanup: "complete" });
     expect(events).toEqual([
       "authenticate",
+      "load:external",
+      "delete:external",
       "list:analysis-videos",
       "remove:analysis-videos",
       "list:analysis-artifacts",
@@ -79,6 +85,26 @@ describe("delete account handler", () => {
     expect(response.status).toBe(401);
     expect(listUserFiles).not.toHaveBeenCalled();
     expect(deleteAuthUser).not.toHaveBeenCalled();
+  });
+
+  it("requires Apple reauthentication before deleting any local data for a legacy Apple identity", async () => {
+    const removeFiles = jest.fn();
+    const deleteAuthUser = jest.fn();
+    const response = await deleteAccountHandler(request(), dependencies({
+      authenticate: async () => ({ userId: "user-1", appleLinked: true }),
+      loadExternalResources: async () => ({ appleLinked: true, encryptedAppleRefreshToken: null, geminiFileNames: [], revenueCatCustomerId: "user-1" }),
+      removeFiles,
+      deleteAuthUser,
+    }));
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "APPLE_REAUTH_REQUIRED", stage: "external" });
+    expect(removeFiles).not.toHaveBeenCalled();
+    expect(deleteAuthUser).not.toHaveBeenCalled();
+  });
+
+  it("truthfully reports queued processor cleanup while completing local account deletion", async () => {
+    const response = await deleteAccountHandler(request(), dependencies({ cleanupExternal: async () => "queued", listUserFiles: async () => [] }));
+    expect(await response.json()).toEqual({ deleted: true, externalCleanup: "queued" });
   });
 
   it("treats already-empty storage as idempotent progress", async () => {

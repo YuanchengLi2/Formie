@@ -1,4 +1,5 @@
 import { createAnalysisHandler, type CreateAnalysisDependencies } from "./handler";
+import { AiEligibilityError } from "../_shared/ai-eligibility";
 
 const declaration = {
   exercise: { source: "catalog", catalogExerciseId: 2, label: "Flat Dumbbell Bench Press" },
@@ -27,6 +28,22 @@ function dependencies(overrides: Partial<CreateAnalysisDependencies> = {}): Crea
 }
 
 describe("create analysis handler", () => {
+  it("returns AI_CONSENT_REQUIRED before reserving quota or creating uploads", async () => {
+    const deps = dependencies({
+      authenticate: jest.fn(async () => { throw new AiEligibilityError("AI_CONSENT_REQUIRED"); }),
+      reserveCredit: jest.fn(),
+    });
+    const response = await createAnalysisHandler(
+      new Request("https://example.test", { method: "POST", body: JSON.stringify({ declaration }) }),
+      deps,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: "AI_CONSENT_REQUIRED" });
+    expect(deps.reserveCredit).not.toHaveBeenCalled();
+    expect(deps.createSession).not.toHaveBeenCalled();
+    expect(deps.createSignedUpload).not.toHaveBeenCalled();
+  });
   it("rejects a request without a set declaration", async () => {
     const response = await createAnalysisHandler(
       new Request("https://example.test", { method: "POST", body: JSON.stringify({}) }),

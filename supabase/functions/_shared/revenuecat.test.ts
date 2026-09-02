@@ -1,4 +1,4 @@
-import { activeRevenueCatEntitlement, parseRevenueCatSubscriber, resolveRevenueCatEntitlement, resolveSubscriptionState } from "./revenuecat";
+import { activeRevenueCatEntitlement, deleteRevenueCatCustomer, parseRevenueCatSubscriber, resolveRevenueCatEntitlement, resolveSubscriptionState } from "./revenuecat";
 
 describe("RevenueCat entitlement mapping", () => {
   it("only treats the configured entitlement as active before its expiry", () => {
@@ -28,6 +28,15 @@ describe("RevenueCat entitlement mapping", () => {
       purchaseDate: "2026-08-01T00:00:00.000Z",
       expirationDate: "2026-08-04T11:59:59.000Z",
     });
+  });
+});
+
+describe("RevenueCat customer deletion", () => {
+  it("permanently deletes the identified customer and treats an absent customer as success", async () => {
+    const fetcher = jest.fn().mockResolvedValueOnce(new Response(null, { status: 200 })).mockResolvedValueOnce(new Response(null, { status: 404 }));
+    await expect(deleteRevenueCatCustomer("user/1", "secret", fetcher)).resolves.toBeUndefined();
+    await expect(deleteRevenueCatCustomer("user/1", "secret", fetcher)).resolves.toBeUndefined();
+    expect(fetcher).toHaveBeenCalledWith("https://api.revenuecat.com/v1/subscribers/user%2F1", expect.objectContaining({ method: "DELETE", headers: expect.objectContaining({ Authorization: "Bearer secret" }) }));
   });
 });
 

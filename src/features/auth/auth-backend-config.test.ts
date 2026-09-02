@@ -32,9 +32,10 @@ describe("Supabase authentication configuration", () => {
     expect(config).not.toContain('form://**');
   });
 
-  it("enables both social providers used by the app", () => {
-    expect(config).toMatch(/\[auth\.external\.google\][^[]*enabled = true/);
+  it("disables unused Google auth and accepts native and web Apple identities", () => {
+    expect(config).toMatch(/\[auth\.external\.google\][^[]*enabled = false/);
     expect(config).toMatch(/\[auth\.external\.apple\][^[]*enabled = true/);
+    expect(config).toMatch(/client_id = "app\.form\.coach,app\.form\.coach\.signin"/);
   });
 
   it("preserves the existing MFA and email abuse protections", () => {

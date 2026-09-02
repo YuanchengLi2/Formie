@@ -153,7 +153,7 @@ export function HomeScreen({
       <View style={{ flexDirection: layout.stackControls ? "column" : "row", gap: spacing.md }}>
         <Pressable accessibilityRole="button" onPress={onOpenCoach} testID="home-coach-action" style={({ pressed }) => ({ flex: 1, minHeight: 88, alignItems: "center", justifyContent: "center", gap: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 })}>
           <DashboardIcon label="Formie Coach icon" name="coach" size={32} />
-          <Text selectable style={{ color: colors.text, fontSize: 18, lineHeight: 23, fontWeight: "600", textAlign: "center" }}>Ask Formie Coach</Text>
+          <Text selectable style={{ color: colors.text, fontSize: 18, lineHeight: 23, fontWeight: "600", textAlign: "center" }}>Coach Preview</Text>
         </Pressable>
         <Pressable accessibilityRole="button" onPress={onOpenProgress} testID="home-progress-action" style={({ pressed }) => ({ flex: 1, minHeight: 88, alignItems: "center", justifyContent: "center", gap: spacing.xs, paddingHorizontal: spacing.sm, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 })}>
           <DashboardIcon label="View progress icon" name="progress" size={32} />

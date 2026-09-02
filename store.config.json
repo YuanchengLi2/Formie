@@ -7,10 +7,10 @@
       "HEALTH_AND_FITNESS"
     ],
     "release": {
-      "automaticRelease": true
+      "automaticRelease": false
     },
     "review": {
-      "notes": "Sign-in and account setup:\n1. Launch Formie and complete the onboarding screens.\n2. Tap Sign in with Apple. Apple is the only account method shown in this release; no separate demo password is required.\n\nSubscription:\n1. The Formie Pro monthly offer appears after account setup or from Settings > Subscription.\n2. The screen shows the localized App Store price, auto-renewal disclosure, Terms of Use, Privacy Policy, and Restore Purchases.\n3. Apple controls the purchase sheet and subscription management.\n\nCore review flow:\n1. From Home, start an analysis and select or confirm the exercise.\n2. Record a short exercise set. Camera access and a physical device are required for recording.\n3. Submit the recording and wait for the analysis to complete.\n4. Open the result to review evidence-linked coaching.\n\nAccount deletion:\n1. Open Settings > Delete Account.\n2. Review the subscription warning, enter DELETE, and confirm Delete Account Now.\n3. Deletion removes the Formie account and Formie-controlled uploaded/derived data. It does not cancel Apple billing; Manage Apple Subscription is available in the confirmation.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/\nPrivacy choices: https://useformie.com/privacy-choices"
+      "notes": "Reviewer access:\nUse the dedicated adult email/password account entered in App Store Connect Sign-In Information. Native Sign in with Apple is also available. Reviewer credentials and contact details are stored only in App Store Connect, not in source metadata.\n\nSubscription:\n1. Formie Monthly is the only plan offered: 10 analyses per month at the localized App Store price (US base price $9.99).\n2. The native paywall shows the localized price, auto-renewal disclosure, Terms, Privacy, and Restore Purchases.\n3. Apple controls purchase and subscription management.\n\nCore review flow and AI consent:\n1. From Home, start an analysis and select or confirm a catalog exercise.\n2. Record a short set. Formie requests camera permission only and records without audio.\n3. On the set-details screen, choose Review AI processing. Formie identifies the exercise video, declaration, and relevant profile information sent to Formie's servers and the paid Google Gemini API. Nothing is uploaded until Agree and analyze is selected.\n4. Wait for analysis, then open the evidence-linked correction and saved progress. Consent can be withdrawn under Settings > AI Processing.\n\nYouTube tutorials:\nEligible catalog exercises can show an attributed public YouTube tutorial selected with the YouTube Data API. Watch on YouTube opens the public YouTube page externally. Formie does not download or host the video, and tutorials do not consume analysis quota.\n\nCoach Preview:\nThe Coach Preview tab is a deliberately nonfunctional static preview. It is not included in Formie Pro and exposes no chat or picker controls.\n\nAccount deletion:\nSettings > Delete Account requires DELETE. Formie revokes or queues Sign in with Apple authorization and requests Gemini file and RevenueCat customer deletion before removing Formie data. Apple billing continues until the reviewer cancels it in Apple subscription settings.\n\nTerms of Use (EULA): https://www.apple.com/legal/internet-services/itunes/dev/stdeula/\nPrivacy choices: https://useformie.com/privacy-choices"
     },
     "info": {
       "en-US": {
@@ -31,12 +31,13 @@
         ],
         "promoText": "Record a set, review the moments that matter, and get clear coaching for your next rep.",
         "privacyPolicyUrl": "https://useformie.com/privacy",
+        "privacyChoicesUrl": "https://useformie.com/privacy-choices",
         "supportUrl": "https://useformie.com/support",
         "marketingUrl": "https://useformie.com"
       }
     },
     "advisory": {
-      "ageRatingOverride": "NONE",
+      "ageRatingOverride": "SEVENTEEN_PLUS",
       "alcoholTobaccoOrDrugUseOrReferences": "NONE",
       "contests": "NONE",
       "gambling": false,
@@ -56,8 +57,8 @@
       "violenceRealisticProlongedGraphicOrSadistic": "NONE",
       "advertising": false,
       "ageAssurance": false,
-      "ageRatingOverrideV2": "NONE",
-      "developerAgeRatingInfoUrl": null,
+      "ageRatingOverrideV2": "EIGHTEEN_PLUS",
+      "developerAgeRatingInfoUrl": "https://useformie.com/terms",
       "gunsOrOtherWeapons": "NONE",
       "healthOrWellnessTopics": true,
       "messagingAndChat": false,

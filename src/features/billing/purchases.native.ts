@@ -15,6 +15,7 @@ function mapCustomerInfo(info: Awaited<ReturnType<typeof Purchases.getCustomerIn
 }
 
 let configuredUserId: string | null = null;
+const customerInfoListeners = new Set<(info: Awaited<ReturnType<typeof Purchases.getCustomerInfo>>) => void>();
 
 export async function showNativeSubscriptionManagement(): Promise<void> {
   if (Platform.OS === "ios") {
@@ -40,6 +41,16 @@ export const purchasesClient: PurchasesClient = {
   async logOut() {
     if (await Purchases.isConfigured()) await Purchases.logOut();
     configuredUserId = null;
+  },
+  async prepareForAccountDeletion(appUserId) {
+    await purchasesClient.configure(appUserId);
+    for (const listener of customerInfoListeners) Purchases.removeCustomerInfoUpdateListener(listener);
+    customerInfoListeners.clear();
+    if (await Purchases.isConfigured()) await Purchases.logOut();
+    configuredUserId = null;
+  },
+  async restoreAfterFailedAccountDeletion(appUserId) {
+    await purchasesClient.configure(appUserId);
   },
   async getOfferings() {
     const offerings = await Purchases.getOfferings();
@@ -77,7 +88,8 @@ export const purchasesClient: PurchasesClient = {
   showManageSubscriptions: showNativeSubscriptionManagement,
   subscribeCustomerInfo(listener) {
     const nativeListener = (info: Awaited<ReturnType<typeof Purchases.getCustomerInfo>>) => listener(mapCustomerInfo(info));
+    customerInfoListeners.add(nativeListener);
     Purchases.addCustomerInfoUpdateListener(nativeListener);
-    return () => Purchases.removeCustomerInfoUpdateListener(nativeListener);
+    return () => { customerInfoListeners.delete(nativeListener); Purchases.removeCustomerInfoUpdateListener(nativeListener); };
   },
 };

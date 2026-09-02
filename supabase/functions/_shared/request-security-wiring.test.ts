@@ -45,7 +45,6 @@ describe("edge request security wiring", () => {
     "refresh-entitlement",
     "send-feedback",
     "subscription-test-controls",
-    "sync-acquisition-sheet",
   ])("enforces the shared browser/native policy and dynamic response CORS for %s", (name) => {
     const contents = source(name);
     expect(contents).toContain("secureBrowserRequest(request");
@@ -59,6 +58,7 @@ describe("edge request security wiring", () => {
     "retry-analysis",
     "revenuecat-webhook",
     "send-support",
+    "process-external-deletions",
   ])("keeps %s non-browser accessible with bounded bodies", (name) => {
     const contents = source(name);
     expect(contents).toContain("validateRequestSecurity(request");

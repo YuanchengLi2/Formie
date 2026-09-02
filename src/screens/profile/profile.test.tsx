@@ -63,15 +63,28 @@ describe("ProfileScreen", () => {
   it("opens Get Help and all configured policy links", async () => {
     const onOpenUrl = jest.fn().mockResolvedValue(undefined);
     const onSendFeedback = jest.fn();
-    const screen = await render(<ProfileScreen termsUrl="https://example.com/terms" privacyUrl="https://example.com/privacy" retentionUrl="https://example.com/retention" onOpenUrl={onOpenUrl} onSendFeedback={onSendFeedback} />);
+    const screen = await render(<ProfileScreen termsUrl="https://example.com/terms" privacyUrl="https://example.com/privacy" privacyChoicesUrl="https://example.com/privacy-choices" retentionUrl="https://example.com/retention" onOpenUrl={onOpenUrl} onSendFeedback={onSendFeedback} />);
     await fireEvent.press(screen.getByText("Help & Support"));
     await fireEvent.press(screen.getByText("Terms of Use"));
     await fireEvent.press(screen.getByText("Privacy Policy"));
+    await fireEvent.press(screen.getByText("Privacy Choices"));
     await fireEvent.press(screen.getByText("Retention Policy"));
     expect(onSendFeedback).toHaveBeenCalledTimes(1);
     expect(onOpenUrl).toHaveBeenNthCalledWith(1, "https://example.com/terms");
     expect(onOpenUrl).toHaveBeenNthCalledWith(2, "https://example.com/privacy");
-    expect(onOpenUrl).toHaveBeenNthCalledWith(3, "https://example.com/retention");
+    expect(onOpenUrl).toHaveBeenNthCalledWith(3, "https://example.com/privacy-choices");
+    expect(onOpenUrl).toHaveBeenNthCalledWith(4, "https://example.com/retention");
+  });
+
+  it("shows the current AI processing consent and withdraws future processing without changing prior results", async () => {
+    const onWithdrawAiConsent = jest.fn().mockResolvedValue(undefined);
+    const screen = await render(<ProfileScreen aiConsent={{ current: true, version: "2026-09-01" }} onWithdrawAiConsent={onWithdrawAiConsent} />);
+
+    expect(screen.getByText("AI Processing")).toBeTruthy();
+    expect(screen.getByText("Agreed · Notice 2026-09-01")).toBeTruthy();
+    expect(screen.getByText(/blocks new analyses and retries/i)).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Withdraw AI processing consent" }));
+    await waitFor(() => expect(onWithdrawAiConsent).toHaveBeenCalledTimes(1));
   });
 
   it("keeps the subscription chevron aligned with the plan title", async () => {
@@ -152,5 +165,18 @@ describe("ProfileScreen", () => {
     expect(screen.getByLabelText("Type DELETE to confirm")).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Delete Account Now" }));
     await waitFor(() => expect(onDeleteAccount).toHaveBeenCalledTimes(2));
+  });
+
+  it("offers the official Apple action when legacy authorization must be refreshed", async () => {
+    const onDeleteAccount = jest.fn().mockRejectedValue(Object.assign(new Error("reauth"), { code: "APPLE_REAUTH_REQUIRED" }));
+    const onReauthorizeApple = jest.fn().mockResolvedValue(true);
+    const screen = await render(<ProfileScreen onDeleteAccount={onDeleteAccount} onReauthorizeApple={onReauthorizeApple} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Delete Account" }));
+    await fireEvent.changeText(screen.getByLabelText("Type DELETE to confirm"), "DELETE");
+    await fireEvent.press(screen.getByRole("button", { name: "Delete Account Now" }));
+    expect(await screen.findByText(/Sign in with Apple again/i)).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("provider-apple"));
+    await waitFor(() => expect(onReauthorizeApple).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/Apple authorization is ready/i)).toBeTruthy();
   });
 });

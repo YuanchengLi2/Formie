@@ -22,6 +22,8 @@ test("homepage preserves section order and shows monthly pricing", () => {
   assert.match(html, /10 complete analyses each month/i);
   assert.match(html, /Whole-set movement breakdowns/i);
   assert.match(html, /Visible evidence and timestamps/i);
+  assert.match(html, /Coach.*preview.*not included in Formie Pro yet/i);
+  assert.doesNotMatch(html, /Formie Coach\s+(?:is\s+)?included/i);
   assert.match(html, /download-on-app-store\.svg/i);
   assert.doesNotMatch(html, /Manage Subscription|manage-subscription/i);
   assert.match(html, />How it works</i);
@@ -29,6 +31,12 @@ test("homepage preserves section order and shows monthly pricing", () => {
   assert.match(html, />Pricing</i);
   assert.match(html, /formie-hero-product-v4\.png/);
   assert.match(html, /formie-coaching-product-v4\.png/);
+});
+
+test("all reusable marketing visuals label Coach as a preview", () => {
+  const visuals = readFileSync(new URL("../components/app-visuals.tsx", import.meta.url), "utf8");
+  assert.match(visuals, /Coach Preview/);
+  assert.doesNotMatch(visuals, /Ask Formie Coach|Coach included/i);
 });
 
 test("document and responsive artwork stay bounded", () => {

@@ -84,8 +84,9 @@ export default function HomePage() {
             width={1536}
             height={1024}
             sizes="(max-width: 960px) 100vw, 68vw"
-            alt="Formie dashboard, saved analyses, Formie Coach, overall score, and priority support"
+            alt="Formie dashboard, saved analyses, progress, and a clearly labeled Formie Coach preview"
           />
+          <p className="v2-preview-note">Formie Coach shown in this concept is a preview and is not included in Formie Pro yet.</p>
         </div>
         <article className="v2-pro-card">
           <header>

@@ -1,4 +1,7 @@
 import { createGeminiFilesClient, reuseOrUploadGeminiFile, waitForGeminiFile } from "./gemini-files";
+import { geminiGovernanceFromValues } from "./gemini-governance";
+
+const governance = geminiGovernanceFromValues({ paidServiceConfirmed: "true", voluntaryLogSharingDisabled: "true" });
 
 describe("Gemini Files client", () => {
   it("uploads, polls, and deletes a video without analysis behavior", async () => {
@@ -7,7 +10,7 @@ describe("Gemini Files client", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ file: { name: "files/one", uri: "https://files.example/one", mimeType: "video/mp4", state: "ACTIVE" } }), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ name: "files/one", uri: "https://files.example/one", mimeType: "video/mp4", state: "ACTIVE" }), { status: 200 }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
-    const client = createGeminiFilesClient({ apiKey: "secret", fetcher });
+    const client = createGeminiFilesClient({ apiKey: "secret", governance, fetcher });
     const file = await client.uploadVideo({ body: new Uint8Array([1]), contentLength: 1, mimeType: "video/mp4", displayName: "set.mp4" });
     await expect(client.getFile(file.name)).resolves.toEqual(file);
     await expect(client.deleteFile(file.name)).resolves.toBeUndefined();

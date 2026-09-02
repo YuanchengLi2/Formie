@@ -29,7 +29,10 @@ export async function analyzeVideoV49Handler(request: Request, dependencies: V49
     const output = await dependencies.execute(run);
     return json({ sessionId: body.sessionId, runId: run.runId, ...output }, output.status === "complete" || output.status === "unable" ? 200 : 202);
   } catch (error) {
+    const eligibility = aiEligibilityErrorResponse(error);
+    if (eligibility) return eligibility;
     if (error instanceof Error && error.message === "UNAUTHORIZED") return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);
     throw error;
   }
 }
+import { aiEligibilityErrorResponse } from "../_shared/ai-eligibility.ts";

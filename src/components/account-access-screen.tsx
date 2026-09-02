@@ -21,10 +21,10 @@ function ConsentRow({ label, checked, onPress, children }: { label: string; chec
   </View>;
 }
 
-export function AccountAccessScreen({ mode = "login", onOAuth, onEmailPassword, onCreateAccount, onBack, onOpenTerms, onOpenPrivacy, onPrivacyConsentChange, onMarketingOptInChange, busyProvider = null, busy = false, error, notice }: {
+export function AccountAccessScreen({ mode = "login", onApple, onEmailPassword, onCreateAccount, onBack, onOpenTerms, onOpenPrivacy, onPrivacyConsentChange, onMarketingOptInChange, busyProvider = null, busy = false, error, notice }: {
   mode?: AccountAccessMode;
   personalizedMessage?: string;
-  onOAuth: (provider: "apple") => void;
+  onApple: () => void;
   onEmailPassword?: () => void;
   onCreateAccount?: () => void;
   onBack?: () => void;
@@ -54,7 +54,7 @@ export function AccountAccessScreen({ mode = "login", onOAuth, onEmailPassword, 
       </View>
       <View style={styles.hero}><Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text></View>
       <View testID="account-access-actions" style={[styles.actions, compact && styles.actionsCompact]}>
-        <SocialProviderButtons disabled={disabled} busyProvider={busyProvider} onOAuth={onOAuth} />
+        <SocialProviderButtons disabled={disabled} busy={busyProvider === "apple"} onApple={onApple} />
         {busy && !busyProvider ? <View style={styles.busy}><ActivityIndicator color="#E5AD32" /><Text style={styles.busyText}>Connecting…</Text></View> : null}
         {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}

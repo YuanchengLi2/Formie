@@ -33,6 +33,7 @@ function dependencies(overrides: Partial<ExerciseGuideDependencies> = {}): Exerc
     })),
     generateGuide: jest.fn(async () => generatedGuide),
     saveGuide: jest.fn(async () => undefined),
+    findTutorial: jest.fn(async () => null),
     ...overrides,
   };
 }
@@ -82,7 +83,7 @@ describe("exerciseGuideHandler", () => {
     expect(deps.loadExercise).not.toHaveBeenCalled();
   });
 
-  it("generates the same guide page for a validated custom exercise name without catalog caching", async () => {
+  it("uses a static guide and no provider tutorial for a custom exercise name", async () => {
     const deps = dependencies();
     const response = await exerciseGuideHandler(new Request("https://example.test/exercise-guide", {
       method: "POST",
@@ -92,17 +93,17 @@ describe("exerciseGuideHandler", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      exercise: { catalogExerciseId: null, canonicalName: "Jefferson Curl", family: "row" },
-      ...generatedGuide,
+      exercise: { catalogExerciseId: null, canonicalName: "Jefferson Curl", family: "other" },
+      family: "other",
+      setup: ["Use a clear space and position any equipment securely before you begin."],
+      execution: ["Move through a comfortable range you can control.", "Keep the full movement visible from start to finish."],
+      safety: ["Stop if the movement causes pain or you cannot control the equipment."],
+      cameraPlacement: ["Place the camera far enough away to keep your full body and equipment visible."],
       tutorial: null,
     });
     expect(deps.loadExercise).not.toHaveBeenCalled();
-    expect(deps.generateGuide).toHaveBeenCalledWith(expect.objectContaining({
-      id: null,
-      name: "Jefferson Curl",
-      mechanics: {},
-      criteria: [],
-    }));
+    expect(deps.generateGuide).not.toHaveBeenCalled();
+    expect(deps.findTutorial).not.toHaveBeenCalled();
     expect(deps.saveGuide).not.toHaveBeenCalled();
   });
 });

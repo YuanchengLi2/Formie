@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "iphoneOnly": true,
+  "appStoreAvailability": {
+    "appleSiliconMac": false,
+    "appleVisionPro": false
+  },
+  "physicalAcceptance": [
+    "physical_iphone",
+    "ipad_iphone_compatibility"
+  ],
+  "screenshotCanvas": {
+    "width": 1290,
+    "height": 2796
+  },
+  "firstScreenshotComposition": "angled_phone_benefits",
+  "screenshotOrder": [
+    "01-benefits-overview.png",
+    "02-record-a-set.png",
+    "03-analysis-in-progress.png",
+    "04-evidence-linked-correction.png",
+    "05-progress-and-next-set.png"
+  ],
+  "subscriptionReviewScreenshot": {
+    "path": "assets/app-store/subscriptions/formie-monthly-review.png",
+    "width": 1290,
+    "height": 2796
+  }
+}

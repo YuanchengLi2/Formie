@@ -67,13 +67,16 @@ const reanalysisResponseSchema = z.object({
 });
 
 export const tutorialVideoSchema = z.object({
+  source: z.literal("youtube_data_api_v3"),
   videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
   url: z.string().url(),
   title: z.string().min(1),
   channel: z.string().min(1),
-  whyChosen: z.string().min(1),
+  channelId: z.string().min(1),
   thumbnailUrl: z.string().url(),
-  searchAttributionHtml: z.string().min(1).nullable(),
+  durationSeconds: z.number().int().positive(),
+  verifiedAt: z.string().datetime(),
+  eligibilityVersion: z.string().min(1),
 });
 
 export const recordingPreflightFrameSchema = z.object({

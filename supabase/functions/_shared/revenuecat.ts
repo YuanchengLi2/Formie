@@ -76,3 +76,10 @@ export async function fetchRevenueCatSubscriber(appUserId: string, secretApiKey 
   if (!response.ok) throw new Error(`RevenueCat subscriber lookup failed (${response.status})`);
   return parseRevenueCatSubscriber(appUserId, await response.json() as RevenueCatPayload);
 }
+
+export async function deleteRevenueCatCustomer(appUserId: string, secretApiKey = Deno.env.get("REVENUECAT_SECRET_API_KEY") ?? "", fetcher: typeof fetch = fetch): Promise<void> {
+  if (!secretApiKey) throw new Error("REVENUECAT_SECRET_API_KEY is not configured");
+  const response = await fetcher(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(appUserId)}`, { method: "DELETE", headers: { Authorization: `Bearer ${secretApiKey}`, "Content-Type": "application/json" } });
+  if (response.status === 404) return;
+  if (!response.ok) throw Object.assign(new Error(`RevenueCat customer delete failed (${response.status})`), { httpStatus: response.status });
+}

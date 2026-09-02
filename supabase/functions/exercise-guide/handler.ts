@@ -1,4 +1,4 @@
-import type { TutorialVideo } from "../_shared/gemini-tutorial.ts";
+import type { TutorialVideo } from "../_shared/youtube-tutorial.ts";
 
 const exerciseFamilies = [
   "curl", "triceps", "press", "overhead-press", "fly", "raise", "row", "pull-down",
@@ -71,6 +71,16 @@ export function parseExerciseGuide(value: unknown): ExerciseGuideContent {
   };
 }
 
+function customExerciseFallback(): ExerciseGuideContent {
+  return {
+    family: "other",
+    setup: ["Use a clear space and position any equipment securely before you begin."],
+    execution: ["Move through a comfortable range you can control.", "Keep the full movement visible from start to finish."],
+    safety: ["Stop if the movement causes pain or you cannot control the equipment."],
+    cameraPlacement: ["Place the camera far enough away to keep your full body and equipment visible."],
+  };
+}
+
 export async function exerciseGuideHandler(
   request: Request,
   dependencies: ExerciseGuideDependencies,
@@ -115,11 +125,13 @@ export async function exerciseGuideHandler(
         };
     if (!exercise) return json({ message: "Exercise not found", code: "NOT_FOUND" }, 404);
 
-    const guide = exercise.cachedGuide
+    const guide = exercise.id === null
+      ? customExerciseFallback()
+      : exercise.cachedGuide
       ? parseExerciseGuide(exercise.cachedGuide)
       : parseExerciseGuide(await dependencies.generateGuide(exercise));
     if (!exercise.cachedGuide && exercise.id !== null) await dependencies.saveGuide(exercise.id, guide);
-    const tutorial = dependencies.findTutorial
+    const tutorial = exercise.id !== null && dependencies.findTutorial
       ? await dependencies.findTutorial(exercise.name).catch(() => null)
       : null;
 

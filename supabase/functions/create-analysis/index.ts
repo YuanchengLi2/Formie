@@ -1,4 +1,5 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
+import { requireCurrentAiEligibility } from "../_shared/ai-eligibility.ts";
 import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { createAnalysisHandler } from "./handler.ts";
 
@@ -8,7 +9,11 @@ Deno.serve(async (request) => {
   const admin = createAdminClient();
 
   const response = await createAnalysisHandler(request, {
-    authenticate: (incoming) => requireUserId(incoming, admin),
+    authenticate: async (incoming) => {
+      const userId = await requireUserId(incoming, admin);
+      await requireCurrentAiEligibility(admin, userId);
+      return userId;
+    },
     ownsSession: async (sessionId, userId) => {
       const { data } = await admin.from("analysis_sessions").select("id").eq("id", sessionId).eq("user_id", userId).maybeSingle();
       return Boolean(data);

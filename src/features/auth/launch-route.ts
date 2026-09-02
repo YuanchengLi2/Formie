@@ -16,12 +16,14 @@ export function resolveLaunchRoute({
   onboarding,
   currentStep,
   profileComplete,
+  adultEligible = true,
   accessStatus,
 }: {
   phase: AuthPhase;
   onboarding: OnboardingLaunchState;
   currentStep?: OnboardingStep;
   profileComplete: boolean;
+  adultEligible?: boolean;
   accessStatus: AccessStatus["status"];
 }): string | null {
   if (phase === "initializing") return null;
@@ -38,6 +40,8 @@ export function resolveLaunchRoute({
     if (onboarding === "in_progress") return `/onboarding/${currentStep ?? "welcome"}`;
     return "/onboarding/welcome";
   }
+
+  if (!adultEligible) return "/account/age-restricted";
 
   if (accessStatus === "active" || accessStatus === "expired") {
     return "/(tabs)/(home)";

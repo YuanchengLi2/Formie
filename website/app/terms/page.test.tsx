@@ -13,4 +13,8 @@ test("terms direct subscription management to the native app", () => {
   assert.match(html, /charged to (?:your )?Apple ID/i);
   assert.match(html, /does not cancel (?:your )?Apple subscription/i);
   assert.match(html, /https:\/\/www\.apple\.com\/legal\/internet-services\/itunes\/dev\/stdeula\//);
+  assert.match(html, /at least 18 years old/i);
+  assert.match(html, /YouTube Terms of Service/i);
+  assert.doesNotMatch(html, /Coach.*included/i);
+  assert.match(html, /support@useformie\.com/i);
 });

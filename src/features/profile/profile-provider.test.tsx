@@ -143,7 +143,7 @@ describe("ProfileProvider", () => {
     expect(await screen.findByText("ready")).toBeTruthy();
     expect(mockRecordAcquisition).toHaveBeenCalledWith(expect.anything(), mockOnboarding.answers, expect.any(String));
     expect(mockOnboarding.markProfileSynced).toHaveBeenCalled();
-    expect(mockInvoke).toHaveBeenCalledWith("sync-acquisition-sheet", { method: "POST" });
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
 });

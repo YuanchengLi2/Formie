@@ -43,14 +43,11 @@ max_frequency = "1m"
 otp_length = 6
 
 [auth.external.google]
-enabled = true
-client_id = "434965200177-sfosc0tjmh9t4hke0dgt4uuked3v6a8n.apps.googleusercontent.com"
-secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
-skip_nonce_check = false
+enabled = false
 
 [auth.external.apple]
 enabled = true
-client_id = "app.form.coach.signin"
+client_id = "app.form.coach,app.form.coach.signin"
 secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
 
 [auth.email.smtp]
@@ -128,11 +125,32 @@ verify_jwt = true
 [functions.revenuecat-webhook]
 verify_jwt = false
 
-[functions.sync-acquisition-sheet]
-verify_jwt = true
-
 [functions.subscription-test-controls]
 verify_jwt = true
 
 [functions.delete-account]
 verify_jwt = true
+
+[functions.delete-analysis]
+verify_jwt = true
+
+[functions.create-analysis]
+verify_jwt = true
+
+[functions.complete-upload]
+verify_jwt = true
+
+[functions.reanalyze-video]
+verify_jwt = true
+
+[functions.exercise-tutorial]
+verify_jwt = true
+
+[functions.apple-authorization]
+verify_jwt = true
+
+[functions.apple-auth-events]
+verify_jwt = false
+
+[functions.process-external-deletions]
+verify_jwt = false

@@ -3,6 +3,7 @@ import { createAuthService } from "./auth-service";
 function authClient() {
   return {
     signInWithOAuth: jest.fn(),
+    signInWithIdToken: jest.fn(),
     exchangeCodeForSession: jest.fn(),
     signInWithPassword: jest.fn(),
     signInWithOtp: jest.fn(),
@@ -77,6 +78,19 @@ describe("social auth service", () => {
     const client = authClient();
     client.verifyOtp.mockResolvedValue({ data: { session: null }, error: null });
     await expect(createAuthService(client, redirectUrl).verifyEmailCode("athlete@example.com", "123456")).rejects.toThrow(/authenticated session/i);
+  });
+
+  it("signs in with an Apple identity token and the unhashed nonce", async () => {
+    const client = authClient();
+    const session = { user: { id: "apple-user" } };
+    client.signInWithIdToken.mockResolvedValue({ data: { session }, error: null });
+
+    await expect(createAuthService(client, redirectUrl).signInWithIdToken("apple-token", "raw-nonce")).resolves.toBe(session);
+    expect(client.signInWithIdToken).toHaveBeenCalledWith({
+      provider: "apple",
+      token: "apple-token",
+      nonce: "raw-nonce",
+    });
   });
 
   it("signs an existing account in with normalized email and password", async () => {

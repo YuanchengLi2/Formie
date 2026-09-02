@@ -466,8 +466,8 @@ describe("analysis API", () => {
     expect(fetcher.mock.calls[0][0]).toBe("https://example.supabase.co/functions/v1/analysis-status?sessionId=session-123");
   });
 
-  it("loads the AI-selected exercise tutorial without exposing the Gemini key", async () => {
-    const tutorial = { videoId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk", title: "Hammer Curl Tutorial", channel: "Trusted Coach", whyChosen: "Clear technique.", thumbnailUrl: "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg", searchAttributionHtml: null };
+  it("loads the validated YouTube Data API tutorial without exposing the API key", async () => {
+    const tutorial = { source: "youtube_data_api_v3", videoId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk", title: "Hammer Curl Tutorial", channel: "Trusted Coach", channelId: "channel-1", thumbnailUrl: "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg", durationSeconds: 360, verifiedAt: "2026-09-01T12:00:00.000Z", eligibilityVersion: "youtube-tutorial-v1" };
     const fetcher = jest.fn(async () => new Response(JSON.stringify({ tutorial }), { status: 200 }));
     await expect(getExerciseTutorial({ accessToken: "user-jwt", baseUrl: "https://example.supabase.co/functions/v1", fetcher, sessionId: "session-123" })).resolves.toEqual(tutorial);
     expect(fetcher).toHaveBeenCalledWith(

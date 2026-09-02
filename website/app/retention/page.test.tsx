@@ -12,4 +12,8 @@ test("retention explains implemented deletion controls and external limits", () 
   assert.match(html, /processor|legal records/i);
   assert.match(html, /does not cancel (?:your )?Apple subscription/i);
   assert.match(html, /href="\/privacy-choices"/i);
+  assert.match(html, /Gemini file deletion/i);
+  assert.match(html, /RevenueCat customer deletion/i);
+  assert.match(html, /encrypted retry queue/i);
+  assert.match(html, /before 30 days/i);
 });

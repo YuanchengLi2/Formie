@@ -17,7 +17,7 @@ export function weightToKg(value: { pounds: number } | { kilograms: number }): n
 }
 
 const legacyAnswersSchema = z.object({
-  ageYears: z.number().int().min(13).max(100).nullable(),
+  ageYears: z.number().int().min(18).max(100).nullable(),
   gender: z.enum(["male", "female", "prefer_not_to_say"]).nullable(),
   heightCm: z.number().min(100).max(250).nullable(),
   weightKg: z.number().min(25).max(400).nullable(),

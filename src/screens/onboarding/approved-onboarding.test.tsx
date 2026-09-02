@@ -1,12 +1,9 @@
 import { act, fireEvent, render, within } from "@testing-library/react-native";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 
 import { initialOnboardingAnswers, type OnboardingStep } from "@/features/onboarding/types";
 
 import { ApprovedOnboardingScreen, getApprovedArtworkSize, getOnboardingDensity, type ApprovedOnboardingScreenProps } from "./approved-onboarding";
-import { getPremiumArtworkLayout } from "./premium-screen";
 
 const mockSelectionAsync = jest.fn().mockResolvedValue(undefined);
 const mockImpactAsync = jest.fn().mockResolvedValue(undefined);
@@ -72,7 +69,7 @@ describe("approved onboarding screen", () => {
   ] as const)("renders the approved %s content without a pictured phone frame", async (step, copy) => {
     const { screen } = await renderStep(step);
 
-    expect(step === "premium" ? screen.getByRole("header", { name: "Formie Pro" }) : screen.getByText(copy)).toBeTruthy();
+    expect(step === "premium" ? screen.getByRole("header", { name: "Train with clearer feedback." }) : screen.getByText(copy)).toBeTruthy();
     expect(screen.queryByTestId("phone-frame")).toBeNull();
   });
 
@@ -241,6 +238,13 @@ describe("approved onboarding screen", () => {
     expect(onAnswerChange).toHaveBeenCalledWith("workoutsPerWeek", 6);
   });
 
+  it("starts adult eligibility at 18 and explains the requirement", async () => {
+    const age = await renderStep("age", { answers: { ...initialOnboardingAnswers, ageYears: 18 } });
+    expect(age.screen.queryByText("17")).toBeNull();
+    expect(age.screen.getByText("You must be 18 or older to use Formie.")).toBeTruthy();
+    await age.screen.unmount();
+  });
+
   it("uses a single native visual layer instead of rendering screenshot controls underneath", async () => {
     const age = await renderStep("age", { answers: { ...initialOnboardingAnswers, ageYears: 19 } });
 
@@ -278,9 +282,9 @@ describe("approved onboarding screen", () => {
   it("requires legal consent but keeps marketing optional before saving with a provider", async () => {
     const { screen, props } = await renderStep("create-account");
     expect(screen.queryAllByRole("checkbox")).toHaveLength(2);
-    expect(screen.getByRole("button", { name: "Sign in with Apple" }).props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByTestId("provider-apple-wrapper").props.accessibilityState.disabled).toBe(true);
     await fireEvent.press(screen.getByLabelText("Agree to the Terms of Use and Privacy Policy"));
-    await fireEvent.press(screen.getByRole("button", { name: "Sign in with Apple" }));
+    await fireEvent.press(screen.getByTestId("provider-apple"));
     expect(props.onAnswerChange).toHaveBeenCalledWith("acceptedPrivacy", true);
     expect(props.onAnswerChange).not.toHaveBeenCalledWith("marketingOptIn", true);
     expect(props.onOAuth).toHaveBeenCalledWith("apple");
@@ -305,7 +309,7 @@ describe("approved onboarding screen", () => {
 
     mockSelectionAsync.mockClear();
     const age = await renderStep("age", { answers: { ...initialOnboardingAnswers, ageYears: 18 } });
-    fireEvent(age.screen.getByTestId("onboarding-age-wheel"), "momentumScrollEnd", { nativeEvent: { contentOffset: { y: 378 } } });
+    fireEvent(age.screen.getByTestId("onboarding-age-wheel"), "momentumScrollEnd", { nativeEvent: { contentOffset: { y: 54 } } });
     expect(mockSelectionAsync).toHaveBeenCalledTimes(1);
   });
 
@@ -318,9 +322,9 @@ describe("approved onboarding screen", () => {
     const wheel = screen.getByTestId("onboarding-age-wheel");
 
     expect(wheel.props.scrollEnabled).not.toBe(false);
-    fireEvent.scroll(wheel, { nativeEvent: { contentOffset: { y: 378 } } });
+    fireEvent.scroll(wheel, { nativeEvent: { contentOffset: { y: 108 } } });
     expect(onAnswerChange).not.toHaveBeenCalled();
-    fireEvent(wheel, "momentumScrollEnd", { nativeEvent: { contentOffset: { y: 378 } } });
+    fireEvent(wheel, "momentumScrollEnd", { nativeEvent: { contentOffset: { y: 108 } } });
     expect(onAnswerChange).toHaveBeenCalledWith("ageYears", 20);
   });
 
@@ -386,21 +390,16 @@ describe("approved onboarding screen", () => {
     expect(onAnswerChange).toHaveBeenCalledWith("acquisitionSourceOther", "Local trainer");
   });
 
-  it("keeps Apple active while showing Google as a blurred coming-soon action", async () => {
+  it("keeps the official Apple action and removes the unsupported Google placeholder", async () => {
     const { screen, props } = await renderStep("create-account", { answers: { ...initialOnboardingAnswers, acceptedPrivacy: true } });
 
     await fireEvent.press(screen.getByLabelText("Agree to the Terms of Use and Privacy Policy"));
-    await fireEvent.press(screen.getByText("Sign in with Apple"));
+    await fireEvent.press(screen.getByTestId("provider-apple"));
 
     expect(props.onOAuth).toHaveBeenCalledTimes(1);
     expect(props.onOAuth).toHaveBeenCalledWith("apple");
-    const google = screen.getByLabelText("Sign in with Google — Coming soon");
-    expect(screen.getByText("Sign in with Google")).toBeTruthy();
-    expect(google.props.accessibilityState.disabled).toBe(true);
-    await fireEvent.press(google);
-    expect(props.onOAuth).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/Google/i)).toBeNull();
     expect(screen.queryByText("Continue with email")).toBeNull();
-    expect(screen.getByText("Coming soon")).toBeTruthy();
     expect(screen.queryByText("Restore account")).toBeNull();
     expect(screen.queryByLabelText("Password")).toBeNull();
   });
@@ -410,7 +409,7 @@ describe("approved onboarding screen", () => {
 
     expect(screen.getByText("$12.49 per month")).toBeTruthy();
     expect(screen.getByText(/automatically renews each month until cancelled/i)).toBeTruthy();
-    expect(screen.getByText("Continue with Pro")).toBeTruthy();
+    expect(screen.getByText("Start Formie Monthly")).toBeTruthy();
     expect(screen.queryByText("Skip")).toBeNull();
     expect(screen.getByRole("button", { name: "Restore Purchases" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Terms of Use" })).toBeTruthy();
@@ -451,64 +450,31 @@ describe("approved onboarding screen", () => {
     expect(props.onRestore).not.toHaveBeenCalled();
   });
 
-  it("uses the latest supplied reference paywall composition", async () => {
+  it("uses a native paywall with only the current subscription benefits", async () => {
     const { screen } = await renderStep("premium", { price: "$9.99" });
 
     const scroll = screen.getByTestId("premium-scroll");
-    expect(scroll.props.contentInsetAdjustmentBehavior).toBe("never");
-    expect(scroll.props.bounces).toBe(true);
-    expect(scroll.props.alwaysBounceVertical).toBe(true);
-    expect(screen.getByTestId("premium-reference-image", { includeHiddenElements: true })).toBeTruthy();
-    expect(screen.getByTestId("premium-status-mask")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Monthly" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Yearly" })).toBeNull();
-    expect(screen.queryByTestId("approved-premium-screenshot")).toBeNull();
-  });
-
-  it("bundles the icon-complete paywall artwork without social proof", () => {
-    const source = readFileSync(resolve(__dirname, "premium-screen.tsx"), "utf8");
-
-    expect(source).toContain("paywall-reference-no-social-proof.png");
-    expect(source).not.toContain("paywall-reference-no-icons-852x1846.png");
-  });
-
-  it("keeps the full approved paywall artwork and overlays the native CTA on it", async () => {
-    const { screen } = await renderStep("premium", { price: "$9.99" });
-    const layout = getPremiumArtworkLayout(390, 844);
-
-    expect(layout.cropSourceEndY).toBe(1846);
-    expect(layout.cropHeight).toBeGreaterThanOrEqual(layout.imageHeight);
-    expect(layout.cta.top).toBeGreaterThan(layout.imageHeight * 0.8);
-    expect(screen.getByRole("button", { name: "Start monthly - $9.99/mo" })).toHaveStyle({ position: "absolute", minHeight: 56 });
+    expect(scroll.props.contentInsetAdjustmentBehavior).toBe("automatic");
+    expect(screen.queryByTestId("premium-reference-image", { includeHiddenElements: true })).toBeNull();
+    expect(screen.getByText("10 analyses per month")).toBeTruthy();
+    expect(screen.getByText("Evidence-linked corrections")).toBeTruthy();
+    expect(screen.getByText("Saved analyses")).toBeTruthy();
+    expect(screen.getByText("Progress over time")).toBeTruthy();
+    expect(screen.queryByText(/Coach/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Start monthly - $9.99/mo" })).toHaveStyle({ minHeight: 56 });
   });
 
   it("uses native offer content as the accessibility source", async () => {
     const { screen } = await renderStep("premium");
 
-    expect(screen.getByRole("header", { name: "Formie Pro" })).toBeTruthy();
-    expect(screen.getByText("10 analyses every month")).toBeTruthy();
+    expect(screen.getByRole("header", { name: "Train with clearer feedback." })).toBeTruthy();
+    expect(screen.getByText("10 analyses per month")).toBeTruthy();
     expect(screen.queryByTestId("premium-accessibility-summary")).toBeNull();
-  });
-
-  it("renders the complete approved artwork instead of cropping it to a hero", () => {
-    const layout = getPremiumArtworkLayout(390, 844);
-
-    expect(layout.imageWidth).toBe(layout.contentWidth);
-    expect(layout.imageHeight / layout.imageWidth).toBeCloseTo(1846 / 852, 5);
-    expect(layout.cropSourceEndY).toBe(1846);
-    expect(layout.contentMinHeight).toBeGreaterThan(layout.imageHeight);
   });
 
   it("disables the native purchase surface while it is reconciling", async () => {
     const reconciling = await renderStep("premium", { purchaseState: "reconciling", busy: true });
     expect(reconciling.screen.getByTestId("onboarding-bottom-cta").props.accessibilityState.disabled).toBe(true);
-  });
-
-  it("renders the supplied artwork as the full paywall surface", async () => {
-    const { screen } = await renderStep("premium");
-
-    expect(screen.getByTestId("premium-reference-image", { includeHiddenElements: true }).props.contentFit).toBe("fill");
-    expect(screen.queryByTestId("premium-artwork-hero")).toBeNull();
   });
 
   it("always purchases the monthly package", async () => {

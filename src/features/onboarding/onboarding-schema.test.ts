@@ -45,6 +45,14 @@ describe("approved onboarding schema", () => {
     })).toBeNull();
     expect(parseOnboardingState({
       ...valid,
+      answers: { ...valid.answers, ageYears: 17 },
+    })).toBeNull();
+    expect(parseOnboardingState({
+      ...valid,
+      answers: { ...valid.answers, ageYears: 18 },
+    })).toMatchObject({ answers: { ageYears: 18 } });
+    expect(parseOnboardingState({
+      ...valid,
       answers: { ...valid.answers, customMilestone: "x".repeat(61) },
     })).toBeNull();
   });

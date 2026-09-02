@@ -1,4 +1,4 @@
-import { analysisEntryHref, canOpenCompletedAccount, canOpenSubscriptionScreen, formatAnalysisBalance, formatAnalysisEntryLabel, formatAnalysisFraction, formatBillingTimestamp, formatSubscriptionDate, formatSubscriptionStateLabel, resolveAnalysisEntry } from "./account-access";
+import { analysisEntryHref, canOpenCompletedAccount, canOpenSubscriptionScreen, formatAnalysisBalance, formatAnalysisEntryLabel, formatAnalysisFraction, formatBillingTimestamp, formatSubscriptionDate, formatSubscriptionStateLabel, resolveAccountEligibility, resolveAnalysisEntry } from "./account-access";
 import type { AccessStatus } from "./types";
 
 const access = (status: AccessStatus["status"], canAnalyze: boolean, remaining: number | null): AccessStatus => ({
@@ -53,6 +53,14 @@ describe("subscription screen admission", () => {
     expect(canOpenSubscriptionScreen({ authenticated: true, profileComplete: true })).toBe(true);
     expect(canOpenSubscriptionScreen({ authenticated: false, profileComplete: true })).toBe(false);
     expect(canOpenSubscriptionScreen({ authenticated: true, profileComplete: false })).toBe(false);
+  });
+});
+
+describe("adult account eligibility", () => {
+  it("fails closed for missing and under-18 profile ages", () => {
+    expect(resolveAccountEligibility(null)).toBe("age_restricted");
+    expect(resolveAccountEligibility(17)).toBe("age_restricted");
+    expect(resolveAccountEligibility(18)).toBe("eligible");
   });
 });
 

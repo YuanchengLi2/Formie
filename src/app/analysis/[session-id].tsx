@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { type Href, useLocalSearchParams, useRouter } from "expo-router";
 import { useMutation } from "@tanstack/react-query";
 
@@ -10,12 +10,18 @@ import { useCaptureStore } from "@/features/capture/capture-store";
 import { deviceVideoStore } from "@/features/capture/device-video-store";
 import { AnalysisProgressScreen } from "@/screens/analysis-progress";
 import { queryClient } from "@/lib/query-client";
+import { supabase } from "@/lib/supabase";
+import { AiProcessingConsentModal } from "@/components/ai-processing-consent-modal";
+import { acceptAiProcessingConsent, currentAiProcessingConsent, isCurrentAiProcessingConsent, type AiConsentClient } from "@/features/privacy/ai-consent";
 
 export default function AnalysisProgressRoute() {
   const router = useRouter();
   const { "session-id": sessionId = "" } = useLocalSearchParams<{ "session-id": string }>();
   const status = useAnalysisStatus(sessionId);
   const resetCapture = useCaptureStore((state) => state.dispatch);
+  const [consentVisible, setConsentVisible] = useState(false);
+  const [consentAgreeing, setConsentAgreeing] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
   const reanalysis = useMutation({
     mutationFn: async () => {
       const declaration = status.data?.setDeclaration;
@@ -44,7 +50,29 @@ export default function AnalysisProgressRoute() {
       }
       router.replace(result.kind === "server" ? `/analysis/${sessionId}` : "/analysis/review");
     },
+    onError: (error) => {
+      if (error instanceof AnalysisApiError && error.code === "AI_CONSENT_REQUIRED") setConsentVisible(true);
+    },
   });
+
+  const requestRetry = async () => {
+    setConsentError(null);
+    try {
+      const current = await currentAiProcessingConsent(supabase as unknown as AiConsentClient);
+      if (!isCurrentAiProcessingConsent(current)) return setConsentVisible(true);
+      reanalysis.mutate(undefined);
+    } catch {
+      setConsentError("AI processing consent could not be checked. Try again.");
+      setConsentVisible(true);
+    }
+  };
+  const agreeAndRetry = async () => {
+    if (consentAgreeing) return;
+    setConsentAgreeing(true); setConsentError(null);
+    try { await acceptAiProcessingConsent(supabase as unknown as AiConsentClient); setConsentVisible(false); reanalysis.mutate(undefined); }
+    catch { setConsentError("AI processing consent could not be saved. Try again."); }
+    finally { setConsentAgreeing(false); }
+  };
 
   useEffect(() => {
     const terminal = status.data?.status === "complete"
@@ -70,12 +98,12 @@ export default function AnalysisProgressRoute() {
         ? "Formie couldn't check the analysis status. Try again."
         : null;
 
-  return (
+  return (<>
     <AnalysisProgressScreen
       mode="analysis"
       stage={status.data?.stage ?? null}
       failureMessage={failureMessage}
-      onRetryAnalysis={status.data?.status === "failed" || terminalWithoutResult ? () => reanalysis.mutate(undefined) : undefined}
+      onRetryAnalysis={status.data?.status === "failed" || terminalWithoutResult ? () => void requestRetry() : undefined}
       retryingAnalysis={reanalysis.isPending}
       retryAnalysisError={reanalysis.error instanceof Error ? reanalysis.error.message : null}
       onRecordAgain={failureMessage ? () => {
@@ -85,5 +113,6 @@ export default function AnalysisProgressRoute() {
       } : undefined}
       onGoHome={failureMessage ? () => router.replace("/(tabs)/(home)") : undefined}
     />
-  );
+    <AiProcessingConsentModal visible={consentVisible} agreeing={consentAgreeing} error={consentError} onAgree={() => void agreeAndRetry()} onDismiss={() => { if (!consentAgreeing) setConsentVisible(false); }} />
+  </>);
 }

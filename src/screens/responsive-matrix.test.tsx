@@ -32,7 +32,7 @@ const SCREEN_CASES = [
   ["recording preflight", <RecordingPreflightScreen key="recording-preflight" mode="checking" onBack={() => undefined} />, "recording-preflight-responsive-screen"],
   ["analysis progress", <AnalysisProgressScreen key="analysis-progress" mode="upload" stage="uploading" failureMessage={null} />, "analysis-progress-responsive-screen"],
   ["feedback", <FeedbackScreen key="feedback" onSubmit={async () => ({ submitted: true, requestId: "request-1" })} />, "feedback-responsive-screen"],
-  ["account access", <AccountAccessScreen key="account-access" onOAuth={() => undefined} />, "account-access-scroll"],
+  ["account access", <AccountAccessScreen key="account-access" onApple={() => undefined} />, "account-access-scroll"],
   ["email authentication", <EmailEntryScreen key="email-auth" intent="login" busy={false} error={null} onBack={() => undefined} onSubmit={() => undefined} />, "email-auth-scroll"],
   ["profile settings", <ProfileScreen key="profile" />, "profile-responsive-screen"],
   ["exercise guide", <ExerciseGuideScreen key="exercise-guide" exerciseName="Squat" guide={null} loading error={null} onBack={() => undefined} onRetry={() => undefined} onContinue={() => undefined} onOpenSpaceHelp={() => undefined} onOpenTutorial={() => undefined} />, "exercise-guide-responsive-screen"],

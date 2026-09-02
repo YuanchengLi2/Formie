@@ -120,7 +120,7 @@ export function SubscriptionManagementScreen() {
 
         <View style={[styles.supportCard, layout.stackControls && styles.supportCardStack, { borderRadius: 22 * scale, marginTop: 18 * scale, padding: 18 * scale }]}>
           <View style={{ flex: 1 }}><Text style={[styles.supportTitle, { fontSize: 15 * scale }]}>Need help?</Text><Text style={[styles.supportCopy, { fontSize: 11.5 * scale, lineHeight: 17 * scale }]}>We can help with access, billing, or your Apple subscription.</Text></View>
-          <Pressable accessibilityRole="link" onPress={() => void Linking.openURL("mailto:support@formie.app")}><Text style={[styles.supportLink, { fontSize: 12 * scale }]}>Contact support</Text></Pressable>
+          <Pressable accessibilityRole="link" onPress={() => void Linking.openURL("mailto:support@useformie.com")}><Text style={[styles.supportLink, { fontSize: 12 * scale }]}>Contact support</Text></Pressable>
         </View>
       </ResponsiveScreen>
     </ImageBackground>

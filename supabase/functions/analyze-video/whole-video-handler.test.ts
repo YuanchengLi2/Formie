@@ -1,4 +1,5 @@
 import { analyzeWholeVideoHandler, type WholeVideoHandlerDependencies, type WholeVideoSession } from "./whole-video-handler";
+import { AiEligibilityError } from "../_shared/ai-eligibility";
 
 function session(overrides: Partial<WholeVideoSession> = {}): WholeVideoSession {
   return {
@@ -29,6 +30,17 @@ function dependencies(overrides: Partial<WholeVideoHandlerDependencies> = {}): W
 }
 
 describe("whole-video handler failure disposition", () => {
+  it("returns AI_CONSENT_REQUIRED without loading or advancing the session", async () => {
+    const deps = dependencies({ authenticate: jest.fn(async () => { throw new AiEligibilityError("AI_CONSENT_REQUIRED"); }) });
+    const response = await analyzeWholeVideoHandler(new Request("https://example/analyze-video", {
+      method: "POST", body: JSON.stringify({ sessionId: "session-1" }),
+    }), deps);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: "AI_CONSENT_REQUIRED" });
+    expect(deps.loadSession).not.toHaveBeenCalled();
+    expect(deps.advancePipeline).not.toHaveBeenCalled();
+    expect(deps.persistFailure).not.toHaveBeenCalled();
+  });
   it("keeps a slow Gemini file activation in processing for durable retry", async () => {
     const persistFailure = jest.fn(async () => ({
       status: "processing",

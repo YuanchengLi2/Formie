@@ -59,12 +59,14 @@ function TutorialCard({ tutorial, onOpen }: { tutorial: TutorialVideo; onOpen: (
         </View>
       </View>
       <View style={{ gap: 2, paddingHorizontal: 12, paddingVertical: 10 }}>
+        <Text selectable style={[typography.caption, { color: "#FF4E45", fontWeight: "800", letterSpacing: 0.4 }]}>YouTube</Text>
         <Text numberOfLines={1} selectable style={[typography.label, { color: colors.text, fontSize: 15, lineHeight: 20 }]}>
           {tutorial.title}
         </Text>
         <Text numberOfLines={1} selectable style={[typography.body, { color: colors.textSecondary, fontSize: 13, lineHeight: 18 }]}>
           {tutorial.channel}
         </Text>
+        <Text selectable style={[typography.caption, { color: colors.gold, marginTop: 4, fontWeight: "700" }]}>Watch on YouTube</Text>
       </View>
     </Pressable>
   );

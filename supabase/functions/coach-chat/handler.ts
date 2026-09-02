@@ -101,9 +101,12 @@ export async function coachChatHandler(request: Request, deps: CoachChatDependen
     const exchange = await deps.appendExchange(thread.id, userId, exchangeKey, input.message, reply, grounding);
     return json({ threadId: thread.id, ...exchange }, 200);
   } catch (error) {
+    const eligibility = aiEligibilityErrorResponse(error);
+    if (eligibility) return eligibility;
     if (error instanceof Error && error.message === "UNAUTHORIZED") return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);
     if (error instanceof SyntaxError) return json({ message: "A JSON request body is required", code: "INVALID_BODY" }, 400);
     if (error instanceof Error && /sessionId|threadId|clientMessageId|message|Target intent|title|evidence|action|Unexpected|JSON object/.test(error.message)) return json({ message: error.message, code: "INVALID_BODY" }, 400);
     return json({ message: "Coach could not reply. Try again.", code: "COACH_FAILED" }, 500);
   }
 }
+import { aiEligibilityErrorResponse } from "../_shared/ai-eligibility.ts";

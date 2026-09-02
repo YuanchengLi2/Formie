@@ -1,4 +1,5 @@
 import { MAX_ANALYSIS_VIDEO_DURATION_MS } from "../_shared/analysis-settings.ts";
+import { aiEligibilityErrorResponse } from "../_shared/ai-eligibility.ts";
 import { classifyAnalysisFailure, type AnalysisFailureDisposition } from "./failure-disposition.ts";
 
 export type WholeVideoSession = {
@@ -135,6 +136,8 @@ export async function analyzeWholeVideoHandler(request: Request, dependencies: W
     const advanced = await dependencies.advancePipeline(session);
     return json(payload(session, advanced), terminalStatuses.has(advanced.status) ? 200 : 202);
   } catch (error) {
+    const eligibility = aiEligibilityErrorResponse(error);
+    if (eligibility) return eligibility;
     if (error instanceof Error && error.message === "UNAUTHORIZED") return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);
     const code = failureCode(error);
     if (code === "ANALYSIS_STAGE_BUSY") {

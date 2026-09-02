@@ -16,14 +16,16 @@ describe("delete analysis handler", () => {
           videoPath: "user-1/session-1/original.mp4",
           analysisVideoPath: "user-1/session-1/analysis-input.mp4",
           artifactPaths: ["user-1/session-1/keyframes/00.jpg", "user-1/session-1/keyframes/01.jpg", "user-1/session-1/exact-frames/00.jpg", "user-1/session-1/pose/landmarks-v3.json"],
+          geminiFileName: "files/session-1",
         }),
+        deleteGeminiFile: async () => "complete",
         removeVideos: async (paths) => { removedVideos.push(paths); },
         deleteSession: async (sessionId) => { deletedSessions.push(sessionId); },
       },
     );
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ deleted: true });
+    expect(await response.json()).toEqual({ deleted: true, externalCleanup: "complete" });
     expect(removedVideos).toEqual([["user-1/session-1/original.mp4", "user-1/session-1/analysis-input.mp4", "user-1/session-1/keyframes/00.jpg", "user-1/session-1/keyframes/01.jpg", "user-1/session-1/exact-frames/00.jpg", "user-1/session-1/pose/landmarks-v3.json"]]);
     expect(deletedSessions).toEqual(["session-1"]);
   });
@@ -38,6 +40,7 @@ describe("delete analysis handler", () => {
       {
         authenticate: async () => "user-1",
         findSession: async () => null,
+        deleteGeminiFile: jest.fn(),
         removeVideos,
         deleteSession: jest.fn(),
       },

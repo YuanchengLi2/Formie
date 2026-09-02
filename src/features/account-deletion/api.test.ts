@@ -7,12 +7,12 @@ describe("deleteAccount", () => {
   };
 
   it("requests authenticated permanent deletion without accepting a client user id", async () => {
-    const fetcher = jest.fn(async () => new Response(JSON.stringify({ deleted: true }), {
+    const fetcher = jest.fn(async () => new Response(JSON.stringify({ deleted: true, externalCleanup: "complete" }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     }));
 
-    await expect(deleteAccount({ ...input, fetcher })).resolves.toEqual({ deleted: true });
+    await expect(deleteAccount({ ...input, fetcher })).resolves.toEqual({ deleted: true, externalCleanup: "complete" });
     expect(fetcher).toHaveBeenCalledWith(
       "https://example.supabase.co/functions/v1/delete-account",
       expect.objectContaining({
@@ -62,5 +62,12 @@ describe("deleteAccount", () => {
       headers: { "Content-Type": "application/json" },
     }));
     await expect(deleteAccount({ ...input, fetcher })).rejects.toMatchObject({ code: "INVALID_RESPONSE", status: 200 });
+  });
+
+  it("returns queued cleanup honestly and preserves the Apple reauthentication contract", async () => {
+    const queued = jest.fn(async () => new Response(JSON.stringify({ deleted: true, externalCleanup: "queued" }), { status: 200 }));
+    await expect(deleteAccount({ ...input, fetcher: queued })).resolves.toEqual({ deleted: true, externalCleanup: "queued" });
+    const reauth = jest.fn(async () => new Response(JSON.stringify({ code: "APPLE_REAUTH_REQUIRED", stage: "external", message: "Sign in with Apple again so Formie can revoke authorization before deletion." }), { status: 409 }));
+    await expect(deleteAccount({ ...input, fetcher: reauth })).rejects.toMatchObject({ code: "APPLE_REAUTH_REQUIRED", status: 409, stage: "external" });
   });
 });

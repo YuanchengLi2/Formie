@@ -76,7 +76,7 @@ describe("HomeScreen", () => {
     expect(screen.getAllByText("FreeMotion Row").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Keep your torso steady").length).toBeGreaterThan(0);
     expect(screen.getByText("1 analysis this week")).toBeTruthy();
-    expect(screen.getByText("Ask Formie Coach")).toBeTruthy();
+    expect(screen.getByText("Coach Preview")).toBeTruthy();
     expect(screen.getByText("View Progress")).toBeTruthy();
     expect(screen.getByTestId("progress-metrics-horizontal")).toBeTruthy();
     expect(screen.getByText("4 days")).toBeTruthy();
@@ -95,7 +95,7 @@ describe("HomeScreen", () => {
     expect(screen.getByLabelText("Formie logo")).toHaveStyle({ width: 56, height: 56 });
     expect(screen.getByTestId("home-coach-action")).toHaveStyle({ minHeight: 88 });
     expect(screen.getByTestId("home-progress-action")).toHaveStyle({ minHeight: 88 });
-    expect(screen.getByText("Ask Formie Coach")).toHaveStyle({ fontSize: 18 });
+    expect(screen.getByText("Coach Preview")).toHaveStyle({ fontSize: 18 });
     expect(screen.getByText("View Progress")).toHaveStyle({ fontSize: 18 });
     expect(screen.getByLabelText("Formie Coach icon")).toHaveStyle({ width: 32, height: 32 });
     expect(screen.getByLabelText("View progress icon")).toHaveStyle({ width: 32, height: 32 });

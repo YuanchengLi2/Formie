@@ -1,6 +1,16 @@
 import { resolveLaunchRoute } from "./launch-route";
 
 describe("launch routing", () => {
+  it("blocks a completed legacy under-18 account before subscription or analysis access", () => {
+    expect(resolveLaunchRoute({
+      phase: "authenticated",
+      onboarding: "complete",
+      profileComplete: true,
+      adultEligible: false,
+      accessStatus: "active",
+    })).toBe("/account/age-restricted");
+  });
+
   it("starts the approved flow on a fresh signed-out install", () => {
     expect(resolveLaunchRoute({
       phase: "signed_out",

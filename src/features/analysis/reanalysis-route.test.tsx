@@ -11,6 +11,7 @@ const mockFindDeviceVideo = jest.fn();
 const mockDismissTo = jest.fn();
 const mockNavigationAddListener = jest.fn(() => jest.fn());
 const mockResultsProps = jest.fn();
+let mockConsentCurrent = true;
 const mockDeclaration: SetDeclaration = {
   exercise: { source: "catalog", catalogExerciseId: 3, label: "Dumbbell Bench Press" },
   amount: { kind: "reps", value: 8, countScope: "total" },
@@ -34,6 +35,12 @@ jest.mock("@tanstack/react-query", () => ({
   }),
 }));
 jest.mock("@/features/auth/access-token", () => ({ getAccessToken: jest.fn() }));
+jest.mock("@/features/privacy/ai-consent", () => ({
+  currentAiProcessingConsent: jest.fn(async () => mockConsentCurrent ? ({ version: "2026-09-01", noticeSha256: "current", acceptedAt: "now", revokedAt: null }) : null),
+  isCurrentAiProcessingConsent: (consent: unknown) => Boolean(consent),
+  acceptAiProcessingConsent: jest.fn(async () => undefined),
+}));
+jest.mock("@/lib/supabase", () => ({ supabase: {} }));
 jest.mock("@/features/progress/history-cache", () => ({ invalidateAnalysisHistory: jest.fn() }));
 jest.mock("@/lib/query-client", () => ({
   queryClient: {
@@ -119,6 +126,7 @@ describe("ResultsRoute reanalysis confirmation", () => {
     mockDismissTo.mockClear();
     mockNavigationAddListener.mockClear();
     mockResultsProps.mockClear();
+    mockConsentCurrent = true;
     mockFindDeviceVideo.mockResolvedValue({
       localUri: "file:///formie-recordings/saved-set.mp4",
       durationMs: 12_000,
@@ -167,6 +175,17 @@ describe("ResultsRoute reanalysis confirmation", () => {
     await fireEvent.press(screen.getByText("Cancel"));
 
     expect(screen.getByText("Analyze Again")).toBeTruthy();
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it("requires affirmative AI consent before dispatching reanalysis", async () => {
+    mockConsentCurrent = false;
+    const screen = await render(<ResultsRoute />);
+    await fireEvent.press(screen.getByText("Analyze Again"));
+    await fireEvent.press(await screen.findByText("Analyze Again"));
+    expect(await screen.findByText("Review AI processing")).toBeTruthy();
+    expect(mockMutate).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText("Not now"));
     expect(mockMutate).not.toHaveBeenCalled();
   });
 

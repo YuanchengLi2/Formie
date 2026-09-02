@@ -1,3 +1,5 @@
+import type { GeminiGovernance } from "./gemini-governance.ts";
+
 const API = "https://generativelanguage.googleapis.com/v1beta";
 const UPLOAD_API = "https://generativelanguage.googleapis.com/upload/v1beta/files";
 
@@ -75,11 +77,12 @@ function parseFile(value: unknown): GeminiFile {
   return { name: file.name, uri: file.uri, mimeType: typeof file.mimeType === "string" ? file.mimeType : "video/mp4", state, ...(failureReason ? { failureReason } : {}) };
 }
 
-export function createGeminiFilesClient({ apiKey, fetcher = fetch }: { apiKey: string; fetcher?: Fetcher }) {
+export function createGeminiFilesClient({ apiKey, governance, fetcher = fetch }: { apiKey: string; governance?: GeminiGovernance; fetcher?: Fetcher }) {
   if (!apiKey) throw new Error("GEMINI_API_KEY is required");
   const key = encodeURIComponent(apiKey);
   return {
     async uploadVideo(input: { body: BodyInit; contentLength: number; mimeType: string; displayName: string }): Promise<GeminiFile> {
+      if (!governance) throw Object.assign(new Error("GEMINI_GOVERNANCE_REQUIRED_FOR_UPLOAD"), { code: "GEMINI_GOVERNANCE_REQUIRED_FOR_UPLOAD" });
       const mimeType = videoMimeType(input.mimeType);
       const start = await fetcher(`${UPLOAD_API}?key=${key}`, {
         method: "POST",

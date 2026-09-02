@@ -8,6 +8,8 @@ const mockIsConfigured = jest.fn<Promise<boolean>, []>();
 const mockConfigure = jest.fn();
 const mockLogIn = jest.fn<Promise<unknown>, [string]>();
 const mockLogOut = jest.fn<Promise<unknown>, []>();
+const mockAddListener = jest.fn();
+const mockRemoveListener = jest.fn();
 
 Object.defineProperty(Platform, "OS", { configurable: true, value: "ios" });
 jest.spyOn(Linking, "openURL").mockImplementation(mockOpenURL);
@@ -24,6 +26,8 @@ jest.mock("react-native-purchases", () => ({
     configure: mockConfigure,
     logIn: mockLogIn,
     logOut: mockLogOut,
+    addCustomerInfoUpdateListener: mockAddListener,
+    removeCustomerInfoUpdateListener: mockRemoveListener,
   },
 }));
 
@@ -40,8 +44,22 @@ describe("native subscription management", () => {
     mockConfigure.mockReset();
     mockLogIn.mockReset().mockResolvedValue({});
     mockLogOut.mockReset().mockResolvedValue({});
+    mockAddListener.mockReset();
+    mockRemoveListener.mockReset();
     process.env.EXPO_OS = "ios";
     process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_KEY = "appl_test_public_key";
+  });
+
+  it("stops RevenueCat listeners and logs out the identified customer before server deletion, then restores identity after failure", async () => {
+    const { purchasesClient } = loadNativePurchases();
+    const unsubscribe = purchasesClient.subscribeCustomerInfo(jest.fn());
+    await purchasesClient.prepareForAccountDeletion("user-to-delete");
+    expect(mockLogIn).toHaveBeenCalledWith("user-to-delete");
+    expect(mockRemoveListener).toHaveBeenCalledTimes(1);
+    expect(mockLogOut).toHaveBeenCalledTimes(1);
+    await purchasesClient.restoreAfterFailedAccountDeletion("user-to-delete");
+    expect(mockLogIn).toHaveBeenCalledWith("user-to-delete");
+    unsubscribe();
   });
 
   it("uses Apple's native subscription sheet on iOS", async () => {

@@ -1,0 +1,24 @@
+{
+  "tracking": false,
+  "dataTypes": [
+    { "type": "Name", "linked": true, "purposes": ["App Functionality"] },
+    { "type": "Email Address", "linked": true, "purposes": ["App Functionality"] },
+    { "type": "Purchases", "linked": true, "purposes": ["App Functionality", "Analytics"] },
+    { "type": "User ID", "linked": true, "purposes": ["App Functionality", "Analytics"] },
+    { "type": "Photos or Videos", "linked": true, "purposes": ["App Functionality", "Product Personalization"] },
+    { "type": "Health", "linked": true, "purposes": ["App Functionality", "Product Personalization"] },
+    { "type": "Fitness", "linked": true, "purposes": ["App Functionality", "Product Personalization"] },
+    { "type": "Body", "linked": true, "purposes": ["App Functionality", "Product Personalization"] },
+    { "type": "Head", "linked": true, "purposes": ["App Functionality", "Product Personalization"] },
+    { "type": "Hands", "linked": true, "purposes": ["App Functionality", "Product Personalization"] },
+    { "type": "Sensitive Info", "linked": true, "purposes": ["App Functionality", "Product Personalization"], "examples": ["age", "gender", "body measurements"] },
+    { "type": "Other User Content", "linked": true, "purposes": ["App Functionality", "Product Personalization"], "personalizationCondition": "Only when used in the analysis requested by the user" },
+    { "type": "Customer Support", "linked": true, "purposes": ["App Functionality"] },
+    { "type": "Product Interaction", "linked": true, "purposes": ["Analytics"], "examples": ["acquisition source", "purchase lifecycle"] },
+    { "type": "Other Diagnostic Data", "linked": true, "purposes": ["App Functionality", "Analytics"] }
+  ],
+  "notCollected": ["Advertising Data", "Location", "Contacts", "Browsing History", "Search History", "Advertising Identifier", "Cross-company Tracking"],
+  "processors": ["Supabase", "Google Gemini paid service", "YouTube Data API", "RevenueCat", "Apple", "Resend", "Vercel"],
+  "privacyPolicyUrl": "https://useformie.com/privacy",
+  "privacyChoicesUrl": "https://useformie.com/privacy-choices"
+}

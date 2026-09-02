@@ -66,7 +66,6 @@ export function ProfileProvider({ children }: PropsWithChildren) {
         if (!active) return;
         if (answers && nextProfile.onboardingCompleted) {
           await recordOnboardingAcquisition(acquisitionClient, answers, Platform.OS);
-          void supabase.functions.invoke("sync-acquisition-sheet", { method: "POST" }).catch(() => undefined);
         }
         if (!active) return;
         setProfile(nextProfile);

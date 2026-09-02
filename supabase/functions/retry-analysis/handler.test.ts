@@ -5,6 +5,7 @@ function dependencies(overrides: Partial<RetryAnalysisDependencies> = {}): Retry
     primaryV49Enabled: true,
     authenticate: jest.fn(async () => undefined),
     findDueSessions: jest.fn(async () => [{ id: "session-1", userId: "user-1", pipelineVersion: "legacy-retryable" }]),
+    eligibleForAi: jest.fn(async () => true),
     invokeAnalysis: jest.fn(async () => 202),
     now: () => new Date("2026-08-02T16:00:00.000Z"),
     ...overrides,
@@ -12,6 +13,12 @@ function dependencies(overrides: Partial<RetryAnalysisDependencies> = {}): Retry
 }
 
 describe("retry-analysis worker", () => {
+  it("stops provider retries after consent is no longer current", async () => {
+    const deps = dependencies({ eligibleForAi: jest.fn(async () => false) });
+    const response = await retryAnalysisHandler(new Request("https://example/retry-analysis", { method: "POST" }), deps);
+    await expect(response.json()).resolves.toEqual({ processed: 0, succeeded: 0, failed: 0 });
+    expect(deps.invokeAnalysis).not.toHaveBeenCalled();
+  });
   it("invokes due processing sessions without publishing a terminal failure", async () => {
     const deps = dependencies();
     const response = await retryAnalysisHandler(new Request("https://example/retry-analysis", { method: "POST" }), deps);

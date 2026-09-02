@@ -1,4 +1,10 @@
 import { buildImageGenerateContentRequest, buildTextGenerateContentRequest, buildVideoGenerateContentRequest, createGenerateContentClient, parseGenerateContentResponse } from "./gemini-generate";
+import { geminiGovernanceFromValues } from "./gemini-governance";
+
+const governance = geminiGovernanceFromValues({
+  paidServiceConfirmed: "true",
+  voluntaryLogSharingDisabled: "true",
+});
 
 const file = { uri: "gemini://video", mimeType: "video/mp4" };
 const schema = { type: "object", required: ["status"], properties: { status: { type: "string" } } };
@@ -59,9 +65,9 @@ describe("whole-video Gemini request construction", () => {
       candidates: [{ content: { parts: [{ text: "not-json" }] } }],
       usageMetadata: { promptTokenCount: 1_200, candidatesTokenCount: 300, thoughtsTokenCount: 500 },
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
-    const client = createGenerateContentClient({ apiKey: "key", fetcher });
+    const client = createGenerateContentClient({ apiKey: "key", governance, fetcher });
 
-    await expect(client.generate("gemini-test", buildTextGenerateContentRequest({ prompt: "Write", schema, thinkingLevel: "low" })))
+    await expect(client.generate("gemini-3.1-flash-lite", buildTextGenerateContentRequest({ prompt: "Write", schema, thinkingLevel: "low" })))
       .rejects.toMatchObject({ usage: { promptTokens: 1_200, outputTokens: 300, thinkingTokens: 500 } });
   });
 
@@ -133,8 +139,8 @@ describe("whole-video Gemini request construction", () => {
       const fetcher = jest.fn(async (_url: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
       }));
-      const client = createGenerateContentClient({ apiKey: "key", fetcher });
-      const pending = client.generate("gemini-test", buildTextGenerateContentRequest({ prompt: "Write", schema, thinkingLevel: "low" }), { timeoutMs: 1_000 });
+      const client = createGenerateContentClient({ apiKey: "key", governance, fetcher });
+      const pending = client.generate("gemini-3.1-flash-lite", buildTextGenerateContentRequest({ prompt: "Write", schema, thinkingLevel: "low" }), { timeoutMs: 1_000 });
       const assertion = expect(pending).rejects.toMatchObject({ code: "GEMINI_HTTP_504", status: 504 });
       await jest.advanceTimersByTimeAsync(1_000);
       await assertion;

@@ -3,12 +3,14 @@ export type DeleteAnalysisSession = {
   videoPath: string | null;
   analysisVideoPath: string | null;
   artifactPaths: string[];
+  geminiFileName: string | null;
 };
 
 export type DeleteAnalysisDependencies = {
   authenticate: (request: Request) => Promise<string>;
   findSession: (sessionId: string, userId: string) => Promise<DeleteAnalysisSession | null>;
   removeVideos: (paths: string[]) => Promise<void>;
+  deleteGeminiFile: (fileName: string, userId: string) => Promise<"complete" | "queued">;
   deleteSession: (sessionId: string, userId: string) => Promise<void>;
 };
 
@@ -34,6 +36,8 @@ export async function deleteAnalysisHandler(request: Request, dependencies: Dele
     const session = await dependencies.findSession(sessionId, userId);
     if (!session) return json({ message: "Analysis not found", code: "NOT_FOUND" }, 404);
 
+    const externalCleanup = session.geminiFileName ? await dependencies.deleteGeminiFile(session.geminiFileName, userId) : "complete";
+
     const paths = [
       ...(session.videoPath ? [session.videoPath] : []),
       ...(session.analysisVideoPath ? [session.analysisVideoPath] : []),
@@ -41,7 +45,7 @@ export async function deleteAnalysisHandler(request: Request, dependencies: Dele
     ];
     if (paths.length > 0) await dependencies.removeVideos(paths);
     await dependencies.deleteSession(session.id, userId);
-    return json({ deleted: true }, 200);
+    return json({ deleted: true, externalCleanup }, 200);
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);

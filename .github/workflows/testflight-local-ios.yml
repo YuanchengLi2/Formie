@@ -3,15 +3,15 @@ name: Build iOS locally and submit to TestFlight
 on:
   workflow_dispatch:
     inputs:
+      release_commit:
+        description: Exact 40-character Git commit SHA to build
+        required: true
+        type: string
       submit_to_testflight:
         description: Submit the completed IPA to TestFlight
         required: false
         default: false
         type: boolean
-  push:
-    branches:
-      - codex/ios-3d-tracking-scoring
-
 concurrency:
   group: formie-testflight-local-ios
   cancel-in-progress: true
@@ -25,8 +25,24 @@ jobs:
       contents: read
 
     steps:
-      - name: Check out release branch
+      - name: Validate exact release commit
+        env:
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+        run: |
+          if [[ ! "$RELEASE_COMMIT" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "release_commit must be an exact 40-character Git commit SHA"
+            exit 1
+          fi
+
+      - name: Check out exact release commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_commit }}
+
+      - name: Verify checked-out release commit
+        env:
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+        run: test "$(git rev-parse HEAD)" = "${RELEASE_COMMIT,,}"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -37,12 +53,22 @@ jobs:
       - name: Set up EAS CLI
         uses: expo/expo-github-action@v8
         with:
-          eas-version: 21.8.0
+          eas-version: 23.2.0
           token: ${{ secrets.EXPO_TOKEN }}
           packager: npm
 
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+
+      - name: Install website dependencies
+        working-directory: website
+        run: npm ci --no-audit --no-fund
+
+      - name: Run mobile and backend tests
+        run: npm test -- --runInBand
+
+      - name: Lint mobile app
+        run: npm run lint
 
       - name: Validate Expo dependency graph
         run: npx expo-doctor
@@ -50,15 +76,162 @@ jobs:
       - name: Type-check mobile app
         run: npm run typecheck
 
+      - name: Audit App Store release policy
+        run: npm run audit:release
+
+      - name: Test source-controlled App Store metadata
+        run: node --test scripts/app-store-policy-audit.test.js scripts/store-metadata.test.cjs scripts/strict-eas-metadata-lint.test.js scripts/configure-external-deletion-worker.test.js
+
+      - name: Validate App Store metadata
+        env:
+          EAS_CLI_EXECUTABLE: eas
+          APP_REVIEW_FIRST_NAME: ${{ secrets.APP_REVIEW_FIRST_NAME }}
+          APP_REVIEW_LAST_NAME: ${{ secrets.APP_REVIEW_LAST_NAME }}
+          APP_REVIEW_EMAIL: ${{ secrets.APP_REVIEW_EMAIL }}
+          APP_REVIEW_PHONE: ${{ secrets.APP_REVIEW_PHONE }}
+          APP_REVIEW_DEMO_USERNAME: ${{ secrets.APP_REVIEW_DEMO_USERNAME }}
+          APP_REVIEW_DEMO_PASSWORD: ${{ secrets.APP_REVIEW_DEMO_PASSWORD }}
+        run: node scripts/strict-eas-metadata-lint.mjs
+
+      - name: Test website
+        working-directory: website
+        run: npm test
+
+      - name: Lint website
+        working-directory: website
+        run: npm run lint
+
+      - name: Build website
+        working-directory: website
+        run: npm run build
+
       - name: Validate production payment and auth environment
         run: >-
           eas env:exec production
-          'node -e "const checks=[/^appl_/.test(String(process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_KEY)),Boolean(process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID),Boolean(process.env.EXPO_PUBLIC_REVENUECAT_PRODUCT_ID),Boolean(process.env.EXPO_PUBLIC_REVENUECAT_OFFERING_ID),Boolean(process.env.EXPO_PUBLIC_SUPABASE_URL),Boolean(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY)];if(checks.some((value)=>!value))process.exit(1)"'
+          'node -e "const checks=[/^appl_/.test(String(process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_KEY)),Boolean(process.env.EXPO_PUBLIC_REVENUECAT_ENTITLEMENT_ID),Boolean(process.env.EXPO_PUBLIC_REVENUECAT_PRODUCT_ID),Boolean(process.env.EXPO_PUBLIC_REVENUECAT_OFFERING_ID),Boolean(process.env.EXPO_PUBLIC_SUPABASE_URL),Boolean(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),process.env.SUBSCRIPTION_TEST_CONTROLS_ENABLED!==\"true\",!process.env.FORMIE_TEST_STORE_EMAIL,!process.env.FORMIE_TEST_STORE_PASSWORD];if(checks.some((value)=>!value))process.exit(1)"'
           --non-interactive
 
       - name: Build signed IPA on GitHub macOS
         run: eas build --platform ios --profile production --local --non-interactive --output ./Formie.ipa
 
+      - name: Inspect signed App Store archive
+        id: archive
+        run: |
+          set -euo pipefail
+          extract_dir="$RUNNER_TEMP/formie-ipa"
+          rm -rf "$extract_dir"
+          mkdir -p "$extract_dir"
+          unzip -q ./Formie.ipa -d "$extract_dir"
+          app_path="$(find "$extract_dir/Payload" -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$app_path"
+          info_plist="$app_path/Info.plist"
+          test -f "$info_plist"
+
+          build_number="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_plist")"
+          camera_description="$(/usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' "$info_plist")"
+          test -n "$camera_description"
+          if /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$info_plist" >/dev/null 2>&1; then
+            echo "NSMicrophoneUsageDescription must not be present"
+            exit 1
+          fi
+
+          entitlements="$RUNNER_TEMP/formie-entitlements.plist"
+          codesign -d --entitlements :- "$app_path" > "$entitlements" 2>/dev/null
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.applesignin:0' "$entitlements" | grep -Fx 'Default'
+          if /usr/libexec/PlistBuddy -c 'Print :get-task-allow' "$entitlements" 2>/dev/null | grep -Fx 'true'; then
+            echo "Production archive must not include get-task-allow"
+            exit 1
+          fi
+          codesign --verify --deep --strict "$app_path"
+
+          privacy_manifest_count="$(find "$app_path" -name PrivacyInfo.xcprivacy -type f | wc -l | xargs)"
+          test "$privacy_manifest_count" -gt 0
+          archive_sha256="$(shasum -a 256 ./Formie.ipa | awk '{print $1}')"
+
+          echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
+          echo "archive_sha256=$archive_sha256" >> "$GITHUB_OUTPUT"
+          echo "privacy_manifest_count=$privacy_manifest_count" >> "$GITHUB_OUTPUT"
+
       - name: Submit IPA to TestFlight
+        id: testflight_submission
         if: ${{ inputs.submit_to_testflight == true }}
-        run: eas submit --platform ios --profile production --path ./Formie.ipa --non-interactive --wait
+        env:
+          BUILD_NUMBER: ${{ steps.archive.outputs.build_number }}
+        run: |
+          set -euo pipefail
+          submit_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          eas submit --platform ios --profile production --path ./Formie.ipa --non-interactive --wait
+          eas submit:list --platform ios --limit 1 --json --non-interactive > "$RUNNER_TEMP/formie-submission.json"
+          SUBMIT_STARTED_AT="$submit_started_at" node - <<'NODE'
+          const fs = require('node:fs');
+          const [submission] = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/formie-submission.json`, 'utf8'));
+          if (!submission?.id || !submission?.createdAt) throw new Error('EAS did not return a submission record');
+          if (Date.parse(submission.createdAt) < Date.parse(process.env.SUBMIT_STARTED_AT) - 60_000) throw new Error('Latest EAS submission predates this workflow');
+          if (submission.status !== 'FINISHED') throw new Error(`EAS submission ended as ${submission.status}`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `submission_id=${submission.id}\nsubmission_status=${submission.status}\n`);
+          NODE
+
+      - name: Verify TestFlight processing state
+        id: apple_status
+        if: ${{ inputs.submit_to_testflight == true }}
+        env:
+          BUILD_NUMBER: ${{ steps.archive.outputs.build_number }}
+        run: |
+          set -euo pipefail
+          processed=false
+          for attempt in {1..40}; do
+            eas submit:status --platform ios --profile production --json --non-interactive > "$RUNNER_TEMP/formie-apple-status.json"
+            if node - <<'NODE'
+          const fs = require('node:fs');
+          const status = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/formie-apple-status.json`, 'utf8'));
+          const build = status.ios?.testFlightBuilds?.find((candidate) => candidate.buildNumber === process.env.BUILD_NUMBER);
+          if (!build || build.processingState === 'PROCESSING') process.exit(75);
+          if (build.processingState !== 'VALID') throw new Error(`Apple processing state is ${build.processingState}`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `processing_state=${build.processingState}\ninternal_state=${build.internalState}\nexternal_state=${build.externalState}\n`);
+          NODE
+            then
+              processed=true
+              break
+            else
+              status_code=$?
+              if [[ "$status_code" -ne 75 ]]; then
+                exit "$status_code"
+              fi
+            fi
+            echo "Build $BUILD_NUMBER is still processing or not visible (attempt $attempt/40)"
+            sleep 30
+          done
+          if [[ "$processed" != "true" ]]; then
+            echo "Build $BUILD_NUMBER did not become VALID within 20 minutes"
+            exit 1
+          fi
+
+      - name: Report release evidence
+        env:
+          RELEASE_COMMIT: ${{ inputs.release_commit }}
+          BUILD_NUMBER: ${{ steps.archive.outputs.build_number }}
+          ARCHIVE_SHA256: ${{ steps.archive.outputs.archive_sha256 }}
+          PRIVACY_MANIFEST_COUNT: ${{ steps.archive.outputs.privacy_manifest_count }}
+          SUBMISSION_ID: ${{ steps.testflight_submission.outputs.submission_id }}
+          SUBMISSION_STATUS: ${{ steps.testflight_submission.outputs.submission_status }}
+          PROCESSING_STATE: ${{ steps.apple_status.outputs.processing_state }}
+          INTERNAL_STATE: ${{ steps.apple_status.outputs.internal_state }}
+          EXTERNAL_STATE: ${{ steps.apple_status.outputs.external_state }}
+        run: |
+          {
+            echo "## Formie iOS release evidence"
+            echo "- Release commit: $RELEASE_COMMIT"
+            echo "- Build number: $BUILD_NUMBER"
+            echo "- Build ID: local-sha256:$ARCHIVE_SHA256"
+            echo "- Privacy manifests: $PRIVACY_MANIFEST_COUNT"
+            if [[ "${{ inputs.submit_to_testflight }}" == "true" ]]; then
+              echo "- EAS submission ID: $SUBMISSION_ID"
+              echo "- EAS submission status: $SUBMISSION_STATUS"
+              echo "- Apple processing state: $PROCESSING_STATE"
+              echo "- TestFlight internal state: $INTERNAL_STATE"
+              echo "- TestFlight external state: $EXTERNAL_STATE"
+            else
+              echo "- TestFlight submission: skipped by workflow input"
+            fi
+            echo "- App Store Review submission: never performed by this workflow"
+          } | tee -a "$GITHUB_STEP_SUMMARY"

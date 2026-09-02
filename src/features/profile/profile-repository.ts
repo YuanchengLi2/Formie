@@ -90,6 +90,9 @@ function legacyDisplayName(user: User): string {
 }
 
 export function createInitialProfileRow(user: User, answers?: OnboardingAnswers): Omit<UserProfileRow, "created_at" | "updated_at"> {
+  if (answers?.ageYears !== null && answers?.ageYears !== undefined && answers.ageYears < 18) {
+    throw new Error("You must be 18 or older to create a Formie account.");
+  }
   const createdAt = new Date().toISOString();
   const complete = Boolean(
     answers?.ageYears

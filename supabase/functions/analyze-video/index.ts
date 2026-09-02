@@ -1,10 +1,15 @@
 import type { AnalysisCandidate } from "../_shared/analysis-contract.ts";
 import { ANALYSIS_RUNTIME_CONTRACT } from "../_shared/analysis-settings.ts";
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
+import { requireCurrentAiEligibility } from "../_shared/ai-eligibility.ts";
 import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { constantTimeEqual } from "../_shared/request-security.ts";
+import { attemptExternalDeletion } from "../_shared/external-deletion.ts";
+import { executeProviderDeletion } from "../_shared/provider-deletion.ts";
+import { secretEnvelopeKeyFromBase64Url } from "../_shared/secret-envelope.ts";
 import { buildTextGenerateContentRequest, buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
 import { createGeminiFilesClient, reuseOrUploadGeminiFile, waitForGeminiFile, type GeminiFile } from "../_shared/gemini-files.ts";
+import { geminiGovernanceFromEnvironment } from "../_shared/gemini-governance.ts";
 import {
   buildBoundaryFreeAnalysisPrompt,
   buildWholeVideoWritingRepairPrompt,
@@ -34,8 +39,9 @@ const PIPELINE_VERSION = ANALYSIS_RUNTIME_CONTRACT.pipelineVersion;
 const ANALYST_MODEL = ANALYSIS_RUNTIME_CONTRACT.analystModel;
 const WRITER_MODEL = ANALYSIS_RUNTIME_CONTRACT.writerModel;
 const apiKey = Deno.env.get("GEMINI_API_KEY") ?? "";
-const files = createGeminiFilesClient({ apiKey });
-const generation = createGenerateContentClient({ apiKey });
+const governance = geminiGovernanceFromEnvironment((name) => Deno.env.get(name));
+const files = createGeminiFilesClient({ apiKey, governance });
+const generation = createGenerateContentClient({ apiKey, governance });
 
 type JsonRecord = Record<string, unknown>;
 type WholeVideoInput = { uri: string; mimeType: string } | { kind: "inline"; data: string; mimeType: string };
@@ -84,6 +90,12 @@ Deno.serve(async (request) => {
   const security = await secureBrowserRequest(request, { methods: ["POST"], authentication: "service", maxBodyBytes: 8_192 });
   if (security) return security;
   const admin = createAdminClient();
+  const deletionKey = secretEnvelopeKeyFromBase64Url(Deno.env.get("APPLE_TOKEN_ENCRYPTION_KEY") ?? "");
+  const deleteGeminiFileDurably = (fileName: string, userId: string) => attemptExternalDeletion({ provider: "gemini", operation: "delete_file", payload: { fileName } }, {
+    encryptionKey: deletionKey,
+    execute: (current) => executeProviderDeletion(current, { revokeApple: async () => undefined, deleteGeminiFile: (name) => files.deleteFile(name), deleteRevenueCatCustomer: async () => undefined }),
+    enqueue: async (job) => { const { error } = await admin.from("external_deletion_jobs").upsert({ user_id: userId, provider: job.provider, operation: job.operation, encrypted_payload: job.encryptedPayload, fingerprint: job.fingerprint, status: "pending", next_retry_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "provider,operation,fingerprint" }); if (error) throw error; },
+  });
 
   async function recordModelCall(input: {
     sessionId: string;
@@ -282,9 +294,12 @@ Deno.serve(async (request) => {
         && retryUserId
         && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(retryUserId)
       ) {
+        await requireCurrentAiEligibility(admin, retryUserId);
         return retryUserId;
       }
-      return requireUserId(incoming, admin);
+      const userId = await requireUserId(incoming, admin);
+      await requireCurrentAiEligibility(admin, userId);
+      return userId;
     },
     loadSession: async (sessionId, userId) => {
       const [{ data: session, error }, { data: result, error: resultError }, { data: storedStage, error: storedStageError }, { data: failedStage, error: failedStageError }] = await Promise.all([
@@ -538,7 +553,7 @@ Deno.serve(async (request) => {
             return { status: candidate.status };
           });
           if (geminiFileName || geminiFile) {
-            await files.deleteFile(geminiFileName ?? geminiFile?.name ?? "").catch(() => undefined);
+            await deleteGeminiFileDurably(geminiFileName ?? geminiFile?.name ?? "", rawSession.userId);
             await admin.from("analysis_sessions").update({
               gemini_file_name: null,
               gemini_file_uri: null,
@@ -552,7 +567,7 @@ Deno.serve(async (request) => {
     persistFailure: async (sessionId, code, disposition) => {
       const { data: retryState, error: retryStateError } = await admin
         .from("analysis_sessions")
-        .select("status,gemini_file_name,analysis_retry_count")
+        .select("status,user_id,gemini_file_name,analysis_retry_count")
         .eq("id", sessionId)
         .maybeSingle();
       if (retryStateError) throw databaseError("ANALYSIS_STATE_SAVE_FAILED", retryStateError);
@@ -564,7 +579,7 @@ Deno.serve(async (request) => {
       if (existingResultError) throw databaseError("ANALYSIS_RESULT_SAVE_FAILED", existingResultError);
       if (retryState?.status === "complete" || retryState?.status === "partial" || existingResult?.status === "complete" || existingResult?.status === "partial") {
         if (typeof retryState?.gemini_file_name === "string") {
-          await files.deleteFile(retryState.gemini_file_name).catch(() => undefined);
+          await deleteGeminiFileDurably(retryState.gemini_file_name, retryState.user_id);
         }
         await persistRetryState(sessionId, {
           status: existingResult?.status ?? retryState?.status ?? "complete",
@@ -585,7 +600,7 @@ Deno.serve(async (request) => {
         disposition,
       );
       if (terminal && typeof retryState?.gemini_file_name === "string") {
-        await files.deleteFile(retryState.gemini_file_name).catch(() => undefined);
+        await deleteGeminiFileDurably(retryState.gemini_file_name, retryState.user_id);
       }
       if (!terminal) {
         const { nextRetryAt } = analysisRetrySchedule(nextRetryCount);

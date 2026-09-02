@@ -15,7 +15,7 @@ export default function LoginRoute() {
     const target = Array.isArray(returnTo) ? returnTo[0] : returnTo;
     if (target === "/subscription") await setAuthReturnTarget(target);
     await onboarding.startOAuth("login");
-    await auth.signInWithProvider("apple");
+    await auth.signInWithApple();
   };
   const deleted = (Array.isArray(accountDeleted) ? accountDeleted[0] : accountDeleted) === "1";
   const deletionNotice = deleted
@@ -23,7 +23,7 @@ export default function LoginRoute() {
     : null;
   return <SocialLoginScreen busyProvider={auth.signingIn} error={auth.error ?? (Array.isArray(routeError) ? routeError[0] : routeError) ?? null} notice={deletionNotice}
     onBack={() => router.back()}
-    onOAuth={() => void beginAppleSignIn()}
+    onApple={() => void beginAppleSignIn()}
     onEmailPassword={() => router.push("/(auth)/password" as Href)}
     onCreateAccount={() => void onboarding.startNewAccount().then(() => router.replace("/onboarding/welcome" as Href))}
     onOpenTerms={() => { if (legal) void Linking.openURL(legal.termsUrl); }}

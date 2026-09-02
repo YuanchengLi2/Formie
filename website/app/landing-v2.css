@@ -113,6 +113,16 @@ p { line-height: 1.7; }
   object-fit: contain;
 }
 
+.v2-preview-note {
+  max-width: 680px;
+  margin: -4% auto 8%;
+  padding: 0 24px;
+  color: rgba(255,255,255,.72);
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: center;
+}
+
 .v2-hero-art img {
   object-fit: contain;
 }

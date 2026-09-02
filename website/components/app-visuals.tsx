@@ -31,7 +31,7 @@ export function PhoneDashboard() {
       <p>4 analyses this week</p>
       <div className="phone-stats"><div><small>Current streak</small><strong>3 days</strong></div><div><small>Average score</small><strong>78</strong></div></div>
       <div className="latest"><small>Latest analysis</small><strong>Dumbbell Shoulder Press</strong><b>76</b></div>
-      <div className="phone-actions"><span>Ask Formie Coach</span><span>View Progress</span></div>
+      <div className="phone-actions"><span>Coach Preview</span><span>View Progress</span></div>
     </div>
   );
 }

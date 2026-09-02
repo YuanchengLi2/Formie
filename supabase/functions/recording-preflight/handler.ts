@@ -510,9 +510,12 @@ export async function recordingPreflightHandler(
     }).catch(() => undefined);
     return json(decision);
   } catch (error) {
+    const eligibility = aiEligibilityErrorResponse(error);
+    if (eligibility) return eligibility;
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);
     }
     return json({ message: "The quick recording check is temporarily unavailable", code: "PREFLIGHT_FAILED" }, 502);
   }
 }
+import { aiEligibilityErrorResponse } from "../_shared/ai-eligibility.ts";

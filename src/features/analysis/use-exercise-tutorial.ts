@@ -15,7 +15,8 @@ export function useExerciseTutorial(sessionId: string, enabled: boolean) {
     queryKey: ["exercise-tutorial", sessionId],
     queryFn: async ({ signal }) => getExerciseTutorial({ accessToken: await accessToken(), sessionId, signal }),
     enabled: Boolean(sessionId) && enabled,
-    staleTime: Infinity,
+    staleTime: 0,
+    refetchOnMount: "always",
     retry: 1,
   });
 }

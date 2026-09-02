@@ -1,4 +1,5 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
+import { requireCurrentAiEligibility } from "../_shared/ai-eligibility.ts";
 import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { createGeminiFilesClient } from "../_shared/gemini-files.ts";
 import { reanalyzeVideoHandler, type ReanalysisResetOutcome } from "./handler.ts";
@@ -14,7 +15,11 @@ Deno.serve(async (request) => {
   const admin = createAdminClient();
 
   const response = await reanalyzeVideoHandler(request, {
-    authenticate: (incoming) => requireUserId(incoming, admin),
+    authenticate: async (incoming) => {
+      const userId = await requireUserId(incoming, admin);
+      await requireCurrentAiEligibility(admin, userId);
+      return userId;
+    },
     verifyReusableInput: async (sessionId, userId) => {
       const { data, error } = await admin
         .from("analysis_sessions")

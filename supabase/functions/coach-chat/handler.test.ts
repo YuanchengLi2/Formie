@@ -1,4 +1,5 @@
 import { coachChatHandler, type CoachChatDependencies } from "./handler";
+import { AiEligibilityError } from "../_shared/ai-eligibility";
 
 const sessionId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
@@ -31,6 +32,13 @@ function dependencies(overrides: Partial<CoachChatDependencies> = {}): CoachChat
 }
 
 describe("coach chat handler", () => {
+  it("requires current AI consent before loading Coach data", async () => {
+    const deps = dependencies({ authenticate: jest.fn(async () => { throw new AiEligibilityError("AI_CONSENT_REQUIRED"); }) });
+    const response = await coachChatHandler(new Request("https://example/coach-chat"), deps);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: "AI_CONSENT_REQUIRED" });
+    expect(deps.listThreads).not.toHaveBeenCalled();
+  });
   it("requires authentication and returns empty owned history", async () => {
     const unauthorized = dependencies({ authenticate: jest.fn(async () => { throw new Error("UNAUTHORIZED"); }) });
     expect((await coachChatHandler(new Request("https://example/coach-chat"), unauthorized)).status).toBe(401);

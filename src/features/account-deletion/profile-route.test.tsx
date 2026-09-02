@@ -5,6 +5,8 @@ import ProfileRoute from "@/app/(tabs)/(profile)";
 const mockReplace = jest.fn();
 const mockDeleteAccount = jest.fn();
 const mockBillingLogOut = jest.fn();
+const mockPrepareAccountDeletion = jest.fn();
+const mockRestoreAfterFailedAccountDeletion = jest.fn();
 const mockMarkLoggedOut = jest.fn();
 const mockAuthLogOut = jest.fn();
 const callOrder: string[] = [];
@@ -20,7 +22,11 @@ jest.mock("@/features/auth/auth-provider", () => ({ useAuth: () => ({
   user: { email: "athlete@example.com" },
   logOut: (...args: unknown[]) => mockAuthLogOut(...args),
 }) }));
-jest.mock("@/features/billing/billing-provider", () => ({ useBilling: () => ({ logOut: (...args: unknown[]) => mockBillingLogOut(...args) }) }));
+jest.mock("@/features/billing/billing-provider", () => ({ useBilling: () => ({
+  logOut: (...args: unknown[]) => mockBillingLogOut(...args),
+  prepareAccountDeletion: (...args: unknown[]) => mockPrepareAccountDeletion(...args),
+  restoreAfterFailedAccountDeletion: (...args: unknown[]) => mockRestoreAfterFailedAccountDeletion(...args),
+}) }));
 jest.mock("@/features/onboarding/onboarding-store", () => ({ useOnboarding: () => ({ markLoggedOut: (...args: unknown[]) => mockMarkLoggedOut(...args) }) }));
 jest.mock("@/features/capture/capture-preferences", () => ({
   useCapturePreferences: (selector: (state: Record<string, unknown>) => unknown) => selector({ preferences: {}, hydrate: jest.fn(), update: jest.fn() }),
@@ -33,6 +39,11 @@ jest.mock("@/features/access/access-provider", () => ({
 jest.mock("@/features/billing/subscription-management-presentation", () => ({ createSubscriptionPresentation: () => ({ badgeLabel: "Active" }) }));
 jest.mock("@/features/billing/subscription-test-controls", () => ({ runSubscriptionTestControl: jest.fn(), setSubscriptionTestRemaining: jest.fn() }));
 jest.mock("@/features/auth/legal-config", () => ({ getLegalLinks: () => ({}) }));
+jest.mock("@/features/privacy/ai-consent", () => ({
+  currentAiProcessingConsent: jest.fn(() => new Promise(() => undefined)),
+  isCurrentAiProcessingConsent: jest.fn(() => false),
+  revokeAiProcessingConsent: jest.fn(),
+}));
 
 describe("ProfileRoute account deletion", () => {
   beforeEach(() => {
@@ -51,6 +62,8 @@ describe("ProfileRoute account deletion", () => {
       remaining: 8,
     };
     mockDeleteAccount.mockReset().mockImplementation(async () => { callOrder.push("server"); });
+    mockPrepareAccountDeletion.mockReset().mockImplementation(async () => { callOrder.push("prepare-billing"); });
+    mockRestoreAfterFailedAccountDeletion.mockReset().mockResolvedValue(undefined);
     mockBillingLogOut.mockReset().mockImplementation(async () => { callOrder.push("billing"); });
     mockMarkLoggedOut.mockReset().mockImplementation(async () => { callOrder.push("onboarding"); });
     mockAuthLogOut.mockReset().mockImplementation(async () => { callOrder.push("auth"); });
@@ -62,12 +75,13 @@ describe("ProfileRoute account deletion", () => {
     return capturedProps?.onDeleteAccount as () => Promise<void>;
   }
 
-  it("deletes on the server before local cleanup and shows signed-out confirmation", async () => {
+  it("stops RevenueCat listeners before server deletion, then shows signed-out confirmation", async () => {
     const callback = await getDeleteCallback();
     await act(async () => { await callback(); });
     expect(mockDeleteAccount).toHaveBeenCalledWith({ accessToken: "access-token" });
-    expect(callOrder).toEqual(["server", "billing", "onboarding", "auth"]);
-    expect(mockBillingLogOut).toHaveBeenCalledTimes(1);
+    expect(callOrder).toEqual(["prepare-billing", "server", "onboarding", "auth"]);
+    expect(mockPrepareAccountDeletion).toHaveBeenCalledTimes(1);
+    expect(mockBillingLogOut).not.toHaveBeenCalled();
     expect(mockMarkLoggedOut).toHaveBeenCalledTimes(1);
     expect(mockAuthLogOut).toHaveBeenCalledWith("user");
     expect(mockReplace).toHaveBeenCalledWith("/login?accountDeleted=1");
@@ -78,6 +92,7 @@ describe("ProfileRoute account deletion", () => {
     const callback = await getDeleteCallback();
     await expect(callback()).rejects.toThrow("Sign in again");
     expect(mockDeleteAccount).not.toHaveBeenCalled();
+    expect(mockPrepareAccountDeletion).not.toHaveBeenCalled();
     expect(mockBillingLogOut).not.toHaveBeenCalled();
     expect(mockMarkLoggedOut).not.toHaveBeenCalled();
     expect(mockAuthLogOut).not.toHaveBeenCalled();
@@ -88,19 +103,21 @@ describe("ProfileRoute account deletion", () => {
     mockDeleteAccount.mockRejectedValueOnce(new Error("server failed"));
     const callback = await getDeleteCallback();
     await expect(callback()).rejects.toThrow("server failed");
+    expect(mockRestoreAfterFailedAccountDeletion).toHaveBeenCalledTimes(1);
     expect(mockBillingLogOut).not.toHaveBeenCalled();
     expect(mockMarkLoggedOut).not.toHaveBeenCalled();
     expect(mockAuthLogOut).not.toHaveBeenCalled();
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it("continues local teardown when RevenueCat logout fails after confirmed deletion", async () => {
-    mockBillingLogOut.mockRejectedValueOnce(new Error("RevenueCat unavailable"));
+  it("does not delete the server account when RevenueCat preparation fails", async () => {
+    mockPrepareAccountDeletion.mockRejectedValueOnce(new Error("RevenueCat unavailable"));
     const callback = await getDeleteCallback();
-    await act(async () => { await callback(); });
-    expect(mockMarkLoggedOut).toHaveBeenCalledTimes(1);
-    expect(mockAuthLogOut).toHaveBeenCalledWith("user");
-    expect(mockReplace).toHaveBeenCalledWith("/login?accountDeleted=1");
+    await expect(callback()).rejects.toThrow("RevenueCat unavailable");
+    expect(mockDeleteAccount).not.toHaveBeenCalled();
+    expect(mockMarkLoggedOut).not.toHaveBeenCalled();
+    expect(mockAuthLogOut).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it.each([

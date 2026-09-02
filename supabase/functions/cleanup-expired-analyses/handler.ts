@@ -1,8 +1,10 @@
 export type RetentionCandidate = {
   id: string;
+  userId: string;
   videoPath: string | null;
   analysisVideoPath: string | null;
   artifactPaths: string[];
+  geminiFileName: string | null;
 };
 
 export type RetentionPolicyInput = {
@@ -15,6 +17,7 @@ export type CleanupExpiredAnalysesDependencies = {
   authenticate: (request: Request) => Promise<void>;
   findEligible: (now: Date) => Promise<RetentionCandidate[]>;
   removeStorage: (paths: string[]) => Promise<void>;
+  deleteGeminiFile: (fileName: string, userId: string) => Promise<"complete" | "queued">;
   deleteSession: (sessionId: string) => Promise<void>;
 };
 
@@ -45,7 +48,9 @@ export async function cleanupExpiredAnalysesHandler(
     await dependencies.authenticate(request);
     const candidates = await dependencies.findEligible(now);
     let deleted = 0;
+    let externalCleanupQueued = 0;
     for (const candidate of candidates) {
+      if (candidate.geminiFileName && await dependencies.deleteGeminiFile(candidate.geminiFileName, candidate.userId) === "queued") externalCleanupQueued += 1;
       const paths = [...new Set([
         ...(candidate.videoPath ? [candidate.videoPath] : []),
         ...(candidate.analysisVideoPath ? [candidate.analysisVideoPath] : []),
@@ -55,7 +60,7 @@ export async function cleanupExpiredAnalysesHandler(
       await dependencies.deleteSession(candidate.id);
       deleted += 1;
     }
-    return json({ deleted }, 200);
+    return json({ deleted, externalCleanupQueued }, 200);
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return json({ message: "Unauthorized", code: "UNAUTHORIZED" }, 401);

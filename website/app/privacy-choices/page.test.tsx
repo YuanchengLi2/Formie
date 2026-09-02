@@ -11,6 +11,9 @@ test("privacy choices gives direct app and external account controls", () => {
   assert.match(html, /delete an analysis/i);
   assert.match(html, /Apple subscription/i);
   assert.match(html, /Sign in with Apple/i);
+  assert.match(html, /Withdraw AI processing consent/i);
+  assert.match(html, /automatically revokes|encrypted deletion queue/i);
+  assert.match(html, /legacy Apple account/i);
   assert.match(html, /href="\/retention"/i);
   assert.match(html, /href="\/support"/i);
 });

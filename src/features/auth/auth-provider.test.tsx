@@ -8,12 +8,18 @@ const mockOnAuthStateChange = jest.fn();
 const mockGetInitialURL = jest.fn();
 const mockAddEventListener = jest.fn();
 const mockSignInWithOAuth = jest.fn();
+const mockSignInWithIdToken = jest.fn();
 const mockExchangeCodeForSession = jest.fn();
 const mockSignInWithPassword = jest.fn();
 const mockSignInWithOtp = jest.fn();
 const mockVerifyOtp = jest.fn();
 const mockSignOut = jest.fn();
+const mockUpdateUser = jest.fn();
+const mockInvoke = jest.fn();
 const mockOpenAuthSessionAsync = jest.fn();
+const mockAppleSignInAsync = jest.fn();
+const mockDigestStringAsync = jest.fn();
+const mockGetRandomBytes = jest.fn();
 
 jest.mock("@/lib/supabase", () => ({
   supabase: { auth: {
@@ -21,12 +27,25 @@ jest.mock("@/lib/supabase", () => ({
     getUser: (...args: unknown[]) => mockGetUser(...args),
     onAuthStateChange: (...args: unknown[]) => mockOnAuthStateChange(...args),
     signInWithOAuth: (...args: unknown[]) => mockSignInWithOAuth(...args),
+    signInWithIdToken: (...args: unknown[]) => mockSignInWithIdToken(...args),
     exchangeCodeForSession: (...args: unknown[]) => mockExchangeCodeForSession(...args),
     signInWithPassword: (...args: unknown[]) => mockSignInWithPassword(...args),
     signInWithOtp: (...args: unknown[]) => mockSignInWithOtp(...args),
     verifyOtp: (...args: unknown[]) => mockVerifyOtp(...args),
     signOut: (...args: unknown[]) => mockSignOut(...args),
-  } },
+    updateUser: (...args: unknown[]) => mockUpdateUser(...args),
+  }, functions: { invoke: (...args: unknown[]) => mockInvoke(...args) } },
+}));
+
+jest.mock("expo-apple-authentication", () => ({
+  AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
+  signInAsync: (...args: unknown[]) => mockAppleSignInAsync(...args),
+}));
+
+jest.mock("expo-crypto", () => ({
+  CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+  digestStringAsync: (...args: unknown[]) => mockDigestStringAsync(...args),
+  getRandomBytes: (...args: unknown[]) => mockGetRandomBytes(...args),
 }));
 
 jest.mock("expo-linking", () => ({
@@ -49,6 +68,7 @@ function Probe() {
   return <>
     <Text>{auth.phase}</Text>
     <Text>{auth.error ?? "no-error"}</Text>
+    <Pressable accessibilityRole="button" onPress={() => void auth.signInWithApple()}><Text>Apple</Text></Pressable>
     <Pressable accessibilityRole="button" onPress={() => void auth.signInWithProvider("google")}><Text>Google</Text></Pressable>
     <Pressable accessibilityRole="button" onPress={() => void auth.signInWithPassword(" AppReview@Formie.app ", "review-password")}><Text>Password sign in</Text></Pressable>
     <Pressable accessibilityRole="button" onPress={() => void auth.sendEmailCode("athlete@example.com")}><Text>Send email code</Text></Pressable>
@@ -65,11 +85,40 @@ describe("AuthProvider", () => {
     mockGetInitialURL.mockResolvedValue(null);
     mockOnAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
     mockSignInWithOAuth.mockResolvedValue({ data: { url: "https://accounts.google.test" }, error: null });
+    mockSignInWithIdToken.mockResolvedValue({ data: { session: { user: { id: "apple-user", is_anonymous: false } } }, error: null });
     mockExchangeCodeForSession.mockResolvedValue({ data: { session: { user: { id: "user-1", is_anonymous: false } } }, error: null });
     mockSignInWithPassword.mockResolvedValue({ data: { session: { user: { id: "review-user", email: "appreview@formie.app" } } }, error: null });
     mockSignInWithOtp.mockResolvedValue({ data: {}, error: null });
     mockVerifyOtp.mockResolvedValue({ data: { session: { user: { id: "email-user", email: "athlete@example.com" } } }, error: null });
     mockSignOut.mockResolvedValue({ data: {}, error: null });
+    mockUpdateUser.mockResolvedValue({ data: { user: { id: "apple-user" } }, error: null });
+    mockInvoke.mockResolvedValue({ data: { stored: true }, error: null });
+    mockGetRandomBytes.mockReturnValue(Uint8Array.from([1, 2, 3]));
+    mockDigestStringAsync.mockResolvedValue("hashed-nonce");
+    mockAppleSignInAsync.mockResolvedValue({ identityToken: "identity-token", authorizationCode: "authorization-code", fullName: { givenName: "Formie", familyName: "Reviewer" } });
+  });
+
+  it("completes native Apple sign-in only after the revocation token is stored", async () => {
+    const screen = await render(<AuthProvider><Probe /></AuthProvider>);
+    expect(await screen.findByText("signed_out")).toBeTruthy();
+
+    await act(async () => fireEvent.press(screen.getByText("Apple")));
+
+    expect(mockSignInWithIdToken).toHaveBeenCalledWith(expect.objectContaining({ provider: "apple", token: "identity-token" }));
+    expect(mockInvoke).toHaveBeenCalledWith("apple-authorization", { method: "POST", body: { authorizationCode: "authorization-code" } });
+    expect(mockUpdateUser).toHaveBeenCalledWith({ data: { full_name: "Formie Reviewer" } });
+    expect(await screen.findByText("authenticated")).toBeTruthy();
+  });
+
+  it("shows an authorization-code exchange error distinctly and ends the new session", async () => {
+    mockInvoke.mockResolvedValue({ data: { code: "APPLE_TOKEN_EXCHANGE_FAILED" }, error: new Error("Edge Function failed") });
+    const screen = await render(<AuthProvider><Probe /></AuthProvider>);
+    expect(await screen.findByText("signed_out")).toBeTruthy();
+
+    await act(async () => fireEvent.press(screen.getByText("Apple")));
+
+    expect(screen.getByText("Apple's authorization code could not be exchanged. Please try again.")).toBeTruthy();
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
   });
 
   it("restores a signed-out startup", async () => {

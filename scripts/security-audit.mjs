@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const npm = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -6,9 +6,10 @@ const npx = process.platform === "win32" ? "npx.cmd" : "npx";
 
 function run(command, args, cwd = process.cwd()) {
   console.log(`\n[release-security] ${command} ${args.join(" ")}`);
-  const executable = process.platform === "win32" ? process.env.ComSpec ?? "cmd.exe" : command;
-  const executableArgs = process.platform === "win32" ? ["/d", "/s", "/c", command, ...args] : args;
-  const result = spawnSync(executable, executableArgs, { cwd, stdio: "inherit", shell: false });
+  const isWindowsBatch = process.platform === "win32" && /\.(?:cmd|bat)$/i.test(command);
+  const result = isWindowsBatch
+    ? spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", `${command} ${args.join(" ")}`], { cwd, stdio: "inherit", shell: false })
+    : spawnSync(command, args, { cwd, stdio: "inherit", shell: false });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
@@ -25,10 +26,23 @@ function assertConfiguration() {
     if (!cors.includes(`"${origin}"`)) throw new Error(`Missing approved origin: ${origin}`);
   }
   for (const file of capture("git", ["ls-files", "supabase/functions/**/*.ts"])) {
+    if (!existsSync(file)) continue;
     const source = readFileSync(file, "utf8");
     if (/Access-Control-Allow-Origin["']?\s*[:=]\s*["']\*/.test(source)) throw new Error(`Wildcard CORS is forbidden: ${file}`);
   }
-  for (const endpoint of ["analyze-video", "cleanup-expired-analyses", "retry-analysis", "reconcile-entitlements", "revenuecat-webhook", "send-support"]) {
+  for (const endpoint of [
+    "analyze-video",
+    "cleanup-expired-analyses",
+    "retry-analysis",
+    "reconcile-entitlements",
+    "revenuecat-webhook",
+    "send-support",
+    "apple-authorization",
+    "apple-auth-events",
+    "process-external-deletions",
+    "exercise-guide",
+    "exercise-tutorial",
+  ]) {
     if (!config.includes(`[functions.${endpoint}]`)) throw new Error(`Missing explicit function security config: ${endpoint}`);
   }
 }
@@ -53,6 +67,8 @@ function scanTrackedSecrets() {
 
 assertConfiguration();
 scanTrackedSecrets();
+run(process.execPath, ["scripts/app-store-policy-audit.mjs"]);
+run(process.execPath, ["--test", "scripts/app-store-policy-audit.test.js", "scripts/app-store-submission-assets-audit.test.js", "scripts/store-metadata.test.cjs", "scripts/strict-eas-metadata-lint.test.js", "scripts/configure-external-deletion-worker.test.js"]);
 run(npm, ["audit", "--omit=dev", "--audit-level=high"]);
 run(npm, ["audit", "--omit=dev", "--audit-level=high"], `${process.cwd()}/website`);
 run(npx, ["expo-doctor"]);
@@ -63,5 +79,13 @@ jestArgs.push(
   "supabase/functions/_shared/request-security-wiring.test.ts",
   "supabase/functions/revenuecat-webhook/handler.test.ts",
   "supabase/functions/_shared/entitlement-ledger.test.ts",
+  "supabase/functions/_shared/secret-envelope.test.ts",
+  "supabase/functions/_shared/apple-events.test.ts",
+  "supabase/functions/_shared/operational-alert.test.ts",
+  "supabase/functions/_shared/external-deletion.test.ts",
+  "supabase/functions/apple-authorization/handler.test.ts",
+  "supabase/functions/apple-auth-events/handler.test.ts",
+  "supabase/functions/process-external-deletions/handler.test.ts",
+  "supabase/functions/_shared/gemini-governance.test.ts",
 );
 run(npx, jestArgs);

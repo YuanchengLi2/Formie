@@ -197,7 +197,10 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
     });
     return json({ processing: true }, 200);
   } catch (error) {
+    const eligibility = aiEligibilityErrorResponse(error);
+    if (eligibility) return eligibility;
     if (error instanceof Error && error.message === "UNAUTHORIZED") return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);
     return json({ message: "Upload could not be completed", code: "COMPLETE_FAILED" }, 500);
   }
 }
+import { aiEligibilityErrorResponse } from "../_shared/ai-eligibility.ts";

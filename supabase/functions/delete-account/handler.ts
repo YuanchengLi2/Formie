@@ -1,9 +1,12 @@
 import { accountStorageBuckets, type AccountStorageBucket } from "./storage.ts";
 
-export type DeleteAccountStage = "storage" | "analytics" | "auth_user";
+export type DeleteAccountStage = "external" | "storage" | "analytics" | "auth_user";
+export type AccountExternalResources = { appleLinked: boolean; encryptedAppleRefreshToken: string | null; geminiFileNames: string[]; revenueCatCustomerId: string };
 
 export type AccountDeletionDependencies = {
-  authenticate(request: Request): Promise<string>;
+  authenticate(request: Request): Promise<{ userId: string; appleLinked: boolean }>;
+  loadExternalResources(userId: string, appleLinked: boolean): Promise<AccountExternalResources>;
+  cleanupExternal(userId: string, resources: AccountExternalResources): Promise<"complete" | "queued">;
   listUserFiles(bucket: AccountStorageBucket, userId: string): Promise<string[]>;
   removeFiles(bucket: AccountStorageBucket, userId: string, paths: string[]): Promise<void>;
   deleteAnalytics(userId: string): Promise<void>;
@@ -36,11 +39,21 @@ export async function deleteAccountHandler(request: Request, dependencies: Accou
     return json({ message: "Type DELETE to confirm account deletion", code: "INVALID_BODY" }, 400);
   }
 
-  let userId: string;
+  let identity: { userId: string; appleLinked: boolean };
   try {
-    userId = await dependencies.authenticate(request);
+    identity = await dependencies.authenticate(request);
   } catch {
     return json({ message: "Sign in again before deleting your account", code: "UNAUTHORIZED" }, 401);
+  }
+  const userId = identity.userId;
+
+  let externalCleanup: "complete" | "queued";
+  try {
+    const resources = await dependencies.loadExternalResources(userId, identity.appleLinked);
+    if (resources.appleLinked && !resources.encryptedAppleRefreshToken) return json({ message: "Sign in with Apple again so Formie can revoke authorization before deletion.", code: "APPLE_REAUTH_REQUIRED", stage: "external" }, 409);
+    externalCleanup = await dependencies.cleanupExternal(userId, resources);
+  } catch {
+    return json({ message: "External account data could not be scheduled for deletion. Try again.", code: "EXTERNAL_DELETE_FAILED", stage: "external" }, 500);
   }
 
   try {
@@ -64,5 +77,5 @@ export async function deleteAccountHandler(request: Request, dependencies: Accou
     return json({ message: "Your account could not be deleted. Try again.", code: "AUTH_USER_DELETE_FAILED", stage: "auth_user" }, 500);
   }
 
-  return json({ deleted: true }, 200);
+  return json({ deleted: true, externalCleanup }, 200);
 }

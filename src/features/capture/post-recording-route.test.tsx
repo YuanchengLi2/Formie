@@ -6,6 +6,17 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
+const mockCurrentAiProcessingConsent = jest.fn();
+const mockAcceptAiProcessingConsent = jest.fn();
+
+jest.mock("@/lib/supabase", () => ({ supabase: { rpc: jest.fn() } }));
+
+jest.mock("@/features/privacy/ai-consent", () => ({
+  AI_PROCESSING_NOTICE: "Formie sends your exercise video, exercise declaration, and relevant profile information to Formie's servers and the paid Google Gemini API to provide the analysis you request. Google may retain limited data for abuse and safety monitoring. You can withdraw consent for future analyses and delete analyses or your account.",
+  currentAiProcessingConsent: (...args: unknown[]) => mockCurrentAiProcessingConsent(...args),
+  acceptAiProcessingConsent: (...args: unknown[]) => mockAcceptAiProcessingConsent(...args),
+  isCurrentAiProcessingConsent: (consent: unknown) => Boolean(consent),
+}));
 
 jest.mock("expo-router", () => {
   const { Text: MockText } = require("react-native");
@@ -43,13 +54,16 @@ jest.mock("@/screens/set-declaration", () => {
     SetDeclarationScreen: ({
       onAnalyze,
       showVideoPreview,
+      analyzeLabel,
     }: {
       onAnalyze: (declaration: unknown) => void;
       showVideoPreview?: boolean;
+      analyzeLabel?: string;
     }) => (
       <>
         <MockText>set-details-screen</MockText>
         <MockText>{`show-video:${String(showVideoPreview)}`}</MockText>
+        <MockText>{`analyze-label:${String(analyzeLabel)}`}</MockText>
         <MockPressable
           accessibilityLabel="Submit mocked set details"
           onPress={() => onAnalyze({
@@ -138,6 +152,10 @@ describe("post-recording route invariants", () => {
     mockReplace.mockClear();
     mockPush.mockClear();
     useCaptureStore.getState().dispatch({ type: "reset" });
+    mockCurrentAiProcessingConsent.mockReset();
+    mockCurrentAiProcessingConsent.mockResolvedValue({ version: "current" });
+    mockAcceptAiProcessingConsent.mockReset();
+    mockAcceptAiProcessingConsent.mockResolvedValue(undefined);
   });
 
   it("never renders the camera's preparing-upload state for a retained recording", async () => {
@@ -256,11 +274,43 @@ describe("post-recording route invariants", () => {
     });
     const screen = await renderRoute(<AnalysisSetDetailsRoute />);
 
+    await act(async () => {});
+
     expect(screen.getByText("set-details-screen")).toBeTruthy();
     expect(screen.getByText("show-video:false")).toBeTruthy();
     expect(screen.queryByText("FINAL CHECK")).toBeNull();
 
     await fireEvent.press(screen.getByLabelText("Submit mocked set details"));
+    expect(useCaptureStore.getState().phase).toBe("uploading");
+    expect(mockReplace).toHaveBeenCalledWith("/analysis/upload");
+  });
+
+  it("transmits nothing until missing AI consent is affirmatively recorded", async () => {
+    mockCurrentAiProcessingConsent.mockResolvedValue(null);
+    useCaptureStore.setState({
+      phase: "recorded",
+      recording,
+      exerciseChoice: {
+        kind: "selected",
+        catalogExerciseId: 4,
+        canonicalName: "Goblet Squat",
+        mechanics: {},
+      },
+    });
+    const screen = await renderRoute(<AnalysisSetDetailsRoute />);
+    await act(async () => {});
+
+    expect(screen.getByText("analyze-label:Review AI processing")).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText("Submit mocked set details"));
+
+    expect(useCaptureStore.getState().phase).toBe("recorded");
+    expect(mockReplace).not.toHaveBeenCalledWith("/analysis/upload");
+    expect(screen.getByText(/paid Google Gemini API/)).toBeTruthy();
+
+    await fireEvent.press(screen.getByLabelText("Agree and analyze"));
+    await act(async () => {});
+
+    expect(mockAcceptAiProcessingConsent).toHaveBeenCalledTimes(1);
     expect(useCaptureStore.getState().phase).toBe("uploading");
     expect(mockReplace).toHaveBeenCalledWith("/analysis/upload");
   });

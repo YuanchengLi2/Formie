@@ -10,6 +10,11 @@ export type AuthClient = {
     provider: SocialProvider;
     options: { redirectTo: string; skipBrowserRedirect: true };
   }) => Promise<AuthResult>;
+  signInWithIdToken: (input: {
+    provider: "apple";
+    token: string;
+    nonce: string;
+  }) => Promise<AuthResult>;
   exchangeCodeForSession: (code: string) => Promise<AuthResult>;
   signInWithPassword: (input: { email: string; password: string }) => Promise<AuthResult>;
   signInWithOtp: (input: { email: string; options: { shouldCreateUser: true } }) => Promise<AuthResult>;
@@ -44,6 +49,14 @@ export function createAuthService(client: AuthClient, redirectUrl: string) {
     },
     async completeOAuth(code: string) {
       const result = await requireSuccess(client.exchangeCodeForSession(code));
+      return authenticatedSession(result);
+    },
+    async signInWithIdToken(identityToken: string, rawNonce: string) {
+      const result = await requireSuccess(client.signInWithIdToken({
+        provider: "apple",
+        token: identityToken,
+        nonce: rawNonce,
+      }));
       return authenticatedSession(result);
     },
     async signInWithPassword(email: string, password: string) {

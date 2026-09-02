@@ -21,7 +21,7 @@ jest.mock("@/screens/coach", () => {
 });
 
 describe("CoachRoute", () => {
-  it("keeps Coach on a neutral blurred construction workspace", async () => {
+  it("keeps Coach on a truthful static preview", async () => {
     const screen = await render(
       <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
         <CoachRoute />
@@ -29,9 +29,10 @@ describe("CoachRoute", () => {
     );
 
     expect(screen.queryByText("Live coach mounted")).toBeNull();
-    expect(screen.getByText("Under Construction")).toBeTruthy();
+    expect(screen.getByText("Preview — not included in Formie Pro yet")).toBeTruthy();
     expect(screen.queryByText("Coming Soon")).toBeNull();
-    expect(screen.getByTestId("coach-coming-soon-background", { includeHiddenElements: true }).props.pointerEvents).toBe("none");
+    expect(screen.getByTestId("coach-preview-card")).toBeTruthy();
+    expect(screen.queryByRole("button")).toBeNull();
     for (const api of Object.values(mockCoachApi)) expect(api).not.toHaveBeenCalled();
   });
 
@@ -41,9 +42,9 @@ describe("CoachRoute", () => {
         <CoachRoute />
       </SafeAreaProvider>,
     );
-    expect(screen.getByText("Under Construction")).toBeTruthy();
+    expect(screen.getByText("Preview — not included in Formie Pro yet")).toBeTruthy();
     expect(screen.queryByText("Coming Soon")).toBeNull();
-    expect(screen.getByTestId("coach-coming-soon-background", { includeHiddenElements: true }).props.pointerEvents).toBe("none");
+    expect(screen.queryByRole("button")).toBeNull();
     expect(screen.queryByText("Upgrade")).toBeNull();
   });
 });

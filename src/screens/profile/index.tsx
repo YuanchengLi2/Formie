@@ -5,6 +5,7 @@ import { HapticPressable as Pressable, triggerInteractionHaptic } from "@/compon
 
 import { ResponsiveScreen } from "@/components/responsive-screen";
 import { SubscriptionBoundary } from "@/components/subscription-boundary";
+import { SocialProviderButtons } from "@/components/social-provider-buttons";
 import type { BillingBoundaryInput } from "@/features/access/billing-boundary";
 import { defaultCapturePreferences, type CapturePreferences } from "@/features/capture/capture-preferences";
 import type { SubscriptionTestAction } from "@/features/billing/subscription-test-controls";
@@ -16,7 +17,7 @@ const mark = require("../../../assets/images/form-logo-mark.png");
 
 type ProfileSubscription = { plan: string; stateLabel: string; access?: BillingBoundaryInput };
 
-export function ProfileScreen({ displayName = "Formie Athlete", email = null, subscription, capturePreferences = defaultCapturePreferences, onSaveProfile = async () => undefined, onSaveCapturePreferences = async () => undefined, onSendFeedback = () => undefined, onManageSubscription = () => undefined, onSubscriptionBoundary, termsUrl, privacyUrl, retentionUrl, onOpenUrl = async () => undefined, onLogOut = async () => undefined, hasManagedSubscription = false, onDeleteAccount = async () => undefined, showTestControls = false, onTestControl = async () => undefined }: {
+export function ProfileScreen({ displayName = "Formie Athlete", email = null, subscription, capturePreferences = defaultCapturePreferences, onSaveProfile = async () => undefined, onSaveCapturePreferences = async () => undefined, onSendFeedback = () => undefined, onManageSubscription = () => undefined, onSubscriptionBoundary, termsUrl, privacyUrl, privacyChoicesUrl, retentionUrl, aiConsent = null, onWithdrawAiConsent, onOpenUrl = async () => undefined, onLogOut = async () => undefined, hasManagedSubscription = false, onDeleteAccount = async () => undefined, onReauthorizeApple, showTestControls = false, onTestControl = async () => undefined }: {
   displayName?: string;
   email?: string | null;
   subscription?: ProfileSubscription;
@@ -28,11 +29,15 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
   onSubscriptionBoundary?: () => void;
   termsUrl?: string;
   privacyUrl?: string;
+  privacyChoicesUrl?: string;
   retentionUrl?: string;
+  aiConsent?: { current: boolean; version: string | null } | null;
+  onWithdrawAiConsent?: () => Promise<void>;
   onOpenUrl?: (url: string) => Promise<void>;
   onLogOut?: () => Promise<void>;
   hasManagedSubscription?: boolean;
   onDeleteAccount?: () => Promise<void>;
+  onReauthorizeApple?: () => Promise<boolean>;
   showTestControls?: boolean;
   onTestControl?: (action: SubscriptionTestAction) => Promise<void>;
 }) {
@@ -48,8 +53,14 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [appleReauthRequired, setAppleReauthRequired] = useState(false);
+  const aiConsentCurrent = Boolean(aiConsent?.current);
+  const [consentCurrent, setConsentCurrent] = useState(aiConsentCurrent);
+  const [consentBusy, setConsentBusy] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
   useEffect(() => { setName(displayName); setDraftName(displayName); }, [displayName]);
   useEffect(() => setCapture(capturePreferences), [capturePreferences]);
+  useEffect(() => setConsentCurrent(aiConsentCurrent), [aiConsentCurrent]);
 
   const commitCapture = async (next: CapturePreferences) => {
     setCapture(next);
@@ -80,6 +91,7 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
   const openDeleteModal = () => {
     setDeleteConfirmation("");
     setDeleteError(null);
+    setAppleReauthRequired(false);
     setDeleteModalVisible(true);
   };
   const cancelDelete = () => {
@@ -94,10 +106,28 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
     setDeleteError(null);
     try {
       await onDeleteAccount();
-    } catch {
-      setDeleteError("Your account could not be deleted. No deletion was confirmed. Try again.");
+    } catch (deletionError) {
+      if (deletionError && typeof deletionError === "object" && "code" in deletionError && deletionError.code === "APPLE_REAUTH_REQUIRED") {
+        setAppleReauthRequired(true);
+        setDeleteError("Sign in with Apple again so Formie can revoke its authorization, then retry deletion.");
+      } else {
+        setDeleteError("Your account could not be deleted. No deletion was confirmed. Try again.");
+      }
     } finally {
       setDeleteBusy(false);
+    }
+  };
+  const withdrawAiConsent = async () => {
+    if (!onWithdrawAiConsent || consentBusy || !consentCurrent) return;
+    setConsentBusy(true);
+    setConsentError(null);
+    try {
+      await onWithdrawAiConsent();
+      setConsentCurrent(false);
+    } catch {
+      setConsentError("AI processing consent could not be withdrawn. Try again.");
+    } finally {
+      setConsentBusy(false);
     }
   };
 
@@ -140,9 +170,19 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
         <SettingsRow label="Start haptics" detail="Feedback on buttons and onboarding" stack={layout.stackControls}><Switch accessibilityLabel="Start haptics" value={capture.interactionHapticsEnabled} onValueChange={(interactionHapticsEnabled) => { triggerInteractionHaptic("switch", interactionHapticsEnabled); void commitCapture({ ...capture, interactionHapticsEnabled }); }} trackColor={{ false: "#343434", true: colors.goldSoft }} thumbColor={capture.interactionHapticsEnabled ? colors.gold : "#909090"} /></SettingsRow>
       </SettingsGroup>
 
+      <SettingsGroup title="AI Processing">
+        <View style={{ gap: 7 }}>
+          <Text style={styles.rowTitle}>{consentCurrent ? `Agreed · Notice ${aiConsent?.version ?? "current"}` : "Not agreed"}</Text>
+          <Text style={styles.rowDetail}>Withdrawing consent blocks new analyses and retries. It does not delete completed results; use analysis or account deletion separately.</Text>
+          {consentCurrent && onWithdrawAiConsent ? <Pressable accessibilityRole="button" accessibilityLabel="Withdraw AI processing consent" disabled={consentBusy} onPress={() => void withdrawAiConsent()} style={({ pressed }) => [styles.aiConsentButton, { opacity: pressed || consentBusy ? 0.6 : 1 }]}><Text style={styles.aiConsentButtonText}>{consentBusy ? "Withdrawing…" : "Withdraw consent"}</Text></Pressable> : null}
+          {consentError ? <Text accessibilityRole="alert" style={styles.error}>{consentError}</Text> : null}
+        </View>
+      </SettingsGroup>
+
       <SettingsGroup title="Support & Legal">
         <LinkRow label="Help & Support" onPress={onSendFeedback} />
         {privacyUrl ? <><Rule /><LinkRow label="Privacy Policy" onPress={() => void onOpenUrl(privacyUrl)} /></> : null}
+        {privacyChoicesUrl ? <><Rule /><LinkRow label="Privacy Choices" onPress={() => void onOpenUrl(privacyChoicesUrl)} /></> : null}
         {termsUrl ? <><Rule /><LinkRow label="Terms of Use" onPress={() => void onOpenUrl(termsUrl)} /></> : null}
         {retentionUrl ? <><Rule /><LinkRow label="Retention Policy" onPress={() => void onOpenUrl(retentionUrl)} /></> : null}
       </SettingsGroup>
@@ -172,6 +212,7 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
           <Text style={styles.deletePrompt}>Type DELETE to confirm.</Text>
           <TextInput accessibilityLabel="Type DELETE to confirm" autoCapitalize="characters" autoCorrect={false} editable={!deleteBusy} value={deleteConfirmation} onChangeText={setDeleteConfirmation} style={styles.input} />
           {deleteError ? <Text accessibilityRole="alert" style={styles.error}>{deleteError}</Text> : null}
+          {appleReauthRequired && onReauthorizeApple ? <SocialProviderButtons onApple={() => { void onReauthorizeApple().then((completed) => { if (completed) { setAppleReauthRequired(false); setDeleteError("Apple authorization is ready. Retry account deletion."); } }); }} /> : null}
           {hasManagedSubscription ? <Pressable accessibilityRole="button" accessibilityLabel="Manage Apple Subscription" disabled={deleteBusy} onPress={onManageSubscription} style={styles.manageAppleButton}><Text style={styles.manageAppleText}>Manage Apple Subscription</Text></Pressable> : null}
           <Pressable accessibilityRole="button" accessibilityLabel="Delete Account Now" accessibilityState={{ disabled: deleteConfirmation !== "DELETE" || deleteBusy }} disabled={deleteConfirmation !== "DELETE" || deleteBusy} onPress={() => void submitDelete()} style={({ pressed }) => [styles.confirmDeleteButton, { opacity: pressed || deleteConfirmation !== "DELETE" || deleteBusy ? 0.5 : 1 }]}><Text style={styles.confirmDeleteText}>{deleteBusy ? "Deleting Account…" : "Delete Account Now"}</Text></Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Cancel account deletion" disabled={deleteBusy} onPress={cancelDelete} style={styles.modalCancel}><Text style={styles.modalCancelText}>Cancel</Text></Pressable>
@@ -197,4 +238,5 @@ const styles = StyleSheet.create({
   linkRow: { minHeight: 43, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, linkChevron: { color: colors.gold, fontSize: 23 }, resetButton: { minHeight: 50, alignItems: "center", justifyContent: "center", borderRadius: 15, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(18,18,18,0.88)" }, resetText: { color: colors.text, fontSize: 13, fontWeight: "600" }, logoutButton: { minHeight: 50, alignItems: "center", justifyContent: "center", borderRadius: 15, borderWidth: 1, borderColor: colors.danger, backgroundColor: "rgba(20,5,5,0.46)" }, logoutText: { color: colors.danger, fontSize: 13, fontWeight: "700" }, deleteButton: { minHeight: 46, alignItems: "center", justifyContent: "center" }, deleteText: { color: colors.danger, fontSize: 12.5, fontWeight: "700", textDecorationLine: "underline" }, error: { color: colors.danger, fontSize: 11.5, textAlign: "center" }, version: { color: colors.textMuted, fontSize: 10.5, textAlign: "center" },
   modalScrim: { flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.74)" }, modalCard: { borderRadius: 22, padding: 20, gap: 13, backgroundColor: "#171717", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }, modalTitle: { color: colors.text, fontSize: 22, fontWeight: "700" }, modalCopy: { color: colors.textSecondary, fontSize: 12, lineHeight: 18 }, deleteWarning: { color: colors.gold, fontSize: 12, lineHeight: 18 }, deletePrompt: { color: colors.text, fontSize: 12, fontWeight: "700" }, input: { minHeight: 51, paddingHorizontal: 14, borderRadius: 13, borderWidth: 1, borderColor: colors.gold, color: colors.text, backgroundColor: "#0D0D0D", fontSize: 15 }, modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 9 }, modalCancel: { minHeight: 43, paddingHorizontal: 18, alignItems: "center", justifyContent: "center" }, modalCancelText: { color: colors.textSecondary, fontWeight: "600" }, modalSave: { minHeight: 43, paddingHorizontal: 20, justifyContent: "center", borderRadius: 12, backgroundColor: colors.gold }, modalSaveText: { color: "#080808", fontWeight: "800" }, manageAppleButton: { minHeight: 46, alignItems: "center", justifyContent: "center", borderRadius: 13, borderWidth: 1, borderColor: colors.gold }, manageAppleText: { color: colors.gold, fontSize: 13, fontWeight: "700" }, confirmDeleteButton: { minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: colors.danger }, confirmDeleteText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   testCopy: { color: colors.textMuted, fontSize: 10.5, lineHeight: 15 }, testActions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10 }, testButton: { minHeight: 34, justifyContent: "center", paddingHorizontal: 10, borderRadius: 99, borderWidth: 1, borderColor: colors.gold }, testText: { color: colors.gold, fontSize: 10.5, fontWeight: "600" },
+  aiConsentButton: { minHeight: 42, alignSelf: "flex-start", justifyContent: "center", paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.gold }, aiConsentButtonText: { color: colors.gold, fontSize: 11.5, fontWeight: "700" },
 });

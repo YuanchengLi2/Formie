@@ -1,7 +1,13 @@
 import { createAdminClient } from "../_shared/auth.ts";
 import { constantTimeEqual, validateRequestSecurity, withRequestIdentifier } from "../_shared/request-security.ts";
 import { historicalAnalysisArtifactPaths } from "../_shared/legacy-analysis-artifacts.ts";
+import { attemptExternalDeletion } from "../_shared/external-deletion.ts";
+import { executeProviderDeletion } from "../_shared/provider-deletion.ts";
+import { secretEnvelopeKeyFromBase64Url } from "../_shared/secret-envelope.ts";
+import { createGeminiFilesClient } from "../_shared/gemini-files.ts";
 import { cleanupExpiredAnalysesHandler, type RetentionCandidate } from "./handler.ts";
+
+function required(name: string): string { const value = Deno.env.get(name)?.trim() ?? ""; if (!value) throw new Error(`${name}_MISSING`); return value; }
 
 function requireScheduledRequest(request: Request): Promise<void> {
   const authorization = request.headers.get("Authorization");
@@ -19,6 +25,8 @@ Deno.serve(async (request) => {
   const security = await validateRequestSecurity(request, { methods: ["POST"], authentication: "webhook", maxBodyBytes: 4_096, allowBrowserOrigin: false });
   if (security) return security;
   const admin = createAdminClient();
+  const envelopeKey = secretEnvelopeKeyFromBase64Url(required("APPLE_TOKEN_ENCRYPTION_KEY"));
+  const gemini = createGeminiFilesClient({ apiKey: required("GEMINI_API_KEY") });
   const response = await cleanupExpiredAnalysesHandler(request, {
     authenticate: requireScheduledRequest,
     findEligible: async (now) => {
@@ -34,7 +42,7 @@ Deno.serve(async (request) => {
         const cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1_000).toISOString();
         const { data: sessions, error: sessionError } = await admin
           .from("analysis_sessions")
-          .select("id,user_id,video_path,analysis_video_path,created_at")
+          .select("id,user_id,video_path,analysis_video_path,gemini_file_name,created_at")
           .eq("user_id", profile.user_id)
           .gte("created_at", profile.retention_effective_at)
           .lte("created_at", cutoff)
@@ -59,12 +67,14 @@ Deno.serve(async (request) => {
         for (const session of sessions) {
           candidates.push({
             id: session.id,
+            userId: session.user_id,
             videoPath: session.video_path,
             analysisVideoPath: session.analysis_video_path,
             artifactPaths: [
               ...(poseBySession.get(session.id) ?? []),
               ...historicalAnalysisArtifactPaths(session.user_id, session.id),
             ],
+            geminiFileName: session.gemini_file_name,
           });
         }
       }
@@ -74,6 +84,11 @@ Deno.serve(async (request) => {
       const { error } = await admin.storage.from("analysis-videos").remove(paths);
       if (error) throw error;
     },
+    deleteGeminiFile: (fileName, userId) => attemptExternalDeletion({ provider: "gemini", operation: "delete_file", payload: { fileName } }, {
+      encryptionKey: envelopeKey,
+      execute: (current) => executeProviderDeletion(current, { revokeApple: async () => undefined, deleteGeminiFile: (name) => gemini.deleteFile(name), deleteRevenueCatCustomer: async () => undefined }),
+      enqueue: async (job) => { const { error } = await admin.from("external_deletion_jobs").upsert({ user_id: userId, provider: job.provider, operation: job.operation, encrypted_payload: job.encryptedPayload, fingerprint: job.fingerprint, status: "pending", next_retry_at: new Date().toISOString(), updated_at: new Date().toISOString() }, { onConflict: "provider,operation,fingerprint" }); if (error) throw error; },
+    }),
     deleteSession: async (sessionId) => {
       const { error } = await admin.from("analysis_sessions").delete().eq("id", sessionId);
       if (error) throw error;

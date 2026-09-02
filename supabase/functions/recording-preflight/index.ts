@@ -1,9 +1,11 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
+import { requireCurrentAiEligibility } from "../_shared/ai-eligibility.ts";
 import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import {
   buildImageGenerateContentRequest,
   createGenerateContentClient,
 } from "../_shared/gemini-generate.ts";
+import { geminiGovernanceFromEnvironment } from "../_shared/gemini-governance.ts";
 import {
   recordingPreflightHandler,
 } from "./handler.ts";
@@ -22,8 +24,10 @@ import {
 } from "./visibility-requirements.ts";
 
 const MODEL = Deno.env.get("RECORDING_PREFLIGHT_MODEL") ?? "gemini-3.1-flash-lite";
+const governance = geminiGovernanceFromEnvironment((name) => Deno.env.get(name));
 const generation = createGenerateContentClient({
   apiKey: Deno.env.get("GEMINI_API_KEY") ?? "",
+  governance,
 });
 
 Deno.serve(async (request) => {
@@ -31,7 +35,11 @@ Deno.serve(async (request) => {
   if (security) return security;
   const admin = createAdminClient();
   const response = await recordingPreflightHandler(request, {
-    authenticate: (incoming) => requireUserId(incoming, admin),
+    authenticate: async (incoming) => {
+      const userId = await requireUserId(incoming, admin);
+      await requireCurrentAiEligibility(admin, userId);
+      return userId;
+    },
     resolveVisibilityRequirements: ({ catalogExerciseId, exerciseName }) =>
       resolveVisibilityRequirements({
         catalogExerciseId,

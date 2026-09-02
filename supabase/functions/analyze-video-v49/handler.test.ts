@@ -1,4 +1,19 @@
 import { analyzeVideoV49Handler } from "./handler";
+import { AiEligibilityError } from "../_shared/ai-eligibility";
+
+it("returns AI_CONSENT_REQUIRED before loading or executing a run", async () => {
+  const loadRun = jest.fn();
+  const execute = jest.fn();
+  const response = await analyzeVideoV49Handler(new Request("https://example.test", { method: "POST", body: JSON.stringify({ sessionId: "session-1" }) }), {
+    authenticate: async () => { throw new AiEligibilityError("AI_CONSENT_REQUIRED"); },
+    loadRun,
+    execute,
+  });
+  expect(response.status).toBe(403);
+  await expect(response.json()).resolves.toMatchObject({ code: "AI_CONSENT_REQUIRED" });
+  expect(loadRun).not.toHaveBeenCalled();
+  expect(execute).not.toHaveBeenCalled();
+});
 
 it("rejects a caller-supplied shadow run without shadow authorization", async () => {
   const response = await analyzeVideoV49Handler(new Request("https://example.test", { method: "POST", body: JSON.stringify({ sessionId: "session-1", runId: "shadow-1" }) }), {

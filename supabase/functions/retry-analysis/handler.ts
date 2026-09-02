@@ -25,6 +25,7 @@ export type RetryAnalysisDependencies = {
   primaryV49Enabled: boolean;
   authenticate: (request: Request) => Promise<void>;
   findDueSessions: (now: Date, limit: number) => Promise<RetryAnalysisSession[]>;
+  eligibleForAi: (userId: string) => Promise<boolean>;
   invokeAnalysis: (session: RetryAnalysisSession) => Promise<number>;
   now?: () => Date;
 };
@@ -44,8 +45,12 @@ export async function retryAnalysisHandler(
   try {
     await dependencies.authenticate(request);
     const now = dependencies.now?.() ?? new Date();
-    const sessions = (await dependencies.findDueSessions(now, 25))
+    const candidates = (await dependencies.findDueSessions(now, 25))
       .filter((session) => canAutomaticallyRetry(session, now));
+    const sessions: RetryAnalysisSession[] = [];
+    for (const session of candidates) {
+      if (await dependencies.eligibleForAi(session.userId)) sessions.push(session);
+    }
     let succeeded = 0;
     let failed = 0;
     for (const session of sessions) {

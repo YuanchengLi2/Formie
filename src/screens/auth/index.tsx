@@ -10,8 +10,8 @@ export function AuthLoadingScreen({ message = "Loading Formie…" }: { message?:
   return <View style={styles.loading}><StatusBar hidden /><ActivityIndicator color={theme.colors.gold} /><Text style={styles.detail}>{message}</Text></View>;
 }
 
-export function SocialLoginScreen({ onOAuth, onEmailPassword, onCreateAccount, onBack, onOpenTerms, onOpenPrivacy, busyProvider, error, notice }: {
-  onOAuth: (provider: "apple") => void;
+export function SocialLoginScreen({ onApple, onEmailPassword, onCreateAccount, onBack, onOpenTerms, onOpenPrivacy, busyProvider, error, notice }: {
+  onApple: () => void;
   onEmailPassword?: () => void;
   onCreateAccount: () => void;
   onBack?: () => void;
@@ -21,7 +21,7 @@ export function SocialLoginScreen({ onOAuth, onEmailPassword, onCreateAccount, o
   error?: string | null;
   notice?: string | null;
 }) {
-  return <AccountAccessScreen mode="login" onOAuth={onOAuth} onEmailPassword={onEmailPassword} onCreateAccount={onCreateAccount} onBack={onBack} onOpenTerms={onOpenTerms} onOpenPrivacy={onOpenPrivacy} busyProvider={busyProvider} error={error} notice={notice} />;
+  return <AccountAccessScreen mode="login" onApple={onApple} onEmailPassword={onEmailPassword} onCreateAccount={onCreateAccount} onBack={onBack} onOpenTerms={onOpenTerms} onOpenPrivacy={onOpenPrivacy} busyProvider={busyProvider} error={error} notice={notice} />;
 }
 
 export function AccessRecoveryScreen({ message, onRetry }: { message: string; onRetry: () => void }) {

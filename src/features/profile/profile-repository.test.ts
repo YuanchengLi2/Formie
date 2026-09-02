@@ -11,6 +11,13 @@ import {
 } from "./profile-repository";
 
 describe("profile repository", () => {
+  it("rejects an onboarding draft that cannot create an adult account", () => {
+    expect(() => createInitialProfileRow(user(), {
+      ...initialOnboardingAnswers,
+      ageYears: 17,
+    })).toThrow("18 or older");
+  });
+
   it("builds one completed owner row from the approved onboarding answers", () => {
     const row = (createInitialProfileRow as unknown as (user: User, answers: unknown) => UserProfileRow)(user(), {
       ...initialOnboardingAnswers,

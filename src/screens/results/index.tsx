@@ -8,6 +8,7 @@ import { FullRecording } from "@/components/full-recording";
 import { MuscleFocusFigure } from "@/components/muscle-focus-figure";
 import { MovementScoreCard } from "@/components/movement-score-card";
 import { resolveExerciseMuscleFocus } from "@/features/analysis/exercise-muscle-focus";
+import type { TutorialVideo } from "@/features/analysis/api";
 import { deriveObservedIssueRegions } from "@/features/analysis/issue-regions";
 import { getResultPresentation } from "@/features/analysis/presentation";
 import { resolvePlaybackWindow, sourceToClipMs, type PlaybackWindow } from "@/features/analysis/playback-window";
@@ -29,7 +30,8 @@ type ResultsScreenProps = {
   onReanalyze?: () => void;
   reanalyzing?: boolean;
   reanalysisError?: string | null;
-  exampleState?: "loading" | "ready" | "error";
+  tutorial?: TutorialVideo | null;
+  exampleState?: "loading" | "ready" | "empty" | "error";
   onWatchExample?: () => void;
   onRateAnalysis?: (helpful: boolean) => void;
   analysisRating?: boolean | null;
@@ -100,7 +102,7 @@ function declaredAmountLabel(result: AnalysisResult): string | null {
     : `${amount.value} reps${amount.countScope === "per_side" ? " per side" : ""}`;
 }
 
-export function ResultsScreen({ result, videoUrl = null, durationMs = null, playbackWindow = null, onRecordAnother, onAskCoach = () => undefined, onReanalyze, reanalyzing = false, reanalysisError = null, exampleState = "loading", onWatchExample, onRateAnalysis, analysisRating = null, ratingPending = false, ratingError = null }: ResultsScreenProps) {
+export function ResultsScreen({ result, videoUrl = null, durationMs = null, playbackWindow = null, onRecordAnother, onAskCoach = () => undefined, onReanalyze, reanalyzing = false, reanalysisError = null, tutorial = null, exampleState = "loading", onWatchExample, onRateAnalysis, analysisRating = null, ratingPending = false, ratingError = null }: ResultsScreenProps) {
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const layout = getPhoneLayoutProfile({ ...window, insets });
@@ -293,11 +295,25 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
       {presentation.comparison ? <View style={{ gap: spacing.sm, padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.gold }}><Text selectable style={[typography.caption, { color: colors.gold }]}>SINCE YOUR LAST SET</Text><Text selectable style={[typography.body, { color: colors.text }]}>{presentation.comparison.summary}</Text></View> : null}
 
       <View testID="result-actions" style={{ flexDirection: layout.stackControls ? "column" : "row", borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
-        <Pressable accessibilityRole="button" onPress={onAskCoach} style={{ flex: 1, minHeight: 72, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.md }}><Text style={[typography.body, { color: colors.text, textAlign: "center" }]}>Ask Formie Coach</Text></Pressable>
-        <View style={layout.stackControls ? { height: 1, backgroundColor: colors.border } : { width: 1, backgroundColor: colors.border }} />
-        <Pressable accessibilityRole="button" accessibilityState={{ disabled: exampleState === "loading" }} disabled={exampleState === "loading"} onPress={onWatchExample} style={{ flex: 1, minHeight: 72, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.md }}>
-          <Text style={[typography.body, { color: exampleState === "error" ? colors.textMuted : colors.gold, textAlign: "center" }]}>{exampleState === "loading" ? "Loading Example…" : exampleState === "error" ? "Retry Example" : "Watch Example"}</Text>
-        </Pressable>
+        <Pressable accessibilityRole="button" onPress={onAskCoach} style={{ flex: 1, minHeight: 72, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.md }}><Text style={[typography.body, { color: colors.text, textAlign: "center" }]}>Coach Preview</Text></Pressable>
+        {exampleState !== "empty" ? <>
+          <View style={layout.stackControls ? { height: 1, backgroundColor: colors.border } : { width: 1, backgroundColor: colors.border }} />
+          <Pressable
+            accessibilityLabel={exampleState === "ready" && tutorial ? `Play ${tutorial.title} on YouTube` : undefined}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: exampleState === "loading" }}
+            disabled={exampleState === "loading"}
+            onPress={onWatchExample}
+            style={{ flex: 1, minHeight: tutorial && exampleState === "ready" ? 96 : 72, alignItems: "center", justifyContent: "center", gap: 2, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }}
+          >
+            {tutorial && exampleState === "ready" ? <>
+              <Text style={[typography.caption, { color: "#FF4E45", fontWeight: "800", letterSpacing: 0.4 }]}>YouTube</Text>
+              <Text numberOfLines={1} style={[typography.label, { color: colors.text, textAlign: "center" }]}>{tutorial.title}</Text>
+              <Text numberOfLines={1} style={[typography.caption, { color: colors.textSecondary, textAlign: "center" }]}>{tutorial.channel}</Text>
+              <Text style={[typography.caption, { color: colors.gold, fontWeight: "700", textAlign: "center" }]}>Watch on YouTube</Text>
+            </> : <Text style={[typography.body, { color: exampleState === "error" ? colors.textMuted : colors.gold, textAlign: "center" }]}>{exampleState === "loading" ? "Finding YouTube tutorial…" : "Retry YouTube tutorial"}</Text>}
+          </Pressable>
+        </> : null}
       </View>
 
       {onRateAnalysis && analysisRating === null && !feedbackDismissed ? <View testID="analysis-feedback" style={{ gap: spacing.md, alignItems: "center", padding: spacing.lg, borderRadius: radii.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface }}>

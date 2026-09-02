@@ -1,4 +1,5 @@
 import { parseSetDeclaration, type SetDeclaration } from "../_shared/set-declaration.ts";
+import { aiEligibilityErrorResponse } from "../_shared/ai-eligibility.ts";
 
 export type ReanalysisResetOutcome = "ready" | "not_found" | "video_missing" | "video_too_long" | "busy" | "declaration_required";
 
@@ -67,6 +68,8 @@ export async function reanalyzeVideoHandler(request: Request, dependencies: Rean
       throw error;
     }
   } catch (error) {
+    const eligibility = aiEligibilityErrorResponse(error);
+    if (eligibility) return eligibility;
     if (error instanceof Error && error.message === "UNAUTHORIZED") return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);
     if (error instanceof Error && error.message === "INVALID_EXERCISE") return json({ message: "Selected exercise is unavailable", code: "INVALID_EXERCISE" }, 400);
     if (error && typeof error === "object" && "code" in error && String((error as { code?: unknown }).code).startsWith("ANALYSIS_")) return json({ message: error instanceof Error ? error.message : "Analysis access is unavailable", code: String((error as { code?: unknown }).code) }, 402);

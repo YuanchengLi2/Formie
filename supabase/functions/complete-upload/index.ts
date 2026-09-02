@@ -1,4 +1,5 @@
 import { createAdminClient, requireUserId } from "../_shared/auth.ts";
+import { requireCurrentAiEligibility } from "../_shared/ai-eligibility.ts";
 import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { completeUploadHandler } from "./handler.ts";
 
@@ -7,7 +8,11 @@ Deno.serve(async (request) => {
   if (security) return security;
   const admin = createAdminClient();
   const response = await completeUploadHandler(request, {
-    authenticate: (incoming) => requireUserId(incoming, admin),
+    authenticate: async (incoming) => {
+      const userId = await requireUserId(incoming, admin);
+      await requireCurrentAiEligibility(admin, userId);
+      return userId;
+    },
     findSession: async (sessionId, userId) => {
       const { data, error } = await admin.from("analysis_sessions").select("id,video_path").eq("id", sessionId).eq("user_id", userId).maybeSingle();
       if (error) throw error;

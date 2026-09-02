@@ -8,6 +8,7 @@ import { queryClient } from "@/lib/query-client";
 import { supabase } from "@/lib/supabase";
 
 import { parseAuthCallbackUrl } from "./auth-callback";
+import { AppleSignInError, signInWithApple as performAppleSignIn } from "./apple-authentication";
 import { createAuthService, type AuthClient, type SocialProvider } from "./auth-service";
 import { authSnapshotFromSession, classifyRemoteUserValidationError, withRemoteValidationDeadline } from "./auth-session";
 import { deriveAuthPhase, type AuthPhase } from "./auth-state";
@@ -23,6 +24,7 @@ type AuthContextValue = {
   error: string | null;
   signingIn: SocialProvider | null;
   emailBusy: "sending" | "verifying" | "password" | null;
+  signInWithApple: () => Promise<boolean>;
   signInWithProvider: (provider: SocialProvider) => Promise<boolean>;
   completeOAuthCode: (code: string) => Promise<boolean>;
   signInWithPassword: (email: string, password: string) => Promise<boolean>;
@@ -59,11 +61,39 @@ function friendlyEmailError(error: unknown): string {
   return message || "Email sign-in could not be completed. Try again.";
 }
 
+function friendlyAppleError(error: unknown): string {
+  if (error instanceof AppleSignInError) {
+    if (error.code === "CANCELLED") return "Apple sign-in was closed before it finished. Please try again.";
+    if (error.code === "NONCE_MISMATCH") return "Apple sign-in could not verify its security nonce. Please try again.";
+    if (error.code === "IDENTITY_TOKEN_FAILED") return "Apple's identity token could not be verified. Please try again.";
+    if (error.code === "TOKEN_EXCHANGE_FAILED") return "Apple's authorization code could not be exchanged. Please try again.";
+    if (error.code === "TOKEN_CUSTODY_FAILED") return "Apple sign-in could not be secured for account deletion. Please try again.";
+    if (error.code === "MISSING_AUTHORIZATION_CODE" || error.code === "MISSING_IDENTITY_TOKEN") {
+      return "Apple did not return the credentials Formie needs. Please try again.";
+    }
+  }
+  return friendlyOAuthError(error);
+}
+
 function friendlyPasswordError(error: unknown): string {
   const message = error instanceof Error ? error.message : typeof error === "object" && error && "message" in error ? String(error.message) : "";
   if (/invalid login credentials|email not confirmed/i.test(message)) return "The email or password is incorrect.";
   if (/network|fetch/i.test(message)) return "Check your connection and try signing in again.";
   return message || "Email and password sign-in could not be completed. Try again.";
+}
+
+async function edgeFunctionErrorCode(data: unknown, error: unknown): Promise<string | null> {
+  if (data && typeof data === "object" && "code" in data && typeof data.code === "string") return data.code;
+  const context = error && typeof error === "object" && "context" in error ? error.context : null;
+  if (context instanceof Response) {
+    try {
+      const payload = await context.clone().json() as Record<string, unknown>;
+      return typeof payload.code === "string" ? payload.code : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -183,6 +213,41 @@ export function AuthProvider({ children }: PropsWithChildren) {
     emailBusy,
     sessionExitReason,
     completeOAuthCode,
+    async signInWithApple() {
+      if (signingIn || emailBusy) return false;
+      setSigningIn("apple");
+      setError(null);
+      try {
+        const returnedSession = await performAppleSignIn({
+          signInWithIdToken: (identityToken, rawNonce) => service.signInWithIdToken(identityToken, rawNonce),
+          storeAuthorization: async (authorizationCode) => {
+            const result = await supabase.functions.invoke("apple-authorization", {
+              method: "POST",
+              body: { authorizationCode },
+            });
+            if (result.error) {
+              const code = await edgeFunctionErrorCode(result.data, result.error);
+              throw Object.assign(result.error, code ? { code } : {});
+            }
+            if (result.data?.stored !== true) throw new Error("Apple authorization custody was not confirmed.");
+            return { stored: true };
+          },
+          saveFullName: async (name) => {
+            const result = await supabase.auth.updateUser({ data: { full_name: name } });
+            if (result.error) throw result.error;
+          },
+          signOut: () => service.logOut(),
+        }) as Session;
+        setSession(returnedSession);
+        setSessionExitReason(null);
+        return true;
+      } catch (failure) {
+        setError(friendlyAppleError(failure));
+        return false;
+      } finally {
+        setSigningIn(null);
+      }
+    },
     async signInWithProvider(provider) {
       if (signingIn) return false;
       setSigningIn(provider);

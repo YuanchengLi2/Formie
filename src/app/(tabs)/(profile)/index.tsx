@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Linking } from "react-native";
 import { type Href, useRouter } from "expo-router";
 
@@ -13,6 +13,8 @@ import { useAccess, useBillingSurfaceRefresh } from "@/features/access/access-pr
 import { createSubscriptionPresentation } from "@/features/billing/subscription-management-presentation";
 import { runSubscriptionTestControl } from "@/features/billing/subscription-test-controls";
 import { deleteAccount } from "@/features/account-deletion/api";
+import { currentAiProcessingConsent, isCurrentAiProcessingConsent, revokeAiProcessingConsent, type AiConsentClient } from "@/features/privacy/ai-consent";
+import { supabase } from "@/lib/supabase";
 
 export default function ProfileRoute() {
   const auth = useAuth();
@@ -24,6 +26,7 @@ export default function ProfileRoute() {
   const capture = useCapturePreferences((state) => state.preferences);
   const hydrateCapture = useCapturePreferences((state) => state.hydrate);
   const updateCapture = useCapturePreferences((state) => state.update);
+  const [aiConsent, setAiConsent] = useState<{ current: boolean; version: string | null } | null>(null);
   useBillingSurfaceRefresh();
   const subscriptionPresentation = createSubscriptionPresentation(access.access);
   const hasManagedSubscription = Boolean(access.access.store)
@@ -40,6 +43,17 @@ export default function ProfileRoute() {
   useEffect(() => {
     void hydrateCapture();
   }, [hydrateCapture]);
+  useEffect(() => {
+    let active = true;
+    void currentAiProcessingConsent(supabase as unknown as AiConsentClient)
+      .then((consent) => {
+        if (active) setAiConsent({ current: isCurrentAiProcessingConsent(consent), version: consent?.version ?? null });
+      })
+      .catch(() => {
+        if (active) setAiConsent({ current: false, version: null });
+      });
+    return () => { active = false; };
+  }, [auth.user?.id]);
   return (
     <>
       <ProfileScreen
@@ -71,7 +85,13 @@ export default function ProfileRoute() {
       }}
       termsUrl={legal?.termsUrl}
       privacyUrl={legal?.privacyUrl}
+      privacyChoicesUrl={legal?.privacyChoicesUrl}
       retentionUrl={legal?.retentionUrl}
+      aiConsent={aiConsent}
+      onWithdrawAiConsent={async () => {
+        await revokeAiProcessingConsent(supabase as unknown as AiConsentClient);
+        setAiConsent((current) => ({ current: false, version: current?.version ?? null }));
+      }}
       onOpenUrl={async (url) => {
         await Linking.openURL(url);
       }}
@@ -85,13 +105,19 @@ export default function ProfileRoute() {
         const accessToken = auth.session?.access_token;
         if (!accessToken) throw new Error("Sign in again before deleting your account.");
 
-        await deleteAccount({ accessToken });
+        await billing.prepareAccountDeletion();
+        try {
+          await deleteAccount({ accessToken });
+        } catch (error) {
+          await billing.restoreAfterFailedAccountDeletion().catch(() => undefined);
+          throw error;
+        }
 
-        await billing.logOut().catch(() => undefined);
         await onboarding.markLoggedOut();
         await auth.logOut("user");
         router.replace("/login?accountDeleted=1" as Href);
       }}
+      onReauthorizeApple={auth.signInWithApple}
       />
     </>
   );

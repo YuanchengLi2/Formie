@@ -122,9 +122,21 @@ function result(): AnalysisResult {
 }
 
 function renderResults(onRecordAnother = jest.fn(), value = result()) {
+  const tutorial = {
+    source: "youtube_data_api_v3" as const,
+    videoId: "abcdefghijk",
+    url: "https://www.youtube.com/watch?v=abcdefghijk",
+    title: "Bodyweight Squat Tutorial",
+    channel: "Trusted Coach",
+    channelId: "channel-1",
+    thumbnailUrl: "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg",
+    durationSeconds: 360,
+    verifiedAt: "2026-09-01T12:00:00.000Z",
+    eligibilityVersion: "youtube-tutorial-v1",
+  };
   return render(
     <SafeAreaProvider initialMetrics={{ frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, right: 0, bottom: 34, left: 0 } }}>
-      <ResultsScreen result={value} videoUrl="https://storage.example/private-set.mp4" durationMs={12_000} playbackWindow={{ sourceStartMs: 500, sourceEndMs: 10_000 }} onRecordAnother={onRecordAnother} exampleState="ready" onWatchExample={jest.fn()} />
+      <ResultsScreen result={value} videoUrl="https://storage.example/private-set.mp4" durationMs={12_000} playbackWindow={{ sourceStartMs: 500, sourceEndMs: 10_000 }} onRecordAnother={onRecordAnother} tutorial={tutorial} exampleState="ready" onWatchExample={jest.fn()} />
     </SafeAreaProvider>,
   );
 }
@@ -211,8 +223,10 @@ describe("ResultsScreen", () => {
     expect(screen.queryByText("Eight complete repetitions were visible from setup through the final reset.")).toBeNull();
     expect(screen.queryByText("The handle endpoint shortened during the final two repetitions.")).toBeNull();
     expect(screen.queryByText("Match the earlier handle endpoint while keeping both shoulders level.")).toBeNull();
-    expect(screen.getByText("Ask Formie Coach")).toBeTruthy();
-    expect(screen.getByText("Watch Example")).toBeTruthy();
+    expect(screen.getByText("Coach Preview")).toBeTruthy();
+    expect(screen.getByText("Watch on YouTube")).toBeTruthy();
+    expect(screen.getByText("Bodyweight Squat Tutorial")).toBeTruthy();
+    expect(screen.getByText("Trusted Coach")).toBeTruthy();
     expect(screen.queryByLabelText("FORM")).toBeNull();
     expect(screen.queryByText("Camera visibility note")).toBeNull();
     expect(screen.queryByText("Objective breakdown from your recording")).toBeNull();
@@ -641,7 +655,7 @@ describe("ResultsScreen", () => {
     expect(screen.getAllByText("Start the next rep with both shoulders level.").length).toBeGreaterThan(0);
     expect(screen.queryByText(/premium run/i)).toBeNull();
     expect(screen.queryByText(/tokens/)).toBeNull();
-    expect(screen.getByText("Ask Formie Coach")).toBeTruthy();
+    expect(screen.getByText("Coach Preview")).toBeTruthy();
     expect(screen.queryByLabelText(/Coaching point:/)).toBeNull();
     expect(screen.queryByLabelText(/AI focus:/)).toBeNull();
     expect(screen.queryByText(/^Rep \d+$/)).toBeNull();
@@ -706,7 +720,7 @@ describe("ResultsScreen", () => {
         <ResultsScreen result={result()} onRecordAnother={jest.fn()} exampleState="loading" />
       </SafeAreaProvider>,
     );
-    expect(loading.getByText("Loading Example…")).toBeDisabled();
+    expect(loading.getByText("Finding YouTube tutorial…")).toBeDisabled();
 
     const retry = jest.fn();
     const failed = await render(
@@ -714,17 +728,40 @@ describe("ResultsScreen", () => {
         <ResultsScreen result={result()} onRecordAnother={jest.fn()} exampleState="error" onWatchExample={retry} />
       </SafeAreaProvider>,
     );
-    await fireEvent.press(failed.getByText("Retry Example"));
+    await fireEvent.press(failed.getByText("Retry YouTube tutorial"));
     expect(retry).toHaveBeenCalledTimes(1);
 
     const watch = jest.fn();
+    const tutorial = {
+      source: "youtube_data_api_v3" as const,
+      videoId: "abcdefghijk",
+      url: "https://www.youtube.com/watch?v=abcdefghijk",
+      title: "Bodyweight Squat Tutorial",
+      channel: "Trusted Coach",
+      channelId: "channel-1",
+      thumbnailUrl: "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg",
+      durationSeconds: 360,
+      verifiedAt: "2026-09-01T12:00:00.000Z",
+      eligibilityVersion: "youtube-tutorial-v1",
+    };
     const ready = await render(
       <SafeAreaProvider initialMetrics={metrics}>
-        <ResultsScreen result={result()} onRecordAnother={jest.fn()} exampleState="ready" onWatchExample={watch} />
+        <ResultsScreen result={result()} onRecordAnother={jest.fn()} tutorial={tutorial} exampleState="ready" onWatchExample={watch} />
       </SafeAreaProvider>,
     );
-    await fireEvent.press(ready.getByText("Watch Example"));
+    expect(ready.getByText("YouTube")).toBeTruthy();
+    expect(ready.getByText("Bodyweight Squat Tutorial")).toBeTruthy();
+    expect(ready.getByText("Trusted Coach")).toBeTruthy();
+    await fireEvent.press(ready.getByText("Watch on YouTube"));
     expect(watch).toHaveBeenCalledTimes(1);
+
+    const empty = await render(
+      <SafeAreaProvider initialMetrics={metrics}>
+        <ResultsScreen result={result()} onRecordAnother={jest.fn()} exampleState="empty" />
+      </SafeAreaProvider>,
+    );
+    expect(empty.queryByText("Retry YouTube tutorial")).toBeNull();
+    expect(empty.queryByText("Watch on YouTube")).toBeNull();
   });
 
   it("makes record another set the dominant result action", async () => {

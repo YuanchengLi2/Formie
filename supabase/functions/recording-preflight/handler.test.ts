@@ -1,4 +1,5 @@
 import { recordingPreflightHandler, type RecordingPreflightDependencies } from "./handler";
+import { AiEligibilityError } from "../_shared/ai-eligibility";
 
 const frames = Array.from({ length: 24 }, (_, index) => ({
   timeMs: 200 + index * 400,
@@ -73,6 +74,17 @@ function dependencies(overrides: Partial<RecordingPreflightDependencies> = {}): 
 }
 
 describe("recordingPreflightHandler", () => {
+  it("does not send frames to Gemini before current AI consent", async () => {
+    const deps = dependencies({ authenticate: jest.fn(async () => { throw new AiEligibilityError("AI_CONSENT_REQUIRED"); }) });
+    const response = await recordingPreflightHandler(new Request("https://example.test/recording-preflight", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer user-jwt" },
+      body: JSON.stringify({ frames, durationMs: 10_000, exerciseName: "Goblet Squat", catalogExerciseId: 4 }),
+    }), deps);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ code: "AI_CONSENT_REQUIRED" });
+    expect(deps.inspectFrames).not.toHaveBeenCalled();
+  });
   it("keeps every recording uploadable and returns camera issues as advisory guidance", async () => {
     const response = await recordingPreflightHandler(new Request("https://example.test/recording-preflight", {
       method: "POST",

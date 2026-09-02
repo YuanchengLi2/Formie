@@ -21,13 +21,16 @@ const guide = {
   safety: ["Keep the supporting surface from sliding."],
   cameraPlacement: ["Side view", "Hip height", "Full body visible"],
   tutorial: {
+    source: "youtube_data_api_v3" as const,
     videoId: "dQw4w9WgXcQ",
     url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
     title: "One-arm dumbbell row tutorial",
     channel: "Trusted Coach",
-    whyChosen: "Shows setup and the full movement clearly.",
+    channelId: "channel-1",
     thumbnailUrl: "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
-    searchAttributionHtml: null,
+    durationSeconds: 360,
+    verifiedAt: "2026-09-01T12:00:00.000Z",
+    eligibilityVersion: "youtube-tutorial-v1",
   },
 };
 
@@ -72,6 +75,8 @@ describe("ExerciseGuideScreen", () => {
     expect(onOpenSpaceHelp).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText("Continue to Camera")).toBeTruthy();
     expect(screen.getByLabelText("Play One-arm dumbbell row tutorial on YouTube")).toBeTruthy();
+    expect(screen.getByText("YouTube")).toBeTruthy();
+    expect(screen.getByText("Watch on YouTube")).toBeTruthy();
     expect(screen.getByTestId("exercise-guide-tabs").props.style).toEqual(expect.objectContaining({ minHeight: 44 }));
     expect(StyleSheet.flatten(screen.getByTestId("exercise-guide-steps").props.style)).toMatchObject({ gap: 16 });
     expect(StyleSheet.flatten(screen.getByTestId("exercise-guide-steps").props.style)).not.toHaveProperty("borderWidth");

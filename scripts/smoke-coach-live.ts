@@ -3,6 +3,7 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { createCoachThread, sendCoachMessage } from "../src/features/coach/api.ts";
 import { createGeminiFilesClient } from "../supabase/functions/_shared/gemini-files.ts";
+import { geminiGovernanceFromEnvironment } from "../supabase/functions/_shared/gemini-governance.ts";
 
 const required = (name: string) => {
   const value = process.env[name]?.trim();
@@ -19,7 +20,8 @@ async function main() {
   const geminiKey = required("GEMINI_API_KEY");
   const admin = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const userClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const files = createGeminiFilesClient({ apiKey: geminiKey });
+  const governance = geminiGovernanceFromEnvironment((name) => process.env[name]);
+  const files = createGeminiFilesClient({ apiKey: geminiKey, governance });
   const nonce = crypto.randomUUID();
   const email = `coach-smoke-${nonce}@example.invalid`;
   const password = `Sm0ke-${nonce}!`;

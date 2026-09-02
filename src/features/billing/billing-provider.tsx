@@ -33,6 +33,8 @@ export type BillingContextValue = {
   restore: () => Promise<boolean>;
   manageSubscription: () => Promise<void>;
   logOut: () => Promise<void>;
+  prepareAccountDeletion: () => Promise<void>;
+  restoreAfterFailedAccountDeletion: () => Promise<void>;
 };
 
 const BillingContext = createContext<BillingContextValue | null>(null);
@@ -68,6 +70,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
   const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
   const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
   const [entitlementResolution, setEntitlementResolution] = useState<EntitlementResolution>("idle");
+  const [deletionListenerGeneration, setDeletionListenerGeneration] = useState(0);
   const previousAccessStatus = useRef<string | null>(null);
   const reconciliationGeneration = useRef(0);
   const purchaseOperation = useRef<string | null>(null);
@@ -360,6 +363,18 @@ export function BillingProvider({ children }: PropsWithChildren) {
     setError(null);
     setRestoreMessage(null);
   }, []);
+  const prepareAccountDeletion = useCallback(async () => {
+    if (!authenticatedUserId) throw new Error("Sign in again before deleting your account.");
+    reconciliationGeneration.current += 1;
+    purchaseOperation.current = null;
+    await purchasesClient.prepareForAccountDeletion(authenticatedUserId);
+    setDeletionListenerGeneration((value) => value + 1);
+  }, [authenticatedUserId]);
+  const restoreAfterFailedAccountDeletion = useCallback(async () => {
+    if (!authenticatedUserId) return;
+    await purchasesClient.restoreAfterFailedAccountDeletion(authenticatedUserId);
+    setDeletionListenerGeneration((value) => value + 1);
+  }, [authenticatedUserId]);
 
   useEffect(() => {
     reconciliationGeneration.current += 1;
@@ -394,7 +409,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
       setSubscription(customerInfo.subscription);
       void syncAccess(customerInfo).then((result) => finishPassiveReconciliation(result.value, Boolean(offering))).catch(() => undefined);
     });
-  }, [authenticatedUserId, finishPassiveReconciliation, offering, syncAccess]);
+  }, [authenticatedUserId, deletionListenerGeneration, finishPassiveReconciliation, offering, syncAccess]);
 
   useEffect(() => {
     if (accessStatus === "active" && (state === "sync_required" || state === "reconciling")) {
@@ -431,7 +446,9 @@ export function BillingProvider({ children }: PropsWithChildren) {
     restore,
     manageSubscription,
     logOut,
-  }), [entitlementResolution, error, load, logOut, manageSubscription, offering, plans, purchase, restore, restoreMessage, retryPurchaseSync, state, subscription]);
+    prepareAccountDeletion,
+    restoreAfterFailedAccountDeletion,
+  }), [entitlementResolution, error, load, logOut, manageSubscription, offering, plans, prepareAccountDeletion, purchase, restore, restoreAfterFailedAccountDeletion, restoreMessage, retryPurchaseSync, state, subscription]);
 
   return <BillingContext value={value}>{children}</BillingContext>;
 }

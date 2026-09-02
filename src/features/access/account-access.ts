@@ -1,6 +1,11 @@
 import type { AccessStatus } from "./types";
 
 export type AnalysisEntry = "record" | "analysis_pending" | "quota_exhausted" | "purchase" | "renewal_pending" | "unavailable";
+export type AccountEligibility = "eligible" | "age_restricted";
+
+export function resolveAccountEligibility(ageYears: number | null | undefined): AccountEligibility {
+  return Number.isInteger(ageYears) && Number(ageYears) >= 18 ? "eligible" : "age_restricted";
+}
 
 export function formatAnalysisEntryLabel(entry: AnalysisEntry, lifecycleState: AccessStatus["lifecycleState"], remaining: number | null): string {
   if (entry === "purchase") return "Purchase";

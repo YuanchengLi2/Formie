@@ -1,13 +1,16 @@
 import { exerciseTutorialHandler, type ExerciseTutorialDependencies } from "./handler";
 
 const tutorial = {
+  source: "youtube_data_api_v3" as const,
   videoId: "abcdefghijk",
   url: "https://www.youtube.com/watch?v=abcdefghijk",
   title: "How to Hammer Curl",
   channel: "Trusted Coach",
-  whyChosen: "Clear setup, execution, and common mistakes.",
+  channelId: "channel-1",
   thumbnailUrl: "https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg",
-  searchAttributionHtml: null,
+  durationSeconds: 360,
+  verifiedAt: "2026-09-01T12:00:00.000Z",
+  eligibilityVersion: "youtube-tutorial-v1",
 };
 
 function request() {
@@ -21,36 +24,26 @@ function request() {
 function dependencies(overrides: Partial<ExerciseTutorialDependencies> = {}): ExerciseTutorialDependencies {
   return {
     authenticate: jest.fn(async () => "user-1"),
-    loadSession: jest.fn(async () => ({ id: "session-1", status: "complete", label: "Hammer Curl", tutorial: null })),
-    findTutorial: jest.fn(async () => tutorial),
-    saveTutorial: jest.fn(async () => undefined),
+    loadSession: jest.fn(async () => ({ id: "session-1", status: "complete", catalogExerciseId: 42, canonicalLabel: "Hammer Curl" })),
+    resolveTutorial: jest.fn(async () => tutorial),
     ...overrides,
   };
 }
 
 describe("exerciseTutorialHandler", () => {
-  it("searches once after a completed exercise analysis and caches the verified video", async () => {
+  it("resolves a revalidated global tutorial for a completed catalog exercise", async () => {
     const deps = dependencies();
     const response = await exerciseTutorialHandler(request(), deps);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ tutorial });
-    expect(deps.findTutorial).toHaveBeenCalledWith("Hammer Curl");
-    expect(deps.saveTutorial).toHaveBeenCalledWith("session-1", tutorial);
-  });
-
-  it("returns a cached tutorial without another AI search", async () => {
-    const deps = dependencies({
-      loadSession: jest.fn(async () => ({ id: "session-1", status: "complete", label: "Hammer Curl", tutorial })),
-    });
-    expect(await (await exerciseTutorialHandler(request(), deps)).json()).toEqual({ tutorial });
-    expect(deps.findTutorial).not.toHaveBeenCalled();
+    expect(deps.resolveTutorial).toHaveBeenCalledWith("Hammer Curl");
   });
 
   it("does not search for an unusable or unidentified recording", async () => {
     const deps = dependencies({
-      loadSession: jest.fn(async () => ({ id: "session-1", status: "unable", label: null, tutorial: null })),
+      loadSession: jest.fn(async () => ({ id: "session-1", status: "unable", catalogExerciseId: null, canonicalLabel: null })),
     });
     expect(await (await exerciseTutorialHandler(request(), deps)).json()).toEqual({ tutorial: null });
-    expect(deps.findTutorial).not.toHaveBeenCalled();
+    expect(deps.resolveTutorial).not.toHaveBeenCalled();
   });
 });

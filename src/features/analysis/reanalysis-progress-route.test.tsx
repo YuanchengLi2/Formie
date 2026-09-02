@@ -9,6 +9,7 @@ const mockFindDeviceVideo = jest.fn();
 const mockReanalyzeAnalysis = jest.fn();
 const mockRefetch = jest.fn();
 const mockSetDeclarationProps = jest.fn();
+let mockConsentCurrent = true;
 const declaration: SetDeclaration = {
   exercise: { source: "custom", catalogExerciseId: null, label: "Dumbbell Skull Crusher" },
   amount: { kind: "reps", value: 10, countScope: "total" },
@@ -64,6 +65,12 @@ jest.mock("@/features/analysis/api", () => ({
   reanalyzeAnalysis: (...args: unknown[]) => mockReanalyzeAnalysis(...args),
 }));
 jest.mock("@/features/auth/access-token", () => ({ getAccessToken: jest.fn(async () => "token") }));
+jest.mock("@/features/privacy/ai-consent", () => ({
+  currentAiProcessingConsent: jest.fn(async () => mockConsentCurrent ? ({ version: "current" }) : null),
+  isCurrentAiProcessingConsent: (consent: unknown) => Boolean(consent),
+  acceptAiProcessingConsent: jest.fn(async () => undefined),
+}));
+jest.mock("@/lib/supabase", () => ({ supabase: {} }));
 jest.mock("@/features/progress/history-cache", () => ({ invalidateAnalysisHistory: jest.fn() }));
 jest.mock("@/lib/query-client", () => ({
   queryClient: {
@@ -138,6 +145,7 @@ describe("AnalysisProgressRoute declaration authority", () => {
     mockRefetch.mockClear();
     mockRefetch.mockResolvedValue(undefined);
     mockSetDeclarationProps.mockClear();
+    mockConsentCurrent = true;
     mockStatus.data = {
       sessionId: "session-1",
       status: "failed",
@@ -182,6 +190,16 @@ describe("AnalysisProgressRoute declaration authority", () => {
     await render(<AnalysisProgressRoute />);
 
     expect(mockReplace).not.toHaveBeenCalledWith("/results/session-1");
+  });
+
+  it("does not retry a failed analysis when AI consent is missing", async () => {
+    mockConsentCurrent = false;
+    const screen = await render(<AnalysisProgressRoute />);
+    await fireEvent.press(screen.getByText("Retry Analysis"));
+    expect(await screen.findByText("Review AI processing")).toBeTruthy();
+    expect(mockReanalyzeAnalysis).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText("Not now"));
+    expect(mockReanalyzeAnalysis).not.toHaveBeenCalled();
   });
 
   it("navigates to results only when a terminal session has its result payload", async () => {

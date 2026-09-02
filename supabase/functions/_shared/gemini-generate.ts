@@ -1,3 +1,5 @@
+import { assertGenerallyAvailableGeminiModel, type GeminiGovernance } from "./gemini-governance.ts";
+
 export type GeminiInputFile = { uri: string; mimeType: string };
 export type GeminiInlineVideo = { kind: "inline"; data: string; mimeType: string };
 export type GeminiVideoInput = GeminiInputFile | GeminiInlineVideo;
@@ -223,12 +225,14 @@ export function parseGenerateContentResponse(payload: Record<string, unknown>) {
   }
 }
 
-export function createGenerateContentClient(input: { apiKey: string; fetcher?: typeof fetch }) {
+export function createGenerateContentClient(input: { apiKey: string; governance: GeminiGovernance; fetcher?: typeof fetch }) {
   if (!input.apiKey) throw new Error("GEMINI_API_KEY is required");
+  if (!input.governance) throw new Error("GEMINI_GOVERNANCE_REQUIRED");
   const fetcher = input.fetcher ?? fetch;
   return {
     async generate(model: string, request: VideoGenerateContentRequest | TextGenerateContentRequest | ImageGenerateContentRequest, options: GenerateContentOptions = {}) {
       if (!model) throw new Error("Gemini model is required");
+      assertGenerallyAvailableGeminiModel(model);
       const timeoutMs = options.timeoutMs ?? 45_000;
       if (!Number.isInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 120_000) throw new Error("Gemini timeout must be between one and 120 seconds");
       const controller = new AbortController();
