@@ -42,7 +42,7 @@ jobs:
       - name: Verify checked-out release commit
         env:
           RELEASE_COMMIT: ${{ inputs.release_commit }}
-        run: test "$(git rev-parse HEAD)" = "${RELEASE_COMMIT,,}"
+        run: test "$(git rev-parse HEAD)" = "$(printf '%s' "$RELEASE_COMMIT" | tr '[:upper:]' '[:lower:]')"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

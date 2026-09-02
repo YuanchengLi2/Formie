@@ -97,5 +97,7 @@ test("TestFlight workflow records signed-archive and Apple processing evidence",
   ]) {
     assert.match(workflow, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+  assert.doesNotMatch(workflow, /\$\{RELEASE_COMMIT,,\}/, "macOS runner Bash must not use Bash 4 lowercase expansion");
+  assert.match(workflow, /tr '\[:upper:\]' '\[:lower:\]'/);
   assert.doesNotMatch(workflow, /eas\s+submit[^\n]+app.?review/i);
 });
