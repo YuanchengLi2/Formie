@@ -64,8 +64,8 @@ jobs:
         working-directory: website
         run: npm ci --no-audit --no-fund
 
-      - name: Run mobile and backend tests
-        run: npm test -- --runInBand
+      - name: Test release-critical app flows
+        run: npm run test:release-critical
 
       - name: Lint mobile app
         run: npm run lint
