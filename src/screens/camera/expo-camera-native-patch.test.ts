@@ -11,6 +11,6 @@ describe("Expo Camera iOS initialization patch", () => {
     expect(patch).toContain("view.initializeCaptureSessionIfNeeded()");
     expect(patch).toContain("private var didInitializeCaptureSession = false");
     expect(patch).toContain("func initializeCaptureSessionIfNeeded()");
-    expect(patch).toMatch(/lifecycleManager\?\.register\(self\)\n\+  \}/);
+    expect(patch).toMatch(/lifecycleManager\?\.register\(self\)\r?\n\+  \}/);
   });
 });
