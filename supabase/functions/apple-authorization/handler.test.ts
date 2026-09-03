@@ -13,6 +13,7 @@ function dependencies(overrides: Partial<AppleAuthorizationDependencies> = {}): 
     authenticate: async () => ({ userId: "user-1", appleSubject: "apple-subject" }),
     hasStoredAuthorization: async () => false,
     exchangeAuthorizationCode: async () => ({ refreshToken: "refresh-token", subject: "apple-subject" }),
+    openAuthorizationReceipt: async () => ({ refreshToken: "receipt-refresh-token", subject: "apple-subject" }),
     encryptRefreshToken: async () => "encrypted-refresh-token",
     storeAuthorization: async () => undefined,
     ...overrides,
@@ -48,6 +49,39 @@ describe("apple authorization handler", () => {
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ code: "APPLE_IDENTITY_REQUIRED" });
     expect(exchangeAuthorizationCode).not.toHaveBeenCalled();
+  });
+
+  it("stores a refresh token carried by a valid short-lived receipt after Supabase links the Apple identity", async () => {
+    const exchangeAuthorizationCode = jest.fn();
+    const openAuthorizationReceipt = jest.fn().mockResolvedValue({ refreshToken: "receipt-refresh-token", subject: "apple-subject" });
+    const encryptRefreshToken = jest.fn().mockResolvedValue("encrypted-refresh-token");
+    const storeAuthorization = jest.fn().mockResolvedValue(undefined);
+
+    const response = await appleAuthorizationHandler(
+      request("POST", { authorizationReceipt: "opaque-receipt" }),
+      dependencies({ exchangeAuthorizationCode, openAuthorizationReceipt, encryptRefreshToken, storeAuthorization }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ stored: true });
+    expect(exchangeAuthorizationCode).not.toHaveBeenCalled();
+    expect(openAuthorizationReceipt).toHaveBeenCalledWith("opaque-receipt");
+    expect(encryptRefreshToken).toHaveBeenCalledWith("receipt-refresh-token");
+  });
+
+  it("rejects a receipt issued for a different Apple subject", async () => {
+    const storeAuthorization = jest.fn();
+    const response = await appleAuthorizationHandler(
+      request("POST", { authorizationReceipt: "opaque-receipt" }),
+      dependencies({
+        openAuthorizationReceipt: jest.fn().mockResolvedValue({ refreshToken: "refresh-token", subject: "different-subject" }),
+        storeAuthorization,
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ code: "APPLE_SUBJECT_MISMATCH" });
+    expect(storeAuthorization).not.toHaveBeenCalled();
   });
 
   it.each([{}, { authorizationCode: "" }, { authorizationCode: "code", extra: true }])("rejects malformed code bodies", async (body) => {

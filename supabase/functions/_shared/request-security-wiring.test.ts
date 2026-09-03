@@ -32,6 +32,7 @@ describe("edge request security wiring", () => {
     "analysis-status",
     "analyze-video",
     "analyze-video-v49",
+    "apple-token-exchange",
     "cancel-analysis",
     "coach-chat",
     "complete-upload",

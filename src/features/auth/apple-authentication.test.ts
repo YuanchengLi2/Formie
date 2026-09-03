@@ -24,31 +24,51 @@ describe("native Apple authentication", () => {
     });
     const signInWithIdToken = jest.fn().mockResolvedValue({ user: { id: "apple-user" } });
     const storeAuthorization = jest.fn().mockResolvedValue({ stored: true });
+    const exchangeAuthorizationCode = jest.fn();
     const saveFullName = jest.fn().mockResolvedValue(undefined);
 
-    await expect(signInWithApple({ signInWithIdToken, storeAuthorization, saveFullName, ...nativeDependencies })).resolves.toEqual({ user: { id: "apple-user" } });
+    await expect(signInWithApple({ signInWithIdToken, storeAuthorization, exchangeAuthorizationCode, saveFullName, ...nativeDependencies })).resolves.toEqual({ user: { id: "apple-user" } });
 
     expect(mockDigestStringAsync).toHaveBeenCalledWith("SHA-256", "AAEC_f7_");
     expect(mockSignInAsync).toHaveBeenCalledWith(expect.objectContaining({ nonce: "hashed-nonce" }));
     expect(signInWithIdToken).toHaveBeenCalledWith("identity-token", "AAEC_f7_");
-    expect(storeAuthorization).toHaveBeenCalledWith("authorization-code");
+    expect(storeAuthorization).toHaveBeenCalledWith({ authorizationCode: "authorization-code" });
+    expect(exchangeAuthorizationCode).not.toHaveBeenCalled();
     expect(saveFullName).toHaveBeenCalledWith("Formie Reviewer");
   });
 
-  it.each([
-    [{ identityToken: null, authorizationCode: "code" }, "MISSING_IDENTITY_TOKEN"],
-    [{ identityToken: "token", authorizationCode: null }, "MISSING_AUTHORIZATION_CODE"],
-  ] as const)("fails closed when Apple omits required credential material", async (credential, code) => {
-    mockSignInAsync.mockResolvedValue(credential);
-    const signOut = jest.fn().mockResolvedValue(undefined);
+  it("exchanges Apple's authorization code when the native credential omits its nullable identity token", async () => {
+    mockSignInAsync.mockResolvedValue({ identityToken: null, authorizationCode: "authorization-code", fullName: null });
+    const signInWithIdToken = jest.fn().mockResolvedValue({ user: { id: "apple-user" } });
+    const exchangeAuthorizationCode = jest.fn().mockResolvedValue({
+      identityToken: "server-identity-token",
+      authorizationReceipt: "authorization-receipt",
+    });
+    const storeAuthorization = jest.fn().mockResolvedValue({ stored: true });
+
+    await expect(signInWithApple({
+      signInWithIdToken,
+      exchangeAuthorizationCode,
+      storeAuthorization,
+      saveFullName: jest.fn(),
+      ...nativeDependencies,
+    })).resolves.toEqual({ user: { id: "apple-user" } });
+
+    expect(exchangeAuthorizationCode).toHaveBeenCalledWith("authorization-code", "hashed-nonce");
+    expect(signInWithIdToken).toHaveBeenCalledWith("server-identity-token", "AAEC_f7_");
+    expect(storeAuthorization).toHaveBeenCalledWith({ authorizationReceipt: "authorization-receipt" });
+  });
+
+  it("fails closed when Apple omits both usable identity-token paths", async () => {
+    mockSignInAsync.mockResolvedValue({ identityToken: null, authorizationCode: null });
 
     await expect(signInWithApple({
       signInWithIdToken: jest.fn(),
+      exchangeAuthorizationCode: jest.fn(),
       storeAuthorization: jest.fn(),
       saveFullName: jest.fn(),
-      signOut,
       ...nativeDependencies,
-    })).rejects.toMatchObject({ code });
+    })).rejects.toMatchObject({ code: "MISSING_AUTHORIZATION_CODE" });
   });
 
   it("ends the local session when server-side revocation custody fails", async () => {
@@ -57,6 +77,7 @@ describe("native Apple authentication", () => {
 
     await expect(signInWithApple({
       signInWithIdToken: jest.fn().mockResolvedValue({ user: { id: "apple-user" } }),
+      exchangeAuthorizationCode: jest.fn(),
       storeAuthorization: jest.fn().mockRejectedValue(new Error("function unavailable")),
       saveFullName: jest.fn(),
       signOut,
@@ -71,6 +92,7 @@ describe("native Apple authentication", () => {
 
     await expect(signInWithApple({
       signInWithIdToken: jest.fn().mockRejectedValue(new Error("Nonce mismatch")),
+      exchangeAuthorizationCode: jest.fn(),
       storeAuthorization,
       saveFullName: jest.fn(),
       ...nativeDependencies,
@@ -85,6 +107,7 @@ describe("native Apple authentication", () => {
 
     await expect(signInWithApple({
       signInWithIdToken: jest.fn().mockResolvedValue({ user: { id: "apple-user" } }),
+      exchangeAuthorizationCode: jest.fn(),
       storeAuthorization: jest.fn().mockRejectedValue(exchangeError),
       saveFullName: jest.fn(),
       signOut,

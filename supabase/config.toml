@@ -149,6 +149,9 @@ verify_jwt = true
 [functions.apple-authorization]
 verify_jwt = true
 
+[functions.apple-token-exchange]
+verify_jwt = false
+
 [functions.apple-auth-events]
 verify_jwt = false
 

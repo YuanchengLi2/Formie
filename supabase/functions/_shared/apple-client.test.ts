@@ -51,7 +51,7 @@ describe("Apple OAuth client", () => {
       clientId: "app.form.coach",
       clientSecret: "client-secret",
       fetcher,
-    })).resolves.toEqual({ refreshToken: "refresh-token", subject: "apple-subject" });
+    })).resolves.toEqual({ refreshToken: "refresh-token", identityToken: idToken, subject: "apple-subject" });
     expect(fetcher).toHaveBeenCalledWith("https://appleid.apple.com/auth/token", expect.objectContaining({
       method: "POST",
       body: expect.stringContaining("grant_type=authorization_code"),
@@ -63,6 +63,53 @@ describe("Apple OAuth client", () => {
     const fetcher = jest.fn().mockResolvedValue(new Response(JSON.stringify({ refresh_token: "refresh-token", id_token: idToken }), { status: 200 }));
 
     await expect(exchangeAppleAuthorizationCode({ authorizationCode: "code", expectedSubject: "apple-subject", clientId: "client", clientSecret: "secret", fetcher })).rejects.toThrow("APPLE_SUBJECT_MISMATCH");
+  });
+
+  it("validates the Apple token claims and nonce for a pre-authentication exchange", async () => {
+    const now = new Date("2026-09-02T12:00:00.000Z");
+    const idToken = `x.${Buffer.from(JSON.stringify({
+      iss: "https://appleid.apple.com",
+      aud: "app.form.coach",
+      exp: Math.floor(now.getTime() / 1000) + 300,
+      sub: "apple-subject",
+      nonce: "hashed-nonce",
+    })).toString("base64url")}.x`;
+    const fetcher = jest.fn().mockResolvedValue(new Response(JSON.stringify({ refresh_token: "refresh-token", id_token: idToken }), { status: 200 }));
+
+    await expect(exchangeAppleAuthorizationCode({
+      authorizationCode: "authorization-code",
+      expectedNonce: "hashed-nonce",
+      clientId: "app.form.coach",
+      clientSecret: "client-secret",
+      fetcher,
+      now,
+    })).resolves.toEqual({ refreshToken: "refresh-token", identityToken: idToken, subject: "apple-subject" });
+  });
+
+  it.each([
+    ["wrong-nonce", "https://appleid.apple.com", "app.form.coach", 300],
+    ["hashed-nonce", "https://attacker.example", "app.form.coach", 300],
+    ["hashed-nonce", "https://appleid.apple.com", "other.client", 300],
+    ["hashed-nonce", "https://appleid.apple.com", "app.form.coach", -1],
+  ])("rejects invalid claims during a nonce-bound exchange", async (nonce, issuer, audience, expiresIn) => {
+    const now = new Date("2026-09-02T12:00:00.000Z");
+    const idToken = `x.${Buffer.from(JSON.stringify({
+      iss: issuer,
+      aud: audience,
+      exp: Math.floor(now.getTime() / 1000) + expiresIn,
+      sub: "apple-subject",
+      nonce,
+    })).toString("base64url")}.x`;
+    const fetcher = jest.fn().mockResolvedValue(new Response(JSON.stringify({ refresh_token: "refresh-token", id_token: idToken }), { status: 200 }));
+
+    await expect(exchangeAppleAuthorizationCode({
+      authorizationCode: "authorization-code",
+      expectedNonce: "hashed-nonce",
+      clientId: "app.form.coach",
+      clientSecret: "client-secret",
+      fetcher,
+      now,
+    })).rejects.toThrow("APPLE_IDENTITY_TOKEN_INVALID");
   });
 
   it("revokes refresh tokens without placing them in the URL", async () => {

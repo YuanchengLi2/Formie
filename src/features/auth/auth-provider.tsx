@@ -220,10 +220,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
       try {
         const returnedSession = await performAppleSignIn({
           signInWithIdToken: (identityToken, rawNonce) => service.signInWithIdToken(identityToken, rawNonce),
-          storeAuthorization: async (authorizationCode) => {
+          exchangeAuthorizationCode: async (authorizationCode, nonce) => {
+            const result = await supabase.functions.invoke("apple-token-exchange", {
+              method: "POST",
+              body: { authorizationCode, nonce },
+            });
+            if (result.error) {
+              const code = await edgeFunctionErrorCode(result.data, result.error);
+              throw Object.assign(result.error, code ? { code } : {});
+            }
+            const identityToken = typeof result.data?.identityToken === "string" ? result.data.identityToken : "";
+            const authorizationReceipt = typeof result.data?.authorizationReceipt === "string" ? result.data.authorizationReceipt : "";
+            if (!identityToken || !authorizationReceipt) throw new Error("Apple token exchange returned an invalid response.");
+            return { identityToken, authorizationReceipt };
+          },
+          storeAuthorization: async (authorization) => {
             const result = await supabase.functions.invoke("apple-authorization", {
               method: "POST",
-              body: { authorizationCode },
+              body: authorization,
             });
             if (result.error) {
               const code = await edgeFunctionErrorCode(result.data, result.error);

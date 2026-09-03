@@ -42,6 +42,7 @@ function fullName(credential: AppleAuthentication.AppleAuthenticationCredential)
 
 export async function signInWithApple({
   signInWithIdToken,
+  exchangeAuthorizationCode,
   storeAuthorization,
   saveFullName,
   signOut = async () => undefined,
@@ -50,7 +51,11 @@ export async function signInWithApple({
   digestString = Crypto.digestStringAsync,
 }: {
   signInWithIdToken: (identityToken: string, rawNonce: string) => Promise<unknown>;
-  storeAuthorization: (authorizationCode: string) => Promise<{ stored: true }>;
+  exchangeAuthorizationCode: (authorizationCode: string, nonce: string) => Promise<{
+    identityToken: string;
+    authorizationReceipt: string;
+  }>;
+  storeAuthorization: (authorization: { authorizationCode: string } | { authorizationReceipt: string }) => Promise<{ stored: true }>;
   saveFullName: (name: string) => Promise<void>;
   signOut?: () => Promise<void>;
   requestCredential?: typeof AppleAuthentication.signInAsync;
@@ -75,16 +80,28 @@ export async function signInWithApple({
     throw error;
   }
 
-  if (!credential.identityToken) {
-    throw new AppleSignInError("MISSING_IDENTITY_TOKEN", "Apple did not return an identity token.");
-  }
   if (!credential.authorizationCode) {
     throw new AppleSignInError("MISSING_AUTHORIZATION_CODE", "Apple did not return an authorization code.");
   }
 
+  let identityToken = credential.identityToken;
+  let authorization: { authorizationCode: string } | { authorizationReceipt: string } = {
+    authorizationCode: credential.authorizationCode,
+  };
+  if (!identityToken) {
+    try {
+      const exchanged = await exchangeAuthorizationCode(credential.authorizationCode, nonce);
+      if (!exchanged.identityToken || !exchanged.authorizationReceipt) throw new Error("APPLE_TOKEN_EXCHANGE_INVALID");
+      identityToken = exchanged.identityToken;
+      authorization = { authorizationReceipt: exchanged.authorizationReceipt };
+    } catch (error) {
+      throw new AppleSignInError("TOKEN_EXCHANGE_FAILED", "Apple's authorization code could not be exchanged. Please try again.", { cause: error });
+    }
+  }
+
   let session: unknown;
   try {
-    session = await signInWithIdToken(credential.identityToken, rawNonce);
+    session = await signInWithIdToken(identityToken, rawNonce);
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (/nonce/i.test(message)) {
@@ -93,7 +110,7 @@ export async function signInWithApple({
     throw new AppleSignInError("IDENTITY_TOKEN_FAILED", "Apple's identity token could not be verified. Please try again.", { cause: error });
   }
   try {
-    await storeAuthorization(credential.authorizationCode);
+    await storeAuthorization(authorization);
   } catch (error) {
     await signOut().catch(() => undefined);
     const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";

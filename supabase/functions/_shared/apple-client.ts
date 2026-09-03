@@ -67,16 +67,21 @@ function formBody(values: Record<string, string>): string {
 export async function exchangeAppleAuthorizationCode({
   authorizationCode,
   expectedSubject,
+  expectedNonce,
   clientId,
   clientSecret,
   fetcher = fetch,
+  now = new Date(),
 }: {
   authorizationCode: string;
-  expectedSubject: string;
+  expectedSubject?: string;
+  expectedNonce?: string;
   clientId: string;
   clientSecret: string;
   fetcher?: typeof fetch;
-}): Promise<{ refreshToken: string; subject: string }> {
+  now?: Date;
+}): Promise<{ refreshToken: string; identityToken: string; subject: string }> {
+  if (!expectedSubject && !expectedNonce) throw new Error("APPLE_TOKEN_EXCHANGE_BINDING_REQUIRED");
   const response = await fetcher("https://appleid.apple.com/auth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -91,10 +96,28 @@ export async function exchangeAppleAuthorizationCode({
   if (!response.ok) throw new Error("APPLE_TOKEN_EXCHANGE_FAILED");
   const refreshToken = typeof payload.refresh_token === "string" ? payload.refresh_token : "";
   const idToken = typeof payload.id_token === "string" ? payload.id_token : "";
-  const subject = idToken.split(".")[1] ? String(decodeJsonSegment(idToken.split(".")[1]!).sub ?? "") : "";
+  let claims: Record<string, unknown>;
+  try {
+    const payload = idToken.split(".")[1];
+    claims = payload ? decodeJsonSegment(payload) : {};
+  } catch {
+    throw new Error("APPLE_TOKEN_RESPONSE_INVALID");
+  }
+  const subject = String(claims.sub ?? "");
   if (!refreshToken || !subject) throw new Error("APPLE_TOKEN_RESPONSE_INVALID");
-  if (subject !== expectedSubject) throw new Error("APPLE_SUBJECT_MISMATCH");
-  return { refreshToken, subject };
+  if (expectedSubject && subject !== expectedSubject) throw new Error("APPLE_SUBJECT_MISMATCH");
+  if (expectedNonce) {
+    const audience = claims.aud;
+    const audienceMatches = audience === clientId || (Array.isArray(audience) && audience.includes(clientId));
+    const expiresAt = typeof claims.exp === "number" ? claims.exp : 0;
+    if (
+      claims.iss !== "https://appleid.apple.com"
+      || !audienceMatches
+      || expiresAt <= Math.floor(now.getTime() / 1000)
+      || claims.nonce !== expectedNonce
+    ) throw new Error("APPLE_IDENTITY_TOKEN_INVALID");
+  }
+  return { refreshToken, identityToken: idToken, subject };
 }
 
 export async function revokeAppleRefreshToken({

@@ -110,6 +110,28 @@ describe("AuthProvider", () => {
     expect(await screen.findByText("authenticated")).toBeTruthy();
   });
 
+  it("recovers a missing native identity token through the nonce-bound server exchange", async () => {
+    mockAppleSignInAsync.mockResolvedValue({ identityToken: null, authorizationCode: "authorization-code", fullName: null });
+    mockInvoke
+      .mockResolvedValueOnce({ data: { identityToken: "server-identity-token", authorizationReceipt: "opaque-receipt" }, error: null })
+      .mockResolvedValueOnce({ data: { stored: true }, error: null });
+    const screen = await render(<AuthProvider><Probe /></AuthProvider>);
+    expect(await screen.findByText("signed_out")).toBeTruthy();
+
+    await act(async () => fireEvent.press(screen.getByText("Apple")));
+
+    expect(mockInvoke).toHaveBeenNthCalledWith(1, "apple-token-exchange", {
+      method: "POST",
+      body: { authorizationCode: "authorization-code", nonce: "hashed-nonce" },
+    });
+    expect(mockSignInWithIdToken).toHaveBeenCalledWith(expect.objectContaining({ provider: "apple", token: "server-identity-token" }));
+    expect(mockInvoke).toHaveBeenNthCalledWith(2, "apple-authorization", {
+      method: "POST",
+      body: { authorizationReceipt: "opaque-receipt" },
+    });
+    expect(await screen.findByText("authenticated")).toBeTruthy();
+  });
+
   it("shows an authorization-code exchange error distinctly and ends the new session", async () => {
     mockInvoke.mockResolvedValue({ data: { code: "APPLE_TOKEN_EXCHANGE_FAILED" }, error: new Error("Edge Function failed") });
     const screen = await render(<AuthProvider><Probe /></AuthProvider>);

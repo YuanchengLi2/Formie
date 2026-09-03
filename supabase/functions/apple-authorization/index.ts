@@ -1,4 +1,5 @@
 import { createAdminClient } from "../_shared/auth.ts";
+import { openAppleAuthorizationReceipt } from "../_shared/apple-authorization-receipt.ts";
 import { createAppleClientSecret, exchangeAppleAuthorizationCode } from "../_shared/apple-client.ts";
 import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { encryptSecretEnvelope, secretEnvelopeKeyFromBase64Url } from "../_shared/secret-envelope.ts";
@@ -41,6 +42,10 @@ Deno.serve(async (request) => {
       });
       return exchangeAppleAuthorizationCode({ authorizationCode: code, expectedSubject, clientId, clientSecret });
     },
+    openAuthorizationReceipt: (receipt) => openAppleAuthorizationReceipt(
+      receipt,
+      secretEnvelopeKeyFromBase64Url(requiredSecret("APPLE_TOKEN_ENCRYPTION_KEY")),
+    ),
     encryptRefreshToken: (refreshToken) => encryptSecretEnvelope(
       refreshToken,
       secretEnvelopeKeyFromBase64Url(requiredSecret("APPLE_TOKEN_ENCRYPTION_KEY")),
