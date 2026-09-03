@@ -12,6 +12,8 @@ export default function TermsPage() {
       <p>You must be at least 18 years old, legally able to agree to these terms, and provide accurate account information. Keep your credentials secure and use Formie only for lawful personal exercise education.</p>
       <h2>Exercise and AI limitations</h2>
       <p>Formie provides automated educational feedback, not medical diagnosis, treatment, physical therapy, or a substitute for a qualified coach. Analysis may be incomplete, delayed, or wrong. Stop exercising and seek appropriate professional help if you feel pain, dizziness, or other concerning symptoms. You remain responsible for exercise selection, loading, environment, and safety.</p>
+      <h2>AI processing choice</h2>
+      <p>AI form analysis is enabled only after you make a separate affirmative choice during account creation. When enabled, Formie may send the exercise video, exercise declaration, and relevant profile information for an analysis you request to Formie&apos;s servers and the paid Google Gemini API. This choice is separate from accepting these Terms and can be withdrawn for future analyses in Formie Settings.</p>
       <h2>Your content</h2>
       <p>You retain ownership of recordings and messages you submit. You give Formie permission to host and process that content only as needed to provide, secure, support, and improve the service in accordance with the Privacy Policy and your settings.</p>
       <h2>YouTube tutorials</h2>
@@ -21,7 +23,7 @@ export default function TermsPage() {
       <p>Manage your subscription in the Formie app, which opens Apple subscription settings where you can change or cancel it. Deleting your Formie account does not cancel your Apple subscription. Restore Purchases is available in the app for eligible purchases.</p>
       <p>Formie Pro includes 10 analyses in each monthly quota period, and unused analyses do not roll over. Existing provider-managed annual access, if present, remains honored through its verified paid-through date, but an annual plan is not offered as a new in-app purchase.</p>
       <h2>Account deletion</h2>
-      <p>You can permanently delete your account in Formie Settings. Successful deletion removes Formie-controlled user content, subject to limited processor, security, backup, billing, fraud-prevention, and legal retention described in the <a href="/privacy">Privacy Policy</a> and <a href="/retention">Retention Policy</a>. Account deletion does not cancel Apple billing.</p>
+      <p>You can permanently delete your account in Formie Settings without signing in with Apple again. Successful deletion removes Formie-controlled user content, subject to limited processor, security, backup, billing, fraud-prevention, and legal retention described in the <a href="/privacy">Privacy Policy</a> and <a href="/retention">Retention Policy</a>. Account deletion does not cancel Apple billing.</p>
       <h2>Acceptable use</h2>
       <p>Do not misuse the service, probe or bypass security, upload content you lack permission to use, interfere with other users, or use automated output to cause harm.</p>
       <h2>Availability and changes</h2>

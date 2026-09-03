@@ -87,19 +87,22 @@ describe("delete account handler", () => {
     expect(deleteAuthUser).not.toHaveBeenCalled();
   });
 
-  it("requires Apple reauthentication before deleting any local data for a legacy Apple identity", async () => {
+  it("deletes a legacy Apple identity even when no revocation credential was retained", async () => {
     const removeFiles = jest.fn();
     const deleteAuthUser = jest.fn();
+    const cleanupExternal = jest.fn(async () => "complete" as const);
     const response = await deleteAccountHandler(request(), dependencies({
       authenticate: async () => ({ userId: "user-1", appleLinked: true }),
       loadExternalResources: async () => ({ appleLinked: true, encryptedAppleRefreshToken: null, geminiFileNames: [], revenueCatCustomerId: "user-1" }),
+      cleanupExternal,
       removeFiles,
       deleteAuthUser,
     }));
-    expect(response.status).toBe(409);
-    await expect(response.json()).resolves.toMatchObject({ code: "APPLE_REAUTH_REQUIRED", stage: "external" });
-    expect(removeFiles).not.toHaveBeenCalled();
-    expect(deleteAuthUser).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ deleted: true, externalCleanup: "complete" });
+    expect(cleanupExternal).toHaveBeenCalledWith("user-1", expect.objectContaining({ appleLinked: true, encryptedAppleRefreshToken: null }));
+    expect(removeFiles).toHaveBeenCalledTimes(accountStorageBuckets.length);
+    expect(deleteAuthUser).toHaveBeenCalledWith("user-1");
   });
 
   it("truthfully reports queued processor cleanup while completing local account deletion", async () => {

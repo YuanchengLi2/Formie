@@ -285,7 +285,7 @@ describe("post-recording route invariants", () => {
     expect(mockReplace).toHaveBeenCalledWith("/analysis/upload");
   });
 
-  it("transmits nothing until missing AI consent is affirmatively recorded", async () => {
+  it("starts analysis directly because consent is handled before recording", async () => {
     mockCurrentAiProcessingConsent.mockResolvedValue(null);
     useCaptureStore.setState({
       phase: "recorded",
@@ -300,19 +300,12 @@ describe("post-recording route invariants", () => {
     const screen = await renderRoute(<AnalysisSetDetailsRoute />);
     await act(async () => {});
 
-    expect(screen.getByText("analyze-label:Review AI processing")).toBeTruthy();
+    expect(screen.getByText("analyze-label:Analyze this video")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Submit mocked set details"));
 
-    expect(useCaptureStore.getState().phase).toBe("recorded");
-    expect(mockReplace).not.toHaveBeenCalledWith("/analysis/upload");
-    expect(screen.getByText(/paid Google Gemini API/)).toBeTruthy();
-
-    await fireEvent.press(screen.getByLabelText("Agree and analyze"));
-    await act(async () => {});
-
-    expect(mockAcceptAiProcessingConsent).toHaveBeenCalledTimes(1);
     expect(useCaptureStore.getState().phase).toBe("uploading");
     expect(mockReplace).toHaveBeenCalledWith("/analysis/upload");
+    expect(mockAcceptAiProcessingConsent).not.toHaveBeenCalled();
   });
 
   it("returns from Set Details directly to Clip Review", async () => {

@@ -50,7 +50,6 @@ export async function deleteAccountHandler(request: Request, dependencies: Accou
   let externalCleanup: "complete" | "queued";
   try {
     const resources = await dependencies.loadExternalResources(userId, identity.appleLinked);
-    if (resources.appleLinked && !resources.encryptedAppleRefreshToken) return json({ message: "Sign in with Apple again so Formie can revoke authorization before deletion.", code: "APPLE_REAUTH_REQUIRED", stage: "external" }, 409);
     externalCleanup = await dependencies.cleanupExternal(userId, resources);
   } catch {
     return json({ message: "External account data could not be scheduled for deletion. Try again.", code: "EXTERNAL_DELETE_FAILED", stage: "external" }, 500);

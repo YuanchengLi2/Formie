@@ -167,16 +167,13 @@ describe("ProfileScreen", () => {
     await waitFor(() => expect(onDeleteAccount).toHaveBeenCalledTimes(2));
   });
 
-  it("offers the official Apple action when legacy authorization must be refreshed", async () => {
+  it("never requires another Apple sign-in before retrying account deletion", async () => {
     const onDeleteAccount = jest.fn().mockRejectedValue(Object.assign(new Error("reauth"), { code: "APPLE_REAUTH_REQUIRED" }));
-    const onReauthorizeApple = jest.fn().mockResolvedValue(true);
-    const screen = await render(<ProfileScreen onDeleteAccount={onDeleteAccount} onReauthorizeApple={onReauthorizeApple} />);
+    const screen = await render(<ProfileScreen onDeleteAccount={onDeleteAccount} />);
     await fireEvent.press(screen.getByRole("button", { name: "Delete Account" }));
     await fireEvent.changeText(screen.getByLabelText("Type DELETE to confirm"), "DELETE");
     await fireEvent.press(screen.getByRole("button", { name: "Delete Account Now" }));
-    expect(await screen.findByText(/Sign in with Apple again/i)).toBeTruthy();
-    await fireEvent.press(screen.getByTestId("provider-apple"));
-    await waitFor(() => expect(onReauthorizeApple).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText(/Apple authorization is ready/i)).toBeTruthy();
+    expect(await screen.findByText("Your account could not be deleted. No deletion was confirmed. Try again.")).toBeTruthy();
+    expect(screen.queryByTestId("provider-apple")).toBeNull();
   });
 });

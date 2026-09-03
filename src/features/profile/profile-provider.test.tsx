@@ -5,6 +5,7 @@ import { act, fireEvent, render } from "@testing-library/react-native";
 const mockLoadOrCreate = jest.fn();
 const mockSave = jest.fn();
 const mockRecordAcquisition = jest.fn();
+const mockAcceptAiProcessingConsent = jest.fn();
 const mockInvoke = jest.fn();
 const mockAuth = {
   phase: "authenticated",
@@ -30,6 +31,10 @@ jest.mock("@/lib/supabase", () => ({
 
 jest.mock("@/features/onboarding/acquisition-reporting", () => ({
   recordOnboardingAcquisition: (...args: unknown[]) => mockRecordAcquisition(...args),
+}));
+
+jest.mock("@/features/privacy/ai-consent", () => ({
+  acceptAiProcessingConsent: (...args: unknown[]) => mockAcceptAiProcessingConsent(...args),
 }));
 
 jest.mock("./profile-repository", () => {
@@ -100,6 +105,7 @@ describe("ProfileProvider", () => {
     mockOnboarding.status = "complete";
     mockOnboarding.answers = {};
     mockRecordAcquisition.mockResolvedValue("response-1");
+    mockAcceptAiProcessingConsent.mockResolvedValue({ version: "2026-09-01" });
     mockInvoke.mockResolvedValue({ data: { status: "queued" }, error: null });
   });
 
@@ -134,16 +140,28 @@ describe("ProfileProvider", () => {
     expect(await screen.findByText("ready")).toBeTruthy();
   });
 
-  it("durably records acquisition before completing authenticated profile sync", async () => {
+  it("durably records signup AI consent and acquisition before completing authenticated profile sync", async () => {
     mockOnboarding.status = "profile_sync_required";
-    mockOnboarding.answers = { acquisitionSource: "google_search", acquisitionSourceOther: "" };
+    mockOnboarding.answers = { acquisitionSource: "google_search", acquisitionSourceOther: "", acceptedAiProcessing: true };
     mockLoadOrCreate.mockResolvedValue(profile());
     const screen = await render(<ProfileProvider><Probe /></ProfileProvider>);
 
     expect(await screen.findByText("ready")).toBeTruthy();
     expect(mockRecordAcquisition).toHaveBeenCalledWith(expect.anything(), mockOnboarding.answers, expect.any(String));
+    expect(mockAcceptAiProcessingConsent).toHaveBeenCalledWith(expect.anything());
     expect(mockOnboarding.markProfileSynced).toHaveBeenCalled();
-    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(mockAcceptAiProcessingConsent.mock.invocationCallOrder[0]).toBeLessThan(mockOnboarding.markProfileSynced.mock.invocationCallOrder[0]);
+  });
+
+  it("completes profile sync without recording AI consent when the user deferred it", async () => {
+    mockOnboarding.status = "profile_sync_required";
+    mockOnboarding.answers = { acquisitionSource: null, acquisitionSourceOther: "", acceptedAiProcessing: false };
+    mockLoadOrCreate.mockResolvedValue(profile());
+    const screen = await render(<ProfileProvider><Probe /></ProfileProvider>);
+
+    expect(await screen.findByText("ready")).toBeTruthy();
+    expect(mockAcceptAiProcessingConsent).not.toHaveBeenCalled();
+    expect(mockOnboarding.markProfileSynced).toHaveBeenCalled();
   });
 
 });

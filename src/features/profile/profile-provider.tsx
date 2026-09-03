@@ -13,6 +13,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { useOnboarding } from "@/features/onboarding/onboarding-store";
 import { supabase } from "@/lib/supabase";
 import { recordOnboardingAcquisition, type AcquisitionReportingClient } from "@/features/onboarding/acquisition-reporting";
+import { acceptAiProcessingConsent, type AiConsentClient } from "@/features/privacy/ai-consent";
 
 import {
   loadOrCreateUserProfile,
@@ -36,6 +37,7 @@ type ProfileContextValue = {
 const ProfileContext = createContext<ProfileContextValue | null>(null);
 const profileClient = supabase as unknown as UserProfileClient;
 const acquisitionClient = supabase as unknown as AcquisitionReportingClient;
+const aiConsentClient = supabase as unknown as AiConsentClient;
 
 export function ProfileProvider({ children }: PropsWithChildren) {
   const auth = useAuth();
@@ -65,6 +67,7 @@ export function ProfileProvider({ children }: PropsWithChildren) {
       .then(async (nextProfile) => {
         if (!active) return;
         if (answers && nextProfile.onboardingCompleted) {
+          if (answers.acceptedAiProcessing) await acceptAiProcessingConsent(aiConsentClient);
           await recordOnboardingAcquisition(acquisitionClient, answers, Platform.OS);
         }
         if (!active) return;

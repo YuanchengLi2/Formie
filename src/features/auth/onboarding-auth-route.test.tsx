@@ -22,7 +22,7 @@ jest.mock("@/features/auth/legal-config", () => ({ getLegalLinks: () => ({ terms
 jest.mock("@/features/billing/billing-provider", () => ({ useBilling: () => ({ state: "ready", offering: { packages: [{ identifier: "$rc_monthly" }] }, plans: { monthly: { identifier: "$rc_monthly", productIdentifier: "formie_monthly", priceString: "$9.99", title: "Formie Monthly" }, annual: null }, priceString: "$9.99", error: null, restoreMessage: "Purchase restored.", purchase: jest.fn(), restore: mockRestore }) }));
 jest.mock("@/features/onboarding/onboarding-store", () => ({ useOnboarding: () => ({
   status: mockOnboardingStatus,
-  answers: { acceptedPrivacy: true },
+  answers: { acceptedPrivacy: true, acceptedAiProcessing: true },
   setStep: jest.fn(), updateAnswer: jest.fn(), startOAuth: mockStartOAuth, markLoggedOut: jest.fn(), completeAccess: jest.fn(), markAuthenticated: jest.fn(), requireAccount: jest.fn(),
 }) }));
 jest.mock("@/features/profile/profile-provider", () => ({ useProfile: () => ({ status: "idle", error: null, retry: jest.fn() }) }));

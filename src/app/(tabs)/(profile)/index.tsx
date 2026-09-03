@@ -117,7 +117,6 @@ export default function ProfileRoute() {
         await auth.logOut("user");
         router.replace("/login?accountDeleted=1" as Href);
       }}
-      onReauthorizeApple={auth.signInWithApple}
       />
     </>
   );

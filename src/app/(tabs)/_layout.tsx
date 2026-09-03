@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Alert, useWindowDimensions } from "react-native";
 import { Tabs, type Href, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,6 +12,9 @@ import { CoachTabIcon } from "@/components/coach-tab-icon";
 import { ProductionIcon } from "@/components/production-icon";
 import { colors } from "@/theme/colors";
 import { getPhoneLayoutProfile } from "@/theme/responsive";
+import { AiProcessingConsentModal } from "@/components/ai-processing-consent-modal";
+import { acceptAiProcessingConsent, currentAiProcessingConsent, isCurrentAiProcessingConsent, type AiConsentClient } from "@/features/privacy/ai-consent";
+import { supabase } from "@/lib/supabase";
 
 export default function TabsLayout() {
   const router = useRouter();
@@ -30,7 +34,45 @@ export default function TabsLayout() {
         : analysisEntry === "quota_exhausted"
           ? "Record. Monthly analysis allowance used"
           : "Record";
+  const [pendingRecordHref, setPendingRecordHref] = useState<Href | null>(null);
+  const [consentVisible, setConsentVisible] = useState(false);
+  const [consentBusy, setConsentBusy] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
+  const consentClient = supabase as unknown as AiConsentClient;
+  const openRecordFlow = async (href: Href) => {
+    try {
+      const consent = await currentAiProcessingConsent(consentClient);
+      if (isCurrentAiProcessingConsent(consent)) {
+        router.push(href);
+        return;
+      }
+      setPendingRecordHref(href);
+      setConsentError(null);
+      setConsentVisible(true);
+    } catch {
+      setPendingRecordHref(href);
+      setConsentError("AI processing consent could not be loaded. Check your connection and try again.");
+      setConsentVisible(true);
+    }
+  };
+  const agreeAndOpenRecordFlow = async () => {
+    if (!pendingRecordHref || consentBusy) return;
+    setConsentBusy(true);
+    setConsentError(null);
+    try {
+      await acceptAiProcessingConsent(consentClient);
+      const href = pendingRecordHref;
+      setConsentVisible(false);
+      setPendingRecordHref(null);
+      router.push(href);
+    } catch (error) {
+      setConsentError(error instanceof Error ? error.message : "AI processing consent could not be saved. Try again.");
+    } finally {
+      setConsentBusy(false);
+    }
+  };
   return (
+    <>
     <Tabs
       screenListeners={{ tabPress: () => triggerInteractionHaptic("tab") }}
       screenOptions={{
@@ -62,6 +104,10 @@ export default function TabsLayout() {
           tabBarButton: () => <CenterTabButton variant={analysisEntry} label={centerLabel} accessibilityLabel={centerAccessibilityLabel} disabled={analysisEntry === "quota_exhausted"} onPress={() => {
             const href = analysisEntryHref(analysisEntry, access.access.pendingAnalysisSessionId);
             if (href) {
+              if (analysisEntry === "record") {
+                void openRecordFlow(href as Href);
+                return;
+              }
               router.push(href as Href);
               return;
             }
@@ -95,5 +141,18 @@ export default function TabsLayout() {
       <Tabs.Screen name="(progress)" options={{ title: "Progress", tabBarIcon: ({ color }) => <ProductionIcon name="tabProgress" label="Progress" size={26} tintColor={color} /> }} />
       <Tabs.Screen name="(profile)" options={{ title: "Settings", tabBarIcon: ({ color }) => <ProductionIcon name="tabProfile" label="Settings" size={26} tintColor={color} /> }} />
     </Tabs>
+    <AiProcessingConsentModal
+      visible={consentVisible}
+      agreeing={consentBusy}
+      error={consentError}
+      onAgree={() => void agreeAndOpenRecordFlow()}
+      onDismiss={() => {
+        if (consentBusy) return;
+        setConsentVisible(false);
+        setPendingRecordHref(null);
+        setConsentError(null);
+      }}
+    />
+    </>
   );
 }

@@ -183,7 +183,7 @@ describe("ResultsRoute reanalysis confirmation", () => {
     const screen = await render(<ResultsRoute />);
     await fireEvent.press(screen.getByText("Analyze Again"));
     await fireEvent.press(await screen.findByText("Analyze Again"));
-    expect(await screen.findByText("Review AI processing")).toBeTruthy();
+    expect(await screen.findByText("Enable AI form analysis")).toBeTruthy();
     expect(mockMutate).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByLabelText("Not now"));
     expect(mockMutate).not.toHaveBeenCalled();

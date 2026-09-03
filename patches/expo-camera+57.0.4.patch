@@ -1,0 +1,26 @@
+diff --git a/node_modules/expo-camera/ios/CameraViewModule.swift b/node_modules/expo-camera/ios/CameraViewModule.swift
+index cccd73f..1710093 100644
+--- a/node_modules/expo-camera/ios/CameraViewModule.swift
++++ b/node_modules/expo-camera/ios/CameraViewModule.swift
+@@ -76,2 +76,3 @@ public final class CameraViewModule: Module, ScannerResultHandler {
+       OnViewDidUpdateProps { (view: CameraView) in
++        view.initializeCaptureSessionIfNeeded()
+         view.startSessionIfNeeded()
+diff --git a/node_modules/expo-camera/ios/Current/CameraView.swift b/node_modules/expo-camera/ios/Current/CameraView.swift
+index 4692d00..41ae4d0 100644
+--- a/node_modules/expo-camera/ios/Current/CameraView.swift
++++ b/node_modules/expo-camera/ios/Current/CameraView.swift
+@@ -33,2 +33,3 @@ public class CameraView: ExpoView, EXAppLifecycleListener, EXCameraInterface, Ca
+   private var previewRotationObservation: NSKeyValueObservation?
++  private var didInitializeCaptureSession = false
+   private var didStartSession = false
+@@ -184,2 +185,9 @@ public class CameraView: ExpoView, EXAppLifecycleListener, EXCameraInterface, Ca
+     lifecycleManager?.register(self)
++  }
++
++  func initializeCaptureSessionIfNeeded() {
++    guard !didInitializeCaptureSession else {
++      return
++    }
++    didInitializeCaptureSession = true
+     sessionManager.initializeCaptureSessionInput()

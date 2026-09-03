@@ -32,6 +32,7 @@ describe("profile repository", () => {
       customMilestone: "Bench 225 lb",
       acquisitionSource: "instagram",
       acceptedPrivacy: true,
+      acceptedAiProcessing: true,
       marketingOptIn: true,
     });
 
@@ -163,6 +164,7 @@ describe("profile repository", () => {
       customMilestone: "Bench 225 lb",
       acquisitionSource: "youtube" as const,
       acceptedPrivacy: true,
+      acceptedAiProcessing: true,
     };
     const completed = {
       ...createInitialProfileRow(user(), answers),
@@ -198,6 +200,7 @@ describe("profile repository", () => {
       customMilestone: "Improve squat depth",
       acquisitionSource: "friend_trainer_coach" as const,
       acceptedPrivacy: true,
+      acceptedAiProcessing: true,
     };
     const incomplete = profileRow();
     const complete = {

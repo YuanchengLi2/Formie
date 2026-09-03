@@ -38,7 +38,9 @@ test("App Store metadata uses production URLs and gives reviewers complete navig
   assert.match(config.apple.review.notes, /Settings > Delete Account/);
   assert.match(config.apple.review.notes, /Sign in with Apple/);
   assert.match(config.apple.review.notes, /email\/password/i);
-  assert.match(config.apple.review.notes, /Agree and analyze/);
+  assert.match(config.apple.review.notes, /separate AI-processing choice/i);
+  assert.match(config.apple.review.notes, /Analyze this video/);
+  assert.doesNotMatch(config.apple.review.notes, /Agree and analyze|Review AI processing/);
   assert.match(config.apple.review.notes, /YouTube Data API/);
   assert.match(config.apple.review.notes, /Coach Preview.*nonfunctional/is);
   assert.doesNotMatch(config.apple.review.notes, /Apple is the only|credentials (?:are )?above/i);

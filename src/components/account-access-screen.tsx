@@ -21,7 +21,7 @@ function ConsentRow({ label, checked, onPress, children }: { label: string; chec
   </View>;
 }
 
-export function AccountAccessScreen({ mode = "login", onApple, onEmailPassword, onCreateAccount, onBack, onOpenTerms, onOpenPrivacy, onPrivacyConsentChange, onMarketingOptInChange, busyProvider = null, busy = false, error, notice }: {
+export function AccountAccessScreen({ mode = "login", onApple, onEmailPassword, onCreateAccount, onBack, onOpenTerms, onOpenPrivacy, onPrivacyConsentChange, onAiProcessingConsentChange, onMarketingOptInChange, busyProvider = null, busy = false, error, notice }: {
   mode?: AccountAccessMode;
   personalizedMessage?: string;
   onApple: () => void;
@@ -31,6 +31,7 @@ export function AccountAccessScreen({ mode = "login", onApple, onEmailPassword, 
   onOpenTerms?: () => void;
   onOpenPrivacy?: () => void;
   onPrivacyConsentChange?: (accepted: boolean) => void;
+  onAiProcessingConsentChange?: (accepted: boolean) => void;
   onMarketingOptInChange?: (accepted: boolean) => void;
   busyProvider?: SocialProvider | null;
   busy?: boolean;
@@ -40,6 +41,7 @@ export function AccountAccessScreen({ mode = "login", onApple, onEmailPassword, 
   const layout = usePhoneLayoutProfile();
   const compact = layout.compact || layout.short;
   const [legalAccepted, setLegalAccepted] = useState(false);
+  const [aiProcessingAccepted, setAiProcessingAccepted] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const disabled = busy || busyProvider !== null || (mode === "onboarding" && !legalAccepted);
   const title = mode === "onboarding" ? "Save your progress" : "Welcome back";
@@ -63,6 +65,7 @@ export function AccountAccessScreen({ mode = "login", onApple, onEmailPassword, 
       </View>
       {mode === "onboarding" ? <View style={styles.consents}>
         <ConsentRow label="Agree to the Terms of Use and Privacy Policy" checked={legalAccepted} onPress={() => setLegalAccepted((value) => { const next = !value; onPrivacyConsentChange?.(next); return next; })}>{"I agree to Formie's "}<Text accessibilityRole="link" onPress={onOpenTerms} style={styles.link}>Terms of Use</Text> and <Text accessibilityRole="link" onPress={onOpenPrivacy} style={styles.link}>Privacy Policy</Text></ConsentRow>
+        <ConsentRow label="Allow AI processing for form analysis" checked={aiProcessingAccepted} onPress={() => setAiProcessingAccepted((value) => { const next = !value; onAiProcessingConsentChange?.(next); return next; })}>Allow Formie to send my exercise video, exercise details, and relevant profile information to Formie servers and the paid Google Gemini API for form analysis. I can withdraw this later in Settings.</ConsentRow>
         <ConsentRow label="Receive Formie tips and offers" checked={marketingOptIn} onPress={() => setMarketingOptIn((value) => { const next = !value; onMarketingOptInChange?.(next); return next; })}>Send me tips, new features, and personalized offers from Formie.</ConsentRow>
       </View> : null}
     </ResponsiveScreen>

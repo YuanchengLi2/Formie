@@ -62,11 +62,12 @@ export type OnboardingAnswers = {
   acquisitionSource: AcquisitionSource | null;
   acquisitionSourceOther: string;
   acceptedPrivacy: boolean;
+  acceptedAiProcessing: boolean;
   marketingOptIn: boolean;
 };
 
 export type OnboardingState = {
-  schemaVersion: 5;
+  schemaVersion: 6;
   onboardingVersion: "approved-v1";
   ownerUserId: string | null;
   currentStep: OnboardingStep;
@@ -90,11 +91,12 @@ export const initialOnboardingAnswers: OnboardingAnswers = {
   acquisitionSource: null,
   acquisitionSourceOther: "",
   acceptedPrivacy: false,
+  acceptedAiProcessing: false,
   marketingOptIn: false,
 };
 
 export const initialOnboardingState: OnboardingState = {
-  schemaVersion: 5,
+  schemaVersion: 6,
   onboardingVersion: "approved-v1",
   ownerUserId: null,
   currentStep: "welcome",

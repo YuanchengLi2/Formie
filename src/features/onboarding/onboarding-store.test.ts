@@ -25,8 +25,8 @@ describe("approved onboarding state", () => {
 
   it("starts with an unanswered acquisition source", () => {
     expect(initialOnboardingState).toMatchObject({
-      schemaVersion: 5,
-      answers: { acquisitionSource: null, acquisitionSourceOther: "" },
+      schemaVersion: 6,
+      answers: { acquisitionSource: null, acquisitionSourceOther: "", acceptedAiProcessing: false },
     });
   });
 
@@ -39,10 +39,10 @@ describe("approved onboarding state", () => {
     delete legacy.answers.acquisitionSourceOther;
 
     expect(parseOnboardingState(legacy)).toMatchObject({
-      schemaVersion: 5,
+      schemaVersion: 6,
       currentStep: "premium",
       status: "complete",
-      answers: { acquisitionSource: null, acquisitionSourceOther: "" },
+      answers: { acquisitionSource: null, acquisitionSourceOther: "", acceptedAiProcessing: false },
     });
   });
 
@@ -57,7 +57,7 @@ describe("approved onboarding state", () => {
     delete legacy.answers.username;
 
     expect(parseOnboardingState(legacy)).toMatchObject({
-      schemaVersion: 5,
+      schemaVersion: 6,
       currentStep: "create-account",
       status: "profile_sync_required",
     });

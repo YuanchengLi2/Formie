@@ -196,7 +196,7 @@ describe("AnalysisProgressRoute declaration authority", () => {
     mockConsentCurrent = false;
     const screen = await render(<AnalysisProgressRoute />);
     await fireEvent.press(screen.getByText("Retry Analysis"));
-    expect(await screen.findByText("Review AI processing")).toBeTruthy();
+    expect(await screen.findByText("Enable AI form analysis")).toBeTruthy();
     expect(mockReanalyzeAnalysis).not.toHaveBeenCalled();
     await fireEvent.press(screen.getByLabelText("Not now"));
     expect(mockReanalyzeAnalysis).not.toHaveBeenCalled();

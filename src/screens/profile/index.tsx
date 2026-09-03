@@ -5,7 +5,6 @@ import { HapticPressable as Pressable, triggerInteractionHaptic } from "@/compon
 
 import { ResponsiveScreen } from "@/components/responsive-screen";
 import { SubscriptionBoundary } from "@/components/subscription-boundary";
-import { SocialProviderButtons } from "@/components/social-provider-buttons";
 import type { BillingBoundaryInput } from "@/features/access/billing-boundary";
 import { defaultCapturePreferences, type CapturePreferences } from "@/features/capture/capture-preferences";
 import type { SubscriptionTestAction } from "@/features/billing/subscription-test-controls";
@@ -17,7 +16,7 @@ const mark = require("../../../assets/images/form-logo-mark.png");
 
 type ProfileSubscription = { plan: string; stateLabel: string; access?: BillingBoundaryInput };
 
-export function ProfileScreen({ displayName = "Formie Athlete", email = null, subscription, capturePreferences = defaultCapturePreferences, onSaveProfile = async () => undefined, onSaveCapturePreferences = async () => undefined, onSendFeedback = () => undefined, onManageSubscription = () => undefined, onSubscriptionBoundary, termsUrl, privacyUrl, privacyChoicesUrl, retentionUrl, aiConsent = null, onWithdrawAiConsent, onOpenUrl = async () => undefined, onLogOut = async () => undefined, hasManagedSubscription = false, onDeleteAccount = async () => undefined, onReauthorizeApple, showTestControls = false, onTestControl = async () => undefined }: {
+export function ProfileScreen({ displayName = "Formie Athlete", email = null, subscription, capturePreferences = defaultCapturePreferences, onSaveProfile = async () => undefined, onSaveCapturePreferences = async () => undefined, onSendFeedback = () => undefined, onManageSubscription = () => undefined, onSubscriptionBoundary, termsUrl, privacyUrl, privacyChoicesUrl, retentionUrl, aiConsent = null, onWithdrawAiConsent, onOpenUrl = async () => undefined, onLogOut = async () => undefined, hasManagedSubscription = false, onDeleteAccount = async () => undefined, showTestControls = false, onTestControl = async () => undefined }: {
   displayName?: string;
   email?: string | null;
   subscription?: ProfileSubscription;
@@ -37,7 +36,6 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
   onLogOut?: () => Promise<void>;
   hasManagedSubscription?: boolean;
   onDeleteAccount?: () => Promise<void>;
-  onReauthorizeApple?: () => Promise<boolean>;
   showTestControls?: boolean;
   onTestControl?: (action: SubscriptionTestAction) => Promise<void>;
 }) {
@@ -53,7 +51,6 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [appleReauthRequired, setAppleReauthRequired] = useState(false);
   const aiConsentCurrent = Boolean(aiConsent?.current);
   const [consentCurrent, setConsentCurrent] = useState(aiConsentCurrent);
   const [consentBusy, setConsentBusy] = useState(false);
@@ -91,7 +88,6 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
   const openDeleteModal = () => {
     setDeleteConfirmation("");
     setDeleteError(null);
-    setAppleReauthRequired(false);
     setDeleteModalVisible(true);
   };
   const cancelDelete = () => {
@@ -106,13 +102,8 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
     setDeleteError(null);
     try {
       await onDeleteAccount();
-    } catch (deletionError) {
-      if (deletionError && typeof deletionError === "object" && "code" in deletionError && deletionError.code === "APPLE_REAUTH_REQUIRED") {
-        setAppleReauthRequired(true);
-        setDeleteError("Sign in with Apple again so Formie can revoke its authorization, then retry deletion.");
-      } else {
-        setDeleteError("Your account could not be deleted. No deletion was confirmed. Try again.");
-      }
+    } catch {
+      setDeleteError("Your account could not be deleted. No deletion was confirmed. Try again.");
     } finally {
       setDeleteBusy(false);
     }
@@ -212,7 +203,6 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
           <Text style={styles.deletePrompt}>Type DELETE to confirm.</Text>
           <TextInput accessibilityLabel="Type DELETE to confirm" autoCapitalize="characters" autoCorrect={false} editable={!deleteBusy} value={deleteConfirmation} onChangeText={setDeleteConfirmation} style={styles.input} />
           {deleteError ? <Text accessibilityRole="alert" style={styles.error}>{deleteError}</Text> : null}
-          {appleReauthRequired && onReauthorizeApple ? <SocialProviderButtons onApple={() => { void onReauthorizeApple().then((completed) => { if (completed) { setAppleReauthRequired(false); setDeleteError("Apple authorization is ready. Retry account deletion."); } }); }} /> : null}
           {hasManagedSubscription ? <Pressable accessibilityRole="button" accessibilityLabel="Manage Apple Subscription" disabled={deleteBusy} onPress={onManageSubscription} style={styles.manageAppleButton}><Text style={styles.manageAppleText}>Manage Apple Subscription</Text></Pressable> : null}
           <Pressable accessibilityRole="button" accessibilityLabel="Delete Account Now" accessibilityState={{ disabled: deleteConfirmation !== "DELETE" || deleteBusy }} disabled={deleteConfirmation !== "DELETE" || deleteBusy} onPress={() => void submitDelete()} style={({ pressed }) => [styles.confirmDeleteButton, { opacity: pressed || deleteConfirmation !== "DELETE" || deleteBusy ? 0.5 : 1 }]}><Text style={styles.confirmDeleteText}>{deleteBusy ? "Deleting Account…" : "Delete Account Now"}</Text></Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Cancel account deletion" disabled={deleteBusy} onPress={cancelDelete} style={styles.modalCancel}><Text style={styles.modalCancelText}>Cancel</Text></Pressable>

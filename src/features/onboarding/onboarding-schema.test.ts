@@ -23,11 +23,26 @@ describe("approved onboarding schema", () => {
     };
 
     expect(parseOnboardingState(versionFour)).toMatchObject({
-      schemaVersion: 5,
+      schemaVersion: 6,
       currentStep: "create-account",
       status: "profile_sync_required",
+      answers: { acceptedAiProcessing: false },
     });
     expect(parseOnboardingState(versionFour)?.answers).not.toHaveProperty("username");
+  });
+
+  it("requires fresh AI consent when migrating a version-five onboarding draft", () => {
+    const { acceptedAiProcessing: _acceptedAiProcessing, ...answers } = initialOnboardingState.answers;
+    const versionFive = {
+      ...initialOnboardingState,
+      schemaVersion: 5,
+      answers: { ...answers, acceptedPrivacy: true },
+    };
+
+    expect(parseOnboardingState(versionFive)).toMatchObject({
+      schemaVersion: 6,
+      answers: { acceptedPrivacy: true, acceptedAiProcessing: false },
+    });
   });
 
   it("accepts a valid versioned draft and rejects corrupt or out-of-range data", () => {

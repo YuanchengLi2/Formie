@@ -25,7 +25,7 @@ describe("account access screens", () => {
     expect(screen.queryByText("Welcome back. Your coaching history is ready when you are.")).toBeNull();
     expect(screen.queryByText(/Create or restore|profile stays private/i)).toBeNull();
     expect(screen.getByTestId("provider-apple")).toBeTruthy();
-    expect(screen.queryByText(/Google/i)).toBeNull();
+    expect(screen.queryByText(/Continue with Google/i)).toBeNull();
     expect(screen.getByText("Sign in with email")).toBeTruthy();
     expect(screen.getByText("Create New Account")).toBeTruthy();
     expect(screen.getByTestId("account-access-scroll")).toBeTruthy();
@@ -53,7 +53,7 @@ describe("account access screens", () => {
     expect(screen.queryByLabelText("Agree to the Terms of Use")).toBeNull();
     expect(screen.queryByLabelText("Acknowledge the Privacy Policy")).toBeNull();
     expect(screen.getByLabelText("Sign in with email")).toBeTruthy();
-    expect(screen.queryByText(/Google/i)).toBeNull();
+    expect(screen.queryByText(/Continue with Google/i)).toBeNull();
   });
 
   it("announces confirmed account deletion without claiming Apple authorization was revoked", async () => {
@@ -83,7 +83,7 @@ describe("account access screens", () => {
     expect(screen.getByText("Save your progress")).toBeTruthy();
     expect(screen.queryByText(/225 lb bench/)).toBeNull();
     expect(screen.getByTestId("provider-apple")).toBeTruthy();
-    expect(screen.queryByText(/Google/i)).toBeNull();
+    expect(screen.queryByText(/Continue with Google/i)).toBeNull();
     expect(screen.queryByText("Continue with email")).toBeNull();
     expect(screen.queryByText("Create New Account")).toBeNull();
     expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#050505" });

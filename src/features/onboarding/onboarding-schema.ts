@@ -36,14 +36,27 @@ const versionThreeAnswersSchema = legacyAnswersSchema.extend({
   acquisitionSourceOther: z.string().max(80),
 });
 
-const answersSchema = versionThreeAnswersSchema;
+const answersSchema = versionThreeAnswersSchema.extend({
+  acceptedAiProcessing: z.boolean(),
+});
 
 const onboardingStateSchema = z.object({
-  schemaVersion: z.literal(5),
+  schemaVersion: z.literal(6),
   onboardingVersion: z.literal("approved-v1"),
   ownerUserId: z.string().min(1).nullable(),
   currentStep: z.enum(onboardingSteps),
   answers: answersSchema,
+  status: z.enum(["collecting", "account_required", "profile_sync_required", "premium_required", "complete"]),
+  oauthIntent: z.enum(["login", "create_account"]).nullable(),
+  explicitLogoutAt: z.string().nullable(),
+});
+
+const versionFiveOnboardingStateSchema = z.object({
+  schemaVersion: z.literal(5),
+  onboardingVersion: z.literal("approved-v1"),
+  ownerUserId: z.string().min(1).nullable(),
+  currentStep: z.enum(onboardingSteps),
+  answers: versionThreeAnswersSchema,
   status: z.enum(["collecting", "account_required", "profile_sync_required", "premium_required", "complete"]),
   oauthIntent: z.enum(["login", "create_account"]).nullable(),
   explicitLogoutAt: z.string().nullable(),
@@ -93,6 +106,14 @@ const legacyOnboardingStateSchema = z.object({
 export function parseOnboardingState(value: unknown): OnboardingState | null {
   const result = onboardingStateSchema.safeParse(value);
   if (result.success) return result.data;
+  const versionFive = versionFiveOnboardingStateSchema.safeParse(value);
+  if (versionFive.success) {
+    return {
+      ...versionFive.data,
+      schemaVersion: 6,
+      answers: { ...versionFive.data.answers, acceptedAiProcessing: false },
+    };
+  }
   const versionFour = versionFourOnboardingStateSchema.safeParse(value);
   if (versionFour.success) {
     const { username: _username, ...answers } = versionFour.data.answers;
@@ -101,30 +122,32 @@ export function parseOnboardingState(value: unknown): OnboardingState | null {
       || versionFour.data.status === "profile_sync_required";
     return {
       ...versionFour.data,
-      schemaVersion: 5,
+      schemaVersion: 6,
       currentStep: wasUsernameFlow ? "create-account" : versionFour.data.currentStep as OnboardingState["currentStep"],
       status: versionFour.data.status === "username_required" ? "profile_sync_required" : versionFour.data.status,
-      answers,
+      answers: { ...answers, acceptedAiProcessing: false },
     };
   }
   const versionThree = versionThreeOnboardingStateSchema.safeParse(value);
   if (versionThree.success) {
     return {
       ...versionThree.data,
-      schemaVersion: 5,
+      schemaVersion: 6,
       currentStep: versionThree.data.status === "profile_sync_required" ? "create-account" : versionThree.data.currentStep,
+      answers: { ...versionThree.data.answers, acceptedAiProcessing: false },
     };
   }
   const legacy = legacyOnboardingStateSchema.safeParse(value);
   if (!legacy.success) return null;
   return {
     ...legacy.data,
-    schemaVersion: 5,
+    schemaVersion: 6,
     currentStep: legacy.data.status === "profile_sync_required" ? "create-account" : legacy.data.currentStep,
     answers: {
       ...legacy.data.answers,
       acquisitionSource: null,
       acquisitionSourceOther: "",
+      acceptedAiProcessing: false,
     },
   };
 }

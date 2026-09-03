@@ -27,7 +27,8 @@ export async function attemptExternalDeletion(request: ExternalDeletionRequest, 
     await dependencies.execute(request);
     return "complete";
   } catch (error) {
-    if (!(error instanceof ExternalDeletionError) || !error.transient) throw error;
+    if (!(error instanceof ExternalDeletionError)) throw error;
+    if (error.code === "INVALID_DELETION_PAYLOAD" || error.code === "UNSUPPORTED_DELETION_OPERATION") throw error;
     await dependencies.enqueue(await prepareExternalDeletionJob(request, dependencies.encryptionKey));
     return "queued";
   }

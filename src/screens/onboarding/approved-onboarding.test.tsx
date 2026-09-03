@@ -279,13 +279,16 @@ describe("approved onboarding screen", () => {
     expect(screen.getByTestId("onboarding-scroll-body")).toBeTruthy();
   });
 
-  it("requires legal consent but keeps marketing optional before saving with a provider", async () => {
+  it("requires legal consent while keeping the separate AI and marketing choices optional", async () => {
     const { screen, props } = await renderStep("create-account");
-    expect(screen.queryAllByRole("checkbox")).toHaveLength(2);
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(3);
     expect(screen.getByTestId("provider-apple-wrapper").props.accessibilityState.disabled).toBe(true);
     await fireEvent.press(screen.getByLabelText("Agree to the Terms of Use and Privacy Policy"));
+    expect(screen.getByTestId("provider-apple-wrapper").props.accessibilityState.disabled).toBe(false);
+    await fireEvent.press(screen.getByLabelText("Allow AI processing for form analysis"));
     await fireEvent.press(screen.getByTestId("provider-apple"));
     expect(props.onAnswerChange).toHaveBeenCalledWith("acceptedPrivacy", true);
+    expect(props.onAnswerChange).toHaveBeenCalledWith("acceptedAiProcessing", true);
     expect(props.onAnswerChange).not.toHaveBeenCalledWith("marketingOptIn", true);
     expect(props.onOAuth).toHaveBeenCalledWith("apple");
   });
@@ -293,6 +296,7 @@ describe("approved onboarding screen", () => {
   it("keeps legal links outside the consent checkbox targets", async () => {
     const { screen } = await renderStep("create-account");
     expect(within(screen.getByLabelText("Agree to the Terms of Use and Privacy Policy")).queryByRole("link")).toBeNull();
+    expect(within(screen.getByLabelText("Allow AI processing for form analysis")).queryByRole("link")).toBeNull();
     expect(within(screen.getByLabelText("Receive Formie tips and offers")).queryByRole("link")).toBeNull();
   });
 
@@ -391,14 +395,15 @@ describe("approved onboarding screen", () => {
   });
 
   it("keeps the official Apple action and removes the unsupported Google placeholder", async () => {
-    const { screen, props } = await renderStep("create-account", { answers: { ...initialOnboardingAnswers, acceptedPrivacy: true } });
+    const { screen, props } = await renderStep("create-account");
 
     await fireEvent.press(screen.getByLabelText("Agree to the Terms of Use and Privacy Policy"));
+    await fireEvent.press(screen.getByLabelText("Allow AI processing for form analysis"));
     await fireEvent.press(screen.getByTestId("provider-apple"));
 
     expect(props.onOAuth).toHaveBeenCalledTimes(1);
     expect(props.onOAuth).toHaveBeenCalledWith("apple");
-    expect(screen.queryByText(/Google/i)).toBeNull();
+    expect(screen.queryByText(/Continue with Google/i)).toBeNull();
     expect(screen.queryByText("Continue with email")).toBeNull();
     expect(screen.queryByText("Restore account")).toBeNull();
     expect(screen.queryByLabelText("Password")).toBeNull();
@@ -462,6 +467,15 @@ describe("approved onboarding screen", () => {
     expect(screen.getByText("Progress over time")).toBeTruthy();
     expect(screen.queryByText(/Coach/i)).toBeNull();
     expect(screen.getByRole("button", { name: "Start monthly - $9.99/mo" })).toHaveStyle({ minHeight: 56 });
+  });
+
+  it("allows account creation when AI consent is deferred", async () => {
+    const { screen, props } = await renderStep("create-account");
+    await fireEvent.press(screen.getByLabelText("Agree to the Terms of Use and Privacy Policy"));
+    await fireEvent.press(screen.getByTestId("provider-apple"));
+
+    expect(props.onAnswerChange).not.toHaveBeenCalledWith("acceptedAiProcessing", true);
+    expect(props.onOAuth).toHaveBeenCalledWith("apple");
   });
 
   it("uses native offer content as the accessibility source", async () => {

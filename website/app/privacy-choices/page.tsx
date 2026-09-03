@@ -21,7 +21,7 @@ export default function PrivacyChoicesPage() {
       <h2>Manage Apple billing</h2>
       <p>Deleting Formie data does not cancel an Apple subscription. Use Manage Apple Subscription in the deletion dialog or Settings &gt; Subscription in Formie to open Apple&apos;s subscription controls.</p>
       <h2>Manage Sign in with Apple</h2>
-      <p>Formie automatically revokes its stored Sign in with Apple authorization during account deletion or places a temporary failure in its encrypted deletion queue. A legacy Apple account without a stored revocation token is asked to use the official Apple sign-in control once before retrying deletion. Apple controls its own account and billing records.</p>
+      <p>Formie automatically revokes its stored Sign in with Apple authorization during account deletion or places a provider failure in its encrypted deletion queue. A legacy Apple account without a stored revocation token is still deleted without another Apple sign-in; after deletion, you can remove Formie manually from Sign in with Apple in Apple Settings. Apple controls its own account and billing records.</p>
       <h2>Ask for help</h2>
       <p>If a control is unavailable or you have a privacy question, contact <Link href="/support">Formie support</Link>.</p>
     </LegalPage>

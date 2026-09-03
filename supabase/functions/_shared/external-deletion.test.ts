@@ -19,8 +19,14 @@ it("queues only transient provider failures and treats successful/idempotent cle
   expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ provider: "gemini", operation: "delete_file" }));
 });
 
-it("does not hide permanent configuration or authentication failures in the retry queue", async () => {
+it("durably queues provider authentication failures so local account deletion can continue", async () => {
   const enqueue = jest.fn();
-  await expect(attemptExternalDeletion(request, { execute: jest.fn(async () => { throw new ExternalDeletionError("HTTP_401", false); }), enqueue, encryptionKey: key })).rejects.toMatchObject({ code: "HTTP_401" });
+  await expect(attemptExternalDeletion(request, { execute: jest.fn(async () => { throw new ExternalDeletionError("HTTP_401", false); }), enqueue, encryptionKey: key })).resolves.toBe("queued");
+  expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ provider: "gemini", operation: "delete_file" }));
+});
+
+it.each(["INVALID_DELETION_PAYLOAD", "UNSUPPORTED_DELETION_OPERATION"])("rejects local programming error %s instead of retrying it", async (code) => {
+  const enqueue = jest.fn();
+  await expect(attemptExternalDeletion(request, { execute: jest.fn(async () => { throw new ExternalDeletionError(code, false); }), enqueue, encryptionKey: key })).rejects.toMatchObject({ code });
   expect(enqueue).not.toHaveBeenCalled();
 });

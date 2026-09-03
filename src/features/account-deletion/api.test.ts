@@ -64,10 +64,10 @@ describe("deleteAccount", () => {
     await expect(deleteAccount({ ...input, fetcher })).rejects.toMatchObject({ code: "INVALID_RESPONSE", status: 200 });
   });
 
-  it("returns queued cleanup honestly and preserves the Apple reauthentication contract", async () => {
+  it("returns queued cleanup honestly without supporting an Apple reauthentication blocker", async () => {
     const queued = jest.fn(async () => new Response(JSON.stringify({ deleted: true, externalCleanup: "queued" }), { status: 200 }));
     await expect(deleteAccount({ ...input, fetcher: queued })).resolves.toEqual({ deleted: true, externalCleanup: "queued" });
     const reauth = jest.fn(async () => new Response(JSON.stringify({ code: "APPLE_REAUTH_REQUIRED", stage: "external", message: "Sign in with Apple again so Formie can revoke authorization before deletion." }), { status: 409 }));
-    await expect(deleteAccount({ ...input, fetcher: reauth })).rejects.toMatchObject({ code: "APPLE_REAUTH_REQUIRED", status: 409, stage: "external" });
+    await expect(deleteAccount({ ...input, fetcher: reauth })).rejects.toMatchObject({ code: "REQUEST_FAILED", status: 409 });
   });
 });

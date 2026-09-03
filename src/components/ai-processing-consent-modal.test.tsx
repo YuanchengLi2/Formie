@@ -25,7 +25,7 @@ describe("AiProcessingConsentModal", () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
     expect(onAgree).not.toHaveBeenCalled();
 
-    fireEvent.press(screen.getByLabelText("Agree and analyze"));
+    fireEvent.press(screen.getByLabelText("Agree and continue"));
     expect(onAgree).toHaveBeenCalledTimes(1);
   });
 });
