@@ -87,6 +87,31 @@ describe("ExerciseGuideScreen", () => {
     expect(screen.getByTestId("exercise-guide-camera-card").props.style).toEqual(expect.objectContaining({ minHeight: 60 }));
   });
 
+  it("lets the header own the top safe area without an extra scroll offset", async () => {
+    const screen = await renderGuide(
+      <ExerciseGuideScreen
+        exerciseName="One-Arm Dumbbell Row"
+        guide={guide}
+        loading={false}
+        error={null}
+        onBack={jest.fn()}
+        onRetry={jest.fn()}
+        onContinue={jest.fn()}
+        onOpenSpaceHelp={jest.fn()}
+        onOpenTutorial={jest.fn()}
+      />,
+    );
+
+    const scrollContentStyle = StyleSheet.flatten(
+      screen.getByTestId("exercise-guide-responsive-screen").props.contentContainerStyle,
+    );
+    expect(scrollContentStyle.paddingTop ?? 0).toBe(0);
+    expect(StyleSheet.flatten(screen.getByTestId("exercise-guide-header").props.style)).toMatchObject({
+      minHeight: safeAreaMetrics.insets.top + 56,
+      paddingTop: safeAreaMetrics.insets.top,
+    });
+  });
+
   it("opens the selected YouTube tutorial", async () => {
     const onOpenTutorial = jest.fn();
     const screen = await renderGuide(

@@ -294,7 +294,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     text: `${magnificationShared.value.toFixed(1)}x`,
   })) as unknown as Partial<TextInputProps>;
   const cameraGeneration = lensDiscoveryEpochRef.current;
-  const cameraNativeId = "camera-preview";
+  const cameraNativeId = `camera-preview-${facing}-${cameraGeneration}`;
 
   if (permission && !permission.granted) {
     return (
@@ -318,6 +318,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
     <View style={{ flex: 1, backgroundColor: colors.cameraBlack }}>
       <GestureDetector gesture={pinchGesture}>
         <AnimatedCameraView
+          key={cameraNativeId}
           ref={cameraRef}
           accessibilityLabel="Camera preview"
           nativeID={cameraNativeId}

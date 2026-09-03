@@ -141,7 +141,7 @@ export function ExerciseGuideScreen({
       alwaysBounceVertical={false}
       bounces={false}
       contentInsetAdjustmentBehavior="never"
-      contentContainerStyle={{ gap: compact ? 10 : 14, paddingTop: Math.max(layout.insets.top, 8) }}
+      contentContainerStyle={{ gap: compact ? 10 : 14 }}
       style={{ flex: 1, backgroundColor: colors.cameraBlack }}
     >
       <CaptureScreenHeader title="Exercise Guide" onBack={onBack} testID="exercise-guide-header" />

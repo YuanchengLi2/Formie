@@ -219,7 +219,7 @@ describe("CameraScreen capture lifecycle", () => {
     expect(screen.queryByLabelText("Camera zoom 0.5x")).toBeNull();
   });
 
-  it("keeps one native preview mounted and rejects stale native lens callbacks after a flip", async () => {
+  it("restarts the native preview on flip and rejects stale native lens callbacks", async () => {
     const screen = await render(<CameraScreen />);
     const rearPreview = screen.getByLabelText("Camera preview");
     const staleNativeLensCallback = rearPreview.props.onAvailableLensesChanged;
@@ -232,7 +232,7 @@ describe("CameraScreen capture lifecycle", () => {
 
     const frontPreview = screen.getByLabelText("Camera preview");
     expect(frontPreview.props.facing).toBe("front");
-    expect(frontPreview.props.nativeID).toBe(rearNativeId);
+    expect(frontPreview.props.nativeID).not.toBe(rearNativeId);
     expect(frontPreview.props.enableTorch).toBe(false);
     expect(frontPreview.props.selectedLens).toBeUndefined();
 
