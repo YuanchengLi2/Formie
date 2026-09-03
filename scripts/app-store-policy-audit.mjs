@@ -74,6 +74,7 @@ export function auditAppStorePolicy(root = process.cwd()) {
   requireMatch(failures, app, /expo-apple-authentication/, "Apple authentication plugin is missing");
   forbidMatch(failures, JSON.stringify({ infoPlist: appConfig.ios?.infoPlist, permissions: appConfig.android?.permissions }), /NSMicrophoneUsageDescription|RECORD_AUDIO|MODIFY_AUDIO_SETTINGS/, "Active audio permissions remain in app.json");
   requireMatch(failures, JSON.stringify(appConfig.android?.blockedPermissions), /RECORD_AUDIO.*MODIFY_AUDIO_SETTINGS/, "Android audio permissions are not explicitly blocked");
+  requireMatch(failures, app, /"microphonePermission"\s*:\s*false/, "iOS camera plugin still injects microphone usage permission");
   requireMatch(failures, app, /"recordAudioAndroid"\s*:\s*false/, "Android camera audio recording is not disabled");
   requireMatch(failures, onboarding, /min\(18/, "Onboarding age is not 18+");
   requireMatch(failures, consentMigration, /record_ai_processing_consent|revoke_ai_processing_consent|AI_CONSENT_REVOKED/, "Versioned AI consent migration is incomplete");

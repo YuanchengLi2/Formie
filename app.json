@@ -49,6 +49,7 @@
         "expo-camera",
         {
           "cameraPermission": "Allow Formie to record your exercise set for private technique analysis.",
+          "microphonePermission": false,
           "recordAudioAndroid": false
         }
       ],

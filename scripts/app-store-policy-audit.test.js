@@ -11,6 +11,12 @@ test("repository App Store policy controls remain wired", () => {
   assert.deepEqual(auditAppStorePolicy(), []);
 });
 
+test("Expo camera is configured to omit iOS microphone permission", () => {
+  const app = readFileSync(new URL("../app.json", import.meta.url), "utf8");
+  assert.match(app, /"microphonePermission"\s*:\s*false/);
+  assert.match(app, /"recordAudioAndroid"\s*:\s*false/);
+});
+
 test("policy audit covers legacy Apple account-deletion events", () => {
   const audit = readFileSync(new URL("./app-store-policy-audit.mjs", import.meta.url), "utf8");
   assert.match(audit, /resolve_apple_identity_user_id/);
