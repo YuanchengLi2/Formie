@@ -64,7 +64,7 @@ describe("approved onboarding screen", () => {
     ["training-frequency", "How often do you train?"],
     ["custom-milestone", "What goal are you working toward?"],
     ["acquisition-source", "Where did you hear about Formie?"],
-    ["create-account", "Save your progress"],
+    ["create-account", "Create your account"],
     ["premium", "Formie plans paywall"],
   ] as const)("renders the approved %s content without a pictured phone frame", async (step, copy) => {
     const { screen } = await renderStep(step);

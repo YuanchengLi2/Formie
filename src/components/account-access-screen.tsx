@@ -8,7 +8,7 @@ import { SocialProviderButtons } from "@/components/social-provider-buttons";
 import type { SocialProvider } from "@/features/auth/auth-service";
 import { usePhoneLayoutProfile } from "@/theme/responsive";
 
-type AccountAccessMode = "login" | "onboarding";
+type AccountAccessMode = "login" | "create_account";
 
 export function isCompactAccountAccessLayout(height: number, width: number, topInset = 0, bottomInset = 0) {
   return height - topInset - bottomInset < 660 || width < 360;
@@ -43,8 +43,9 @@ export function AccountAccessScreen({ mode = "login", onApple, onEmailPassword, 
   const [legalAccepted, setLegalAccepted] = useState(false);
   const [aiProcessingAccepted, setAiProcessingAccepted] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
-  const disabled = busy || busyProvider !== null || (mode === "onboarding" && !legalAccepted);
-  const title = mode === "onboarding" ? "Save your progress" : "Welcome back";
+  const creatingAccount = mode === "create_account";
+  const disabled = busy || busyProvider !== null || (creatingAccount && !legalAccepted);
+  const title = creatingAccount ? "Create your account" : "Welcome back";
 
   return <View testID="social-account-access" style={styles.screen}>
     <StatusBar style="light" />
@@ -55,19 +56,19 @@ export function AccountAccessScreen({ mode = "login", onApple, onEmailPassword, 
         <View testID="account-access-gold-bar" style={styles.progressBar} />
       </View>
       <View style={styles.hero}><Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text></View>
-      <View testID="account-access-actions" style={[styles.actions, compact && styles.actionsCompact]}>
-        <SocialProviderButtons disabled={disabled} busy={busyProvider === "apple"} onApple={onApple} />
+      {creatingAccount ? <View style={styles.consents}>
+        <ConsentRow label="Agree to the Terms of Use and Privacy Policy" checked={legalAccepted} onPress={() => setLegalAccepted((value) => { const next = !value; onPrivacyConsentChange?.(next); return next; })}>{"I agree to Formie's "}<Text accessibilityRole="link" onPress={onOpenTerms} style={styles.link}>Terms of Use</Text> and <Text accessibilityRole="link" onPress={onOpenPrivacy} style={styles.link}>Privacy Policy</Text></ConsentRow>
+        <ConsentRow label="Allow AI processing for form analysis" checked={aiProcessingAccepted} onPress={() => setAiProcessingAccepted((value) => { const next = !value; onAiProcessingConsentChange?.(next); return next; })}>Allow Formie to send my exercise video, exercise details, and relevant profile information to Formie servers and the paid Google Gemini API for form analysis. I can withdraw this later in Settings.</ConsentRow>
+        <ConsentRow label="Receive Formie tips and offers" checked={marketingOptIn} onPress={() => setMarketingOptIn((value) => { const next = !value; onMarketingOptInChange?.(next); return next; })}>Send me tips, new features, and personalized offers from Formie.</ConsentRow>
+      </View> : null}
+      <View testID="account-access-actions" style={[styles.actions, compact && styles.actionsCompact, creatingAccount && styles.actionsCreateAccount]}>
+        <SocialProviderButtons intent={creatingAccount ? "create_account" : "login"} disabled={disabled} busy={busyProvider === "apple"} onApple={onApple} />
         {busy && !busyProvider ? <View style={styles.busy}><ActivityIndicator color="#E5AD32" /><Text style={styles.busyText}>Connecting…</Text></View> : null}
         {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
         {mode === "login" && onEmailPassword ? <Pressable accessibilityRole="button" accessibilityLabel="Sign in with email" disabled={disabled} onPress={onEmailPassword} style={({ pressed }) => [styles.emailSignIn, (pressed || disabled) && styles.pressed]}><Text style={styles.emailSignInText}>Sign in with email</Text></Pressable> : null}
         {mode === "login" && onCreateAccount ? <Pressable accessibilityRole="button" onPress={onCreateAccount} style={({ pressed }) => [styles.createAccount, pressed && styles.pressed]}><Text style={styles.createAccountText}>Create New Account</Text></Pressable> : null}
       </View>
-      {mode === "onboarding" ? <View style={styles.consents}>
-        <ConsentRow label="Agree to the Terms of Use and Privacy Policy" checked={legalAccepted} onPress={() => setLegalAccepted((value) => { const next = !value; onPrivacyConsentChange?.(next); return next; })}>{"I agree to Formie's "}<Text accessibilityRole="link" onPress={onOpenTerms} style={styles.link}>Terms of Use</Text> and <Text accessibilityRole="link" onPress={onOpenPrivacy} style={styles.link}>Privacy Policy</Text></ConsentRow>
-        <ConsentRow label="Allow AI processing for form analysis" checked={aiProcessingAccepted} onPress={() => setAiProcessingAccepted((value) => { const next = !value; onAiProcessingConsentChange?.(next); return next; })}>Allow Formie to send my exercise video, exercise details, and relevant profile information to Formie servers and the paid Google Gemini API for form analysis. I can withdraw this later in Settings.</ConsentRow>
-        <ConsentRow label="Receive Formie tips and offers" checked={marketingOptIn} onPress={() => setMarketingOptIn((value) => { const next = !value; onMarketingOptInChange?.(next); return next; })}>Send me tips, new features, and personalized offers from Formie.</ConsentRow>
-      </View> : null}
     </ResponsiveScreen>
   </View>;
 }
@@ -86,6 +87,7 @@ const styles = StyleSheet.create({
   titleCompact: { fontSize: 30, lineHeight: 36 },
   actions: { width: "100%", maxWidth: 296, alignSelf: "center", gap: 20, marginTop: 116 },
   actionsCompact: { marginTop: 48 },
+  actionsCreateAccount: { marginTop: 22 },
   busy: { minHeight: 28, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   busyText: { color: "#D8D3C8", fontSize: 14 },
   error: { color: "#FF8A82", fontSize: 14, lineHeight: 20, fontWeight: "600", textAlign: "center" },

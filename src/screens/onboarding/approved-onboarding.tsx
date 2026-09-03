@@ -290,7 +290,7 @@ function AccountScreen(props: ApprovedOnboardingScreenProps) {
   const personalizedMessage = goal
     ? `Save your account so Formie can keep coaching you toward ${goal}.`
     : "Save your account so Formie can keep your goals, analyses, and personalized coaching together.";
-  return <AccountAccessScreen mode="onboarding" personalizedMessage={personalizedMessage} busy={props.busy} busyProvider={props.busyProvider} error={props.error} onBack={props.onBack} onOpenTerms={props.onOpenTerms} onOpenPrivacy={props.onOpenPrivacy} onPrivacyConsentChange={(accepted) => props.onAnswerChange("acceptedPrivacy", accepted)} onAiProcessingConsentChange={(accepted) => props.onAnswerChange("acceptedAiProcessing", accepted)} onMarketingOptInChange={(accepted) => props.onAnswerChange("marketingOptIn", accepted)} onApple={() => impactThen(() => props.onOAuth("apple"))} />;
+  return <AccountAccessScreen mode="create_account" personalizedMessage={personalizedMessage} busy={props.busy} busyProvider={props.busyProvider} error={props.error} onBack={props.onBack} onOpenTerms={props.onOpenTerms} onOpenPrivacy={props.onOpenPrivacy} onPrivacyConsentChange={(accepted) => props.onAnswerChange("acceptedPrivacy", accepted)} onAiProcessingConsentChange={(accepted) => props.onAnswerChange("acceptedAiProcessing", accepted)} onMarketingOptInChange={(accepted) => props.onAnswerChange("marketingOptIn", accepted)} onApple={() => impactThen(() => props.onOAuth("apple"))} />;
 }
 
 function LoadingScreen({ onComplete }: { onComplete?: () => void }) {

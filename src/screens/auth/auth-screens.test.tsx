@@ -1,4 +1,5 @@
 import { fireEvent, render } from "@testing-library/react-native";
+import * as AppleAuthentication from "expo-apple-authentication";
 import { StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -9,6 +10,15 @@ const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top:
 
 function withSafeArea(node: React.ReactNode) {
   return <SafeAreaProvider initialMetrics={metrics}>{node}</SafeAreaProvider>;
+}
+
+function renderedMarkers(node: unknown): string[] {
+  if (!node || typeof node === "string") return [];
+  if (Array.isArray(node)) return node.flatMap(renderedMarkers);
+  if (typeof node !== "object") return [];
+  const rendered = node as { props?: Record<string, unknown>; children?: unknown[] };
+  const marker = rendered.props?.accessibilityLabel ?? rendered.props?.testID;
+  return [...(typeof marker === "string" ? [marker] : []), ...renderedMarkers(rendered.children)];
 }
 
 describe("account access screens", () => {
@@ -73,25 +83,28 @@ describe("account access screens", () => {
   it("matches the approved white save-progress reference", async () => {
     const screen = await render(withSafeArea(
       <AccountAccessScreen
-        mode="onboarding"
+        mode="create_account"
         personalizedMessage="Save your account so Formie can keep coaching you toward your first 225 lb bench."
         onApple={jest.fn()}
         busyProvider={null}
       />,
     ));
 
-    expect(screen.getByText("Save your progress")).toBeTruthy();
+    expect(screen.getByText("Create your account")).toBeTruthy();
     expect(screen.queryByText(/225 lb bench/)).toBeNull();
     expect(screen.getByTestId("provider-apple")).toBeTruthy();
+    expect(screen.getByTestId("provider-apple")).toHaveProp("buttonType", AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP);
     expect(screen.queryByText(/Continue with Google/i)).toBeNull();
     expect(screen.queryByText("Continue with email")).toBeNull();
     expect(screen.queryByText("Create New Account")).toBeNull();
     expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#050505" });
     expect(screen.getByTestId("account-access-gold-bar")).toHaveStyle({ height: 3, backgroundColor: "#E5AD32" });
     expect(screen.getByTestId("account-access-top-row")).toHaveStyle({ flexDirection: "row", gap: 14 });
-    expect(screen.getByTestId("account-access-actions")).toHaveStyle({ width: "100%", maxWidth: 296, alignSelf: "center", marginTop: 116 });
+    expect(screen.getByTestId("account-access-actions")).toHaveStyle({ width: "100%", maxWidth: 296, alignSelf: "center", marginTop: 22 });
     expect(screen.getByTestId("social-provider-buttons")).toHaveStyle({ gap: 22 });
     const legalCheckbox = screen.getByLabelText("Agree to the Terms of Use and Privacy Policy");
+    const markers = renderedMarkers(screen.toJSON());
+    expect(markers.indexOf("Agree to the Terms of Use and Privacy Policy")).toBeLessThan(markers.indexOf("provider-apple"));
     expect(legalCheckbox).toHaveStyle({ width: 18, height: 18, backgroundColor: "#050505" });
     await fireEvent.press(legalCheckbox);
     expect(legalCheckbox).toHaveStyle({ width: 18, height: 18, backgroundColor: "#E5AD32" });

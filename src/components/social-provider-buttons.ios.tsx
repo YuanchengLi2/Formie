@@ -3,11 +3,13 @@ import { StyleSheet, Text, View } from "react-native";
 
 export function SocialProviderButtons({
   onApple,
+  intent = "login",
   busy = false,
   disabled = false,
   error = null,
 }: {
   onApple: () => void;
+  intent?: "login" | "create_account";
   busy?: boolean;
   disabled?: boolean;
   error?: string | null;
@@ -24,7 +26,9 @@ export function SocialProviderButtons({
         <AppleAuthentication.AppleAuthenticationButton
           testID="provider-apple"
           buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
-          buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+          buttonType={intent === "create_account"
+            ? AppleAuthentication.AppleAuthenticationButtonType.SIGN_UP
+            : AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
           cornerRadius={29}
           onPress={onApple}
           style={styles.appleButton}

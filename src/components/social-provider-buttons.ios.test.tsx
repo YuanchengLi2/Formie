@@ -3,7 +3,7 @@ import { fireEvent, render } from "@testing-library/react-native";
 
 jest.mock("expo-apple-authentication", () => ({
   AppleAuthenticationButtonStyle: { WHITE: "WHITE" },
-  AppleAuthenticationButtonType: { SIGN_IN: "SIGN_IN" },
+  AppleAuthenticationButtonType: { SIGN_IN: "SIGN_IN", SIGN_UP: "SIGN_UP" },
   AppleAuthenticationButton: ({ onPress, testID, ...props }: { onPress: () => void; testID: string }) => {
     const React = require("react");
     const { Pressable, Text } = require("react-native");
@@ -25,6 +25,12 @@ describe("iOS social provider buttons", () => {
 
     fireEvent.press(apple);
     expect(onApple).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses Apple's sign-up control when creating an account", async () => {
+    const screen = await render(<SocialProviderButtons intent="create_account" onApple={jest.fn()} />);
+
+    expect(screen.getByTestId("provider-apple")).toHaveProp("buttonType", "SIGN_UP");
   });
 
   it("keeps loading and errors outside the official Apple control", async () => {
