@@ -3,8 +3,8 @@ import { join } from "node:path";
 
 const source = readFileSync(join(__dirname, "index.ts"), "utf8");
 
-describe("v83 simple-language calibrated whole-video coaching wiring", () => {
-  it("uses one full-video Gemini 3.7 call followed by text-only Gemini 3.1 Flash Lite writing", () => {
+describe("whole-video analyst and writer wiring", () => {
+  it("uses one full-video runtime-selected analyst call followed by text-only Gemini 3.1 Flash Lite writing", () => {
     expect(source).not.toContain("runShortClipRechecks({");
     expect(source).toContain("buildWholeVideoWritingPrompt");
     expect(source).toContain("buildTextGenerateContentRequest");

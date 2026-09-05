@@ -11,6 +11,10 @@ describe("Gemini 3.6 Flash paid-tier cost", () => {
 });
 
 describe("model-aware Gemini cost", () => {
+  it("uses Gemini 3.8 Flash introductory pricing for the video analyst", () => {
+    expect(estimatedGeminiCost("gemini-3.8-flash", { promptTokens: 1_000_000, outputTokens: 500_000, thinkingTokens: 500_000 })).toBe(4.5);
+  });
+
   it("uses Gemini 3.7 Flash introductory pricing for the video analyst", () => {
     expect(estimatedGeminiCost("gemini-3.7-flash", { promptTokens: 1_000_000, outputTokens: 500_000, thinkingTokens: 500_000 })).toBe(4.5);
   });

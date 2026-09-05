@@ -24,8 +24,8 @@ describe("whole-video analysis settings", () => {
   it("exposes one immutable versioned contract for request construction and telemetry", () => {
     expect(Object.isFrozen(ANALYSIS_RUNTIME_CONTRACT)).toBe(true);
     expect(ANALYSIS_RUNTIME_CONTRACT).toEqual({
-      pipelineVersion: "gemini-whole-video-v88-evidence-scoring",
-      analystModel: "gemini-3.7-flash",
+      pipelineVersion: "gemini-whole-video-v89-gemini-38-analyst",
+      analystModel: "gemini-3.8-flash",
       analystThinkingLevel: "high",
       mediaResolution: "MEDIA_RESOLUTION_HIGH",
       requestedFps: 12,

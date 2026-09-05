@@ -7,7 +7,7 @@ export function estimatedGemini36FlashCost(usage?: { promptTokens: number; outpu
 
 export function estimatedGeminiCost(model: string, usage?: { promptTokens: number; outputTokens: number; thinkingTokens: number }): number | null {
   if (!usage) return null;
-  if (model === "gemini-3.7-flash") {
+  if (model === "gemini-3.8-flash" || model === "gemini-3.7-flash") {
     const inputCost = usage.promptTokens * 0.75 / 1_000_000;
     const generatedCost = (usage.outputTokens + usage.thinkingTokens) * 3.75 / 1_000_000;
     return Number((inputCost + generatedCost).toFixed(9));

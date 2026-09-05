@@ -29,6 +29,8 @@ describe("Gemini production governance", () => {
     "gemini-3-flash-preview",
     "gemini-3.1-pro-preview",
     "gemini-flash-latest",
+    "gemini-3.8-flash-exp",
+    "gemini-3.8-flash-001",
     "gemini-3.7-flash-exp",
     "gemini-3.7-flash-001",
     "gemini-test",
@@ -37,6 +39,7 @@ describe("Gemini production governance", () => {
   });
 
   it.each([
+    "gemini-3.8-flash",
     "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
