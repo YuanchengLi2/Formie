@@ -3,6 +3,8 @@ import { fetchRevenueCatSubscriber } from "../_shared/revenuecat.ts";
 import { applyRevenueCatLifecycleEvent, expireTransferredEntitlement, persistEntitlementLedger } from "../_shared/entitlement-ledger.ts";
 import { revenueCatWebhookHandler } from "./handler.ts";
 import { validateRequestSecurity, withRequestIdentifier } from "../_shared/request-security.ts";
+import { isRevenueCatFinancialEvent, projectRevenueCatWebhook, reconcileRevenueCatTransactionHistory } from "../_shared/revenue-ledger.ts";
+import { claimRevenueCatWebhookEvent } from "../_shared/revenuecat-event-store.ts";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -12,13 +14,7 @@ Deno.serve(async (request) => {
   const admin = createAdminClient();
   const response = await revenueCatWebhookHandler(request, {
     claimEvent: async (event) => {
-      const { data, error } = await admin.rpc("claim_revenuecat_webhook_event", {
-        p_event_id: event.id,
-        p_event_type: event.type,
-        p_app_user_id: event.app_user_id,
-      });
-      if (error) throw error;
-      return data === "completed" ? "completed" : "claimed";
+      return claimRevenueCatWebhookEvent(admin, event);
     },
     resolveUserId: async (appUserId, aliases) => {
       const candidates = [appUserId, ...aliases];
@@ -51,8 +47,25 @@ Deno.serve(async (request) => {
         },
       });
     },
+    projectEvent: async (userId, event) => {
+      const fingerprintSalt = Deno.env.get("RECEIPT_FINGERPRINT_SALT") ?? "";
+      if (userId && isRevenueCatFinancialEvent(event)) {
+        await reconcileRevenueCatTransactionHistory(admin, userId, event.app_user_id, fingerprintSalt);
+      }
+      const projected = await projectRevenueCatWebhook(admin, userId, event, fingerprintSalt);
+      const { error } = await admin.from("revenuecat_webhook_events").update({
+        user_id: userId,
+        financial_projection_status: projected ? "completed" : "not_applicable",
+        financial_projected_at: projected ? new Date().toISOString() : null,
+      }).eq("event_id", event.id);
+      if (error) throw error;
+    },
     completeEvent: async (eventId) => {
       const { error } = await admin.from("revenuecat_webhook_events").update({ status: "completed", completed_at: new Date().toISOString(), last_error: null }).eq("event_id", eventId);
+      if (error) throw error;
+    },
+    deferEvent: async (eventId, reason) => {
+      const { error } = await admin.from("revenuecat_webhook_events").update({ status: "failed", completed_at: null, last_error: reason }).eq("event_id", eventId);
       if (error) throw error;
     },
     failEvent: async (eventId, reason) => {

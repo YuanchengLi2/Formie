@@ -8,7 +8,7 @@ export type ReanalyzeVideoDependencies = {
   canonicalizeDeclaration: (declaration: SetDeclaration) => Promise<SetDeclaration>;
   verifyReusableInput: (sessionId: string, userId: string) => Promise<"ready" | "not_found" | "video_missing" | "video_too_long">;
   resetSession: (sessionId: string, userId: string, declaration?: SetDeclaration) => Promise<ReanalysisResetOutcome>;
-  reserveCredit?: (input: { userId: string; sessionId: string; clientRequestId: string }) => Promise<{ reservationId: string | null; status?: "reserved" | "already_reserved" | "analysis_pending"; blockingSessionId?: string | null; remaining: number | null; periodEndsAt: string | null }>;
+  reserveCredit?: (input: { userId: string; sessionId: string; clientRequestId: string }) => Promise<{ reservationId: string | null; status?: "reserved" | "already_reserved" | "analysis_pending" | "request_terminal"; blockingSessionId?: string | null; remaining: number | null; periodEndsAt: string | null }>;
   cancelCredit?: (userId: string, reservationId: string) => Promise<void>;
 };
 
@@ -51,10 +51,11 @@ export async function reanalyzeVideoHandler(request: Request, dependencies: Rean
     if (input === "video_missing") return json({ message: "The original video is no longer available", code: "VIDEO_NOT_FOUND" }, 409);
     if (input === "video_too_long") return json({ message: "Video inputs are limited to 15 seconds", code: "VIDEO_TOO_LONG" }, 409);
     if (declaration) declaration = await dependencies.canonicalizeDeclaration(declaration);
-    let reservation: { reservationId: string | null; status?: "reserved" | "already_reserved" | "analysis_pending"; blockingSessionId?: string | null; remaining: number | null; periodEndsAt: string | null } | null = null;
+    let reservation: { reservationId: string | null; status?: "reserved" | "already_reserved" | "analysis_pending" | "request_terminal"; blockingSessionId?: string | null; remaining: number | null; periodEndsAt: string | null } | null = null;
     try {
       if (dependencies.reserveCredit) reservation = await dependencies.reserveCredit({ userId, sessionId, clientRequestId });
       if (reservation?.status === "analysis_pending") return json({ message: "An analysis is already in progress", code: "ANALYSIS_PENDING", sessionId: reservation.blockingSessionId, remaining: reservation.remaining, periodEndsAt: reservation.periodEndsAt }, 409);
+      if (reservation?.status === "request_terminal") return json({ message: "This reanalysis request has already finished. Start a new request.", code: "ANALYSIS_REQUEST_TERMINAL", sessionId }, 409);
       const outcome = await dependencies.resetSession(sessionId, userId, declaration);
       if (outcome !== "ready" && reservation?.reservationId && dependencies.cancelCredit) await dependencies.cancelCredit(userId, reservation.reservationId).catch(() => undefined);
       if (outcome === "not_found") return json({ message: "Analysis not found", code: "NOT_FOUND" }, 404);

@@ -53,11 +53,23 @@ describe("social auth service", () => {
     expect(client.signOut).toHaveBeenCalledWith({ scope: "local" });
   });
 
-  it("sends one email code for both existing and new accounts", async () => {
+  it("does not create an account when sending a login code", async () => {
     const client = authClient();
     client.signInWithOtp.mockResolvedValue({ data: {}, error: null });
 
-    await createAuthService(client, redirectUrl).sendEmailCode(" Athlete@Example.com ");
+    await createAuthService(client, redirectUrl).sendEmailCode(" Athlete@Example.com ", "login");
+
+    expect(client.signInWithOtp).toHaveBeenCalledWith({
+      email: "athlete@example.com",
+      options: { shouldCreateUser: false },
+    });
+  });
+
+  it("creates an account only when sending an explicit account-creation code", async () => {
+    const client = authClient();
+    client.signInWithOtp.mockResolvedValue({ data: {}, error: null });
+
+    await createAuthService(client, redirectUrl).sendEmailCode("athlete@example.com", "create_account");
 
     expect(client.signInWithOtp).toHaveBeenCalledWith({
       email: "athlete@example.com",

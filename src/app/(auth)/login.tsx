@@ -15,7 +15,8 @@ export default function LoginRoute() {
     const target = Array.isArray(returnTo) ? returnTo[0] : returnTo;
     if (target === "/subscription") await setAuthReturnTarget(target);
     await onboarding.startOAuth("login");
-    await auth.signInWithApple();
+    const outcome = await auth.signInWithApple("login");
+    if (outcome.status !== "authenticated") await onboarding.cancelOAuth();
   };
   const deleted = (Array.isArray(accountDeleted) ? accountDeleted[0] : accountDeleted) === "1";
   const deletionNotice = deleted

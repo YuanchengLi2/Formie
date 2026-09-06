@@ -4,6 +4,7 @@ export type AccountDashboardResponse = {
   account: { email: string | null; displayName: string; profileExists: boolean };
   usage: { status: "active" | "expired"; used: number | null; limit: number | null; remaining: number | null; periodStart: string | null; resetsAt: string | null };
   subscription: SubscriptionState;
+  referralBonus: { state: "none" | "pending_payment" | "active" | "expired" | "revoked"; baseLimit: number; baseUsed: number; bonusGranted: number; bonusUsed: number; bonusReserved: number; bonusRemaining: number; bonusExpiresAt: string | null };
 };
 
 type Dependencies = {
@@ -17,7 +18,7 @@ type Dependencies = {
     quota_used: number | null; quota_limit: number | null; remaining: number | null;
     quota_period_starts_at?: string | null; quota_resets_at?: string | null;
     period_starts_at?: string | null; period_ends_at?: string | null;
-  } }>;
+  }; referralBonus: AccountDashboardResponse["referralBonus"] }>;
 };
 
 function json(payload: unknown, status: number) { return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } }); }
@@ -50,7 +51,7 @@ export async function accountDashboardHandler(request: Request, dependencies: De
       renewalUrl: state === "active_cancelled" || state === "expired" ? managementUrl : null,
       sandbox: data.access.sandbox ?? false,
     };
-    const response: AccountDashboardResponse = { account: { email: user.email, displayName: data.displayName, profileExists: data.profileExists }, usage: { status: data.access.status, used: data.access.quota_used, limit: data.access.quota_limit, remaining: data.access.remaining, periodStart: data.access.quota_period_starts_at ?? data.access.period_starts_at ?? null, resetsAt: data.access.quota_resets_at ?? data.access.period_ends_at ?? null }, subscription };
+    const response: AccountDashboardResponse = { account: { email: user.email, displayName: data.displayName, profileExists: data.profileExists }, usage: { status: data.access.status, used: data.access.quota_used, limit: data.access.quota_limit, remaining: data.access.remaining, periodStart: data.access.quota_period_starts_at ?? data.access.period_starts_at ?? null, resetsAt: data.access.quota_resets_at ?? data.access.period_ends_at ?? null }, subscription, referralBonus: data.referralBonus };
     return json(response, 200);
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") return json({ code: "UNAUTHORIZED", message: "Sign in again" }, 401);

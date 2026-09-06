@@ -34,6 +34,25 @@ describe("subscription management presentation", () => {
     expect(events).toEqual(["configured", "presented", "reconciled"]);
   });
 
+  it("does not finish subscription management until post-dismissal reconciliation completes", async () => {
+    let releaseReconciliation!: () => void;
+    const operation = presentSubscriptionManagement({
+      configure: async () => undefined,
+      present: async () => undefined,
+      reconcile: () => new Promise<void>((resolve) => { releaseReconciliation = resolve; }),
+    });
+    let completed = false;
+    void operation.then(() => { completed = true; });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(completed).toBe(false);
+    releaseReconciliation();
+    await operation;
+    expect(completed).toBe(true);
+  });
+
   it("does not report a post-dismissal reconciliation failure as a presentation failure", async () => {
     await expect(presentSubscriptionManagement({
       configure: async () => undefined,

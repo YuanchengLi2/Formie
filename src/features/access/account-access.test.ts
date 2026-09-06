@@ -1,4 +1,4 @@
-import { analysisEntryHref, canOpenCompletedAccount, canOpenSubscriptionScreen, formatAnalysisBalance, formatAnalysisEntryLabel, formatAnalysisFraction, formatBillingTimestamp, formatSubscriptionDate, formatSubscriptionStateLabel, resolveAccountEligibility, resolveAnalysisEntry } from "./account-access";
+import { analysisEntryHref, canOpenCompletedAccount, canOpenOnboarding, canOpenSubscriptionScreen, formatAnalysisBalance, formatAnalysisEntryLabel, formatAnalysisFraction, formatBillingTimestamp, formatSubscriptionDate, formatSubscriptionStateLabel, resolveAccountEligibility, resolveAnalysisEntry } from "./account-access";
 import type { AccessStatus } from "./types";
 
 const access = (status: AccessStatus["status"], canAnalyze: boolean, remaining: number | null): AccessStatus => ({
@@ -24,6 +24,16 @@ const access = (status: AccessStatus["status"], canAnalyze: boolean, remaining: 
   quotaResetsAt: "2026-09-01T00:00:00.000Z",
   pendingAnalysisSessionId: null,
   stateVersion: 1,
+  referralBonus: {
+    state: "none",
+    baseLimit: 10,
+    baseUsed: remaining === null ? 0 : 10 - remaining,
+    bonusGranted: 0,
+    bonusUsed: 0,
+    bonusReserved: 0,
+    bonusRemaining: 0,
+    bonusExpiresAt: null,
+  },
 });
 
 describe("completed account admission", () => {
@@ -45,6 +55,16 @@ describe("completed account admission", () => {
   it("never admits signed-out or incomplete profiles", () => {
     expect(canOpenCompletedAccount({ authenticated: false, profileComplete: true, onboardingStatus: "complete", accessStatus: "active" })).toBe(false);
     expect(canOpenCompletedAccount({ authenticated: true, profileComplete: false, onboardingStatus: "complete", accessStatus: "active" })).toBe(false);
+  });
+});
+
+describe("onboarding admission", () => {
+  it("waits for the authenticated server profile before deciding the account is incomplete", () => {
+    expect(canOpenOnboarding({ phase: "authenticated", profileStatus: "idle", profileComplete: false })).toBe(false);
+    expect(canOpenOnboarding({ phase: "authenticated", profileStatus: "loading", profileComplete: false })).toBe(false);
+    expect(canOpenOnboarding({ phase: "authenticated", profileStatus: "ready", profileComplete: false })).toBe(true);
+    expect(canOpenOnboarding({ phase: "authenticated", profileStatus: "ready", profileComplete: true })).toBe(false);
+    expect(canOpenOnboarding({ phase: "signed_out", profileStatus: "idle", profileComplete: false })).toBe(true);
   });
 });
 

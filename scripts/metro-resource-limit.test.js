@@ -6,7 +6,7 @@ describe("Metro resource limits", () => {
     const workspace = path.resolve(__dirname, "..");
     const output = execFileSync(
       process.execPath,
-      ["-e", "const config=require('./metro.config'); const rules=[config.resolver.blockList].flat().filter(Boolean).map(String); const hasNestedBlockList=Array.isArray(config.resolver.blockList)&&config.resolver.blockList.some(Array.isArray); process.stdout.write(JSON.stringify({maxWorkers:config.maxWorkers,useWatchman:config.useWatchman,blockList:rules,hasNestedBlockList,projectRoot:process.cwd()}))"],
+      ["-e", "const config=require('./metro.config'); const rules=[config.resolver.blockList].flat().filter(Boolean).map(String); const hasNestedBlockList=Array.isArray(config.resolver.blockList)&&config.resolver.blockList.some(Array.isArray); process.stdout.write(JSON.stringify({maxWorkers:config.maxWorkers,useWatchman:config.resolver.useWatchman,blockList:rules,hasNestedBlockList,projectRoot:process.cwd()}))"],
       { cwd: workspace, encoding: "utf8" },
     );
     const config = JSON.parse(output);
@@ -17,7 +17,9 @@ describe("Metro resource limits", () => {
     }
     expect(config.hasNestedBlockList).toBe(false);
     const blockList = config.blockList.map((rule) => new RegExp(rule.slice(1, rule.lastIndexOf("/"))));
-    const blocked = (path) => blockList.some((rule) => rule.test(path));
+    // metro-file-map normalizes Windows separators to POSIX before applying
+    // the watcher ignore pattern. Keep this test aligned with that runtime.
+    const blocked = (candidate) => blockList.some((rule) => rule.test(candidate.split(path.sep).join("/")));
     expect(blocked(path.join(config.projectRoot, ".worktrees", "feature", "node_modules", "package", "index.js"))).toBe(true);
     expect(blocked(path.join(config.projectRoot, "dist-android-check", "_expo", "static", "js", "bundle.js"))).toBe(true);
     expect(blocked(path.join(config.projectRoot, "src", "app", "_layout.tsx"))).toBe(false);

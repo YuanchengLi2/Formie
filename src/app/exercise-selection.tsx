@@ -3,6 +3,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 
 import { searchExerciseCatalog, type CatalogExercise } from "@/features/analysis/exercise-catalog";
 import { useCaptureStore } from "@/features/capture/capture-store";
+import { startCaptureFlow } from "@/features/capture/capture-flow";
+import { trackProductEvent } from "@/features/analytics/product-analytics";
 import { ExerciseSelectionScreen } from "@/screens/exercise-selection";
 
 export default function ExerciseSelectionRoute() {
@@ -33,6 +35,8 @@ export default function ExerciseSelectionRoute() {
         initialExercise={initialExercise}
         onSearch={onSearch}
         onSelect={(exercise) => {
+          const captureFlowId = startCaptureFlow();
+          void trackProductEvent("exercise_selected", { exerciseId: exercise.id }, { captureFlowId });
           dispatch({
             type: "exercise_selected",
             exercise: {
@@ -47,6 +51,8 @@ export default function ExerciseSelectionRoute() {
           });
         }}
         onGenerateCustomGuide={(canonicalName) => {
+          const captureFlowId = startCaptureFlow();
+          void trackProductEvent("exercise_selected", { exerciseId: "custom", source: "custom" }, { captureFlowId });
           dispatch({ type: "exercise_customized", canonicalName });
           router.push({
             pathname: "/exercise-guide",

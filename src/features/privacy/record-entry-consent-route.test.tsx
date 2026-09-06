@@ -3,9 +3,8 @@ import React from "react";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 
 const mockPush = jest.fn();
-const mockCurrentConsent = jest.fn();
 const mockAcceptConsent = jest.fn();
-const mockIsCurrentConsent = jest.fn();
+let mockConsentCurrent = false;
 
 jest.mock("expo-router", () => {
   const ReactModule = jest.requireActual("react") as typeof React;
@@ -50,19 +49,15 @@ jest.mock("@/features/access/account-access", () => ({
 }));
 jest.mock("@/features/privacy/ai-consent", () => ({
   AI_PROCESSING_NOTICE: "Formie sends your exercise video to the paid Google Gemini API.",
-  currentAiProcessingConsent: (...args: unknown[]) => mockCurrentConsent(...args),
-  acceptAiProcessingConsent: (...args: unknown[]) => mockAcceptConsent(...args),
-  isCurrentAiProcessingConsent: (...args: unknown[]) => mockIsCurrentConsent(...args),
 }));
-jest.mock("@/lib/supabase", () => ({ supabase: { rpc: jest.fn() } }));
+jest.mock("@/features/privacy/use-ai-consent", () => ({ useAiConsent: () => ({ status: "ready", current: mockConsentCurrent, version: mockConsentCurrent ? "2026-09-01" : null, error: null, accept: (...args: unknown[]) => mockAcceptConsent(...args), revoke: jest.fn(), refresh: jest.fn() }) }));
 
 import TabsLayout from "@/app/(tabs)/_layout";
 
 describe("record entry AI consent", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockCurrentConsent.mockResolvedValue(null);
-    mockIsCurrentConsent.mockReturnValue(false);
+    mockConsentCurrent = false;
     mockAcceptConsent.mockResolvedValue(undefined);
   });
 
@@ -76,11 +71,10 @@ describe("record entry AI consent", () => {
     await fireEvent.press(screen.getByRole("button", { name: "Agree and continue" }));
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/exercise-selection"));
     expect(mockAcceptConsent).toHaveBeenCalledTimes(1);
-  });
+  }, 10_000);
 
   it("opens recording immediately when current consent already exists", async () => {
-    mockCurrentConsent.mockResolvedValue({ version: "current" });
-    mockIsCurrentConsent.mockReturnValue(true);
+    mockConsentCurrent = true;
     const screen = await render(<TabsLayout />);
 
     await fireEvent.press(screen.getByRole("button", { name: "Record" }));

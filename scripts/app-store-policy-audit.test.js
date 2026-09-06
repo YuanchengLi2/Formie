@@ -23,6 +23,17 @@ test("policy audit covers legacy Apple account-deletion events", () => {
   assert.match(audit, /Apple server account-deletion events do not fall back to legacy identity resolution/);
 });
 
+test("privacy labels use Apple data types rather than category headings", () => {
+  const labels = JSON.parse(readFileSync(new URL("../docs/app-store/privacy-labels.json", import.meta.url), "utf8"));
+  const types = labels.dataTypes.map((entry) => entry.type);
+
+  assert.ok(types.includes("Purchase History"));
+  assert.ok(types.includes("Head"));
+  assert.ok(types.includes("Hands"));
+  assert.ok(!types.includes("Purchases"));
+  assert.ok(!types.includes("Body"));
+});
+
 test("iPhone-only release surfaces require iPad compatibility acceptance and exclude Mac and Vision", () => {
   assert.deepEqual(
     auditIosReleaseSurfaces(

@@ -1,4 +1,5 @@
 export type SocialProvider = "apple" | "google";
+export type AuthIntent = "login" | "create_account";
 
 type AuthResult = {
   error: unknown;
@@ -17,7 +18,7 @@ export type AuthClient = {
   }) => Promise<AuthResult>;
   exchangeCodeForSession: (code: string) => Promise<AuthResult>;
   signInWithPassword: (input: { email: string; password: string }) => Promise<AuthResult>;
-  signInWithOtp: (input: { email: string; options: { shouldCreateUser: true } }) => Promise<AuthResult>;
+  signInWithOtp: (input: { email: string; options: { shouldCreateUser: boolean } }) => Promise<AuthResult>;
   verifyOtp: (input: { email: string; token: string; type: "email" }) => Promise<AuthResult>;
   signOut: (options: { scope: "local" }) => Promise<AuthResult>;
 };
@@ -66,10 +67,10 @@ export function createAuthService(client: AuthClient, redirectUrl: string) {
       }));
       return authenticatedSession(result);
     },
-    async sendEmailCode(email: string): Promise<void> {
+    async sendEmailCode(email: string, intent: AuthIntent): Promise<void> {
       await requireSuccess(client.signInWithOtp({
         email: email.trim().toLowerCase(),
-        options: { shouldCreateUser: true },
+        options: { shouldCreateUser: intent === "create_account" },
       }));
     },
     async verifyEmailCode(email: string, token: string) {

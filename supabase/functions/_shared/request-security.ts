@@ -4,7 +4,7 @@ export const APPROVED_BROWSER_ORIGINS = new Set([
   "https://dashboard.useformie.app",
 ]);
 
-export type RequestAuthentication = "user" | "service" | "webhook" | "none";
+export type RequestAuthentication = "user" | "service" | "webhook" | "optional" | "none";
 
 export type RequestSecurityPolicy = {
   methods: readonly string[];

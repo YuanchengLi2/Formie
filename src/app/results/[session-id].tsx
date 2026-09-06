@@ -10,22 +10,26 @@ import { AnalysisApiError, reanalyzeAnalysis } from "@/features/analysis/api";
 import { getAnalysisFeedback, submitAnalysisFeedback } from "@/features/analysis/feedback";
 import { useAnalysisStatus } from "@/features/analysis/use-analysis-status";
 import { getAccessToken } from "@/features/auth/access-token";
+import { useAuth } from "@/features/auth/auth-provider";
 import { useExerciseTutorial } from "@/features/analysis/use-exercise-tutorial";
 import { createResultsExitHandler } from "@/features/analysis/results-exit";
 import { useCaptureStore } from "@/features/capture/capture-store";
+import { getAnalysisRecoveryStore } from "@/features/capture/analysis-recovery-store";
 import { deviceVideoStore } from "@/features/capture/device-video-store";
 import type { RecordedSet } from "@/features/capture/types";
 import { queryClient } from "@/lib/query-client";
-import { supabase } from "@/lib/supabase";
-import { acceptAiProcessingConsent, currentAiProcessingConsent, isCurrentAiProcessingConsent, type AiConsentClient } from "@/features/privacy/ai-consent";
+import { useAiConsent } from "@/features/privacy/use-ai-consent";
 import { ResultsScreen } from "@/screens/results";
 import { SetDeclarationScreen } from "@/screens/set-declaration";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
 import { typography } from "@/theme/type";
+import { trackProductEvent } from "@/features/analytics/product-analytics";
+import { finishCaptureFlow } from "@/features/capture/capture-flow";
 
 export default function ResultsRoute() {
   const router = useRouter();
+  const auth = useAuth();
   const navigation = useNavigation();
   const { "session-id": sessionId = "" } = useLocalSearchParams<{ "session-id": string }>();
   const status = useAnalysisStatus(sessionId, { includeVideoUrl: true, mode: "status" });
@@ -38,6 +42,7 @@ export default function ResultsRoute() {
   const [consentVisible, setConsentVisible] = useState(false);
   const [consentAgreeing, setConsentAgreeing] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
+  const consent = useAiConsent();
   const resetCapture = useCaptureStore((state) => state.dispatch);
   const feedbackQueryKey = ["analysis-feedback", sessionId] as const;
   const persistedFeedback = useQuery({
@@ -46,9 +51,21 @@ export default function ResultsRoute() {
     enabled: Boolean(sessionId),
     staleTime: Number.POSITIVE_INFINITY,
   });
+  useEffect(() => {
+    void getAnalysisRecoveryStore().clear().catch(() => undefined);
+  }, []);
   useEffect(() => navigation.addListener("beforeRemove", createResultsExitHandler(() => {
     router.dismissTo("/(tabs)/(home)" as Href);
   })), [navigation, router]);
+  useEffect(() => {
+    if (!status.data?.result || !sessionId) return;
+    void trackProductEvent("analysis_result_viewed", { outcome: status.data.result.status }, { analysisSessionId: sessionId });
+    finishCaptureFlow();
+  }, [sessionId, status.data?.result]);
+  useEffect(() => {
+    if (!sessionId || persistedFeedback.isPending || persistedFeedback.data !== null) return;
+    void trackProductEvent("feedback_prompt_viewed", {}, { analysisSessionId: sessionId });
+  }, [persistedFeedback.data, persistedFeedback.isPending, sessionId]);
   const reanalysis = useMutation({
     mutationFn: async (declaration?: SetDeclaration) => {
       if (!declaration) throw new Error("Set details are required");
@@ -56,6 +73,8 @@ export default function ResultsRoute() {
         const accessToken = await getAccessToken();
         const clientRequestId = globalThis.crypto?.randomUUID?.() ?? `reanalysis-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         await reanalyzeAnalysis({ accessToken, sessionId, declaration, clientRequestId });
+        if (!auth.user?.id) throw new Error("Your account session is unavailable. Sign in again and retry.");
+        await getAnalysisRecoveryStore().markProcessing(auth.user.id, sessionId);
         return { kind: "server" as const };
       } catch (error) {
         // A missing retained artifact is the one case where the existing
@@ -95,6 +114,7 @@ export default function ResultsRoute() {
     },
   });
   const prepareReanalysis = async () => {
+    await trackProductEvent("reanalysis_started", {}, { analysisSessionId: sessionId });
     setPreparingReanalysis(true);
     setReanalysisPreparationError(null);
     setReanalysisRecording(null);
@@ -113,8 +133,7 @@ export default function ResultsRoute() {
     setPendingReanalysis(declaration);
     setConsentError(null);
     try {
-      const current = await currentAiProcessingConsent(supabase as unknown as AiConsentClient);
-      if (!isCurrentAiProcessingConsent(current)) {
+      if (!consent.current) {
         setConsentVisible(true);
         return;
       }
@@ -130,7 +149,7 @@ export default function ResultsRoute() {
     setConsentAgreeing(true);
     setConsentError(null);
     try {
-      await acceptAiProcessingConsent(supabase as unknown as AiConsentClient);
+      await consent.accept();
       const declaration = pendingReanalysis;
       setConsentVisible(false);
       setPendingReanalysis(null);
@@ -200,11 +219,13 @@ export default function ResultsRoute() {
         }
       }}
       onAskCoach={() => router.push({ pathname: "/(tabs)/(coach)", params: { sessionId } })}
+      onCoachingSectionViewed={(section) => void trackProductEvent("coaching_section_viewed", { tab: section }, { analysisSessionId: sessionId })}
       onRateAnalysis={(helpful) => feedback.mutate(helpful)}
       analysisRating={feedback.data ?? persistedFeedback.data ?? null}
       ratingPending={feedback.isPending}
       ratingError={feedback.error instanceof Error ? feedback.error.message : null}
       onRecordAnother={() => {
+        void trackProductEvent("record_another_set_clicked", {}, { analysisSessionId: sessionId });
         resetCapture({ type: "reset" });
         const previousExercise = status.data.setDeclaration?.exercise;
         if (previousExercise?.source === "catalog") {

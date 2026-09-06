@@ -13,8 +13,7 @@ import { ProductionIcon } from "@/components/production-icon";
 import { colors } from "@/theme/colors";
 import { getPhoneLayoutProfile } from "@/theme/responsive";
 import { AiProcessingConsentModal } from "@/components/ai-processing-consent-modal";
-import { acceptAiProcessingConsent, currentAiProcessingConsent, isCurrentAiProcessingConsent, type AiConsentClient } from "@/features/privacy/ai-consent";
-import { supabase } from "@/lib/supabase";
+import { useAiConsent } from "@/features/privacy/use-ai-consent";
 
 export default function TabsLayout() {
   const router = useRouter();
@@ -38,29 +37,22 @@ export default function TabsLayout() {
   const [consentVisible, setConsentVisible] = useState(false);
   const [consentBusy, setConsentBusy] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
-  const consentClient = supabase as unknown as AiConsentClient;
+  const consent = useAiConsent();
   const openRecordFlow = async (href: Href) => {
-    try {
-      const consent = await currentAiProcessingConsent(consentClient);
-      if (isCurrentAiProcessingConsent(consent)) {
-        router.push(href);
-        return;
-      }
-      setPendingRecordHref(href);
-      setConsentError(null);
-      setConsentVisible(true);
-    } catch {
-      setPendingRecordHref(href);
-      setConsentError("AI processing consent could not be loaded. Check your connection and try again.");
-      setConsentVisible(true);
+    if (consent.current) {
+      router.push(href);
+      return;
     }
+    setPendingRecordHref(href);
+    setConsentError(consent.status === "error" ? consent.error ?? "AI processing consent could not be loaded. Check your connection and try again." : null);
+    setConsentVisible(true);
   };
   const agreeAndOpenRecordFlow = async () => {
     if (!pendingRecordHref || consentBusy) return;
     setConsentBusy(true);
     setConsentError(null);
     try {
-      await acceptAiProcessingConsent(consentClient);
+      await consent.accept();
       const href = pendingRecordHref;
       setConsentVisible(false);
       setPendingRecordHref(null);

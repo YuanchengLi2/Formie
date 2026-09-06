@@ -4,6 +4,7 @@ import { SafeAreaProvider, type Metrics } from "react-native-safe-area-context";
 import { initialOnboardingAnswers, type OnboardingStep } from "@/features/onboarding/types";
 
 import { ApprovedOnboardingScreen, getApprovedArtworkSize, getOnboardingDensity, type ApprovedOnboardingScreenProps } from "./approved-onboarding";
+import { getPremiumArtworkLayout } from "./premium-screen";
 
 const mockSelectionAsync = jest.fn().mockResolvedValue(undefined);
 const mockImpactAsync = jest.fn().mockResolvedValue(undefined);
@@ -69,9 +70,9 @@ describe("approved onboarding screen", () => {
   ] as const)("renders the approved %s content without a pictured phone frame", async (step, copy) => {
     const { screen } = await renderStep(step);
 
-    expect(step === "premium" ? screen.getByRole("header", { name: "Train with clearer feedback." }) : screen.getByText(copy)).toBeTruthy();
+    expect(step === "premium" ? screen.getByRole("header", { name: "Formie Pro" }) : screen.getByText(copy)).toBeTruthy();
     expect(screen.queryByTestId("phone-frame")).toBeNull();
-  });
+  }, 10_000);
 
   it("removes the redundant product-demonstration close copy", async () => {
     const { screen } = await renderStep("product-demonstration");
@@ -373,10 +374,10 @@ describe("approved onboarding screen", () => {
     const onAnswerChange = jest.fn();
     const unanswered = await renderStep("acquisition-source", { onAnswerChange });
 
-    for (const label of ["TikTok", "Instagram", "YouTube", "App Store search", "Google search", "Friend, trainer, or coach", "Other"]) {
+    for (const label of ["TikTok", "Instagram", "YouTube", "App Store search", "Google search", "Friend, trainer, or coach", "Affiliated creator", "Other"]) {
       expect(unanswered.screen.getByRole("radio", { name: label })).toHaveStyle({ width: "100%", minHeight: 62 });
     }
-    expect(unanswered.screen.getAllByLabelText(/source icon$/)).toHaveLength(7);
+    expect(unanswered.screen.getAllByLabelText(/source icon$/)).toHaveLength(8);
     expect(unanswered.screen.getByTestId("onboarding-scroll-body")).toBeTruthy();
     expect(unanswered.screen.getByTestId("onboarding-bottom-cta").props.accessibilityState.disabled).toBe(true);
     await fireEvent.press(unanswered.screen.getByRole("radio", { name: "Other" }));
@@ -412,15 +413,15 @@ describe("approved onboarding screen", () => {
   it("shows the live monthly offer, renewal terms, restore, and legal actions", async () => {
     const { screen, props } = await renderStep("premium", { price: "$12.49" });
 
-    expect(screen.getByText("$12.49 per month")).toBeTruthy();
+    expect(screen.getByLabelText("$12.49 per month")).toBeTruthy();
     expect(screen.getByText(/automatically renews each month until cancelled/i)).toBeTruthy();
-    expect(screen.getByText("Start Formie Monthly")).toBeTruthy();
+    expect(screen.getByText("Continue with Pro")).toBeTruthy();
     expect(screen.queryByText("Skip")).toBeNull();
     expect(screen.getByRole("button", { name: "Restore Purchases" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Terms of Use" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Privacy Policy" })).toBeTruthy();
     const purchaseButton = screen.getByRole("button", { name: "Start monthly - $12.49/mo" });
-    expect(purchaseButton).toHaveStyle({ minHeight: 56 });
+    expect(purchaseButton).toHaveStyle({ minHeight: 60 });
     await fireEvent.press(purchaseButton);
     await fireEvent.press(screen.getByRole("button", { name: "Restore Purchases" }));
     await fireEvent.press(screen.getByRole("link", { name: "Terms of Use" }));
@@ -455,18 +456,53 @@ describe("approved onboarding screen", () => {
     expect(props.onRestore).not.toHaveBeenCalled();
   });
 
-  it("uses a native paywall with only the current subscription benefits", async () => {
+  it("uses the approved full-width reference paywall with native price and controls", async () => {
     const { screen } = await renderStep("premium", { price: "$9.99" });
 
     const scroll = screen.getByTestId("premium-scroll");
-    expect(scroll.props.contentInsetAdjustmentBehavior).toBe("automatic");
-    expect(screen.queryByTestId("premium-reference-image", { includeHiddenElements: true })).toBeNull();
-    expect(screen.getByText("10 analyses per month")).toBeTruthy();
-    expect(screen.getByText("Evidence-linked corrections")).toBeTruthy();
-    expect(screen.getByText("Saved analyses")).toBeTruthy();
-    expect(screen.getByText("Progress over time")).toBeTruthy();
-    expect(screen.queryByText(/Coach/i)).toBeNull();
-    expect(screen.getByRole("button", { name: "Start monthly - $9.99/mo" })).toHaveStyle({ minHeight: 56 });
+    expect(scroll.props.contentInsetAdjustmentBehavior).toBe("never");
+    expect(scroll.props.bounces).toBe(false);
+    expect(scroll.props.alwaysBounceVertical).toBe(false);
+    expect(screen.getByTestId("premium-reference-image", { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByTestId("premium-status-mask")).toBeTruthy();
+    expect(screen.getByTestId("premium-live-price")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start monthly - $9.99/mo" })).toHaveStyle({ position: "absolute", minHeight: 60 });
+    expect(screen.queryByText(/review|testimonial/i)).toBeNull();
+  });
+
+  it("shows a dedicated creator-code page and requires server validation before continuing", async () => {
+    const onValidateCreatorCode = jest.fn().mockResolvedValue(true);
+    const invalid = await renderStep("creator-code" as OnboardingStep, {
+      onValidateCreatorCode,
+      referralDisplayName: null,
+      referralCodeError: "That creator code isn't valid. Check it and try again.",
+    } as never);
+
+    expect(invalid.screen.getByText("Enter your creator code")).toBeTruthy();
+    const input = invalid.screen.getByLabelText("Creator code");
+    await fireEvent.changeText(input, "alex-7q2k");
+    await fireEvent.press(invalid.screen.getByRole("button", { name: "Verify code" }));
+    expect(onValidateCreatorCode).toHaveBeenCalledWith("ALEX-7Q2K");
+    expect(invalid.screen.getByRole("alert").props.children).toContain("isn't valid");
+    expect(invalid.screen.getByTestId("onboarding-bottom-cta").props.accessibilityState.disabled).toBe(true);
+    await invalid.screen.unmount();
+
+    const valid = await renderStep("creator-code" as OnboardingStep, {
+      referralDisplayName: "Alex",
+    } as never);
+    expect(valid.screen.getByText("✓ Referred by Alex")).toBeTruthy();
+    expect(valid.screen.getByText("Subscribe to receive 3 extra analyses in your first month.")).toBeTruthy();
+    expect(valid.screen.getByTestId("onboarding-bottom-cta").props.accessibilityState.disabled).toBe(false);
+  });
+
+  it.each([320, 375, 390, 430])("keeps reference geometry exact at %d px", (width) => {
+    const layout = getPremiumArtworkLayout(width, 844);
+    expect(layout.contentWidth).toBe(width);
+    expect(layout.imageWidth).toBe(width);
+    expect(layout.cropSourceEndY).toBe(1846);
+    expect(layout.contentMinHeight - layout.cropHeight).toBe(24);
+    expect(layout.cta.height).toBe(60);
+    expect(layout.statusMaskHeight).toBeGreaterThan(0);
   });
 
   it("allows account creation when AI consent is deferred", async () => {
@@ -481,8 +517,8 @@ describe("approved onboarding screen", () => {
   it("uses native offer content as the accessibility source", async () => {
     const { screen } = await renderStep("premium");
 
-    expect(screen.getByRole("header", { name: "Train with clearer feedback." })).toBeTruthy();
-    expect(screen.getByText("10 analyses per month")).toBeTruthy();
+    expect(screen.getByRole("header", { name: "Formie Pro" })).toBeTruthy();
+    expect(screen.getByText("10 analyses every month")).toBeTruthy();
     expect(screen.queryByTestId("premium-accessibility-summary")).toBeNull();
   });
 

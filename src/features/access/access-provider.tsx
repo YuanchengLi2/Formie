@@ -31,7 +31,8 @@ export function accessExpiryRefreshDelay(periodEndsAt: string, now = Date.now())
 }
 
 export function accessBoundaryRefreshDelays(access: Pick<AccessStatus, "quotaResetsAt" | "paidThrough">, now = Date.now()): number[] {
-  return [...new Set([access.quotaResetsAt, access.paidThrough]
+  const bonusExpiry = "referralBonus" in access ? (access as AccessStatus).referralBonus.bonusExpiresAt : null;
+  return [...new Set([access.quotaResetsAt, access.paidThrough, bonusExpiry]
     .filter((value): value is string => Boolean(value))
     .filter((value) => Number.isFinite(new Date(value).getTime()) && new Date(value).getTime() > now)
     .map((value) => accessExpiryRefreshDelay(value, now)))]
@@ -59,7 +60,8 @@ export function shouldCommitAccessRefresh(requestedUserId: string | null, curren
 }
 
 export function preserveConfirmedAccessDuringRenewal(current: AccessStatus, next: AccessStatus): AccessStatus {
-  return current.status === "active" && next.lifecycleState === "renewal_pending" ? current : next;
+  const bonusExpired = current.referralBonus.bonusExpiresAt !== null && Date.parse(current.referralBonus.bonusExpiresAt) <= Date.now();
+  return current.status === "active" && next.lifecycleState === "renewal_pending" && !bonusExpired ? current : next;
 }
 
 export function shouldReconcileProviderOnResume(access: Pick<AccessStatus, "sandbox" | "store">): boolean {
@@ -201,6 +203,7 @@ export function AccessProvider({ children }: PropsWithChildren) {
     const channel = supabase.channel(`access:${currentUserId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "user_access_entitlements", filter: `user_id=eq.${currentUserId}` }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "analysis_credit_reservations", filter: `user_id=eq.${currentUserId}` }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "referral_bonus_grants", filter: `user_id=eq.${currentUserId}` }, scheduleRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "subscription_test_scenarios", filter: `user_id=eq.${currentUserId}` }, scheduleRefresh)
       .subscribe((nextStatus) => {
         if (nextStatus === "SUBSCRIBED") {

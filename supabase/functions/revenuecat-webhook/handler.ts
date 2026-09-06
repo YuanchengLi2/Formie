@@ -18,9 +18,21 @@ export type WebhookEvent = {
   store?: string | null;
   original_transaction_id?: string | null;
   transaction_id?: string | null;
+  price_in_purchased_currency?: number | null;
+  currency?: string | null;
+  tax_percentage?: number | null;
+  commission_percentage?: number | null;
+  country_code?: string | null;
+  period_type?: string | null;
+  raw_event: Record<string, unknown>;
+  recognized: boolean;
 };
 
-const lifecycleEventTypes = new Set(["INITIAL_PURCHASE", "RENEWAL", "CANCELLATION", "UNCANCELLATION", "BILLING_ISSUE", "PRODUCT_CHANGE", "TRANSFER", "EXPIRATION", "TEST"]);
+const lifecycleEventTypes = new Set([
+  "INITIAL_PURCHASE", "NON_RENEWING_PURCHASE", "RENEWAL", "CANCELLATION",
+  "UNCANCELLATION", "BILLING_ISSUE", "PRODUCT_CHANGE", "SUBSCRIPTION_PAUSED",
+  "SUBSCRIPTION_EXTENDED", "TRANSFER", "EXPIRATION", "REFUND_REVERSED", "TEST",
+]);
 
 export type RevenueCatWebhookDependencies = {
   claimEvent: (event: WebhookEvent) => Promise<"claimed" | "completed">;
@@ -29,7 +41,9 @@ export type RevenueCatWebhookDependencies = {
   applyEvent: (userId: string, event: WebhookEvent) => Promise<void>;
   loadSubscriber: (userId: string) => Promise<RevenueCatSubscriber>;
   saveSubscriber: (userId: string, subscriber: RevenueCatSubscriber, event: WebhookEvent) => Promise<void>;
+  projectEvent: (userId: string | null, event: WebhookEvent) => Promise<void>;
   completeEvent: (eventId: string) => Promise<void>;
+  deferEvent: (eventId: string, reason: string) => Promise<void>;
   failEvent: (eventId: string, reason: string) => Promise<void>;
 };
 
@@ -47,6 +61,15 @@ function timestamp(value: unknown): string | null {
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
+function finiteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function percentage(value: unknown): number | null {
+  const parsed = finiteNumber(value);
+  return parsed !== null && parsed >= 0 && parsed <= 1 ? parsed : null;
+}
+
 export async function revenueCatWebhookHandler(request: Request, dependencies: RevenueCatWebhookDependencies, secret: string): Promise<Response> {
   if (request.method !== "POST") return json({ code: "METHOD_NOT_ALLOWED" }, 405);
   const authorization = request.headers.get("authorization") ?? "";
@@ -54,24 +77,24 @@ export async function revenueCatWebhookHandler(request: Request, dependencies: R
 
   let event: WebhookEvent | null = null;
   try {
-    const payload = await request.json() as { event?: Partial<WebhookEvent> };
+    const payload = await request.json() as { event?: Record<string, unknown> };
     const candidate = payload.event;
-    if (!candidate || typeof candidate.id !== "string" || !candidate.id.trim() || typeof candidate.type !== "string" || !lifecycleEventTypes.has(candidate.type) || (candidate.environment !== undefined && candidate.environment !== "PRODUCTION" && candidate.environment !== "SANDBOX")) return json({ code: "INVALID_EVENT" }, 400);
+    if (!candidate || typeof candidate.id !== "string" || !candidate.id.trim() || typeof candidate.type !== "string" || !/^[A-Z][A-Z0-9_]{1,63}$/.test(candidate.type) || (candidate.environment !== undefined && candidate.environment !== "PRODUCTION" && candidate.environment !== "SANDBOX")) return json({ code: "INVALID_EVENT" }, 400);
     const aliases = [...new Set(stringArray(candidate.aliases))];
     const transferredFrom = [...new Set(stringArray(candidate.transferred_from))];
     const transferredTo = [...new Set(stringArray(candidate.transferred_to))];
     const rawAppUserId = typeof candidate.app_user_id === "string" ? candidate.app_user_id.trim() : "";
     const destinationAppUserId = candidate.type === "TRANSFER" ? transferredTo[0] ?? rawAppUserId : rawAppUserId;
     if (!destinationAppUserId) return json({ code: "INVALID_EVENT" }, 400);
-    const raw = candidate as Partial<WebhookEvent> & { product_id?: unknown; purchased_at_ms?: unknown; expiration_at_ms?: unknown; event_timestamp_ms?: unknown; entitlement_ids?: unknown; cancel_reason?: unknown; store?: unknown; original_transaction_id?: unknown; transaction_id?: unknown };
+    const raw = candidate;
     event = {
-      id: candidate.id,
+      id: candidate.id.trim(),
       type: candidate.type,
       app_user_id: destinationAppUserId,
       aliases,
       transferred_from: transferredFrom,
       transferred_to: transferredTo,
-      environment: candidate.environment,
+      environment: candidate.environment as "PRODUCTION" | "SANDBOX" | undefined,
       product_identifier: typeof raw.product_id === "string" ? raw.product_id : null,
       purchased_at: timestamp(raw.purchased_at_ms),
       expiration_at: timestamp(raw.expiration_at_ms),
@@ -81,12 +104,31 @@ export async function revenueCatWebhookHandler(request: Request, dependencies: R
       store: text(raw.store),
       original_transaction_id: text(raw.original_transaction_id),
       transaction_id: text(raw.transaction_id),
+      price_in_purchased_currency: finiteNumber(raw.price_in_purchased_currency) ?? finiteNumber(raw.price),
+      currency: text(raw.currency),
+      tax_percentage: percentage(raw.tax_percentage),
+      commission_percentage: percentage(raw.commission_percentage),
+      country_code: text(raw.country_code),
+      period_type: text(raw.period_type),
+      raw_event: raw,
+      recognized: lifecycleEventTypes.has(candidate.type),
     };
     if (await dependencies.claimEvent(event) === "completed") return json({ received: true, duplicate: true }, 200);
+    if (!event.recognized) {
+      await dependencies.projectEvent(null, event);
+      await dependencies.completeEvent(event.id);
+      return json({ received: true, ignored: true }, 200);
+    }
+    if (event.type === "TEST") {
+      await dependencies.projectEvent(null, event);
+      await dependencies.completeEvent(event.id);
+      return json({ received: true, test: true }, 200);
+    }
     const userId = await dependencies.resolveUserId(event.app_user_id, event.aliases ?? []);
     if (!userId) {
-      await dependencies.completeEvent(event.id);
-      return json({ received: true, mapped: false }, 200);
+      await dependencies.projectEvent(null, event);
+      await dependencies.deferEvent(event.id, "USER_MAPPING_PENDING");
+      return json({ received: true, mapped: false, retryable: true }, 202);
     }
     if (event.type === "TRANSFER") {
       for (const sourceAppUserId of event.transferred_from ?? []) {
@@ -104,6 +146,7 @@ export async function revenueCatWebhookHandler(request: Request, dependencies: R
     await dependencies.applyEvent(userId, event);
     const subscriber = await dependencies.loadSubscriber(userId);
     await dependencies.saveSubscriber(userId, subscriber, event);
+    await dependencies.projectEvent(userId, event);
     await dependencies.completeEvent(event.id);
     return json({ received: true, mapped: true }, 200);
   } catch (error) {

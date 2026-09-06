@@ -21,7 +21,9 @@ describe("revenueCatWebhookHandler", () => {
       applyEvent: jest.fn().mockResolvedValue(undefined),
       loadSubscriber: jest.fn().mockResolvedValue({ appUserId: "8e6dbfc0-23c9-4a8a-a232-273c4f48c161", entitlements: [] }),
       saveSubscriber: jest.fn().mockResolvedValue(undefined),
+      projectEvent: jest.fn().mockResolvedValue(undefined),
       completeEvent: jest.fn().mockResolvedValue(undefined),
+      deferEvent: jest.fn().mockResolvedValue(undefined),
       failEvent: jest.fn().mockResolvedValue(undefined),
     };
     const response = await revenueCatWebhookHandler(request(event), dependencies, "secret");
@@ -36,7 +38,7 @@ describe("revenueCatWebhookHandler", () => {
   it("parses cancellation and uncancellation transaction fields before subscriber reconciliation", async () => {
     const dependencies = {
       claimEvent: jest.fn().mockResolvedValue("claimed"), resolveUserId: jest.fn().mockResolvedValue("8e6dbfc0-23c9-4a8a-a232-273c4f48c161"),
-      applyEvent: jest.fn().mockResolvedValue(undefined), loadSubscriber: jest.fn().mockResolvedValue({ appUserId: "u1", entitlements: [] }), saveSubscriber: jest.fn(), completeEvent: jest.fn(), failEvent: jest.fn(),
+      applyEvent: jest.fn().mockResolvedValue(undefined), loadSubscriber: jest.fn().mockResolvedValue({ appUserId: "u1", entitlements: [] }), saveSubscriber: jest.fn().mockResolvedValue(undefined), projectEvent: jest.fn().mockResolvedValue(undefined), completeEvent: jest.fn().mockResolvedValue(undefined), deferEvent: jest.fn().mockResolvedValue(undefined), failEvent: jest.fn().mockResolvedValue(undefined),
     };
     const response = await revenueCatWebhookHandler(request({ event: { ...event.event, id: "uncancel", type: "UNCANCELLATION", product_id: "formie_monthly", purchased_at_ms: 1786058836000, expiration_at_ms: 1786059136000, event_timestamp_ms: 1786058896000, entitlement_ids: ["formie_pro"], environment: "SANDBOX", store: "APP_STORE", original_transaction_id: "200000123", transaction_id: "200000456" } }), dependencies as never, "secret");
     expect(response.status).toBe(200);
@@ -62,19 +64,21 @@ describe("revenueCatWebhookHandler", () => {
     expect(await response.json()).toMatchObject({ duplicate: true });
   });
 
-  it("rejects unsupported event types and malformed environments before claiming", async () => {
-    const dependencies = { claimEvent: jest.fn() };
-    const invalidType = await revenueCatWebhookHandler(request({ event: { ...event.event, type: "UNKNOWN_EVENT" } }), dependencies as never, "secret");
+  it("durably ignores newly introduced provider event types and rejects malformed environments", async () => {
+    const dependencies = { claimEvent: jest.fn().mockResolvedValue("claimed"), projectEvent: jest.fn().mockResolvedValue(undefined), completeEvent: jest.fn().mockResolvedValue(undefined), failEvent: jest.fn().mockResolvedValue(undefined) };
+    const unknownType = await revenueCatWebhookHandler(request({ event: { ...event.event, type: "UNKNOWN_EVENT" } }), dependencies as never, "secret");
     const invalidEnvironment = await revenueCatWebhookHandler(request({ event: { ...event.event, environment: "LOCAL" } }), dependencies as never, "secret");
-    expect(invalidType.status).toBe(400);
+    expect(unknownType.status).toBe(200);
+    expect(await unknownType.json()).toMatchObject({ ignored: true });
     expect(invalidEnvironment.status).toBe(400);
-    expect(dependencies.claimEvent).not.toHaveBeenCalled();
+    expect(dependencies.claimEvent).toHaveBeenCalledTimes(1);
   });
 
   it("uses transfer aliases to resolve the canonical Supabase identity", async () => {
     const dependencies = {
-      claimEvent: jest.fn().mockResolvedValue("claimed"), resolveUserId: jest.fn().mockResolvedValue(null),
-      loadSubscriber: jest.fn(), saveSubscriber: jest.fn(), completeEvent: jest.fn().mockResolvedValue(undefined), failEvent: jest.fn(),
+      claimEvent: jest.fn().mockResolvedValue("claimed"), resolveUserId: jest.fn().mockResolvedValue("8d4b4da4-f6d7-4fc0-96ec-ae8b20f1340a"),
+      expireTransferredUser: jest.fn().mockResolvedValue(null), applyEvent: jest.fn().mockResolvedValue(undefined),
+      loadSubscriber: jest.fn().mockResolvedValue({ appUserId: "8d4b4da4-f6d7-4fc0-96ec-ae8b20f1340a", entitlements: [] }), saveSubscriber: jest.fn().mockResolvedValue(undefined), projectEvent: jest.fn().mockResolvedValue(undefined), completeEvent: jest.fn().mockResolvedValue(undefined), deferEvent: jest.fn().mockResolvedValue(undefined), failEvent: jest.fn().mockResolvedValue(undefined),
     };
     const response = await revenueCatWebhookHandler(request({ event: { ...event.event, type: "TRANSFER", aliases: ["8d4b4da4-f6d7-4fc0-96ec-ae8b20f1340a"] } }), dependencies as never, "secret");
     expect(response.status).toBe(200);
@@ -90,7 +94,7 @@ describe("revenueCatWebhookHandler", () => {
       expireTransferredUser: jest.fn().mockResolvedValue({ originalTransactionId: "200000123", transactionId: "200000456", store: "app_store" }),
       applyEvent: jest.fn().mockResolvedValue(undefined),
       loadSubscriber: jest.fn(async (userId: string) => ({ appUserId: userId, entitlements: [] })),
-      saveSubscriber: jest.fn().mockResolvedValue(undefined), completeEvent: jest.fn().mockResolvedValue(undefined), failEvent: jest.fn(),
+      saveSubscriber: jest.fn().mockResolvedValue(undefined), projectEvent: jest.fn().mockResolvedValue(undefined), completeEvent: jest.fn().mockResolvedValue(undefined), deferEvent: jest.fn().mockResolvedValue(undefined), failEvent: jest.fn().mockResolvedValue(undefined),
     };
     const response = await revenueCatWebhookHandler(request({ event: {
       id: "transfer-1",
@@ -110,7 +114,7 @@ describe("revenueCatWebhookHandler", () => {
   it("accepts RevenueCat test webhook events for deployment verification", async () => {
     const dependencies = {
       claimEvent: jest.fn().mockResolvedValue("claimed"), resolveUserId: jest.fn().mockResolvedValue(null),
-      loadSubscriber: jest.fn(), saveSubscriber: jest.fn(), completeEvent: jest.fn().mockResolvedValue(undefined), failEvent: jest.fn(),
+      loadSubscriber: jest.fn(), saveSubscriber: jest.fn(), projectEvent: jest.fn().mockResolvedValue(undefined), completeEvent: jest.fn().mockResolvedValue(undefined), deferEvent: jest.fn().mockResolvedValue(undefined), failEvent: jest.fn().mockResolvedValue(undefined),
     };
     const response = await revenueCatWebhookHandler(request({ event: { ...event.event, type: "TEST" } }), dependencies as never, "secret");
     expect(response.status).toBe(200);

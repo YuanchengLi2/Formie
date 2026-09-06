@@ -1,6 +1,11 @@
 begin;
 
-select plan(20);
+select plan(27);
+
+insert into auth.users (id, aud, role, email)
+values ('00000000-0000-0000-0000-000000000901', 'authenticated', 'authenticated', 'consent-lifecycle@formie.test');
+
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000000901","role":"authenticated"}', true);
 
 select has_table('public', 'ai_processing_notice_versions', 'approved AI notice registry exists');
 select has_table('public', 'user_consents', 'versioned AI consent history exists');
@@ -67,6 +72,15 @@ select ok(
 );
 
 select has_function('public', 'claim_external_deletion_jobs', ARRAY['integer']::text[], 'service worker claim RPC exists');
+select has_function('public', 'cleanup_expired_external_deletion_jobs', ARRAY[]::text[], 'encrypted deletion payload expiry RPC exists');
+select ok(
+  exists (
+    select 1 from cron.job
+    where jobname = 'form-external-deletion-job-expiry'
+      and command like '%cleanup_expired_external_deletion_jobs%'
+  ),
+  'expired encrypted deletion payloads are removed independently of worker claims'
+);
 
 select has_table('public', 'youtube_tutorial_cache', 'global YouTube tutorial cache exists');
 select hasnt_column('public', 'youtube_tutorial_cache', 'user_id', 'YouTube cache is not linked to Formie users');
@@ -89,6 +103,32 @@ select ok(
       and command like '%delete from public.youtube_tutorial_cache where expires_at <= now()%'
   ),
   'expired YouTube metadata is deleted independently of user traffic'
+);
+
+select lives_ok(
+  $$ select public.record_ai_processing_consent('2026-09-01', '739cb7347c35cdf9e4bfec5588113dde724eff88d0b28b215745549dd9a2be20') $$,
+  'AI consent can be accepted'
+);
+
+select lives_ok(
+  $$ select public.revoke_ai_processing_consent('2026-09-01') $$,
+  'AI consent can be withdrawn'
+);
+
+select lives_ok(
+  $$ select public.record_ai_processing_consent('2026-09-01', '739cb7347c35cdf9e4bfec5588113dde724eff88d0b28b215745549dd9a2be20') $$,
+  'AI consent can be accepted again after withdrawal'
+);
+
+select is(
+  (select count(*)::integer from public.user_consents where user_id = '00000000-0000-0000-0000-000000000901' and kind = 'ai_processing' and revoked_at is null),
+  1,
+  're-consent leaves exactly one active AI consent row'
+);
+
+select ok(
+  exists (select 1 from public.user_consents where user_id = '00000000-0000-0000-0000-000000000901' and kind = 'ai_processing' and revoked_at is not null),
+  'withdrawn AI consent remains auditable after re-consent'
 );
 
 select * from finish();

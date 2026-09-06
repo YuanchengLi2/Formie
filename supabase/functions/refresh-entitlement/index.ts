@@ -11,7 +11,11 @@ Deno.serve(async (request) => {
   const response = await refreshEntitlementHandler(request, {
     authenticate: (incoming) => requireUserId(incoming, admin),
     loadSubscriber: (appUserId) => fetchRevenueCatSubscriber(appUserId),
-    saveAccess: ({ userId, subscriber, activeEntitlementId }) => persistEntitlementLedger(admin, userId, subscriber, activeEntitlementId),
+    saveAccess: async ({ userId, subscriber, activeEntitlementId }) => {
+      // Financial history is reconciled by the scheduled reconciliation worker
+      // and webhooks. Its separate API/configuration must not gate paid access.
+      return persistEntitlementLedger(admin, userId, subscriber, activeEntitlementId);
+    },
     loadAccess: async (userId) => {
       const { data, error } = await admin.rpc("get_access_status_for_user", { p_user_id: userId });
       if (error) throw error;

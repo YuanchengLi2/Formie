@@ -1,6 +1,19 @@
 export type RevenueCatEntitlement = { identifier: string; productIdentifier: string | null; purchaseDate: string | null; expirationDate: string | null };
 export type RevenueCatSubscription = { productIdentifier: string; store: string | null; purchaseDate?: string | null; originalPurchaseDate?: string | null; expirationDate: string | null; unsubscribeDetectedAt: string | null; ownershipType?: string | null; sandbox: boolean };
 export type RevenueCatSubscriber = { appUserId: string; entitlements: RevenueCatEntitlement[]; subscriptions?: RevenueCatSubscription[]; managementUrl?: string | null };
+export type RevenueCatCustomerEvent = {
+  id: string;
+  type: string;
+  occurredAt: string | null;
+  body: Record<string, unknown>;
+};
+
+export class RevenueCatApiError extends Error {
+  constructor(message: string, public readonly status: number, public readonly retryable: boolean) {
+    super(message);
+    this.name = "RevenueCatApiError";
+  }
+}
 
 type RevenueCatPayload = { subscriber?: { management_url?: unknown; entitlements?: Record<string, { product_identifier?: unknown; purchase_date?: unknown; expires_date?: unknown }>; subscriptions?: Record<string, { store?: unknown; purchase_date?: unknown; original_purchase_date?: unknown; expires_date?: unknown; unsubscribe_detected_at?: unknown; ownership_type?: unknown; is_sandbox?: unknown }> } };
 const text = (value: unknown) => typeof value === "string" && value.length > 0 ? value : null;
@@ -75,6 +88,68 @@ export async function fetchRevenueCatSubscriber(appUserId: string, secretApiKey 
   if (response.status === 404) return { appUserId, entitlements: [], subscriptions: [], managementUrl: null };
   if (!response.ok) throw new Error(`RevenueCat subscriber lookup failed (${response.status})`);
   return parseRevenueCatSubscriber(appUserId, await response.json() as RevenueCatPayload);
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function unixMilliseconds(value: unknown): string | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+}
+
+/**
+ * Loads the provider's immutable customer event history before reward projection.
+ * The API's next_page value is treated as an API-relative cursor and never as an
+ * arbitrary URL. A bounded page count prevents a corrupt cursor from looping.
+ */
+export async function fetchRevenueCatCustomerEvents(
+  appUserId: string,
+  projectId = Deno.env.get("REVENUECAT_PROJECT_ID") ?? "",
+  secretApiKey = Deno.env.get("REVENUECAT_V2_SECRET_API_KEY") ?? "",
+  fetcher: typeof fetch = fetch,
+): Promise<RevenueCatCustomerEvent[]> {
+  if (!projectId) throw new Error("REVENUECAT_PROJECT_ID is not configured");
+  if (!secretApiKey) throw new Error("REVENUECAT_V2_SECRET_API_KEY is not configured");
+
+  const basePath = `/v2/projects/${encodeURIComponent(projectId)}/customers/${encodeURIComponent(appUserId)}/events`;
+  let nextPath: string | null = `${basePath}?limit=100`;
+  const events: RevenueCatCustomerEvent[] = [];
+  const visited = new Set<string>();
+
+  for (let page = 0; nextPath && page < 20; page += 1) {
+    if (visited.has(nextPath)) throw new Error("RevenueCat customer event pagination repeated a cursor");
+    visited.add(nextPath);
+    const url = new URL(nextPath, "https://api.revenuecat.com");
+    if (url.origin !== "https://api.revenuecat.com" || !url.pathname.startsWith(basePath)) {
+      throw new Error("RevenueCat customer event pagination returned an invalid cursor");
+    }
+    const response = await fetcher(url.toString(), {
+      headers: { Authorization: `Bearer ${secretApiKey}`, Accept: "application/json" },
+    });
+    if (response.status === 404) return [];
+    if (!response.ok) {
+      throw new RevenueCatApiError(
+        `RevenueCat customer event lookup failed (${response.status})`,
+        response.status,
+        response.status === 408 || response.status === 423 || response.status === 429 || response.status >= 500,
+      );
+    }
+    const payload = record(await response.json());
+    if (!payload || !Array.isArray(payload.items)) throw new Error("RevenueCat customer event response is invalid");
+    for (const candidate of payload.items) {
+      const item = record(candidate);
+      const body = record(item?.body);
+      if (!item || typeof item.id !== "string" || typeof item.type !== "string" || !body) continue;
+      events.push({ id: item.id, type: item.type, occurredAt: unixMilliseconds(item.occurred_at), body });
+    }
+    const candidateNext = typeof payload.next_page === "string" && payload.next_page ? payload.next_page : null;
+    nextPath = candidateNext;
+  }
+  if (nextPath) throw new Error("RevenueCat customer event history exceeded the pagination limit");
+  return events;
 }
 
 export async function deleteRevenueCatCustomer(appUserId: string, secretApiKey = Deno.env.get("REVENUECAT_SECRET_API_KEY") ?? "", fetcher: typeof fetch = fetch): Promise<void> {

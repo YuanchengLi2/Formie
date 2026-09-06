@@ -34,13 +34,34 @@ Deno.serve(async (request) => {
       return Boolean(data);
     },
     exchangeAuthorizationCode: async (code, expectedSubject) => {
-      const clientSecret = await createAppleClientSecret({
-        teamId: requiredSecret("APPLE_TEAM_ID"),
-        keyId: requiredSecret("APPLE_KEY_ID"),
-        clientId,
-        privateKeyPem: requiredSecret("APPLE_PRIVATE_KEY").replace(/\\n/g, "\n"),
-      });
-      return exchangeAppleAuthorizationCode({ authorizationCode: code, expectedSubject, clientId, clientSecret });
+      let stage = "read_team_id";
+      try {
+        const teamId = requiredSecret("APPLE_TEAM_ID");
+        stage = "read_key_id";
+        const keyId = requiredSecret("APPLE_KEY_ID");
+        stage = "read_private_key";
+        const privateKeyPem = requiredSecret("APPLE_PRIVATE_KEY").replace(/\\n/g, "\n");
+        stage = "client_secret_signing";
+        const clientSecret = await createAppleClientSecret({
+          teamId,
+          keyId,
+          clientId,
+          privateKeyPem,
+        });
+        stage = "provider_exchange";
+        return await exchangeAppleAuthorizationCode({ authorizationCode: code, expectedSubject, clientId, clientSecret });
+      } catch (error) {
+        const diagnostic = error && typeof error === "object" ? error as Record<string, unknown> : {};
+        const localCode = error instanceof Error && /^APPLE_[A-Z0-9_]+$/.test(error.message) ? error.message : null;
+        console.error(JSON.stringify({
+          event: "apple_token_exchange_failed",
+          stage,
+          localCode,
+          providerCode: typeof diagnostic.providerCode === "string" ? diagnostic.providerCode : "local_validation",
+          httpStatus: typeof diagnostic.httpStatus === "number" ? diagnostic.httpStatus : null,
+        }));
+        throw error;
+      }
     },
     openAuthorizationReceipt: (receipt) => openAppleAuthorizationReceipt(
       receipt,

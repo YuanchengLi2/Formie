@@ -3,10 +3,10 @@ import { NextResponse } from "next/server";
 import { isAdminEmail } from "@/lib/admin/access";
 import { consumeAdminLoginAttempt } from "@/lib/admin/login-rate-limit";
 import { createCookieClient } from "@/lib/admin/supabase-runtime";
-import { enforceSameOrigin, readBoundedUrlEncodedForm } from "@/lib/request-security";
+import { enforceSameOrigin, publicRequestOrigin, readBoundedUrlEncodedForm } from "@/lib/request-security";
 
 function loginUrl(request: Request, error: string) {
-  return new URL(`/admin/login?error=${error}`, request.url);
+  return new URL(`/admin/login?error=${error}`, publicRequestOrigin(request));
 }
 
 export async function POST(request: Request) {
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       await supabase.auth.signOut();
       return NextResponse.redirect(loginUrl(request, "invalid"), 303);
     }
-    return NextResponse.redirect(new URL("/admin", request.url), 303);
+    return NextResponse.redirect(new URL("/admin", publicRequestOrigin(request)), 303);
   } catch {
     return NextResponse.redirect(loginUrl(request, "invalid"), 303);
   }

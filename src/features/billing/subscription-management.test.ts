@@ -18,6 +18,21 @@ describe("native subscription management copy", () => {
 });
 
 describe("shared subscription presentation", () => {
+  it("never reports an active renewal while access is unknown", () => {
+    expect(createSubscriptionPresentation({
+      lifecycleState: "unknown",
+      willRenew: false,
+      paidThrough: null,
+      status: "unknown",
+    })).toMatchObject({
+      headlineAccent: "subscription",
+      badgeLabel: "Checking",
+      automaticRenewalValue: "Checking",
+      showManage: false,
+      showPurchase: false,
+    });
+  });
+
   it.each([
     ["active_renewing", "is on", "Active", false],
     ["active_cancelled", "is off", "Renewal off", false],
@@ -30,6 +45,30 @@ describe("shared subscription presentation", () => {
 
   it("does not render explanatory hero copy below the renewal headline", () => {
     expect(routeSource).not.toContain("presentation.heroDetail");
+  });
+
+  it("does not let a stale native renewal snapshot override server-authoritative access", () => {
+    const serverAccess = { lifecycleState: "active_renewing" as const, willRenew: true, paidThrough: "2026-08-11T02:34:50Z", status: "active" as const, productIdentifier: "formie_monthly" };
+    const nativeSubscription = { entitlementId: "formie_pro", productIdentifier: "formie_monthly", isActive: true, willRenew: false, expirationDate: "2026-08-11T02:34:50Z", managementURL: null, isSandbox: true, store: "APP_STORE" };
+
+    expect(createSubscriptionPresentation(serverAccess, nativeSubscription)).toMatchObject({
+      headlineAccent: "is on",
+      automaticRenewalValue: "On",
+    });
+    expect(createSubscriptionPresentation({ ...serverAccess, lifecycleState: "active_cancelled", willRenew: false }, { ...nativeSubscription, willRenew: true })).toMatchObject({
+      headlineAccent: "is off",
+      automaticRenewalValue: "Off",
+    });
+  });
+
+  it("does not let native renewal metadata fabricate active server access", () => {
+    const expired = { lifecycleState: "expired" as const, willRenew: false, paidThrough: "2026-08-11T02:34:50Z", status: "expired" as const, productIdentifier: "formie_monthly" };
+    const nativeSubscription = { entitlementId: "formie_pro", productIdentifier: "formie_monthly", isActive: true, willRenew: true, expirationDate: "2026-09-11T02:34:50Z", managementURL: null, isSandbox: true, store: "APP_STORE" };
+
+    expect(createSubscriptionPresentation(expired, nativeSubscription)).toMatchObject({
+      headlineAccent: "has ended",
+      showPurchase: true,
+    });
   });
 });
 

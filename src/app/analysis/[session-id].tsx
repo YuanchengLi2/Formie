@@ -6,22 +6,25 @@ import { useAnalysisStatus } from "@/features/analysis/use-analysis-status";
 import { cancelAnalysis } from "@/features/access/api";
 import { AnalysisApiError, reanalyzeAnalysis } from "@/features/analysis/api";
 import { getAccessToken } from "@/features/auth/access-token";
+import { useAuth } from "@/features/auth/auth-provider";
+import { getAnalysisRecoveryStore } from "@/features/capture/analysis-recovery-store";
 import { useCaptureStore } from "@/features/capture/capture-store";
 import { deviceVideoStore } from "@/features/capture/device-video-store";
 import { AnalysisProgressScreen } from "@/screens/analysis-progress";
 import { queryClient } from "@/lib/query-client";
-import { supabase } from "@/lib/supabase";
 import { AiProcessingConsentModal } from "@/components/ai-processing-consent-modal";
-import { acceptAiProcessingConsent, currentAiProcessingConsent, isCurrentAiProcessingConsent, type AiConsentClient } from "@/features/privacy/ai-consent";
+import { useAiConsent } from "@/features/privacy/use-ai-consent";
 
 export default function AnalysisProgressRoute() {
   const router = useRouter();
+  const auth = useAuth();
   const { "session-id": sessionId = "" } = useLocalSearchParams<{ "session-id": string }>();
   const status = useAnalysisStatus(sessionId);
   const resetCapture = useCaptureStore((state) => state.dispatch);
   const [consentVisible, setConsentVisible] = useState(false);
   const [consentAgreeing, setConsentAgreeing] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
+  const consent = useAiConsent();
   const reanalysis = useMutation({
     mutationFn: async () => {
       const declaration = status.data?.setDeclaration;
@@ -30,6 +33,8 @@ export default function AnalysisProgressRoute() {
         const accessToken = await getAccessToken();
         const clientRequestId = globalThis.crypto?.randomUUID?.() ?? `reanalysis-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         await reanalyzeAnalysis({ accessToken, sessionId, declaration, clientRequestId });
+        if (!auth.user?.id) throw new Error("Your account session is unavailable. Sign in again and retry.");
+        await getAnalysisRecoveryStore().markProcessing(auth.user.id, sessionId);
         return { kind: "server" as const };
       } catch (error) {
         if (!(error instanceof AnalysisApiError) || error.code !== "VIDEO_NOT_FOUND") throw error;
@@ -58,8 +63,7 @@ export default function AnalysisProgressRoute() {
   const requestRetry = async () => {
     setConsentError(null);
     try {
-      const current = await currentAiProcessingConsent(supabase as unknown as AiConsentClient);
-      if (!isCurrentAiProcessingConsent(current)) return setConsentVisible(true);
+      if (!consent.current) return setConsentVisible(true);
       reanalysis.mutate(undefined);
     } catch {
       setConsentError("AI processing consent could not be checked. Try again.");
@@ -69,7 +73,7 @@ export default function AnalysisProgressRoute() {
   const agreeAndRetry = async () => {
     if (consentAgreeing) return;
     setConsentAgreeing(true); setConsentError(null);
-    try { await acceptAiProcessingConsent(supabase as unknown as AiConsentClient); setConsentVisible(false); reanalysis.mutate(undefined); }
+    try { await consent.accept(); setConsentVisible(false); reanalysis.mutate(undefined); }
     catch { setConsentError("AI processing consent could not be saved. Try again."); }
     finally { setConsentAgreeing(false); }
   };
@@ -78,7 +82,9 @@ export default function AnalysisProgressRoute() {
     const terminal = status.data?.status === "complete"
       || status.data?.status === "partial"
       || status.data?.status === "unable";
-    if (terminal && status.data?.result) router.replace(`/results/${sessionId}` as Href);
+    if (terminal && status.data?.result) {
+      void getAnalysisRecoveryStore().clear().finally(() => router.replace(`/results/${sessionId}` as Href));
+    }
   }, [router, sessionId, status.data?.result, status.data?.status]);
 
   const terminalWithoutResult = (status.data?.status === "complete"
@@ -107,11 +113,13 @@ export default function AnalysisProgressRoute() {
       retryingAnalysis={reanalysis.isPending}
       retryAnalysisError={reanalysis.error instanceof Error ? reanalysis.error.message : null}
       onRecordAgain={failureMessage ? () => {
-        void cancelAnalysis({ sessionId }).catch(() => undefined);
-        resetCapture({ type: "reset" });
-        router.replace("/exercise-selection");
+        void getAnalysisRecoveryStore().clear().finally(() => {
+          void cancelAnalysis({ sessionId }).catch(() => undefined);
+          resetCapture({ type: "reset" });
+          router.replace("/exercise-selection");
+        });
       } : undefined}
-      onGoHome={failureMessage ? () => router.replace("/(tabs)/(home)") : undefined}
+      onGoHome={failureMessage ? () => void getAnalysisRecoveryStore().clear().finally(() => router.replace("/(tabs)/(home)")) : undefined}
     />
     <AiProcessingConsentModal visible={consentVisible} agreeing={consentAgreeing} error={consentError} onAgree={() => void agreeAndRetry()} onDismiss={() => { if (!consentAgreeing) setConsentVisible(false); }} />
   </>);

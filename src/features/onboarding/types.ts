@@ -13,6 +13,7 @@ export const onboardingSteps = [
   "training-frequency",
   "custom-milestone",
   "acquisition-source",
+  "creator-code",
   "long-term-value",
   "loading",
   "create-account",
@@ -26,20 +27,42 @@ export function isOnboardingStep(value: unknown): value is OnboardingStep {
 }
 
 export function nextOnboardingStep(step: OnboardingStep): OnboardingStep | null {
+  if (step === "acquisition-source" || step === "creator-code") return "long-term-value";
   const index = onboardingSteps.indexOf(step);
   return index >= 0 && index < onboardingSteps.length - 1 ? onboardingSteps[index + 1] : null;
 }
 
 export function previousOnboardingStep(step: OnboardingStep): OnboardingStep | null {
+  if (step === "long-term-value") return "acquisition-source";
   const index = onboardingSteps.indexOf(step);
   return index > 0 ? onboardingSteps[index - 1] : null;
+}
+
+export function nextOnboardingStepForAnswers(
+  step: OnboardingStep,
+  acquisitionSource: AcquisitionSource | null,
+): OnboardingStep | null {
+  if (step === "acquisition-source") {
+    return acquisitionSource === "affiliated_creator" ? "creator-code" : "long-term-value";
+  }
+  return nextOnboardingStep(step);
+}
+
+export function previousOnboardingStepForAnswers(
+  step: OnboardingStep,
+  acquisitionSource: AcquisitionSource | null,
+): OnboardingStep | null {
+  if (step === "long-term-value") {
+    return acquisitionSource === "affiliated_creator" ? "creator-code" : "acquisition-source";
+  }
+  return previousOnboardingStep(step);
 }
 export type Gender = "male" | "female" | "prefer_not_to_say";
 export type MeasurementSystem = "imperial" | "metric";
 export type ExperienceLevel = "beginner" | "intermediate" | "advanced";
 export type PrimaryGoal = "build_muscle" | "get_stronger" | "lose_weight" | "improve_technique";
 export type BiggestFrustration = "plateau" | "unsure_form" | "discomfort" | "lack_confidence";
-export type AcquisitionSource = "tiktok" | "instagram" | "youtube" | "app_store_search" | "google_search" | "friend_trainer_coach" | "other";
+export type AcquisitionSource = "tiktok" | "instagram" | "youtube" | "app_store_search" | "google_search" | "friend_trainer_coach" | "affiliated_creator" | "other";
 export type OAuthIntent = "login" | "create_account";
 export type OnboardingStatus =
   | "collecting"
@@ -111,6 +134,7 @@ export type OnboardingAction =
   | { type: "step_viewed"; step: OnboardingStep }
   | { type: "account_required" }
   | { type: "oauth_started"; intent: OAuthIntent }
+  | { type: "oauth_cancelled" }
   | { type: "auth_succeeded"; userId: string }
   | { type: "profile_sync_succeeded" }
   | { type: "access_granted"; userId?: string | null }
@@ -130,6 +154,8 @@ export function reduceOnboardingState(state: OnboardingState, action: Onboarding
       return { ...state, currentStep: "create-account", status: "account_required" };
     case "oauth_started":
       return { ...state, oauthIntent: action.intent };
+    case "oauth_cancelled":
+      return { ...state, oauthIntent: null };
     case "auth_succeeded":
       return { ...state, ownerUserId: action.userId, currentStep: "create-account", status: "profile_sync_required" };
     case "profile_sync_succeeded":

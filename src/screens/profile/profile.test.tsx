@@ -78,13 +78,36 @@ describe("ProfileScreen", () => {
 
   it("shows the current AI processing consent and withdraws future processing without changing prior results", async () => {
     const onWithdrawAiConsent = jest.fn().mockResolvedValue(undefined);
-    const screen = await render(<ProfileScreen aiConsent={{ current: true, version: "2026-09-01" }} onWithdrawAiConsent={onWithdrawAiConsent} />);
+    const screen = await render(<ProfileScreen aiConsent={{ status: "ready", current: true, version: "2026-09-01", error: null }} onWithdrawAiConsent={onWithdrawAiConsent} />);
 
     expect(screen.getByText("AI Processing")).toBeTruthy();
     expect(screen.getByText("Agreed · Notice 2026-09-01")).toBeTruthy();
     expect(screen.getByText(/blocks new analyses and retries/i)).toBeTruthy();
     await fireEvent.press(screen.getByRole("button", { name: "Withdraw AI processing consent" }));
     await waitFor(() => expect(onWithdrawAiConsent).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows the current AI disclosure before accepting re-consent", async () => {
+    const onAcceptAiConsent = jest.fn().mockResolvedValue(undefined);
+    const screen = await render(<ProfileScreen aiConsent={{ status: "ready", current: false, version: null, error: null }} onAcceptAiConsent={onAcceptAiConsent} />);
+
+    expect(screen.getByText("Withdrawn")).toBeTruthy();
+    await fireEvent.press(screen.getByRole("button", { name: "Enable AI processing" }));
+    expect(screen.getByRole("header", { name: "Enable AI form analysis" })).toBeTruthy();
+    expect(screen.getByText(/paid Google Gemini API/i)).toBeTruthy();
+    expect(onAcceptAiConsent).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole("button", { name: "Not now" }));
+    expect(screen.queryByRole("header", { name: "Enable AI form analysis" })).toBeNull();
+    expect(onAcceptAiConsent).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole("button", { name: "Enable AI processing" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Agree and continue" }));
+    await waitFor(() => expect(onAcceptAiConsent).toHaveBeenCalledTimes(1));
+  });
+
+  it("labels an Apple private relay identity without displaying the relay address", async () => {
+    const screen = await render(<ProfileScreen accountIdentity={{ provider: "apple", title: "Sign in with Apple", detail: "Private Relay email", usesPrivateRelay: true }} />);
+    expect(screen.getByText("Sign in with Apple · Private Relay email")).toBeTruthy();
+    expect(screen.queryByText(/privaterelay\.appleid\.com/i)).toBeNull();
   });
 
   it("keeps the subscription chevron aligned with the plan title", async () => {
@@ -94,8 +117,8 @@ describe("ProfileScreen", () => {
 
   it("shows grouped identity, subscription, and development Test Store lifecycle controls", async () => {
     const onTestControl = jest.fn().mockResolvedValue(undefined);
-    const screen = await render(<ProfileScreen displayName="Yuan" email="yuan@example.com" subscription={{ plan: "Formie Annual", stateLabel: "Active · Automatic renewal on · Next billing Sep 1, 2026 at 8:56 AM UTC" }} showTestControls onTestControl={onTestControl} />);
-    expect(screen.getByText("yuan@example.com")).toBeTruthy();
+    const screen = await render(<ProfileScreen displayName="Yuan" accountIdentity={{ provider: "email", title: "Email account", detail: "yuan@example.com", usesPrivateRelay: false }} subscription={{ plan: "Formie Annual", stateLabel: "Active · Automatic renewal on · Next billing Sep 1, 2026 at 8:56 AM UTC" }} showTestControls onTestControl={onTestControl} />);
+    expect(screen.getByText("Email account · yuan@example.com")).toBeTruthy();
     expect(screen.getByText("Formie Annual")).toBeTruthy();
     expect(screen.queryByText(/analyses left/i)).toBeNull();
     expect(screen.getByText("Active · Automatic renewal on · Next billing Sep 1, 2026 at 8:56 AM UTC")).toBeTruthy();

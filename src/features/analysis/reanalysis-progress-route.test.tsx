@@ -65,12 +65,11 @@ jest.mock("@/features/analysis/api", () => ({
   reanalyzeAnalysis: (...args: unknown[]) => mockReanalyzeAnalysis(...args),
 }));
 jest.mock("@/features/auth/access-token", () => ({ getAccessToken: jest.fn(async () => "token") }));
-jest.mock("@/features/privacy/ai-consent", () => ({
-  currentAiProcessingConsent: jest.fn(async () => mockConsentCurrent ? ({ version: "current" }) : null),
-  isCurrentAiProcessingConsent: (consent: unknown) => Boolean(consent),
-  acceptAiProcessingConsent: jest.fn(async () => undefined),
+jest.mock("@/features/auth/auth-provider", () => ({ useAuth: () => ({ phase: "authenticated", user: { id: "user-1" } }) }));
+jest.mock("@/features/capture/analysis-recovery-store", () => ({
+  getAnalysisRecoveryStore: () => ({ markProcessing: jest.fn(async () => undefined), clear: jest.fn(async () => undefined) }),
 }));
-jest.mock("@/lib/supabase", () => ({ supabase: {} }));
+jest.mock("@/features/privacy/use-ai-consent", () => ({ useAiConsent: () => ({ status: "ready", current: mockConsentCurrent, version: mockConsentCurrent ? "2026-09-01" : null, error: null, accept: jest.fn(async () => undefined), revoke: jest.fn(), refresh: jest.fn() }) }));
 jest.mock("@/features/progress/history-cache", () => ({ invalidateAnalysisHistory: jest.fn() }));
 jest.mock("@/lib/query-client", () => ({
   queryClient: {

@@ -13,11 +13,13 @@ Deno.serve(async (request) => {
     loadSubscriber: fetchRevenueCatSubscriber,
     persistLedger: (userId, subscriber) => persistEntitlementLedger(admin, userId, subscriber),
     loadDashboardData: async (userId) => {
-      const [profileResult, accessResult] = await Promise.all([caller.from("user_profiles").select("display_name").eq("user_id", userId).maybeSingle(), caller.rpc("get_my_access_status")]);
+      const [profileResult, accessResult] = await Promise.all([caller.from("user_profiles").select("display_name").eq("user_id", userId).maybeSingle(), caller.rpc("get_my_access_status_v2")]);
       if (profileResult.error || accessResult.error) throw profileResult.error ?? accessResult.error;
-      const access = Array.isArray(accessResult.data) ? accessResult.data[0] : accessResult.data;
+      const envelope = accessResult.data && typeof accessResult.data === "object" ? accessResult.data as Record<string, any> : null;
+      const access = envelope?.access;
       if (!access) throw new Error("Access status is unavailable");
-      return { displayName: profileResult.data?.display_name ?? "Formie Athlete", profileExists: Boolean(profileResult.data), access };
+      const bonus = envelope?.referralBonus ?? { state: "none", baseLimit: 10, baseUsed: 0, bonusGranted: 0, bonusUsed: 0, bonusReserved: 0, bonusRemaining: 0, bonusExpiresAt: null };
+      return { displayName: profileResult.data?.display_name ?? "Formie Athlete", profileExists: Boolean(profileResult.data), access, referralBonus: bonus };
     },
   });
   const secured = withCors(request, response);

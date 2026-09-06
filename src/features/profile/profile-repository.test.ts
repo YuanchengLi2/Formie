@@ -3,9 +3,10 @@ import { initialOnboardingAnswers } from "@/features/onboarding/types";
 
 import {
   createInitialProfileRow,
-  loadOrCreateUserProfile,
+  loadUserProfile,
   profileFromRow,
   saveUserProfile,
+  upsertOnboardingProfile,
   type UserProfileClient,
   type UserProfileRow,
 } from "./profile-repository";
@@ -147,7 +148,16 @@ describe("profile repository", () => {
     const upsert = jest.fn();
     const client = clientWith({ maybeSingle, upsert });
 
-    await expect(loadOrCreateUserProfile(client, user())).resolves.toEqual(profileFromRow(row));
+    await expect(loadUserProfile(client, "user-1")).resolves.toEqual(profileFromRow(row));
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("leaves a missing profile missing during a read", async () => {
+    const maybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
+    const upsert = jest.fn();
+    const client = clientWith({ maybeSingle, upsert });
+
+    await expect(loadUserProfile(client, "user-1")).resolves.toBeNull();
     expect(upsert).not.toHaveBeenCalled();
   });
 
@@ -176,7 +186,7 @@ describe("profile repository", () => {
     const upsert = jest.fn(() => ({ select: () => ({ single }) }));
     const client = clientWith({ maybeSingle, upsert });
 
-    await (loadOrCreateUserProfile as unknown as (client: UserProfileClient, user: User, answers: unknown) => Promise<unknown>)(client, user(), answers);
+    await (upsertOnboardingProfile as unknown as (client: UserProfileClient, user: User, answers: unknown) => Promise<unknown>)(client, user(), answers);
 
     expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
       age_years: 27,
@@ -212,7 +222,7 @@ describe("profile repository", () => {
     const upsert = jest.fn(() => ({ select: () => ({ single }) }));
     const client = clientWith({ maybeSingle, upsert });
 
-    await loadOrCreateUserProfile(client, user(), answers);
+    await upsertOnboardingProfile(client, user(), answers);
 
     expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
       gender: "female",
@@ -220,7 +230,7 @@ describe("profile repository", () => {
     }), { onConflict: "user_id" });
   });
 
-  it("creates a missing profile and saves editable profile fields", async () => {
+  it("creates a missing profile only through explicit onboarding and saves editable profile fields", async () => {
     const initial = profileRow();
     const advanced = { ...initial, experience: "advanced" as const };
     const maybeSingle = jest.fn().mockResolvedValue({ data: null, error: null });
@@ -231,11 +241,24 @@ describe("profile repository", () => {
     const update = jest.fn(() => ({ eq: () => ({ select: () => ({ single }) }) }));
     const client = clientWith({ maybeSingle, upsert, update });
 
-    await expect(loadOrCreateUserProfile(client, user())).resolves.toEqual(profileFromRow(initial));
+    const answers = {
+      ...initialOnboardingAnswers,
+      ageYears: 27,
+      gender: "male" as const,
+      heightCm: 177.8,
+      weightKg: 74.84,
+      experience: "intermediate" as const,
+      primaryGoal: "get_stronger" as const,
+      biggestFrustration: "unsure_form" as const,
+      customMilestone: "Bench 225 lb",
+      acquisitionSource: "youtube" as const,
+      acceptedPrivacy: true,
+    };
+    await expect(upsertOnboardingProfile(client, user(), answers)).resolves.toEqual(profileFromRow(initial));
     expect(upsert).toHaveBeenCalledWith(expect.objectContaining({
       user_id: "user-1",
-      onboarding_step: "welcome",
-      onboarding_completed: false,
+      onboarding_step: "complete",
+      onboarding_completed: true,
     }), { onConflict: "user_id" });
 
     await expect(saveUserProfile(client, "user-1", {

@@ -61,6 +61,20 @@ function dependencies(overrides: Partial<UploadCoordinatorDependencies> = {}): U
 }
 
 describe("upload coordinator", () => {
+  it("releases a hung upload even when the transport ignores abort, then allows retry", async () => {
+    jest.useFakeTimers();
+    try {
+      const uploadVideo = jest.fn<Promise<void>, []>(() => new Promise(() => undefined));
+      const deps = dependencies({ createSession: jest.fn(async () => singleTarget), uploadVideo });
+      const coordinator = createUploadCoordinator(deps);
+      const assertion = expect(coordinator.run(recording, declaration)).rejects.toThrow("timed out");
+      await jest.advanceTimersByTimeAsync(90_000);
+      await assertion;
+      expect(uploadVideo).toHaveBeenCalledTimes(2);
+      uploadVideo.mockResolvedValue(undefined);
+      await expect(coordinator.run(recording, declaration)).resolves.toMatchObject({ sessionId: "session-single" });
+    } finally { jest.useRealTimers(); }
+  });
   it("allows a prepared 4.5 MB mobile upload to run well beyond fifteen seconds", () => {
     expect(uploadDeadlineMs(4_500_000)).toBeGreaterThan(15_000);
     expect(uploadDeadlineMs(4_500_000)).toBeGreaterThanOrEqual(45_000);
@@ -106,7 +120,7 @@ describe("upload coordinator", () => {
     expect(deps.uploadVideo).toHaveBeenCalledWith(prepared, singleTarget.analysis, expect.any(AbortSignal));
     expect(deps.normalizeVideo).not.toHaveBeenCalled();
     expect(deps.normalizePrivacySafeFallback).not.toHaveBeenCalled();
-    expect(deps.completeUpload).toHaveBeenCalledWith("user-jwt", "session-single", 12_000, false, expect.any(AbortSignal), { byteLength: 4_500_000 });
+    expect(deps.completeUpload).toHaveBeenCalledWith("user-jwt", "session-single", undefined, 12_000, false, expect.any(AbortSignal), { byteLength: 4_500_000 });
   });
 
   it("retries an ambiguous single-profile upload against the identical target", async () => {
@@ -217,7 +231,7 @@ describe("upload coordinator", () => {
 
     expect(uploadVideo).toHaveBeenNthCalledWith(1, recording, target.original, expect.any(AbortSignal));
     expect(uploadVideo).toHaveBeenNthCalledWith(2, { ...recording, localUri: "file:///set-upright.mp4" }, target.analysis, expect.any(AbortSignal));
-    expect(completeUpload).toHaveBeenCalledWith("user-jwt", "session-1", 12_000, true, expect.any(AbortSignal));
+    expect(completeUpload).toHaveBeenCalledWith("user-jwt", "session-1", undefined, 12_000, true, expect.any(AbortSignal));
     expect(deps.bindLocalRecording).toHaveBeenCalledWith("session-1", recording);
   });
 
@@ -239,7 +253,7 @@ describe("upload coordinator", () => {
     expect(deps.uploadVideo).toHaveBeenNthCalledWith(2, normalized, target.analysis, expect.any(AbortSignal));
     expect(deps.uploadVideo).toHaveBeenNthCalledWith(3, { ...recording, localUri: "file:///set-upper-body.mp4" }, target.privacySafe, expect.any(AbortSignal));
     expect(normalizeVideo).toHaveBeenCalledWith(recording);
-    expect(deps.completeUpload).toHaveBeenCalledWith("user-jwt", "session-1", 12_000, true, expect.any(AbortSignal));
+    expect(deps.completeUpload).toHaveBeenCalledWith("user-jwt", "session-1", undefined, 12_000, true, expect.any(AbortSignal));
   });
 
   it("retries session creation with one idempotency key", async () => {
@@ -257,7 +271,7 @@ describe("upload coordinator", () => {
 
   it("retries completion without uploading the saved video twice", async () => {
     const completeUpload = jest
-      .fn<Promise<void>, [string, string, number, boolean, AbortSignal]>()
+      .fn<Promise<void>, [string, string, string | undefined, number, boolean, AbortSignal]>()
       .mockRejectedValueOnce(new Error("completion unavailable"))
       .mockResolvedValueOnce(undefined);
     const deps = dependencies({ completeUpload });
@@ -267,6 +281,27 @@ describe("upload coordinator", () => {
 
     expect(deps.uploadVideo).toHaveBeenCalledTimes(3);
     expect(completeUpload).toHaveBeenCalledTimes(2);
+  });
+
+  it("carries the exact attempt from reservation through upload completion", async () => {
+    const completeUpload = jest.fn(async () => undefined);
+    const attemptTarget = { ...singleTarget, reservationId: "reservation-1", attemptId: "attempt-1" };
+    const coordinator = createUploadCoordinator(dependencies({
+      createSession: jest.fn(async () => attemptTarget),
+      prepareAnalysisVideo: jest.fn(async () => ({ ...recording, byteLength: 4_500_000 })),
+      completeUpload,
+    }));
+
+    await coordinator.run(recording, declaration);
+    expect(completeUpload).toHaveBeenCalledWith(
+      "user-jwt",
+      "session-single",
+      "attempt-1",
+      12_000,
+      false,
+      expect.any(AbortSignal),
+      { byteLength: 4_500_000 },
+    );
   });
 
   it("clears prepared state only when explicitly reset", async () => {
@@ -303,7 +338,20 @@ describe("upload coordinator", () => {
     expect(completeUpload).not.toHaveBeenCalled();
   });
 
-  it("releases a reserved credit after a terminal pre-completion failure", async () => {
+  it("reuses a persisted idempotency key after the app process restarts", async () => {
+    const firstCreate = jest.fn<Promise<UploadTarget>, [string, SetDeclaration, string | undefined, string, AbortSignal]>().mockResolvedValue(target);
+    const first = createUploadCoordinator(dependencies({ createSession: firstCreate }));
+    await first.run(recording, declaration, undefined, { clientRequestId: "durable-upload-request" });
+
+    const resumedCreate = jest.fn<Promise<UploadTarget>, [string, SetDeclaration, string | undefined, string, AbortSignal]>().mockResolvedValue(target);
+    const resumed = createUploadCoordinator(dependencies({ createSession: resumedCreate }));
+    await resumed.run(recording, declaration, undefined, { clientRequestId: "durable-upload-request" });
+
+    expect(firstCreate).toHaveBeenCalledWith("user-jwt", declaration, undefined, "durable-upload-request", expect.any(AbortSignal));
+    expect(resumedCreate).toHaveBeenCalledWith("user-jwt", declaration, undefined, "durable-upload-request", expect.any(AbortSignal));
+  });
+
+  it("keeps the reserved operation resumable after a pre-completion failure", async () => {
     const cancelUpload = jest.fn(async () => undefined);
     const createSession = jest.fn()
       .mockResolvedValueOnce({ ...singleTarget, sessionId: "failed-session", reservationId: "failed-reservation" })
@@ -320,12 +368,11 @@ describe("upload coordinator", () => {
     }));
 
     await expect(coordinator.run(recording, declaration)).rejects.toThrow("upload failed");
-    expect(cancelUpload).toHaveBeenCalledTimes(1);
-    expect(cancelUpload).toHaveBeenCalledWith({ sessionId: "failed-session", reservationId: "failed-reservation", reason: "upload_failed" });
+    expect(cancelUpload).not.toHaveBeenCalled();
 
     await expect(coordinator.run(recording, declaration)).resolves.toMatchObject({ sessionId: "retry-session" });
     expect(createSession).toHaveBeenCalledTimes(2);
-    expect(cancelUpload).toHaveBeenCalledTimes(1);
+    expect(cancelUpload).not.toHaveBeenCalled();
   });
 
   it("does not reuse a failed session for a different declaration", async () => {

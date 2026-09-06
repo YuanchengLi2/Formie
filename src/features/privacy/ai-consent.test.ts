@@ -33,9 +33,18 @@ describe("AI processing consent", () => {
   });
 
   it("records the source-controlled notice version and digest", async () => {
-    rpc.mockResolvedValue({ data: null, error: null });
+    rpc.mockResolvedValue({ data: [{
+      version: AI_PROCESSING_NOTICE_VERSION,
+      notice_sha256: AI_PROCESSING_NOTICE_SHA256,
+      accepted_at: "2026-09-03T12:00:00.000Z",
+      revoked_at: null,
+    }], error: null });
 
-    await expect(acceptAiProcessingConsent(client)).resolves.toBeUndefined();
+    await expect(acceptAiProcessingConsent(client)).resolves.toMatchObject({
+      version: AI_PROCESSING_NOTICE_VERSION,
+      acceptedAt: "2026-09-03T12:00:00.000Z",
+      revokedAt: null,
+    });
     expect(rpc).toHaveBeenCalledWith("record_ai_processing_consent", {
       p_version: AI_PROCESSING_NOTICE_VERSION,
       p_notice_sha256: AI_PROCESSING_NOTICE_SHA256,
@@ -43,8 +52,8 @@ describe("AI processing consent", () => {
   });
 
   it("revokes future processing and surfaces RPC failures", async () => {
-    rpc.mockResolvedValueOnce({ data: null, error: null });
-    await expect(revokeAiProcessingConsent(client)).resolves.toBeUndefined();
+    rpc.mockResolvedValueOnce({ data: "2026-09-03T13:00:00.000Z", error: null });
+    await expect(revokeAiProcessingConsent(client)).resolves.toBe("2026-09-03T13:00:00.000Z");
     expect(rpc).toHaveBeenCalledWith("revoke_ai_processing_consent", {
       p_version: AI_PROCESSING_NOTICE_VERSION,
     });

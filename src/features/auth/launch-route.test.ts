@@ -1,6 +1,25 @@
 import { resolveLaunchRoute } from "./launch-route";
 
 describe("launch routing", () => {
+  it("does not classify an authenticated account until its server profile has resolved", () => {
+    expect(resolveLaunchRoute({
+      phase: "authenticated",
+      onboarding: "not_started",
+      currentStep: "welcome",
+      profileStatus: "idle",
+      profileComplete: false,
+      accessStatus: "unknown",
+    } as never)).toBeNull();
+    expect(resolveLaunchRoute({
+      phase: "authenticated",
+      onboarding: "not_started",
+      currentStep: "welcome",
+      profileStatus: "loading",
+      profileComplete: false,
+      accessStatus: "unknown",
+    } as never)).toBeNull();
+  });
+
   it("blocks a completed legacy under-18 account before subscription or analysis access", () => {
     expect(resolveLaunchRoute({
       phase: "authenticated",

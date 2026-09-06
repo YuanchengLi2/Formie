@@ -11,6 +11,9 @@ const mockRefresh = jest.fn();
 const mockCompleteAccess = jest.fn();
 let capturedProps: Record<string, unknown> | null = null;
 let mockReturnTo: string | undefined;
+let mockAccessStatus = "expired";
+let mockLifecycleState = "expired";
+let mockOnboardingStatus = "premium_required";
 
 jest.mock("expo-router", () => ({
   useRouter: () => ({ replace: mockReplace, back: mockBack }),
@@ -29,12 +32,12 @@ jest.mock("@/features/auth/legal-config", () => ({
 }));
 jest.mock("@/features/access/access-provider", () => ({
   useAccess: () => ({
-    access: { status: "expired", lifecycleState: "expired", remaining: 0 },
+    access: { status: mockAccessStatus, lifecycleState: mockLifecycleState, remaining: 0 },
     refresh: mockRefresh,
   }),
 }));
 jest.mock("@/features/onboarding/onboarding-store", () => ({
-  useOnboarding: () => ({ status: "premium_required", completeAccess: mockCompleteAccess }),
+  useOnboarding: () => ({ status: mockOnboardingStatus, completeAccess: mockCompleteAccess }),
 }));
 jest.mock("@/features/billing/billing-provider", () => ({
   useBilling: () => ({
@@ -62,6 +65,9 @@ describe("SubscriptionRoute", () => {
     mockRefresh.mockReset().mockResolvedValue(undefined);
     mockCompleteAccess.mockReset().mockResolvedValue(undefined);
     mockReturnTo = undefined;
+    mockAccessStatus = "expired";
+    mockLifecycleState = "expired";
+    mockOnboardingStatus = "premium_required";
   });
 
   it("forwards the live price, restore state, and production legal actions", async () => {
@@ -90,5 +96,27 @@ describe("SubscriptionRoute", () => {
     expect(mockRefresh).toHaveBeenCalledTimes(1);
     expect(mockCompleteAccess).toHaveBeenCalledTimes(1);
     expect(mockReplace).toHaveBeenCalledWith("/exercise-selection");
+  });
+
+  it("shows an active restored subscription confirmation before completing onboarding", async () => {
+    mockAccessStatus = "active";
+    mockLifecycleState = "active_renewing";
+    render(<SubscriptionRoute />);
+    await waitFor(() => expect(capturedProps?.restoredSubscription).toBe(true));
+
+    expect(mockCompleteAccess).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
+    await act(async () => { await (capturedProps?.onContinue as () => Promise<void>)(); });
+    expect(mockCompleteAccess).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith("/(tabs)/(home)");
+  });
+
+  it("redirects a returning completed account that is already active", async () => {
+    mockAccessStatus = "active";
+    mockLifecycleState = "active_renewing";
+    mockOnboardingStatus = "complete";
+    render(<SubscriptionRoute />);
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith("/(tabs)/(home)"));
+    expect(mockCompleteAccess).not.toHaveBeenCalled();
   });
 });

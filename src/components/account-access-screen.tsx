@@ -21,12 +21,13 @@ function ConsentRow({ label, checked, onPress, children }: { label: string; chec
   </View>;
 }
 
-export function AccountAccessScreen({ mode = "login", onApple, onEmailPassword, onCreateAccount, onBack, onOpenTerms, onOpenPrivacy, onPrivacyConsentChange, onAiProcessingConsentChange, onMarketingOptInChange, busyProvider = null, busy = false, error, notice }: {
+export function AccountAccessScreen({ mode = "login", onApple, onEmailPassword, onCreateAccount, onSignIn, onBack, onOpenTerms, onOpenPrivacy, onPrivacyConsentChange, onAiProcessingConsentChange, onMarketingOptInChange, busyProvider = null, busy = false, error, notice }: {
   mode?: AccountAccessMode;
   personalizedMessage?: string;
   onApple: () => void;
   onEmailPassword?: () => void;
   onCreateAccount?: () => void;
+  onSignIn?: () => void;
   onBack?: () => void;
   onOpenTerms?: () => void;
   onOpenPrivacy?: () => void;
@@ -56,12 +57,7 @@ export function AccountAccessScreen({ mode = "login", onApple, onEmailPassword, 
         <View testID="account-access-gold-bar" style={styles.progressBar} />
       </View>
       <View style={styles.hero}><Text style={[styles.title, compact && styles.titleCompact]}>{title}</Text></View>
-      {creatingAccount ? <View style={styles.consents}>
-        <ConsentRow label="Agree to the Terms of Use and Privacy Policy" checked={legalAccepted} onPress={() => setLegalAccepted((value) => { const next = !value; onPrivacyConsentChange?.(next); return next; })}>{"I agree to Formie's "}<Text accessibilityRole="link" onPress={onOpenTerms} style={styles.link}>Terms of Use</Text> and <Text accessibilityRole="link" onPress={onOpenPrivacy} style={styles.link}>Privacy Policy</Text></ConsentRow>
-        <ConsentRow label="Allow AI processing for form analysis" checked={aiProcessingAccepted} onPress={() => setAiProcessingAccepted((value) => { const next = !value; onAiProcessingConsentChange?.(next); return next; })}>Allow Formie to send my exercise video, exercise details, and relevant profile information to Formie servers and the paid Google Gemini API for form analysis. I can withdraw this later in Settings.</ConsentRow>
-        <ConsentRow label="Receive Formie tips and offers" checked={marketingOptIn} onPress={() => setMarketingOptIn((value) => { const next = !value; onMarketingOptInChange?.(next); return next; })}>Send me tips, new features, and personalized offers from Formie.</ConsentRow>
-      </View> : null}
-      <View testID="account-access-actions" style={[styles.actions, compact && styles.actionsCompact, creatingAccount && styles.actionsCreateAccount]}>
+      <View testID="account-access-actions" style={[styles.actions, compact && styles.actionsCompact, creatingAccount && (compact ? styles.actionsCreateAccountCompact : styles.actionsCreateAccount)]}>
         <SocialProviderButtons intent={creatingAccount ? "create_account" : "login"} disabled={disabled} busy={busyProvider === "apple"} onApple={onApple} />
         {busy && !busyProvider ? <View style={styles.busy}><ActivityIndicator color="#E5AD32" /><Text style={styles.busyText}>Connecting…</Text></View> : null}
         {notice ? <Text accessibilityLiveRegion="polite" style={styles.notice}>{notice}</Text> : null}
@@ -69,6 +65,12 @@ export function AccountAccessScreen({ mode = "login", onApple, onEmailPassword, 
         {mode === "login" && onEmailPassword ? <Pressable accessibilityRole="button" accessibilityLabel="Sign in with email" disabled={disabled} onPress={onEmailPassword} style={({ pressed }) => [styles.emailSignIn, (pressed || disabled) && styles.pressed]}><Text style={styles.emailSignInText}>Sign in with email</Text></Pressable> : null}
         {mode === "login" && onCreateAccount ? <Pressable accessibilityRole="button" onPress={onCreateAccount} style={({ pressed }) => [styles.createAccount, pressed && styles.pressed]}><Text style={styles.createAccountText}>Create New Account</Text></Pressable> : null}
       </View>
+      {creatingAccount ? <View style={styles.consents}>
+        <ConsentRow label="Agree to the Terms of Use and Privacy Policy" checked={legalAccepted} onPress={() => setLegalAccepted((value) => { const next = !value; onPrivacyConsentChange?.(next); return next; })}>{"I agree to Formie's "}<Text accessibilityRole="link" onPress={onOpenTerms} style={styles.link}>Terms of Use</Text> and <Text accessibilityRole="link" onPress={onOpenPrivacy} style={styles.link}>Privacy Policy</Text></ConsentRow>
+        <ConsentRow label="Allow AI processing for form analysis" checked={aiProcessingAccepted} onPress={() => setAiProcessingAccepted((value) => { const next = !value; onAiProcessingConsentChange?.(next); return next; })}>Allow Formie to send my exercise video, exercise details, and relevant profile information to Formie servers and the paid Google Gemini API for form analysis. I can withdraw this later in Settings.</ConsentRow>
+        <ConsentRow label="Receive Formie tips and offers" checked={marketingOptIn} onPress={() => setMarketingOptIn((value) => { const next = !value; onMarketingOptInChange?.(next); return next; })}>Send me tips, new features, and personalized offers from Formie.</ConsentRow>
+        {onSignIn ? <Pressable testID="account-access-sign-in" accessibilityRole="button" accessibilityLabel="Already have an account? Sign in" onPress={onSignIn} style={({ pressed }) => [styles.accountSignIn, pressed && styles.pressed]}><Text style={styles.accountSignInText}>Already have an account? <Text style={styles.accountSignInAccent}>Sign in</Text></Text></Pressable> : null}
+      </View> : null}
     </ResponsiveScreen>
   </View>;
 }
@@ -87,7 +89,8 @@ const styles = StyleSheet.create({
   titleCompact: { fontSize: 30, lineHeight: 36 },
   actions: { width: "100%", maxWidth: 296, alignSelf: "center", gap: 20, marginTop: 116 },
   actionsCompact: { marginTop: 48 },
-  actionsCreateAccount: { marginTop: 22 },
+  actionsCreateAccount: { marginTop: 88 },
+  actionsCreateAccountCompact: { marginTop: 44 },
   busy: { minHeight: 28, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   busyText: { color: "#D8D3C8", fontSize: 14 },
   error: { color: "#FF8A82", fontSize: 14, lineHeight: 20, fontWeight: "600", textAlign: "center" },
@@ -97,6 +100,9 @@ const styles = StyleSheet.create({
   createAccount: { minHeight: 48, alignItems: "center", justifyContent: "center" },
   createAccountText: { color: "#E5AD32", fontSize: 16, fontWeight: "700", textDecorationLine: "underline" },
   consents: { width: "100%", maxWidth: 296, alignSelf: "center", gap: 10, marginTop: 20 },
+  accountSignIn: { minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: 2 },
+  accountSignInText: { color: "#AAA6A2", fontSize: 14, lineHeight: 20, fontWeight: "600" },
+  accountSignInAccent: { color: "#E5AD32", fontWeight: "800", textDecorationLine: "underline" },
   consentRow: { minHeight: 28, flexDirection: "row", alignItems: "flex-start", gap: 11 },
   checkbox: { width: 18, height: 18, borderRadius: 2, borderWidth: 1.5, borderColor: "#8E8A86", alignItems: "center", justifyContent: "center", backgroundColor: "#050505", marginTop: 1 },
   checkboxChecked: { borderColor: "#E5AD32", backgroundColor: "#E5AD32" },

@@ -15,7 +15,7 @@ export default function EmailCodeRoute() {
   const intent: EmailAuthIntent = first(params.intent) === "onboarding" ? "onboarding" : "login";
   if (!email) return <Redirect href={`/(auth)/email?intent=${intent}` as Href} />;
 
-  return <EmailCodeScreen email={email} intent={intent} busy={auth.emailBusy !== null} error={auth.error} onBack={() => router.back()} onResend={() => void auth.sendEmailCode(email)} onVerify={(code) => void auth.verifyEmailCode(email, code).then((verified) => {
+  return <EmailCodeScreen email={email} intent={intent} busy={auth.emailBusy !== null} error={auth.error} onBack={() => router.back()} onResend={() => void auth.sendEmailCode(email, intent === "onboarding" ? "create_account" : "login")} onVerify={(code) => void auth.verifyEmailCode(email, code).then((verified) => {
     if (verified) router.replace("/" as Href);
   })} />;
 }

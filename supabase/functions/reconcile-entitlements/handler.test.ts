@@ -1,6 +1,19 @@
 import { reconcileEntitlementsHandler } from "./handler";
 
 describe("reconcile entitlements handler", () => {
+  it("reports financial history failures separately from successful access recovery", async () => {
+    const release = jest.fn(async () => 2);
+    const response = await reconcileEntitlementsHandler(new Request("https://example.test", { method: "POST" }), {
+      authenticateCron: () => true,
+      listUsers: async () => ({ users: ["one", "two"], hasMore: false, nextOffset: null }),
+      loadSubscriber: async (id) => ({ appUserId: id, entitlements: [] }),
+      saveSubscriber: async () => ({ status: "active" }),
+      reconcileFinancialHistory: async () => { throw new Error("history unavailable"); },
+      releaseStaleReservations: release,
+    });
+    expect(await response.json()).toMatchObject({ reconciled: 2, updated: 2, failed: 0, financialFailed: 2, released: 2 });
+    expect(release).toHaveBeenCalledTimes(1);
+  });
   it("continues through individual RevenueCat lookup failures", async () => {
     const saveSubscriber = jest.fn(async () => ({ status: "expired" as const }));
     const response = await reconcileEntitlementsHandler(new Request("https://example.test", { method: "POST", headers: { "x-cron-secret": "secret" } }), {

@@ -75,6 +75,7 @@ export type RecordingPreflightResult =
 export type UploadTarget = {
   sessionId: string;
   reservationId?: string;
+  attemptId?: string;
   original?: UploadArtifactTarget;
   analysis: UploadArtifactTarget;
   privacySafe?: UploadArtifactTarget;
@@ -116,6 +117,7 @@ export type CaptureState = {
   declaration: SetDeclaration | null;
   uploadTarget: UploadTarget | null;
   uploadSubstage: UploadSubstage | null;
+  uploadRequestId: string | null;
   sessionId: string | null;
   previousSessionId: string | null;
   error: string | null;
@@ -137,11 +139,13 @@ export type CaptureEvent =
   | { type: "declaration_submitted"; declaration: SetDeclaration }
   | { type: "local_reanalysis_prepared"; recording: RecordedSet; declaration: SetDeclaration; previousSessionId: string }
   | { type: "recording_failed"; message: string }
-  | { type: "upload_started" }
+  | { type: "upload_started"; clientRequestId: string }
   | { type: "upload_target_created"; target: UploadTarget }
   | { type: "upload_progress"; substage: UploadSubstage; target?: UploadTarget | null }
   | { type: "upload_failed"; message: string }
-  | { type: "retry_upload" }
+  | { type: "retry_upload"; clientRequestId: string }
+  | { type: "upload_recovered"; recording: RecordedSet; declaration: SetDeclaration; previousSessionId: string | null; clientRequestId: string; sessionId: string | null; error?: string }
+  | { type: "processing_recovered"; sessionId: string }
   | { type: "processing"; sessionId: string }
   | { type: "discard_recording" }
   | { type: "reset" };

@@ -61,7 +61,7 @@ export function auditAppStorePolicy(root = process.cwd()) {
   const geminiGenerate = read(root, "supabase/functions/_shared/gemini-generate.ts");
   const geminiFiles = read(root, "supabase/functions/_shared/gemini-files.ts");
   const paywall = read(root, "src/screens/onboarding/premium-screen.tsx");
-  const coach = read(root, "src/screens/coach/coach-preview.tsx");
+    const coach = read(root, "src/screens/coach/coach-preview.tsx");
   const profileProvider = read(root, "src/features/profile/profile-provider.tsx");
   const websiteVisuals = read(root, "website/components/app-visuals.tsx");
   const privacyLabels = JSON.parse(read(root, "docs/app-store/privacy-labels.json"));
@@ -86,9 +86,13 @@ export function auditAppStorePolicy(root = process.cwd()) {
   requireMatch(failures, youtubeCacheMigration, /form-youtube-tutorial-cache-expiry[\s\S]*delete from public\.youtube_tutorial_cache where expires_at <= now\(\)/, "YouTube cache has no traffic-independent 30-day expiry job");
   forbidMatch(failures, profileProvider, /sync-acquisition-sheet/, "Google Sheets export remains enabled");
   requireMatch(failures, paywall, /\{price\} per month|10 analyses per month/, "Native paywall does not visibly use the localized price and quota");
-  forbidMatch(failures, paywall, /referencePaywall|Coach/, "Paywall contains baked artwork or Coach claims");
-  requireMatch(failures, coach, /Preview — not included in Formie Pro yet/, "Coach preview disclosure is missing");
-  forbidMatch(failures, coach, /RecordingPicker|TextInput|onPress/, "Coach preview contains simulated controls");
+  requireMatch(failures, paywall, /paywall-reference-no-social-proof\.png/, "Approved no-social-proof paywall artwork is not wired");
+  requireMatch(failures, paywall, /premium-live-price[\s\S]*priceCover[\s\S]*backgroundColor:\s*"#0B0B09"/, "Localized price is not rendered over an opaque native cover");
+  requireMatch(failures, paywall, /onboarding-bottom-cta[\s\S]*goldGradient[\s\S]*minHeight:\s*60/, "Approved paywall does not retain the opaque 60 px native purchase control");
+  forbidMatch(failures, paywall, /socialProof|testimonial|reviewCount|starRating/, "Paywall reintroduces social proof");
+  if (!existsSync(`${root}/assets/production/paywall/reference/paywall-reference-no-social-proof.png`)) failures.push("Approved no-social-proof paywall artwork is missing");
+    requireMatch(failures, coach, /Preview — not included in Formie Pro yet/, "Coach preview disclosure is missing");
+    forbidMatch(failures, coach, /RecordingPicker|TextInput|onPress/, "Coach preview contains simulated controls");
   requireMatch(failures, websiteVisuals, /Coach Preview/, "Reusable website visuals do not identify Coach as a preview");
   forbidMatch(failures, websiteVisuals, /Ask Formie Coach|Coach included/i, "Reusable website visuals imply that Coach is functional or included");
   if (store.apple.release.automaticRelease !== false) failures.push("App Store release is not manual");

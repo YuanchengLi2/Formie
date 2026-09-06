@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Linking } from "react-native";
 import { type Href, useRouter } from "expo-router";
 
@@ -13,8 +13,8 @@ import { useAccess, useBillingSurfaceRefresh } from "@/features/access/access-pr
 import { createSubscriptionPresentation } from "@/features/billing/subscription-management-presentation";
 import { runSubscriptionTestControl } from "@/features/billing/subscription-test-controls";
 import { deleteAccount } from "@/features/account-deletion/api";
-import { currentAiProcessingConsent, isCurrentAiProcessingConsent, revokeAiProcessingConsent, type AiConsentClient } from "@/features/privacy/ai-consent";
-import { supabase } from "@/lib/supabase";
+import { presentAccountIdentity } from "@/features/auth/account-identity";
+import { useAiConsent } from "@/features/privacy/use-ai-consent";
 
 export default function ProfileRoute() {
   const auth = useAuth();
@@ -26,9 +26,9 @@ export default function ProfileRoute() {
   const capture = useCapturePreferences((state) => state.preferences);
   const hydrateCapture = useCapturePreferences((state) => state.hydrate);
   const updateCapture = useCapturePreferences((state) => state.update);
-  const [aiConsent, setAiConsent] = useState<{ current: boolean; version: string | null } | null>(null);
+  const aiConsent = useAiConsent();
   useBillingSurfaceRefresh();
-  const subscriptionPresentation = createSubscriptionPresentation(access.access);
+  const subscriptionPresentation = createSubscriptionPresentation(access.access, billing.subscription);
   const hasManagedSubscription = Boolean(access.access.store)
     && access.access.lifecycleState !== "not_subscribed"
     && access.access.lifecycleState !== "expired"
@@ -43,25 +43,14 @@ export default function ProfileRoute() {
   useEffect(() => {
     void hydrateCapture();
   }, [hydrateCapture]);
-  useEffect(() => {
-    let active = true;
-    void currentAiProcessingConsent(supabase as unknown as AiConsentClient)
-      .then((consent) => {
-        if (active) setAiConsent({ current: isCurrentAiProcessingConsent(consent), version: consent?.version ?? null });
-      })
-      .catch(() => {
-        if (active) setAiConsent({ current: false, version: null });
-      });
-    return () => { active = false; };
-  }, [auth.user?.id]);
   return (
     <>
       <ProfileScreen
       displayName={profileState.profile?.displayName ?? "Formie Athlete"}
-      email={auth.user?.email ?? null}
+      accountIdentity={auth.user ? presentAccountIdentity(auth.user) : null}
       subscription={{
         plan: access.access.planCode === "annual" ? "Formie Annual" : "Formie Monthly",
-        stateLabel: `${subscriptionPresentation.badgeLabel} · Automatic renewal ${access.access.willRenew ? "on" : access.access.lifecycleState === "renewal_pending" ? "checking" : "off"}`,
+        stateLabel: `${subscriptionPresentation.badgeLabel} · Automatic renewal ${subscriptionPresentation.automaticRenewalValue.toLowerCase()}`,
         access: { lifecycleState: access.access.lifecycleState, willRenew: access.access.willRenew, paidThrough: access.access.paidThrough, sandbox: access.access.sandbox },
       }}
       onSubscriptionBoundary={() => void access.reconcile()}
@@ -88,10 +77,8 @@ export default function ProfileRoute() {
       privacyChoicesUrl={legal?.privacyChoicesUrl}
       retentionUrl={legal?.retentionUrl}
       aiConsent={aiConsent}
-      onWithdrawAiConsent={async () => {
-        await revokeAiProcessingConsent(supabase as unknown as AiConsentClient);
-        setAiConsent((current) => ({ current: false, version: current?.version ?? null }));
-      }}
+      onAcceptAiConsent={aiConsent.accept}
+      onWithdrawAiConsent={aiConsent.revoke}
       onOpenUrl={async (url) => {
         await Linking.openURL(url);
       }}

@@ -2,6 +2,7 @@ import { createAdminClient } from "../_shared/auth.ts";
 import { constantTimeEqual, validateRequestSecurity, withRequestIdentifier } from "../_shared/request-security.ts";
 import { fetchRevenueCatSubscriber } from "../_shared/revenuecat.ts";
 import { persistEntitlementLedger } from "../_shared/entitlement-ledger.ts";
+import { reconcileRevenueCatTransactionHistory } from "../_shared/revenue-ledger.ts";
 import { reconcileEntitlementsHandler } from "./handler.ts";
 
 Deno.serve(async (request) => {
@@ -27,7 +28,12 @@ Deno.serve(async (request) => {
       return { users, hasMore, nextOffset: hasMore ? offset + users.length : null };
     },
     loadSubscriber: (appUserId) => fetchRevenueCatSubscriber(appUserId),
-    saveSubscriber: (userId, subscriber) => persistEntitlementLedger(admin, userId, subscriber, Deno.env.get("REVENUECAT_ENTITLEMENT_ID") ?? "formie_pro"),
+    saveSubscriber: async (userId, subscriber) => {
+      return persistEntitlementLedger(admin, userId, subscriber, Deno.env.get("REVENUECAT_ENTITLEMENT_ID") ?? "formie_pro");
+    },
+    reconcileFinancialHistory: async (userId, subscriber) => {
+      await reconcileRevenueCatTransactionHistory(admin, userId, subscriber.appUserId, Deno.env.get("RECEIPT_FINGERPRINT_SALT") ?? "");
+    },
     releaseStaleReservations: async () => {
       const { data, error } = await admin.rpc("release_stale_analysis_credit_reservations");
       if (error) throw error;

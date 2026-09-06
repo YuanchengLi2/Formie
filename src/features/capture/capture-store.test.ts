@@ -307,8 +307,8 @@ describe("capture state", () => {
       recording: { localUri: "file:///set.mp4", durationMs: 18_000, mimeType: "video/mp4" },
     });
     state = captureReducer(state, { type: "declaration_submitted", declaration });
-    state = captureReducer(state, { type: "upload_started" });
-    expect(state.uploadSubstage).toBe("creating_session");
+    state = captureReducer(state, { type: "upload_started", clientRequestId: "upload-request-1" });
+    expect(state).toMatchObject({ uploadSubstage: "creating_session", uploadRequestId: "upload-request-1" });
     state = captureReducer(state, {
       type: "upload_progress",
       substage: "uploading_original",
@@ -347,7 +347,7 @@ describe("capture state", () => {
     };
 
     state = captureReducer(state, { type: "declaration_submitted", declaration });
-    state = captureReducer(state, { type: "upload_started" });
+    state = captureReducer(state, { type: "upload_started", clientRequestId: "upload-request-1" });
     state = captureReducer(state, {
       type: "upload_target_created",
       target: {
@@ -370,13 +370,15 @@ describe("capture state", () => {
     expect(state.recording?.localUri).toBe("file:///set.mp4");
     expect(state.uploadTarget?.sessionId).toBe("session-1");
 
-    state = captureReducer(state, { type: "retry_upload" });
+    state = captureReducer(state, { type: "retry_upload", clientRequestId: "upload-request-2" });
     expect(state).toMatchObject({
       phase: "uploading",
       error: null,
       recording: { localUri: "file:///set.mp4" },
       declaration,
-      uploadTarget: { sessionId: "session-1" },
+      uploadTarget: null,
+      uploadRequestId: "upload-request-2",
+      sessionId: "session-1",
     });
   });
 
@@ -386,7 +388,7 @@ describe("capture state", () => {
       phase: "recorded",
       recording: { localUri: "file:///set.mp4", durationMs: 12_000, mimeType: "video/mp4" },
     };
-    expect(() => captureReducer(recorded, { type: "upload_started" })).toThrow("declaration");
+    expect(() => captureReducer(recorded, { type: "upload_started", clientRequestId: "upload-request-1" })).toThrow("declaration");
   });
 
   it("rejects impossible transitions", () => {

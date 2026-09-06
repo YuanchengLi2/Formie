@@ -1,6 +1,18 @@
 export type AccessState = "loading" | "active" | "expired" | "unknown";
 export type SubscriptionLifecycleState = "active_renewing" | "active_cancelled" | "renewal_pending" | "expired" | "not_subscribed" | "unknown";
 export type SubscriptionPlanCode = "monthly" | "annual";
+export type ReferralBonusAccess = {
+  state: "none" | "pending_payment" | "active" | "expired" | "revoked";
+  baseLimit: number;
+  baseUsed: number;
+  bonusGranted: number;
+  bonusUsed: number;
+  bonusReserved: number;
+  bonusRemaining: number;
+  bonusExpiresAt: string | null;
+};
+
+export const noReferralBonus: ReferralBonusAccess = { state: "none", baseLimit: 10, baseUsed: 0, bonusGranted: 0, bonusUsed: 0, bonusReserved: 0, bonusRemaining: 0, bonusExpiresAt: null };
 
 export type AccessStatus = {
   status: Exclude<AccessState, "loading" | "unknown"> | "unknown";
@@ -25,6 +37,7 @@ export type AccessStatus = {
   entitlementId: string | null;
   source: "revenuecat" | "unknown";
   refreshedAt: string;
+  referralBonus: ReferralBonusAccess;
 };
 
 export const unknownAccess: AccessStatus = {
@@ -50,6 +63,7 @@ export const unknownAccess: AccessStatus = {
   entitlementId: null,
   source: "unknown",
   refreshedAt: "",
+  referralBonus: noReferralBonus,
 };
 
 export type AnalysisReservation = {

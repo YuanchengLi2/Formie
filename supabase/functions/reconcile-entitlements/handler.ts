@@ -5,6 +5,7 @@ export type ReconcileEntitlementsDependencies = {
   listUsers: (options: { offset: number; limit: number }) => Promise<{ users: string[]; hasMore: boolean; nextOffset: number | null }>;
   loadSubscriber: (appUserId: string) => Promise<RevenueCatSubscriber>;
   saveSubscriber: (userId: string, subscriber: RevenueCatSubscriber) => Promise<{ status: "active" | "expired" } | null>;
+  reconcileFinancialHistory?: (userId: string, subscriber: RevenueCatSubscriber) => Promise<void>;
   releaseStaleReservations: () => Promise<number>;
 };
 
@@ -26,18 +27,24 @@ export async function reconcileEntitlementsHandler(request: Request, dependencie
   let expired = 0;
   let skipped = 0;
   let failed = 0;
+  let financialFailed = 0;
   for (const userId of batch.users) {
     try {
-      const saved = await dependencies.saveSubscriber(userId, await dependencies.loadSubscriber(userId));
+      const subscriber = await dependencies.loadSubscriber(userId);
+      const saved = await dependencies.saveSubscriber(userId, subscriber);
       reconciled += 1;
       if (saved?.status === "active") updated += 1;
       else if (saved?.status === "expired") expired += 1;
       else skipped += 1;
+      if (dependencies.reconcileFinancialHistory) {
+        try { await dependencies.reconcileFinancialHistory(userId, subscriber); }
+        catch { financialFailed += 1; }
+      }
     } catch {
       // One provider failure must not prevent other subscribers from reconciling.
       failed += 1;
     }
   }
   const released = await dependencies.releaseStaleReservations();
-  return json({ reconciled, updated, expired, skipped, failed, released, hasMore: batch.hasMore, nextOffset: batch.nextOffset }, 200);
+  return json({ reconciled, updated, expired, skipped, failed, released, ...(dependencies.reconcileFinancialHistory ? { financialFailed } : {}), hasMore: batch.hasMore, nextOffset: batch.nextOffset }, 200);
 }

@@ -70,7 +70,7 @@ Deno.serve(async (request) => {
       const row = (Array.isArray(data) ? data[0] : data) as { reservation_id?: unknown; status?: unknown; blocking_session_id?: unknown; remaining?: unknown; period_ends_at?: unknown } | null;
       const pending = row?.status === "analysis_pending";
       if (!row || (!pending && typeof row.reservation_id !== "string")) throw Object.assign(new Error("Analysis access reservation was invalid"), { code: "ANALYSIS_ACCESS_FAILED" });
-      return { reservationId: typeof row.reservation_id === "string" ? row.reservation_id : null, status: pending ? "analysis_pending" as const : row.status === "already_reserved" ? "already_reserved" as const : "reserved" as const, blockingSessionId: pending && typeof row.blocking_session_id === "string" ? row.blocking_session_id : null, remaining: typeof row.remaining === "number" ? row.remaining : null, periodEndsAt: typeof row.period_ends_at === "string" ? row.period_ends_at : null };
+      return { reservationId: typeof row.reservation_id === "string" ? row.reservation_id : null, status: pending ? "analysis_pending" as const : row.status === "already_reserved" ? "already_reserved" as const : row.status === "request_terminal" ? "request_terminal" as const : "reserved" as const, blockingSessionId: typeof row.blocking_session_id === "string" ? row.blocking_session_id : null, remaining: typeof row.remaining === "number" ? row.remaining : null, periodEndsAt: typeof row.period_ends_at === "string" ? row.period_ends_at : null };
     },
     cancelCredit: async (userId, reservationId) => {
       await admin.from("analysis_credit_reservations").update({ status: "cancelled", cancelled_at: new Date().toISOString() }).eq("id", reservationId).eq("user_id", userId).eq("status", "reserved");

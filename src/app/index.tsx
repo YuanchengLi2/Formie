@@ -5,7 +5,7 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { resolveLaunchRoute, type OnboardingLaunchState } from "@/features/auth/launch-route";
 import { useOnboarding } from "@/features/onboarding/onboarding-store";
 import { useProfile } from "@/features/profile/profile-provider";
-import { AuthLoadingScreen } from "@/screens/auth";
+import { AccessRecoveryScreen, AuthLoadingScreen } from "@/screens/auth";
 
 function launchState(status: ReturnType<typeof useOnboarding>["status"], currentStep: ReturnType<typeof useOnboarding>["currentStep"], explicitLogoutAt: string | null): OnboardingLaunchState {
   if (explicitLogoutAt) return "logged_out";
@@ -24,12 +24,16 @@ export default function IndexRoute() {
   const onboardingLaunchState = launchState(onboarding.status, onboarding.currentStep, onboarding.explicitLogoutAt);
 
   if (auth.phase === "initializing" || !onboarding.hydrated) return <AuthLoadingScreen />;
-  if (auth.phase === "authenticated" && profile.status === "loading") return <AuthLoadingScreen message="Preparing your Formie account…" />;
+  if (auth.phase === "authenticated" && profile.status === "error") {
+    return <AccessRecoveryScreen message={profile.error ?? "Your profile could not be loaded. Try again."} onRetry={profile.retry} />;
+  }
+  if (auth.phase === "authenticated" && profile.status !== "ready") return <AuthLoadingScreen message="Preparing your Formie account…" />;
 
   const destination = resolveLaunchRoute({
     phase: auth.phase,
     onboarding: onboardingLaunchState,
     currentStep: onboarding.currentStep,
+    profileStatus: profile.status,
     profileComplete: profile.profile?.onboardingCompleted === true,
     adultEligible: typeof profile.profile?.ageYears === "number" && profile.profile.ageYears >= 18,
     accessStatus: access.access.status,

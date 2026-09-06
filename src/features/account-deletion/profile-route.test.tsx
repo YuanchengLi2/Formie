@@ -36,14 +36,10 @@ jest.mock("@/features/access/access-provider", () => ({
   useAccess: () => ({ access: mockAccess, reconcile: jest.fn(), refresh: jest.fn() }),
   useBillingSurfaceRefresh: jest.fn(),
 }));
-jest.mock("@/features/billing/subscription-management-presentation", () => ({ createSubscriptionPresentation: () => ({ badgeLabel: "Active" }) }));
+jest.mock("@/features/billing/subscription-management-presentation", () => ({ createSubscriptionPresentation: () => ({ badgeLabel: "Active", automaticRenewalValue: "On" }) }));
 jest.mock("@/features/billing/subscription-test-controls", () => ({ runSubscriptionTestControl: jest.fn(), setSubscriptionTestRemaining: jest.fn() }));
 jest.mock("@/features/auth/legal-config", () => ({ getLegalLinks: () => ({}) }));
-jest.mock("@/features/privacy/ai-consent", () => ({
-  currentAiProcessingConsent: jest.fn(() => new Promise(() => undefined)),
-  isCurrentAiProcessingConsent: jest.fn(() => false),
-  revokeAiProcessingConsent: jest.fn(),
-}));
+jest.mock("@/features/privacy/use-ai-consent", () => ({ useAiConsent: () => ({ status: "ready", current: false, version: null, error: null, accept: jest.fn(), revoke: jest.fn(), refresh: jest.fn() }) }));
 
 describe("ProfileRoute account deletion", () => {
   beforeEach(() => {

@@ -37,11 +37,11 @@ function MetricTile({
       testID={`progress-metric-${kind}`}
       style={{
         width: compact ? 176 : "48.5%",
-        minHeight: compact ? 104 : 112,
+        minHeight: compact ? 72 : 112,
         justifyContent: "center",
-        gap: spacing.xs,
+        gap: compact ? 2 : spacing.xs,
         paddingHorizontal: spacing.md,
-        paddingVertical: spacing.sm,
+        paddingVertical: compact ? spacing.xs : spacing.sm,
         borderRadius: radii.md,
         borderWidth: 1,
         borderColor: colors.border,
@@ -49,7 +49,7 @@ function MetricTile({
         opacity: loading ? 0.5 : 1,
       }}
     >
-      <DashboardIcon label={`${label} icon`} name={iconName} size={32} />
+      <DashboardIcon label={`${label} icon`} name={iconName} size={compact ? 26 : 32} />
       <Text selectable style={[typography.caption, { color: colors.textMuted }]}>
         {label}
       </Text>

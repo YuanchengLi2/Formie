@@ -9,6 +9,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  database-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+      - run: supabase db reset --local
+      - run: supabase test db
+
   native-static:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -71,3 +83,29 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:responsive
+
+  authenticated-business-dashboards:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: website
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.FORMIE_E2E_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.FORMIE_E2E_SUPABASE_ANON_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.FORMIE_E2E_SUPABASE_SERVICE_ROLE_KEY }}
+      FORMIE_E2E_ALLOW_MUTATIONS: "true"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Require isolated authenticated dashboard credentials
+        run: >-
+          node -e "const required=['NEXT_PUBLIC_SUPABASE_URL','NEXT_PUBLIC_SUPABASE_ANON_KEY','SUPABASE_SERVICE_ROLE_KEY'];if(required.some((name)=>!String(process.env[name]??'').trim())){console.error('Authenticated dashboard E2E Supabase secrets are incomplete');process.exit(1)}"
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:business-dashboards:isolated

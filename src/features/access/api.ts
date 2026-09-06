@@ -1,11 +1,20 @@
 import { supabase } from "@/lib/supabase";
 import { publishAccessMutation } from "./access-events";
 
-import { unknownAccess, type AccessStatus, type AnalysisReservation } from "./types";
+import { noReferralBonus, unknownAccess, type AccessStatus, type AnalysisReservation, type ReferralBonusAccess } from "./types";
+
+function asBonus(value: unknown): ReferralBonusAccess {
+  const row = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const state = row.state === "pending_payment" || row.state === "active" || row.state === "expired" || row.state === "revoked" ? row.state : "none";
+  const number = (key: string, fallback = 0) => typeof row[key] === "number" ? row[key] as number : fallback;
+  return { state, baseLimit: number("baseLimit", 10), baseUsed: number("baseUsed"), bonusGranted: number("bonusGranted"), bonusUsed: number("bonusUsed"), bonusReserved: number("bonusReserved"), bonusRemaining: number("bonusRemaining"), bonusExpiresAt: typeof row.bonusExpiresAt === "string" ? row.bonusExpiresAt : null };
+}
 
 export function asAccess(value: unknown): AccessStatus {
   if (!value || typeof value !== "object") return { ...unknownAccess, refreshedAt: new Date().toISOString() };
-  const row = (Array.isArray(value) ? value[0] : value) as Record<string, unknown>;
+  const envelope = value as Record<string, unknown>;
+  const rawAccess = envelope.access ?? value;
+  const row = (Array.isArray(rawAccess) ? rawAccess[0] : rawAccess) as Record<string, unknown>;
   const status = row.status === "active" || row.status === "expired" ? row.status : "unknown";
   const source = row.source === "revenuecat" ? "revenuecat" : "unknown";
   const remaining = typeof row.remaining === "number" ? row.remaining : null;
@@ -36,11 +45,12 @@ export function asAccess(value: unknown): AccessStatus {
     entitlementId: typeof row.entitlement_id === "string" ? row.entitlement_id : typeof row.entitlementId === "string" ? row.entitlementId : null,
     source,
     refreshedAt: typeof row.refreshedAt === "string" ? row.refreshedAt : new Date().toISOString(),
+    referralBonus: envelope.referralBonus ? asBonus(envelope.referralBonus) : noReferralBonus,
   };
 }
 
 export async function getAccessStatus(): Promise<AccessStatus> {
-  const { data, error } = await supabase.rpc("get_my_access_status");
+  const { data, error } = await supabase.rpc("get_my_access_status_v2");
   if (error) throw error;
   return asAccess(data);
 }
@@ -52,7 +62,7 @@ export async function refreshProviderAccess(accessToken: string): Promise<Access
   if (error) throw error;
   const access = data && typeof data === "object" ? (data as { access?: unknown }).access : null;
   if (!access) throw new Error("Subscription refresh returned no access snapshot.");
-  return asAccess(access);
+  return getAccessStatus();
 }
 
 export type AccessRefreshBaseline = Pick<AccessStatus, "status" | "lifecycleState" | "remaining" | "stateVersion" | "willRenew" | "paidThrough">;

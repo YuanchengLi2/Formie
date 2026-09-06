@@ -1,4 +1,5 @@
 import type { SetDeclaration } from "@/features/analysis/set-declaration";
+import { withRequestDeadline } from "@/lib/request-deadline";
 
 import { captureVideoSettings } from "./video-settings";
 import type {
@@ -36,8 +37,10 @@ export type UploadCoordinatorDependencies = {
   prepareAnalysisVideo?: (recording: RecordedSet) => Promise<RecordedSet>;
   normalizePrivacySafeFallback: (recording: RecordedSet) => Promise<RecordedSet>;
   bindLocalRecording: (sessionId: string, recording: RecordedSet) => Promise<void>;
-  completeUpload: (accessToken: string, sessionId: string, durationMs: number, hasPrivacySafeFallback: boolean, signal: AbortSignal, metadata?: { byteLength?: number }) => Promise<void>;
+  completeUpload: (accessToken: string, sessionId: string, attemptId: string | undefined, durationMs: number, hasPrivacySafeFallback: boolean, signal: AbortSignal, metadata?: { byteLength?: number }) => Promise<void>;
   cancelUpload?: (input: { sessionId: string; reservationId?: string; reason: "upload_failed" | "user_discarded" }) => Promise<void>;
+  onFailure?: (input: { error: unknown; sessionId: string | null }) => void;
+  onCancelled?: (input: { sessionId: string | null }) => void;
 };
 
 async function retryNetworkStep<T>(
@@ -50,14 +53,12 @@ async function retryNetworkStep<T>(
     if (cancellation?.requested()) throw Object.assign(new Error("Upload cancelled"), { name: "AbortError" });
     const controller = new AbortController();
     cancellation?.controllers.add(controller);
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await operation(controller.signal);
+      return await withRequestDeadline(operation, timeoutMs, controller.signal);
     } catch (error) {
       if (cancellation?.requested()) throw Object.assign(new Error("Upload cancelled"), { name: "AbortError" });
       lastError = error;
     } finally {
-      clearTimeout(timeout);
       cancellation?.controllers.delete(controller);
     }
   }
@@ -114,12 +115,13 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
     recording: RecordedSet,
     declaration: SetDeclaration,
     previousSessionId?: string,
+    recovery?: { clientRequestId: string },
   ): Promise<{ sessionId: string; target: UploadTarget }> => {
     if (activeRun) return activeRun;
     userDiscarded = false;
     const nextDeclarationKey = JSON.stringify({ declaration, previousSessionId: previousSessionId ?? null });
     if (declarationKey !== null && declarationKey !== nextDeclarationKey) clear();
-    if (!clientRequestId) clientRequestId = dependencies.createRequestId();
+    if (!clientRequestId) clientRequestId = recovery?.clientRequestId ?? dependencies.createRequestId();
     const requestId = clientRequestId;
     const networkStep = <T>(operation: (signal: AbortSignal) => Promise<T>, timeoutMs?: number) => retryNetworkStep(
       operation,
@@ -165,6 +167,7 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
         await networkStep((signal) => dependencies.completeUpload(
           accessToken,
           target.sessionId,
+          target.attemptId,
           recording.durationMs,
           false,
           signal,
@@ -231,6 +234,7 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
       await networkStep((signal) => dependencies.completeUpload(
         accessToken,
         target.sessionId,
+        target.attemptId,
         recording.durationMs,
         Boolean(target.privacySafe),
         signal,
@@ -238,16 +242,14 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
       const result = { sessionId: target.sessionId, target };
       clear();
       return result;
-    })().catch(async (error) => {
-      const failedTarget = currentTarget;
-      if (!userDiscarded && failedTarget && dependencies.cancelUpload) {
-        await dependencies.cancelUpload({
-          sessionId: failedTarget.sessionId,
-          reservationId: failedTarget.reservationId,
-          reason: "upload_failed",
-        }).catch(() => undefined);
-      }
+    })().catch((error) => {
+      // Keep the server session and its reservation alive after transport or
+      // preprocessing failures. The durable client journal resumes this exact
+      // request instead of consuming a second credit. Explicit discard remains
+      // the only action that cancels the server operation.
+      const failedSessionId = currentTarget?.sessionId ?? null;
       clear();
+      dependencies.onFailure?.({ error, sessionId: failedSessionId });
       throw error;
     });
     activeRun = operation;
@@ -265,6 +267,7 @@ export function createUploadCoordinator(dependencies: UploadCoordinatorDependenc
       userDiscarded = true;
       activeNetworkControllers.forEach((controller) => controller.abort());
       const target = currentTarget;
+      dependencies.onCancelled?.({ sessionId: target?.sessionId ?? null });
       cancellation = (async () => {
         if (target && dependencies.cancelUpload) {
           await dependencies.cancelUpload({

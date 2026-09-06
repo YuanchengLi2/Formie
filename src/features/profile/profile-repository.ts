@@ -67,6 +67,15 @@ export type UserProfileClient = {
   };
 };
 
+export type OnboardingFinalizationClient = {
+  functions: {
+    invoke: (name: "referral-context", options: { body: Record<string, unknown> }) => Promise<{
+      data: unknown;
+      error: { message?: string } | null;
+    }>;
+  };
+};
+
 export type UserProfilePatch = Partial<Pick<
   UserProfile,
   | "displayName"
@@ -166,10 +175,23 @@ function requireProfile(
   return profileFromRow(result.data);
 }
 
-export async function loadOrCreateUserProfile(
+export async function loadUserProfile(
+  client: UserProfileClient,
+  userId: string,
+): Promise<UserProfile | null> {
+  const existing = await client
+    .from("user_profiles")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existing.error) throw new Error(existing.error.message ?? "Your profile could not be loaded.");
+  return existing.data ? profileFromRow(existing.data) : null;
+}
+
+export async function upsertOnboardingProfile(
   client: UserProfileClient,
   user: User,
-  onboardingAnswers?: OnboardingAnswers,
+  onboardingAnswers: OnboardingAnswers,
 ): Promise<UserProfile> {
   const existing = await client
     .from("user_profiles")
@@ -177,9 +199,7 @@ export async function loadOrCreateUserProfile(
     .eq("user_id", user.id)
     .maybeSingle();
   if (existing.error) throw new Error(existing.error.message ?? "Your profile could not be loaded.");
-  if (existing.data && (!onboardingAnswers || existing.data.onboarding_completed)) {
-    return profileFromRow(existing.data);
-  }
+  if (existing.data?.onboarding_completed) return profileFromRow(existing.data);
 
   const created = await client
     .from("user_profiles")
@@ -187,6 +207,48 @@ export async function loadOrCreateUserProfile(
     .select()
     .single();
   return requireProfile(created, "Your profile could not be created.");
+}
+
+export async function finalizeOnboardingProfile(
+  client: OnboardingFinalizationClient,
+  user: User,
+  answers: OnboardingAnswers,
+  platform: string,
+  referral?: { token: string; method: "creator_code" } | null,
+): Promise<{ profile: UserProfile; referralState: "none" | "attributed" | "unavailable" }> {
+  const candidate = createInitialProfileRow(user, answers);
+  if (!candidate.onboarding_completed || !answers.acquisitionSource) throw new Error("Onboarding answers are incomplete.");
+  const result = await client.functions.invoke("referral-context", { body: {
+    action: "finalize",
+    token: referral?.token ?? null,
+    method: referral?.method ?? "creator_code",
+    profile: {
+      ageYears: answers.ageYears,
+      gender: answers.gender,
+      heightCm: answers.heightCm,
+      weightKg: answers.weightKg,
+      measurementSystem: answers.measurementSystem,
+      experience: answers.experience,
+      primaryGoal: answers.primaryGoal,
+      biggestFrustration: answers.biggestFrustration,
+      workoutsPerWeek: answers.workoutsPerWeek,
+      customMilestone: answers.customMilestone.trim(),
+      acceptedPrivacy: answers.acceptedPrivacy,
+      marketingOptIn: answers.marketingOptIn,
+    },
+    acquisition: {
+      source: answers.acquisitionSource,
+      otherDetail: answers.acquisitionSource === "other" ? answers.acquisitionSourceOther.trim() : "",
+      platform: platform === "ios" || platform === "android" || platform === "web" ? platform : "unknown",
+    },
+  } });
+  if (result.error) throw new Error(result.error.message ?? "Your account setup could not be completed.");
+  const payload = result.data && typeof result.data === "object" && !Array.isArray(result.data) ? result.data as Record<string, unknown> : null;
+  const profile = payload?.profile && typeof payload.profile === "object" && !Array.isArray(payload.profile) ? payload.profile as UserProfileRow : null;
+  if (!profile?.user_id || !profile.onboarding_completed) throw new Error("The onboarding finalization response was invalid.");
+  const referralResult = payload?.referral && typeof payload.referral === "object" && !Array.isArray(payload.referral) ? payload.referral as Record<string, unknown> : {};
+  const state = referralResult.state === "attributed" || referralResult.state === "unavailable" ? referralResult.state : "none";
+  return { profile: profileFromRow(profile), referralState: state };
 }
 
 export async function saveUserProfile(

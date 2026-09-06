@@ -25,7 +25,7 @@ import {
   type WholeVideoWriting,
 } from "../_shared/boundary-free-analysis.ts";
 import { resultPayload } from "../_shared/result-payload.ts";
-import { estimatedGeminiCost } from "../_shared/gemini-cost.ts";
+import { recordModelCallTelemetry } from "../_shared/model-telemetry.ts";
 import { parseSetDeclaration } from "../_shared/set-declaration.ts";
 import { selectGeminiVideoPath } from "./analysis-input.ts";
 import { advanceWholeVideoPipeline } from "./whole-video-runner.ts";
@@ -99,6 +99,7 @@ Deno.serve(async (request) => {
 
   async function recordModelCall(input: {
     sessionId: string;
+    attemptId: string;
     stage: ModelCallStage;
     modelName: string;
     requestedFps: number | null;
@@ -109,34 +110,24 @@ Deno.serve(async (request) => {
     status: "succeeded" | "failed";
     errorCode?: string;
   }): Promise<void> {
-    const { error } = await admin.from("model_call_telemetry").insert({
-      session_id: input.sessionId,
+    await recordModelCallTelemetry(admin, {
+      sessionId: input.sessionId,
+      analysisAttemptId: input.attemptId,
       stage: input.stage,
       model: input.modelName,
-      requested_fps: input.requestedFps,
-      clip_start_ms: input.clipStartMs ?? null,
-      clip_end_ms: input.clipEndMs ?? null,
-      prompt_tokens: input.usage?.promptTokens ?? null,
-      output_tokens: input.usage?.outputTokens ?? null,
-      thinking_tokens: input.usage?.thinkingTokens ?? null,
-      estimated_cost_usd: estimatedGeminiCost(input.modelName, input.usage),
-      duration_ms: Math.max(0, Date.now() - input.startedAt),
+      requestedFps: input.requestedFps,
+      clipStartMs: input.clipStartMs,
+      clipEndMs: input.clipEndMs,
+      startedAtMs: input.startedAt,
+      usage: input.usage,
       status: input.status,
-      error_code: input.errorCode ?? null,
+      errorCode: input.errorCode,
     });
-    if (error) {
-      console.error(JSON.stringify({
-        context: "MODEL_CALL_TELEMETRY_SAVE_FAILED",
-        sessionId: input.sessionId,
-        stage: input.stage,
-        model: input.modelName,
-        message: error.message,
-      }));
-    }
   }
 
   async function generate(input: {
     sessionId: string;
+    attemptId: string;
     stage: ModelCallStage;
     modelName: string;
     request: Parameters<typeof generation.generate>[1];
@@ -150,6 +141,7 @@ Deno.serve(async (request) => {
       const response = await generation.generate(input.modelName, input.request, { timeoutMs: input.timeoutMs });
       await recordModelCall({
         sessionId: input.sessionId,
+        attemptId: input.attemptId,
         stage: input.stage,
         modelName: input.modelName,
         requestedFps: input.fps ?? null,
@@ -166,6 +158,7 @@ Deno.serve(async (request) => {
         : undefined;
       await recordModelCall({
         sessionId: input.sessionId,
+        attemptId: input.attemptId,
         stage: input.stage,
         modelName: input.modelName,
         requestedFps: input.fps ?? null,
@@ -216,9 +209,12 @@ Deno.serve(async (request) => {
     if (persistenceError) throw persistenceError;
   }
 
-  async function persistRetryState(sessionId: string, values: JsonRecord): Promise<void> {
-    const { error } = await admin.from("analysis_sessions").update(values).eq("id", sessionId);
+  async function persistRetryState(sessionId: string, attemptId: string | null, values: JsonRecord): Promise<void> {
+    let query = admin.from("analysis_sessions").update(values).eq("id", sessionId);
+    if (attemptId) query = query.eq("active_attempt_id", attemptId);
+    const { data, error } = await query.select("id").maybeSingle();
     if (error) throw databaseError("ANALYSIS_STATE_SAVE_FAILED", error);
+    if (attemptId && !data) throw Object.assign(new Error("Analysis attempt was superseded"), { code: "ANALYSIS_ATTEMPT_SUPERSEDED" });
   }
 
   async function runStage<T>(sessionId: string, stage: StageName, input: unknown, work: () => Promise<T>): Promise<T> {
@@ -227,6 +223,8 @@ Deno.serve(async (request) => {
   }
 
   async function prepareGeminiVideo(session: WholeVideoSession): Promise<{ input: WholeVideoInput; byteLength: number | null; file: GeminiFile }> {
+    const attemptId = typeof session.activeAttemptId === "string" ? session.activeAttemptId : null;
+    if (!attemptId) throw Object.assign(new Error("Analysis reservation attempt is missing"), { code: "ANALYSIS_ATTEMPT_REQUIRED" });
     const existingName = typeof session.geminiFileName === "string" ? session.geminiFileName : null;
     let byteLength: number | null = typeof session.analysis_input_byte_length === "number" && session.analysis_input_byte_length > 0
       ? session.analysis_input_byte_length
@@ -256,7 +254,7 @@ Deno.serve(async (request) => {
         gemini_file_uri: uploaded.uri,
         gemini_file_state: uploaded.state,
         updated_at: new Date().toISOString(),
-      }).eq("id", session.id);
+      }).eq("id", session.id).eq("active_attempt_id", attemptId);
       if (metadataError) throw Object.assign(metadataError, { code: "ANALYSIS_FILE_METADATA_FAILED" });
       return uploaded;
     };
@@ -272,7 +270,7 @@ Deno.serve(async (request) => {
         stage: "video_processing",
         pipeline_version: PIPELINE_VERSION,
         updated_at: new Date().toISOString(),
-      }).eq("id", session.id);
+      }).eq("id", session.id).eq("active_attempt_id", attemptId);
       if (processingError) throw Object.assign(processingError, { code: "ANALYSIS_FILE_METADATA_FAILED" });
       // Gemini file activation frequently takes longer than six seconds. Keep
       // the accepted upload alive long enough for the normal case, then hand
@@ -340,10 +338,13 @@ Deno.serve(async (request) => {
         hasStoredVideoEvidence: Boolean(storedStage?.output),
         failedStageErrorCode: failedStageIsNewer && typeof failedStage?.error_code === "string" ? failedStage.error_code : null,
         analysisDecision: currentPipeline && session.analysis_draft && typeof session.analysis_draft === "object" ? session.analysis_draft : null,
+        activeAttemptId: typeof session.active_attempt_id === "string" ? session.active_attempt_id : null,
         setDeclaration: declaration,
       } as WholeVideoSession;
     },
     advancePipeline: async (rawSession) => {
+      const activeAttemptId = typeof rawSession.activeAttemptId === "string" ? rawSession.activeAttemptId : null;
+      if (!activeAttemptId) throw Object.assign(new Error("Analysis reservation attempt is missing"), { code: "ANALYSIS_ATTEMPT_REQUIRED" });
       const invocationStartedAt = Date.now();
       const durationMs = rawSession.durationMs!;
       const declaration = rawSession.setDeclaration ? parseSetDeclaration(rawSession.setDeclaration) : undefined;
@@ -392,12 +393,12 @@ Deno.serve(async (request) => {
             gemini_file_uri: prepared.file.uri,
             gemini_file_state: prepared.file.state,
             updated_at: new Date().toISOString(),
-          }).eq("id", rawSession.id);
+          }).eq("id", rawSession.id).eq("active_attempt_id", activeAttemptId);
         }
         return analysisVideo;
       };
       const saveSessionStage = async (stage: string, extra: JsonRecord = {}) => {
-        const { error } = await admin.from("analysis_sessions").update({
+        const { data: updated, error } = await admin.from("analysis_sessions").update({
           status: "processing",
           stage,
           pipeline_version: PIPELINE_VERSION,
@@ -412,8 +413,12 @@ Deno.serve(async (request) => {
           ...extra,
         })
           .eq("id", rawSession.id)
-          .not("status", "in", "(complete,partial,unable,failed)");
+          .eq("active_attempt_id", activeAttemptId)
+          .not("status", "in", "(complete,partial,unable,failed)")
+          .select("id")
+          .maybeSingle();
         if (error) throw databaseError("ANALYSIS_STATE_SAVE_FAILED", error);
+        if (!updated) throw Object.assign(new Error("Analysis attempt was superseded"), { code: "ANALYSIS_ATTEMPT_SUPERSEDED" });
       };
 
       return advanceWholeVideoPipeline({
@@ -435,7 +440,7 @@ Deno.serve(async (request) => {
                   thinkingLevel: ANALYSIS_RUNTIME_CONTRACT.analystThinkingLevel,
                   mediaResolution: ANALYSIS_RUNTIME_CONTRACT.mediaResolution,
                 });
-            const raw = await generate({ sessionId, stage: "analyzing", modelName: ANALYST_MODEL, request: requestBody, fps: ANALYSIS_RUNTIME_CONTRACT.requestedFps, timeoutMs: deadline.timeoutFor("analyzing") }) as JsonRecord;
+            const raw = await generate({ sessionId, attemptId: activeAttemptId, stage: "analyzing", modelName: ANALYST_MODEL, request: requestBody, fps: ANALYSIS_RUNTIME_CONTRACT.requestedFps, timeoutMs: deadline.timeoutFor("analyzing") }) as JsonRecord;
             return parseWholeVideoAnalysis(raw, durationMs) as unknown as JsonRecord;
           });
           // Structured analyst output is already durable in the successful
@@ -466,7 +471,7 @@ Deno.serve(async (request) => {
                 schema: WHOLE_VIDEO_WRITING_SCHEMA,
                 thinkingLevel: ANALYSIS_RUNTIME_CONTRACT.writerThinkingLevel,
               });
-              return generate({ sessionId, stage: "finalizing", modelName: WRITER_MODEL, request: writerRequest, timeoutMs });
+              return generate({ sessionId, attemptId: activeAttemptId, stage: "finalizing", modelName: WRITER_MODEL, request: writerRequest, timeoutMs });
             };
             const writing = await writeValidatedCoaching({
               write: () => generateWriting(buildWholeVideoWritingPrompt(analysis, declaration)),
@@ -491,8 +496,9 @@ Deno.serve(async (request) => {
         saveResult: async (sessionId, rawResult) => {
           const candidate = rawResult as unknown as AnalysisCandidate;
           await runStage(sessionId, "finalizing", { status: candidate.status, itemCount: candidate.priorityCorrections.length + candidate.coachingCues.length }, async () => {
-            const { error } = await admin.rpc("commit_analysis_result_v2", {
+            const { error } = await admin.rpc("commit_analysis_result_for_attempt", {
               p_session_id: sessionId,
+              p_attempt_id: activeAttemptId,
               p_session: {
                 pipeline_version: PIPELINE_VERSION,
                 exercise_family: candidate.recognition.exerciseFamily,
@@ -535,10 +541,10 @@ Deno.serve(async (request) => {
             const { count: modelCallCount, error: telemetryError } = await admin
               .from("model_call_telemetry")
               .select("id", { count: "exact", head: true })
-              .eq("session_id", sessionId);
+              .eq("analysis_attempt_id", activeAttemptId);
             if (telemetryError) throw databaseError("ANALYSIS_RESULT_SAVE_FAILED", telemetryError);
             const analysisTotalDurationMs = Math.max(0, Date.now() - analysisRunStartedAt);
-              const { error: sessionError } = await admin.from("analysis_sessions").update({
+              const { data: completedSession, error: sessionError } = await admin.from("analysis_sessions").update({
                 status: candidate.status,
                 stage: "complete",
                 analysis_total_duration_ms: analysisTotalDurationMs,
@@ -548,8 +554,9 @@ Deno.serve(async (request) => {
                 analysis_next_retry_at: null,
                 analysis_last_error_code: null,
                 updated_at: new Date().toISOString(),
-            }).eq("id", sessionId);
+            }).eq("id", sessionId).eq("active_attempt_id", activeAttemptId).select("id").maybeSingle();
             if (sessionError) throw databaseError("ANALYSIS_RESULT_SAVE_FAILED", sessionError);
+            if (!completedSession) throw Object.assign(new Error("Analysis attempt was superseded"), { code: "ANALYSIS_ATTEMPT_SUPERSEDED" });
             return { status: candidate.status };
           });
           if (geminiFileName || geminiFile) {
@@ -559,18 +566,19 @@ Deno.serve(async (request) => {
               gemini_file_uri: null,
               gemini_file_state: null,
               updated_at: new Date().toISOString(),
-            }).eq("id", sessionId);
+            }).eq("id", sessionId).eq("active_attempt_id", activeAttemptId);
           }
         },
       });
     },
-    persistFailure: async (sessionId, code, disposition) => {
+    persistFailure: async (sessionId, code, disposition, attemptId) => {
       const { data: retryState, error: retryStateError } = await admin
         .from("analysis_sessions")
-        .select("status,user_id,gemini_file_name,analysis_retry_count")
+        .select("status,user_id,gemini_file_name,analysis_retry_count,active_attempt_id")
         .eq("id", sessionId)
         .maybeSingle();
       if (retryStateError) throw databaseError("ANALYSIS_STATE_SAVE_FAILED", retryStateError);
+      if (attemptId && retryState?.active_attempt_id !== attemptId) throw Object.assign(new Error("Analysis attempt was superseded"), { code: "ANALYSIS_ATTEMPT_SUPERSEDED" });
       const { data: existingResult, error: existingResultError } = await admin
         .from("analysis_results")
         .select("status")
@@ -581,7 +589,7 @@ Deno.serve(async (request) => {
         if (typeof retryState?.gemini_file_name === "string") {
           await deleteGeminiFileDurably(retryState.gemini_file_name, retryState.user_id);
         }
-        await persistRetryState(sessionId, {
+        await persistRetryState(sessionId, attemptId, {
           status: existingResult?.status ?? retryState?.status ?? "complete",
           stage: "complete",
           failure_code: null,
@@ -604,7 +612,7 @@ Deno.serve(async (request) => {
       }
       if (!terminal) {
         const { nextRetryAt } = analysisRetrySchedule(nextRetryCount);
-        await persistRetryState(sessionId, {
+        await persistRetryState(sessionId, attemptId, {
           status: "processing",
           stage: "retry_wait",
           pipeline_version: PIPELINE_VERSION,
@@ -616,7 +624,7 @@ Deno.serve(async (request) => {
         });
         return { status: "processing", stage: "retry_wait", analysisNextRetryAt: nextRetryAt };
       }
-      await persistRetryState(sessionId, {
+      await persistRetryState(sessionId, attemptId, {
         status: "failed",
         stage: "failed",
         pipeline_version: PIPELINE_VERSION,

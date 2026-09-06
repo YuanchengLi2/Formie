@@ -6,6 +6,7 @@ import type { Session, User } from "@supabase/supabase-js";
 
 import { queryClient } from "@/lib/query-client";
 import { supabase } from "@/lib/supabase";
+import { loadUserProfile, type UserProfileClient } from "@/features/profile/profile-repository";
 
 import { parseAuthCallbackUrl } from "./auth-callback";
 import { AppleSignInError, signInWithApple as performAppleSignIn } from "./apple-authentication";
@@ -24,20 +25,28 @@ type AuthContextValue = {
   error: string | null;
   signingIn: SocialProvider | null;
   emailBusy: "sending" | "verifying" | "password" | null;
-  signInWithApple: () => Promise<boolean>;
+  signInWithApple: (intent: AuthIntent) => Promise<AppleAuthOutcome>;
   signInWithProvider: (provider: SocialProvider) => Promise<boolean>;
   completeOAuthCode: (code: string) => Promise<boolean>;
   signInWithPassword: (email: string, password: string) => Promise<boolean>;
-  sendEmailCode: (email: string) => Promise<boolean>;
+  sendEmailCode: (email: string, intent: AuthIntent) => Promise<boolean>;
   verifyEmailCode: (email: string, code: string) => Promise<boolean>;
   logOut: (reason?: SessionExitReason) => Promise<void>;
   sessionExitReason: SessionExitReason | null;
   clearError: () => void;
 };
 
+export type AuthIntent = "login" | "create_account";
+
+export type AppleAuthOutcome =
+  | { status: "authenticated"; userId: string }
+  | { status: "cancelled" }
+  | { status: "failed" };
+
 export type SessionExitReason = "user" | "invalid_session";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const profileClient = supabase as unknown as UserProfileClient;
 
 async function currentSession(): Promise<Session | null> {
   const result = await supabase.auth.getSession();
@@ -85,9 +94,10 @@ function friendlyPasswordError(error: unknown): string {
 async function edgeFunctionErrorCode(data: unknown, error: unknown): Promise<string | null> {
   if (data && typeof data === "object" && "code" in data && typeof data.code === "string") return data.code;
   const context = error && typeof error === "object" && "context" in error ? error.context : null;
-  if (context instanceof Response) {
+  if (context && typeof context === "object" && "json" in context && typeof context.json === "function") {
     try {
-      const payload = await context.clone().json() as Record<string, unknown>;
+      const readable = "clone" in context && typeof context.clone === "function" ? context.clone() : context;
+      const payload = await readable.json() as Record<string, unknown>;
       return typeof payload.code === "string" ? payload.code : null;
     } catch {
       return null;
@@ -100,30 +110,40 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const redirectUrl = Linking.createURL("auth/callback");
   const service = useMemo(() => createAuthService(supabase.auth as unknown as AuthClient, redirectUrl), [redirectUrl]);
   const [initializing, setInitializing] = useState(true);
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSessionState] = useState<Session | null>(null);
+  const sessionRevision = useRef(0);
+  const setSession = useCallback((next: Session | null) => {
+    sessionRevision.current += 1;
+    setSessionState(next);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [signingIn, setSigningIn] = useState<SocialProvider | null>(null);
   const [emailBusy, setEmailBusy] = useState<"sending" | "verifying" | "password" | null>(null);
   const callbackTasksRef = useRef(new Map<string, Promise<boolean>>());
   const completedCodesRef = useRef(new Set<string>());
+  const appleSignInPendingRef = useRef(false);
   const [sessionExitReason, setSessionExitReason] = useState<SessionExitReason | null>(null);
 
   const clearLocalSession = useCallback(async (reason: SessionExitReason) => {
-    await service.logOut().catch(() => undefined);
+    // Invalidate in-flight validation before yielding to the auth SDK.
     queryClient.clear();
     setSession(null);
     setError(null);
     setSessionExitReason(reason);
-  }, [service]);
+    await service.logOut().catch(() => undefined);
+  }, [service, setSession]);
 
-  const validatePersistedSession = useCallback(async (candidate: Session | null) => {
+  const validatePersistedSession = useCallback(async (candidate: Session | null, revision = sessionRevision.current) => {
+    if (revision !== sessionRevision.current) return undefined;
     if (!candidate) return candidate;
     try {
       const result = await withRemoteValidationDeadline(supabase.auth.getUser());
+      if (revision !== sessionRevision.current) return undefined;
       if (result.error) throw result.error;
       if (!result.data.user?.id) throw { status: 401, code: "user_not_found", message: "User not found" };
       return candidate;
     } catch (failure) {
+      if (revision !== sessionRevision.current) return undefined;
       if (classifyRemoteUserValidationError(failure) === "invalid_session") {
         await clearLocalSession("invalid_session");
         return null;
@@ -157,7 +177,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     })().finally(() => callbackTasksRef.current.delete(key));
     callbackTasksRef.current.set(key, task);
     return task;
-  }, [service]);
+  }, [service, setSession]);
 
   const completeOAuthCode = useCallback((code: string) => (
     processCallback(`${redirectUrl}?code=${encodeURIComponent(code)}`)
@@ -165,19 +185,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     let active = true;
-    const authSubscription = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      if (active) setSession(nextSession);
+    const authSubscription = supabase.auth.onAuthStateChange((event, nextSession) => {
+      // Startup owns INITIAL_SESSION and validates it before publishing it.
+      if (!active || event === "INITIAL_SESSION" || appleSignInPendingRef.current) return;
+      setSession(nextSession);
     });
     void (async () => {
       try {
+        const revision = sessionRevision.current;
         let loadedSession = await currentSession();
+        if (!active || revision !== sessionRevision.current) return;
         if (authSnapshotFromSession(loadedSession)?.isAnonymous) {
           await service.logOut();
           loadedSession = null;
         }
-        loadedSession = await validatePersistedSession(loadedSession);
+        const validated = await validatePersistedSession(loadedSession, revision);
         if (!active) return;
-        setSession(loadedSession);
+        if (validated !== undefined) setSession(validated);
         const initialUrl = await Linking.getInitialURL();
         if (initialUrl) await processCallback(initialUrl);
       } catch (failure) {
@@ -190,7 +214,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       active = false;
       authSubscription.data.subscription.unsubscribe();
     };
-  }, [processCallback, service, validatePersistedSession]);
+  }, [processCallback, service, setSession, validatePersistedSession]);
 
   useEffect(() => {
     if (!session) return;
@@ -200,7 +224,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       });
     });
     return () => listener.remove();
-  }, [session, validatePersistedSession]);
+  }, [session, setSession, validatePersistedSession]);
 
   const phase = deriveAuthPhase({ initializing, session: authSnapshotFromSession(session) });
   const value = useMemo<AuthContextValue>(() => ({
@@ -213,10 +237,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     emailBusy,
     sessionExitReason,
     completeOAuthCode,
-    async signInWithApple() {
-      if (signingIn || emailBusy) return false;
+    async signInWithApple(_intent) {
+      if (signingIn || emailBusy) return { status: "failed" };
+      sessionRevision.current += 1;
+      appleSignInPendingRef.current = true;
       setSigningIn("apple");
       setError(null);
+      let provisionalSession: Session | null = null;
       try {
         const returnedSession = await performAppleSignIn({
           signInWithIdToken: (identityToken, rawNonce) => service.signInWithIdToken(identityToken, rawNonce),
@@ -252,13 +279,25 @@ export function AuthProvider({ children }: PropsWithChildren) {
           },
           signOut: () => service.logOut(),
         }) as Session;
+        provisionalSession = returnedSession;
+        // A missing profile is unfinished setup, not proof that an authenticated
+        // identity can be deleted. ProfileProvider and launch resume onboarding.
+        await loadUserProfile(profileClient, returnedSession.user.id);
+        appleSignInPendingRef.current = false;
         setSession(returnedSession);
         setSessionExitReason(null);
-        return true;
+        return { status: "authenticated", userId: returnedSession.user.id };
       } catch (failure) {
+        appleSignInPendingRef.current = false;
+        if (provisionalSession) await service.logOut().catch(() => undefined);
+        queryClient.clear();
+        setSession(null);
         setError(friendlyAppleError(failure));
-        return false;
+        return failure instanceof AppleSignInError && failure.code === "CANCELLED"
+          ? { status: "cancelled" }
+          : { status: "failed" };
       } finally {
+        appleSignInPendingRef.current = false;
         setSigningIn(null);
       }
     },
@@ -291,12 +330,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
         setSigningIn(null);
       }
     },
-    async sendEmailCode(email) {
+    async sendEmailCode(email, intent) {
       if (emailBusy || signingIn) return false;
       setEmailBusy("sending");
       setError(null);
       try {
-        await service.sendEmailCode(email);
+        await service.sendEmailCode(email, intent);
         return true;
       } catch (failure) {
         setError(friendlyEmailError(failure));
@@ -341,7 +380,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       await clearLocalSession(reason);
     },
     clearError: () => setError(null),
-  }), [clearLocalSession, completeOAuthCode, emailBusy, error, phase, processCallback, redirectUrl, service, session, sessionExitReason, signingIn]);
+  }), [clearLocalSession, completeOAuthCode, emailBusy, error, phase, processCallback, redirectUrl, service, session, sessionExitReason, setSession, signingIn]);
 
   return <AuthContext value={value}>{children}</AuthContext>;
 }

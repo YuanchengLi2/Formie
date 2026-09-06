@@ -52,6 +52,11 @@ export type ApprovedOnboardingScreenProps = {
   onRetrySync?: () => void;
   onRestore: () => void;
   onLoadingComplete?: () => void;
+  referralDisplayName?: string | null;
+  referralOffer?: "eligible" | "syncing" | null;
+  referralCodeError?: string | null;
+  referralCodeValidating?: boolean;
+  onValidateCreatorCode?: (code: string) => Promise<boolean> | boolean;
 };
 
 const logo = require("../../../assets/images/form-logo-mark.png");
@@ -83,6 +88,7 @@ const copy: Record<OnboardingStep, { title: string; subtitle: string; eyebrow?: 
   "training-frequency": { title: "How often do you train?", subtitle: "Choose your typical number of workouts each week." },
   "custom-milestone": { title: "What goal are you working toward?", subtitle: "Type the milestone you want Formie to keep in mind." },
   "acquisition-source": { title: "Where did you hear about Formie?", subtitle: "This helps us understand what brings athletes to Formie." },
+  "creator-code": { title: "Enter your creator code", subtitle: "We’ll verify it before attaching the creator referral to your new account." },
   "long-term-value": { title: "Every set adds context.", subtitle: "See whether the same cue is getting easier, cleaner, and more consistent.", eyebrow: "BUILT FOR THE NEXT WORKOUT" },
   loading: { title: "Building your profile...", subtitle: "Combining your goals, experience, and training context." },
   "create-account": { title: "Save your coaching profile.", subtitle: "Connect an account so your profile and subscription follow you." },
@@ -97,6 +103,7 @@ const acquisitionChoices = [
   ["App Store search", "app_store_search", "A", "#59A9FF"],
   ["Google search", "google_search", "G", "#77A7FF"],
   ["Friend, trainer, or coach", "friend_trainer_coach", "●●", "#F0B328"],
+  ["Affiliated creator", "affiliated_creator", "★", "#F0B328"],
   ["Other", "other", "…", "#B7B2AC"],
 ] as const;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -254,7 +261,8 @@ function FrequencySlider({ value, onChange }: { value: number; onChange: (value:
   return <View style={styles.frequency}><Text style={styles.frequencyNumber}>{value}</Text><Text style={styles.frequencyLabel}>WORKOUTS PER WEEK</Text><View accessibilityRole="adjustable" accessibilityLabel="Workouts per week" accessibilityValue={{ min: 1, max: 7, now: value, text: `${value} workouts per week` }} accessibilityActions={[{ name: "increment" }, { name: "decrement" }]} onAccessibilityAction={(event) => choose(value + (event.nativeEvent.actionName === "increment" ? 1 : -1))} onLayout={(event) => { widthRef.current = event.nativeEvent.layout.width; }} style={styles.frequencyTrack} {...panResponder.panHandlers}>{[1, 2, 3, 4, 5, 6, 7].map((choice) => <Pressable key={choice} accessibilityRole="radio" accessibilityLabel={`${choice} workouts per week`} accessibilityState={{ selected: choice === value }} onPress={() => choose(choice)} style={styles.frequencyChoice}><View style={[styles.dot, choice <= value && styles.dotActive, choice === value && styles.dotSelected]} /><Text style={[styles.tick, choice === value && styles.tickSelected]}>{choice}</Text></Pressable>)}</View><View style={styles.frequencyEnds}><Text style={styles.smallLabel}>ONCE A WEEK</Text><Text style={styles.smallLabel}>DAILY</Text></View></View>;
 }
 
-function QuestionControls({ step, answers, onAnswerChange }: ApprovedOnboardingScreenProps) {
+function QuestionControls({ step, answers, onAnswerChange, referralDisplayName, referralCodeError, referralCodeValidating, onValidateCreatorCode }: ApprovedOnboardingScreenProps) {
+  const [creatorCode, setCreatorCode] = useState("");
   if (step === "age") { const value = answers.ageYears ?? 18; return <View style={styles.wheelPanel}><NumberWheel values={range(18, 100)} selected={value} onSelect={(next) => onAnswerChange("ageYears", next)} testID="onboarding-age-wheel" valueTestID="onboarding-age-value" /><Text style={styles.unit}>years old</Text><Text style={styles.eligibilityCopy}>You must be 18 or older to use Formie.</Text></View>; }
   if (step === "gender") return <View style={styles.list}><OptionCard dense title="Male" selected={answers.gender === "male"} onPress={() => onAnswerChange("gender", "male")} /><OptionCard dense title="Female" selected={answers.gender === "female"} onPress={() => onAnswerChange("gender", "female")} /><OptionCard dense title="Prefer not to say" selected={answers.gender === "prefer_not_to_say"} onPress={() => onAnswerChange("gender", "prefer_not_to_say")} /></View>;
   if (step === "height") { const metric = answers.measurementSystem === "metric"; const cm = answers.heightCm ?? 177.8; const selected = metric ? Math.round(cm) : Math.round(cm / 2.54); return <View style={styles.measure}><NumberWheel values={metric ? range(120, 230) : range(48, 96)} selected={selected} suffix={metric ? " cm" : " in"} onSelect={(next) => onAnswerChange("heightCm", metric ? heightToCm({ centimeters: next }) : heightToCm({ feet: Math.floor(next / 12), inches: next % 12 }))} testID="onboarding-height-wheel" /><Text style={styles.unit}>{metric ? `${selected} cm` : `${Math.floor(selected / 12)} ft ${selected % 12} in`}</Text><Segmented metric={metric} imperialLabel="ft / in" metricLabel="cm" onChange={(next) => onAnswerChange("measurementSystem", next ? "metric" : "imperial")} /></View>; }
@@ -265,24 +273,26 @@ function QuestionControls({ step, answers, onAnswerChange }: ApprovedOnboardingS
   if (step === "training-frequency") return <FrequencySlider value={answers.workoutsPerWeek} onChange={(next) => onAnswerChange("workoutsPerWeek", next)} />;
   if (step === "custom-milestone") return <View style={styles.milestone}><Text style={styles.fieldLabel}>YOUR GOAL</Text><TextInput accessibilityLabel="Your goal" value={answers.customMilestone} maxLength={60} onChangeText={(value) => selectThen(() => onAnswerChange("customMilestone", value))} placeholder="Bench 225 lb" placeholderTextColor="#77736E" style={styles.input} /><Text style={styles.hint}>For example: Bench 225 lb, first pull-up, improve squat depth</Text><Text style={styles.counter}>{answers.customMilestone.length} / 60</Text></View>;
   if (step === "acquisition-source") return <View style={styles.acquisition}><View accessibilityRole="radiogroup" style={styles.acquisitionGrid}>{acquisitionChoices.map(([label, value, icon, iconColor]) => { const selected = answers.acquisitionSource === value; return <Pressable key={value} accessibilityRole="radio" accessibilityLabel={label} accessibilityState={{ selected }} onPress={() => selectThen(() => { onAnswerChange("acquisitionSource", value); if (value !== "other" && answers.acquisitionSourceOther) onAnswerChange("acquisitionSourceOther", ""); })} style={({ pressed }) => [styles.acquisitionOption, selected && styles.acquisitionOptionSelected, pressed && styles.pressed]}><View accessibilityLabel={`${label} source icon`} style={[styles.acquisitionIcon, { borderColor: iconColor }, selected && styles.acquisitionIconSelected]}><Text style={[styles.acquisitionIconGlyph, { color: iconColor }, value === "friend_trainer_coach" && styles.acquisitionPeopleGlyph]}>{icon}</Text></View><Text numberOfLines={2} style={[styles.acquisitionOptionText, selected && styles.acquisitionOptionTextSelected]}>{label}</Text><View style={[styles.acquisitionRadio, selected && styles.radioSelected]}>{selected ? <Text style={styles.check}>✓</Text> : null}</View></Pressable>; })}</View>{answers.acquisitionSource === "other" ? <View style={styles.acquisitionOther}><TextInput accessibilityLabel="Where did you hear about Formie? Other response" value={answers.acquisitionSourceOther} maxLength={80} onChangeText={(value) => onAnswerChange("acquisitionSourceOther", value)} placeholder="Tell us where" placeholderTextColor="#77736E" style={[styles.input, styles.acquisitionInput]} /><Text style={styles.counter}>{answers.acquisitionSourceOther.length} / 80</Text></View> : null}</View>;
+  if (step === "creator-code") return <View style={styles.creatorCodePanel}>{referralDisplayName ? <View style={styles.referralAcknowledgement}><Text style={styles.referralAcknowledgementTitle}>✓ Referred by {referralDisplayName}</Text><Text style={styles.referralAcknowledgementCopy}>Subscribe to receive 3 extra analyses in your first month.</Text></View> : <><Text style={styles.fieldLabel}>CREATOR CODE</Text><TextInput accessibilityLabel="Creator code" autoCapitalize="characters" autoCorrect={false} maxLength={32} value={creatorCode} onChangeText={(value) => setCreatorCode(value.toUpperCase().replace(/[^A-Z0-9-]/g, ""))} placeholder="ALEX-7Q2K" placeholderTextColor="#77736E" style={[styles.input, styles.creatorCodeInput]} /><Pressable accessibilityRole="button" accessibilityLabel="Verify code" accessibilityState={{ disabled: referralCodeValidating || creatorCode.length < 3 }} disabled={referralCodeValidating || creatorCode.length < 3} onPress={() => void onValidateCreatorCode?.(creatorCode)} style={({ pressed }) => [styles.verifyCodeButton, (referralCodeValidating || creatorCode.length < 3) && styles.verifyCodeButtonDisabled, pressed && styles.pressed]}><Text style={styles.verifyCodeButtonText}>{referralCodeValidating ? "Verifying…" : "Verify code"}</Text></Pressable>{referralCodeError ? <Text accessibilityRole="alert" style={styles.inlineError}>{referralCodeError}</Text> : null}</>}</View>;
   return null;
 }
 
-function canContinue(step: OnboardingStep, answers: OnboardingAnswers) {
+function canContinue(step: OnboardingStep, answers: OnboardingAnswers, referralDisplayName?: string | null) {
   if (step === "gender") return answers.gender !== null;
   if (step === "experience") return answers.experience !== null;
   if (step === "primary-goal") return answers.primaryGoal !== null;
   if (step === "biggest-frustration") return answers.biggestFrustration !== null;
   if (step === "custom-milestone") return answers.customMilestone.trim().length > 0;
   if (step === "acquisition-source") return answers.acquisitionSource !== null && (answers.acquisitionSource !== "other" || answers.acquisitionSourceOther.trim().length > 0);
+  if (step === "creator-code") return Boolean(referralDisplayName);
   return true;
 }
 
 function QuestionScreen(props: ApprovedOnboardingScreenProps) {
   const next = () => { if (props.step === "age" && props.answers.ageYears === null) props.onAnswerChange("ageYears", 18); if (props.step === "height" && props.answers.heightCm === null) props.onAnswerChange("heightCm", 177.8); if (props.step === "weight" && props.answers.weightKg === null) props.onAnswerChange("weightKg", 74.84); props.onNext(); };
-  const hasControls = ["age", "gender", "height", "weight", "experience", "primary-goal", "biggest-frustration", "training-frequency", "custom-milestone", "acquisition-source"].includes(props.step);
-  const accommodatesKeyboard = props.step === "custom-milestone" || (props.step === "acquisition-source" && props.answers.acquisitionSource === "other");
-  return <KeyboardAvoidingView behavior={accommodatesKeyboard && process.env.EXPO_OS === "ios" ? "padding" : undefined} style={styles.screen}><Scaffold step={props.step} onBack={props.onBack} ctaLabel="Continue" ctaDisabled={!canContinue(props.step, props.answers) || props.busy} onCta={next}>{hasControls ? <><QuestionControls {...props} />{props.error ? <Text accessibilityRole="alert" style={styles.inlineError}>{props.error}</Text> : null}</> : undefined}</Scaffold></KeyboardAvoidingView>;
+  const hasControls = ["age", "gender", "height", "weight", "experience", "primary-goal", "biggest-frustration", "training-frequency", "custom-milestone", "acquisition-source", "creator-code"].includes(props.step);
+  const accommodatesKeyboard = props.step === "custom-milestone" || props.step === "creator-code" || (props.step === "acquisition-source" && props.answers.acquisitionSource === "other");
+  return <KeyboardAvoidingView behavior={accommodatesKeyboard && process.env.EXPO_OS === "ios" ? "padding" : undefined} style={styles.screen}><Scaffold step={props.step} onBack={props.onBack} ctaLabel="Continue" ctaDisabled={!canContinue(props.step, props.answers, props.referralDisplayName) || props.busy} onCta={next}>{hasControls ? <><QuestionControls {...props} />{props.error ? <Text accessibilityRole="alert" style={styles.inlineError}>{props.error}</Text> : null}</> : undefined}</Scaffold></KeyboardAvoidingView>;
 }
 
 function AccountScreen(props: ApprovedOnboardingScreenProps) {
@@ -290,7 +300,7 @@ function AccountScreen(props: ApprovedOnboardingScreenProps) {
   const personalizedMessage = goal
     ? `Save your account so Formie can keep coaching you toward ${goal}.`
     : "Save your account so Formie can keep your goals, analyses, and personalized coaching together.";
-  return <AccountAccessScreen mode="create_account" personalizedMessage={personalizedMessage} busy={props.busy} busyProvider={props.busyProvider} error={props.error} onBack={props.onBack} onOpenTerms={props.onOpenTerms} onOpenPrivacy={props.onOpenPrivacy} onPrivacyConsentChange={(accepted) => props.onAnswerChange("acceptedPrivacy", accepted)} onAiProcessingConsentChange={(accepted) => props.onAnswerChange("acceptedAiProcessing", accepted)} onMarketingOptInChange={(accepted) => props.onAnswerChange("marketingOptIn", accepted)} onApple={() => impactThen(() => props.onOAuth("apple"))} />;
+  return <AccountAccessScreen mode="create_account" personalizedMessage={personalizedMessage} busy={props.busy} busyProvider={props.busyProvider} error={props.error} onBack={props.onBack} onSignIn={props.onSignIn} onOpenTerms={props.onOpenTerms} onOpenPrivacy={props.onOpenPrivacy} onPrivacyConsentChange={(accepted) => props.onAnswerChange("acceptedPrivacy", accepted)} onAiProcessingConsentChange={(accepted) => props.onAnswerChange("acceptedAiProcessing", accepted)} onMarketingOptInChange={(accepted) => props.onAnswerChange("marketingOptIn", accepted)} onApple={() => impactThen(() => props.onOAuth("apple"))} />;
 }
 
 function LoadingScreen({ onComplete }: { onComplete?: () => void }) {
@@ -315,7 +325,7 @@ export function ApprovedOnboardingScreen(props: ApprovedOnboardingScreenProps) {
   if (props.step === "product-value" || props.step === "why-formie" || props.step === "product-demonstration" || props.step === "long-term-value") return <NativeArtworkScreen step={props.step} onNext={props.onNext} onBack={props.onBack} />;
   if (props.step === "loading") return <LoadingScreen onComplete={props.onLoadingComplete} />;
   if (props.step === "create-account") return <AccountScreen {...props} />;
-  if (props.step === "premium") return <PremiumScreen price={props.price} purchaseAvailable={props.purchaseAvailable} busy={props.busy} state={props.purchaseState} error={props.error} restoreMessage={props.restoreMessage} onRetrySync={props.onRetrySync} onBack={props.onBack} onPurchase={() => impactThen(props.onPurchase)} onPurchasePlan={(plan) => impactThen(() => props.onPurchasePlan ? props.onPurchasePlan(plan) : props.onPurchase())} onRestore={props.onRestore} onOpenTerms={props.onOpenTerms} onOpenPrivacy={props.onOpenPrivacy} />;
+  if (props.step === "premium") return <PremiumScreen referralOffer={props.referralOffer} price={props.price} purchaseAvailable={props.purchaseAvailable} busy={props.busy} state={props.purchaseState} error={props.error} restoreMessage={props.restoreMessage} onRetrySync={props.onRetrySync} onBack={props.onBack} onPurchase={() => impactThen(props.onPurchase)} onPurchasePlan={(plan) => impactThen(() => props.onPurchasePlan ? props.onPurchasePlan(plan) : props.onPurchase())} onRestore={props.onRestore} onOpenTerms={props.onOpenTerms} onOpenPrivacy={props.onOpenPrivacy} />;
   return <QuestionScreen {...props} />;
 }
 
@@ -391,6 +401,9 @@ const styles = StyleSheet.create({
   frequency: { alignItems: "center", gap: 12 }, frequencyNumber: { color: "#F7F6F4", fontSize: 58, lineHeight: 62, fontWeight: "800", fontVariant: ["tabular-nums"] }, frequencyLabel: { color: "#AAA6A2", fontSize: 10, letterSpacing: 2, fontWeight: "800" }, frequencyTrack: { width: "100%", height: 65, flexDirection: "row", alignItems: "flex-start", borderTopWidth: 2, borderTopColor: "#393633", marginTop: 18 }, frequencyChoice: { flex: 1, height: 64, alignItems: "center", gap: 9, top: -5 }, dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#55514E" }, dotActive: { backgroundColor: "#F0B328" }, dotSelected: { width: 16, height: 16, borderRadius: 8, top: -4 }, tick: { color: "#77736E", fontSize: 12 }, tickSelected: { color: "#F0B328", fontWeight: "800", top: -4 }, frequencyEnds: { width: "100%", flexDirection: "row", justifyContent: "space-between" }, smallLabel: { color: "#77736E", fontSize: 9, letterSpacing: 1 },
   milestone: { gap: 10 }, fieldLabel: { color: "#F0B328", fontSize: 10, letterSpacing: 2, fontWeight: "800" }, input: { minHeight: 58, borderRadius: 12, borderWidth: 1, borderColor: "#514E49", paddingHorizontal: 15, color: "#F6F5F3", backgroundColor: "#090909", fontSize: 18 }, hint: { color: "#8E8A86", fontSize: 12, lineHeight: 17 }, counter: { color: "#8E8A86", fontSize: 11, textAlign: "right" },
   acquisition: { flex: 1, minHeight: 0, justifyContent: "center", gap: 9 },
+  referralAcknowledgement: { borderRadius: 12, borderWidth: 1, borderColor: "#8B6823", backgroundColor: "#171106", paddingHorizontal: 13, paddingVertical: 9 },
+  referralAcknowledgementTitle: { color: "#F4E1A7", fontSize: 15, lineHeight: 20, fontWeight: "800" },
+  referralAcknowledgementCopy: { color: "#C8C3B9", fontSize: 12.5, lineHeight: 17, marginTop: 2 },
   acquisitionGrid: { width: "100%", gap: 6 },
   acquisitionOption: { width: "100%", minHeight: 62, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 13, borderCurve: "continuous", borderWidth: 1, borderColor: "#45423F", backgroundColor: "#090909", flexDirection: "row", alignItems: "center", gap: 12 },
   acquisitionOptionSelected: { borderColor: "#F0B328", backgroundColor: "#171106" },
@@ -403,6 +416,11 @@ const styles = StyleSheet.create({
   acquisitionRadio: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.25, borderColor: "#797673", alignItems: "center", justifyContent: "center" },
   acquisitionOther: { gap: 3 },
   acquisitionInput: { minHeight: 46, fontSize: 15 },
+  creatorCodePanel: { gap: 12, justifyContent: "center" },
+  creatorCodeInput: { fontSize: 22, letterSpacing: 2.2, fontWeight: "800", textAlign: "center" },
+  verifyCodeButton: { minHeight: 52, borderRadius: 12, backgroundColor: "#F0B328", alignItems: "center", justifyContent: "center" },
+  verifyCodeButtonDisabled: { opacity: 0.45 },
+  verifyCodeButtonText: { color: "#070707", fontSize: 16, fontWeight: "800" },
   inlineError: { color: "#FF7C7C", fontSize: 12.5, lineHeight: 18, textAlign: "center", marginTop: 10 },
   account: { gap: 14, paddingBottom: 8 }, provider: { minHeight: 70, borderRadius: 14, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 14 }, providerDisabled: { opacity: 0.48 }, apple: { backgroundColor: "#F7F7F7" }, google: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#DADCE0" }, providerIcon: { width: 32, height: 32 }, appleText: { color: "#080808", fontSize: 18, fontWeight: "700" }, googleText: { color: "#202124", fontSize: 18, fontWeight: "700" }, busy: { minHeight: 30, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }, muted: { color: "#AAA6A2", fontSize: 13, textAlign: "center" }, error: { color: "#FF7C7C", fontSize: 12.5, lineHeight: 18, textAlign: "center" }, legal: { color: "#8F8B87", fontSize: 11.5, lineHeight: 17, textAlign: "center" }, link: { color: "#F0B328" }, restore: { minHeight: 44, alignItems: "center", justifyContent: "center" },
   consents: { gap: 10, marginTop: 2 }, consentRow: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12 }, checkbox: { width: 30, height: 30, borderRadius: 8, borderWidth: 1.5, borderColor: "#77736E", alignItems: "center", justifyContent: "center" }, checkboxChecked: { borderColor: "#F0B328", backgroundColor: "#F0B328" }, checkboxGlyph: { color: "#080808", fontSize: 19, fontWeight: "900" }, consentText: { flex: 1, color: "#D7D3CE", fontSize: 14, lineHeight: 19 },

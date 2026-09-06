@@ -3,7 +3,7 @@ import { createAdminClient, requireUserId } from "../_shared/auth.ts";
 import { requireCurrentAiEligibility } from "../_shared/ai-eligibility.ts";
 import { secureBrowserRequest, withCors } from "../_shared/cors.ts";
 import { constantTimeEqual } from "../_shared/request-security.ts";
-import { estimatedGeminiCost } from "../_shared/gemini-cost.ts";
+import { recordModelCallTelemetry } from "../_shared/model-telemetry.ts";
 import { buildTextGenerateContentRequest, buildVideoGenerateContentRequest, createGenerateContentClient } from "../_shared/gemini-generate.ts";
 import { geminiGovernanceFromEnvironment } from "../_shared/gemini-governance.ts";
 import { parseSetDeclaration, type SetDeclaration } from "../_shared/set-declaration.ts";
@@ -101,20 +101,17 @@ async function inlineVideo(session: LoadedRun, admin: ReturnType<typeof createAd
 }
 
 async function recordModelCall(admin: ReturnType<typeof createAdminClient>, input: { run: LoadedRun; model: string; startedAt: number; usage?: { promptTokens: number; outputTokens: number; thinkingTokens: number }; status: "succeeded" | "failed"; errorCode?: string }): Promise<void> {
-  await admin.from("model_call_telemetry").insert({
-    session_id: input.run.sessionId,
-    v49_run_id: input.run.runId,
+  await recordModelCallTelemetry(admin, {
+    sessionId: input.run.sessionId,
+    v49RunId: input.run.runId,
     stage: "analyzing",
     model: input.model,
-    requested_fps: input.model === V49_ANALYST_MODEL ? V49_REQUESTED_FPS : null,
-    prompt_tokens: input.usage?.promptTokens ?? null,
-    output_tokens: input.usage?.outputTokens ?? null,
-    thinking_tokens: input.usage?.thinkingTokens ?? null,
-    estimated_cost_usd: estimatedGeminiCost(input.model, input.usage),
-    duration_ms: Math.max(0, Date.now() - input.startedAt),
+    requestedFps: input.model === V49_ANALYST_MODEL ? V49_REQUESTED_FPS : null,
+    startedAtMs: input.startedAt,
+    usage: input.usage,
     status: input.status,
-    error_code: input.errorCode ?? null,
-  }).then(() => undefined).catch(() => undefined);
+    errorCode: input.errorCode,
+  });
 }
 
 async function generate(admin: ReturnType<typeof createAdminClient>, run: LoadedRun, model: string, request: Parameters<typeof generation.generate>[1]): Promise<unknown> {
@@ -124,7 +121,10 @@ async function generate(admin: ReturnType<typeof createAdminClient>, run: Loaded
     await recordModelCall(admin, { run, model, startedAt, usage: response.usage, status: "succeeded" });
     return response.value;
   } catch (error) {
-    await recordModelCall(admin, { run, model, startedAt, status: "failed", errorCode: codeFor(error) });
+    const usage = error && typeof error === "object" && "usage" in error
+      ? (error as { usage?: { promptTokens: number; outputTokens: number; thinkingTokens: number } }).usage
+      : undefined;
+    await recordModelCall(admin, { run, model, startedAt, usage, status: "failed", errorCode: codeFor(error) });
     throw error;
   }
 }

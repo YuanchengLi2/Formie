@@ -81,7 +81,7 @@ Deno.serve(async (request) => {
       },
     ),
     deleteAnalytics: async (userId) => {
-      const { error } = await admin.from("product_analytics_events").delete().eq("user_id", userId);
+      const { error } = await admin.rpc("redact_deleted_account_business_data", { p_user_id: userId });
       if (error) throw error;
     },
     deleteAuthUser: async (userId) => {

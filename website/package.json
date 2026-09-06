@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "test": "node scripts/run-tests.mjs",
     "test:e2e": "playwright test",
+    "test:business-dashboards": "playwright test tests/business-dashboards.spec.ts",
+    "test:business-dashboards:isolated": "node scripts/run-isolated-business-dashboard-e2e.mjs",
     "test:responsive": "playwright test tests/responsive.spec.ts"
   },
   "dependencies": {

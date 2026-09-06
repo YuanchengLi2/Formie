@@ -12,12 +12,19 @@ import { Platform } from "react-native";
 import { useAuth } from "@/features/auth/auth-provider";
 import { useOnboarding } from "@/features/onboarding/onboarding-store";
 import { supabase } from "@/lib/supabase";
-import { recordOnboardingAcquisition, type AcquisitionReportingClient } from "@/features/onboarding/acquisition-reporting";
+import { queryClient } from "@/lib/query-client";
 import { acceptAiProcessingConsent, type AiConsentClient } from "@/features/privacy/ai-consent";
+import { aiConsentQueryKey } from "@/features/privacy/use-ai-consent";
+import { useReferral } from "@/features/referrals/referral-provider";
+import { trackProductEvent } from "@/features/analytics/product-analytics";
+import { recordOnboardingAcquisition, type AcquisitionReportingClient } from "@/features/onboarding/acquisition-reporting";
 
 import {
-  loadOrCreateUserProfile,
+  loadUserProfile,
   saveUserProfile,
+  finalizeOnboardingProfile,
+  upsertOnboardingProfile,
+  type OnboardingFinalizationClient,
   type UserProfileClient,
   type UserProfilePatch,
 } from "./profile-repository";
@@ -36,13 +43,31 @@ type ProfileContextValue = {
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
 const profileClient = supabase as unknown as UserProfileClient;
+const finalizationClient = supabase as unknown as OnboardingFinalizationClient;
 const acquisitionClient = supabase as unknown as AcquisitionReportingClient;
 const aiConsentClient = supabase as unknown as AiConsentClient;
+
+function reportProfileFailure(operation: "load" | "setup", reason: unknown): void {
+  const details = reason && typeof reason === "object"
+    ? {
+        name: "name" in reason ? String(reason.name) : undefined,
+        message: "message" in reason ? String(reason.message) : undefined,
+        code: "code" in reason ? String(reason.code) : undefined,
+      }
+    : { message: String(reason) };
+  console.error(`[ProfileProvider] profile ${operation} failed`, details);
+}
 
 export function ProfileProvider({ children }: PropsWithChildren) {
   const auth = useAuth();
   const onboarding = useOnboarding();
-  const shouldSyncOnboarding = onboarding.status === "profile_sync_required";
+  const referral = useReferral();
+  const referralToken = referral.pending?.token ?? null;
+  const referralMethod = referral.method;
+  const clearReferral = referral.clear;
+  const shouldSyncOnboarding = onboarding.status === "profile_sync_required" && onboarding.oauthIntent === "create_account";
+  const authenticatedUserId = auth.phase === "authenticated" ? auth.user?.id ?? null : null;
+  const onboardingReadyForUser = !authenticatedUserId || onboarding.ownerUserId === authenticatedUserId;
   const onboardingAnswers = onboarding.answers;
   const markProfileSynced = onboarding.markProfileSynced;
   const [status, setStatus] = useState<ProfileStatus>("idle");
@@ -58,33 +83,96 @@ export function ProfileProvider({ children }: PropsWithChildren) {
       setError(null);
       return;
     }
+    if (!onboardingReadyForUser) {
+      setStatus("loading");
+      setProfile(null);
+      setError(null);
+      return;
+    }
 
     let active = true;
     setStatus("loading");
     setError(null);
+    const authenticatedUser = auth.user;
     const answers = shouldSyncOnboarding ? onboardingAnswers : undefined;
-    void loadOrCreateUserProfile(profileClient, auth.user, answers)
-      .then(async (nextProfile) => {
-        if (!active) return;
-        if (answers && nextProfile.onboardingCompleted) {
-          if (answers.acceptedAiProcessing) await acceptAiProcessingConsent(aiConsentClient);
-          await recordOnboardingAcquisition(acquisitionClient, answers, Platform.OS);
-        }
-        if (!active) return;
-        setProfile(nextProfile);
-        setStatus("ready");
-        if (answers && nextProfile.onboardingCompleted) await markProfileSynced();
-      })
-      .catch((reason: unknown) => {
+    void (async () => {
+      let nextProfile: UserProfile | null;
+      try {
+        nextProfile = await loadUserProfile(profileClient, authenticatedUser.id);
+      } catch (reason) {
+        reportProfileFailure("load", reason);
         if (!active) return;
         setProfile(null);
         setStatus("error");
         setError("Your profile could not be loaded. Try again.");
-      });
+        return;
+      }
+      let acquisitionRecordedByFinalization = false;
+      if (answers && !nextProfile?.onboardingCompleted) {
+        try {
+          if (referralToken) {
+            const finalized = await finalizeOnboardingProfile(
+              finalizationClient,
+              authenticatedUser,
+              answers,
+              Platform.OS,
+              { token: referralToken, method: referralMethod },
+            );
+            nextProfile = finalized.profile;
+            acquisitionRecordedByFinalization = true;
+            await clearReferral();
+          } else {
+            nextProfile = await upsertOnboardingProfile(profileClient, authenticatedUser, answers);
+          }
+        } catch (reason) {
+          reportProfileFailure("setup", reason);
+          if (!active) return;
+          setProfile(null);
+          setStatus("error");
+          setError("Your account setup could not be completed. Try again.");
+          return;
+        }
+      }
+      if (!active) return;
+      if (!nextProfile) {
+        setProfile(null);
+        // Authentication can outlive an interrupted onboarding transaction.
+        // A successful empty read must reach onboarding, not a retry loop.
+        setStatus("ready");
+        return;
+      }
+      setProfile(nextProfile);
+      if (answers && nextProfile.onboardingCompleted) {
+        try {
+          if (!acquisitionRecordedByFinalization) {
+            await recordOnboardingAcquisition(acquisitionClient, answers, Platform.OS);
+            if (referralToken) await clearReferral();
+          }
+          if (answers.acceptedAiProcessing) {
+            const consent = await acceptAiProcessingConsent(aiConsentClient);
+            queryClient.setQueryData(aiConsentQueryKey(authenticatedUser.id), consent);
+            void queryClient.invalidateQueries({ queryKey: aiConsentQueryKey(authenticatedUser.id), refetchType: "active" });
+          }
+          // Product analytics is durable but must remain non-blocking. A local
+          // storage failure must never roll a successfully finalized account
+          // back into the onboarding error state.
+          void trackProductEvent("account_created", { onboardingVersion: "approved-v1" })
+            .catch((reason) => console.warn("[ProfileProvider] account analytics enqueue failed", reason));
+        } catch {
+          if (!active) return;
+          setStatus("error");
+          setError("Your account setup could not be completed. Try again.");
+          return;
+        }
+      }
+      if (!active) return;
+      setStatus("ready");
+      if (answers && nextProfile.onboardingCompleted) await markProfileSynced();
+    })();
     return () => {
       active = false;
     };
-  }, [auth.phase, auth.user, markProfileSynced, onboardingAnswers, revision, shouldSyncOnboarding]);
+  }, [auth.phase, auth.user, clearReferral, markProfileSynced, onboardingAnswers, onboardingReadyForUser, referralMethod, referralToken, revision, shouldSyncOnboarding]);
 
   const saveProfile = useCallback(async (patch: UserProfilePatch) => {
     if (!auth.user || auth.phase !== "authenticated") {

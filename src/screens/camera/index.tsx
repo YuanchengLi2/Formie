@@ -17,6 +17,8 @@ import { recordedDurationFromCapture } from "@/features/capture/countdown";
 import { deviceVideoStore } from "@/features/capture/device-video-store";
 import type { RecordedSet } from "@/features/capture/types";
 import { captureVideoSettings } from "@/features/capture/video-settings";
+import { currentCaptureFlow } from "@/features/capture/capture-flow";
+import { trackProductEvent } from "@/features/analytics/product-analytics";
 import { CAMERA_LENS_HYSTERESIS, cameraZoomPresets, isCompoundCameraLens, mergeCameraLensInventory, pinchMagnification, resolveCameraMagnification, type CameraZoomLabel } from "@/features/capture/camera-zoom";
 import { colors } from "@/theme/colors";
 import { spacing } from "@/theme/spacing";
@@ -100,8 +102,10 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
   const startNativeRecording = useCallback(async () => {
     if (!cameraRef.current) return;
     const actualStart = Date.now();
+    const captureFlowId = currentCaptureFlow();
     requestedStopAtRef.current = null;
     dispatch({ type: "recording_started", startedAt: actualStart });
+    void trackProductEvent("recording_started", {}, { captureFlowId });
     if (capturePreferences.recordingVibrationEnabled) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
@@ -121,6 +125,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
         mimeType: "video/mp4",
       } satisfies RecordedSet);
       dispatch({ type: "recording_finished", recording: saved });
+      void trackProductEvent("recording_completed", { durationMs: saved.durationMs }, { captureFlowId });
       router.replace("/analysis/review");
     } catch (recordingError) {
       if (exitRequestedRef.current) return;
@@ -128,6 +133,7 @@ export function CameraScreen({ previousSessionId }: CameraScreenProps) {
       if (current.phase === "recording") {
         const message = recordingError instanceof Error ? recordingError.message : "Recording could not be saved";
         dispatch({ type: "recording_failed", message });
+        void trackProductEvent("recording_failed", { errorCategory: recordingError instanceof Error ? recordingError.name : "unknown" }, { captureFlowId });
       }
     }
   }, [capturePreferences.recordingVibrationEnabled, dispatch, router]);

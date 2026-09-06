@@ -30,6 +30,7 @@ describe("ProgressMetricsPanel", () => {
     expect(screen.getByText("4 days")).toBeTruthy();
     expect(screen.getByText("Row · 88 avg")).toBeTruthy();
     expect(screen.getByText("Squat · +12")).toBeTruthy();
-    expect(screen.getByTestId("progress-metric-average")).toHaveStyle({ minHeight: 104, width: 176 });
+    expect(screen.getByTestId("progress-metric-average")).toHaveStyle({ minHeight: 72, width: 176 });
+    expect(screen.getByLabelText("Average score icon")).toHaveStyle({ width: 26, height: 26 });
   });
 });

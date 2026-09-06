@@ -20,6 +20,7 @@ const customerInfoListeners = new Set<(info: Awaited<ReturnType<typeof Purchases
 export async function showNativeSubscriptionManagement(): Promise<void> {
   if (Platform.OS === "ios") {
     await Purchases.showManageSubscriptions();
+    await Purchases.invalidateCustomerInfoCache();
     return;
   }
   const info = mapCustomerInfo(await Purchases.getCustomerInfo());

@@ -16,6 +16,7 @@ export const initialCaptureState: CaptureState = {
   declaration: null,
   uploadTarget: null,
   uploadSubstage: null,
+  uploadRequestId: null,
   sessionId: null,
   previousSessionId: null,
   error: null,
@@ -140,7 +141,7 @@ export function captureReducer(state: CaptureState, event: CaptureEvent): Captur
     case "upload_started":
       requirePhase(state, ["recorded"], "start upload");
       if (!state.declaration) throw new Error("Cannot start upload without a declaration");
-      return { ...state, phase: "uploading", uploadSubstage: "creating_session", error: null };
+      return { ...state, phase: "uploading", uploadSubstage: "creating_session", uploadRequestId: event.clientRequestId, error: null };
     case "upload_target_created":
       requirePhase(state, ["uploading"], "save upload target");
       return { ...state, sessionId: event.target.sessionId, uploadTarget: event.target };
@@ -157,7 +158,21 @@ export function captureReducer(state: CaptureState, event: CaptureEvent): Captur
     case "retry_upload":
       requirePhase(state, ["error"], "retry upload");
       if (!state.recording) throw new Error("Cannot retry upload without a local recording");
-      return { ...state, phase: "uploading", error: null };
+      return { ...state, phase: "uploading", uploadSubstage: "creating_session", uploadTarget: null, uploadRequestId: event.clientRequestId, error: null };
+    case "upload_recovered":
+      return {
+        ...initialCaptureState,
+        phase: event.error ? "error" : "uploading",
+        recording: event.recording,
+        declaration: event.declaration,
+        previousSessionId: event.previousSessionId,
+        uploadRequestId: event.clientRequestId,
+        sessionId: event.sessionId,
+        uploadSubstage: event.error ? null : "creating_session",
+        error: event.error ?? null,
+      };
+    case "processing_recovered":
+      return { ...initialCaptureState, phase: "processing", sessionId: event.sessionId };
     case "processing":
       requirePhase(state, ["uploading"], "process analysis");
       return { ...state, phase: "processing", uploadSubstage: null, sessionId: event.sessionId, error: null };

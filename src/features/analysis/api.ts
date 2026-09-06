@@ -29,6 +29,7 @@ const signedUploadSchema = z.object({
 const createSessionResponseSchema = z.object({
   sessionId: z.string().min(1),
   reservationId: z.string().min(1).optional(),
+  attemptId: z.string().min(1).optional(),
   remaining: z.number().int().nonnegative().nullable().optional(),
   periodEndsAt: z.string().min(1).nullable().optional(),
   upload: signedUploadSchema.optional(),
@@ -401,6 +402,7 @@ export async function uploadSignedAnalysisArtifact(input: {
 
 export async function completeAnalysisUpload(input: RequestContext & {
   sessionId: string;
+  attemptId?: string;
   durationMs: number;
   analysisInput?:
     | { kind: "upright_video"; durationPreserved: true }
@@ -414,6 +416,7 @@ export async function completeAnalysisUpload(input: RequestContext & {
       method: "POST",
       body: JSON.stringify({
         sessionId: input.sessionId,
+        ...(input.attemptId ? { attemptId: input.attemptId } : {}),
         durationMs: input.durationMs,
         ...(input.analysisInput ? { analysisInput: input.analysisInput } : {}),
         ...(input.privacySafeFallback ? { privacySafeFallback: input.privacySafeFallback } : {}),

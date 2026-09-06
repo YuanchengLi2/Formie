@@ -12,7 +12,7 @@ function request(body: unknown) {
 function dependencies(overrides: Partial<CompleteUploadDependencies> = {}): CompleteUploadDependencies {
   return {
     authenticate: jest.fn(async () => "user-1"),
-    findSession: jest.fn(async () => ({ id: "session-1", videoPath: null })),
+    findSession: jest.fn(async () => ({ id: "session-1", videoPath: null, status: "uploading", stage: null })),
     videoExists: jest.fn(async () => true),
     markProcessing: jest.fn(async () => undefined),
     wait: jest.fn(async () => undefined),
@@ -42,9 +42,19 @@ describe("completeUploadHandler", () => {
     expect(response.headers.get("X-Formie-Upload-Contract")).toBe("single-analysis-v1");
   });
 
+  it.each(["queued", "processing", "complete", "partial", "unable"] as const)("treats repeated completion for an already %s session as idempotent", async (status) => {
+    const deps = dependencies({ findSession: jest.fn(async () => ({ id: "session-1", videoPath: "user-1/session-1/analysis-input.mp4", status, stage: "analyzing" })) });
+    const response = await completeUploadHandler(request({ sessionId: "session-1", durationMs: 12_000, analysisInput: { kind: "capture_ready_video", durationPreserved: true, byteLength: 4_500_000 } }), deps);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ processing: true });
+    expect(deps.videoExists).not.toHaveBeenCalled();
+    expect(deps.markProcessing).not.toHaveBeenCalled();
+  });
+
   it("finalizes a single capture-ready analysis video without an original upload", async () => {
     const deps = dependencies({
-      findSession: jest.fn(async () => ({ id: "session-1", videoPath: null })),
+      findSession: jest.fn(async () => ({ id: "session-1", videoPath: null, status: "uploading", stage: null })),
       videoExists: jest.fn(async (path) => path.endsWith("/analysis-input.mp4")),
     });
 
@@ -59,10 +69,37 @@ describe("completeUploadHandler", () => {
 
     expect(response.status).toBe(200);
     expect(deps.markProcessing).toHaveBeenCalledWith(expect.objectContaining({
+      attemptId: null,
       videoPath: "user-1/session-1/analysis-input.mp4",
       analysisVideoPath: "user-1/session-1/analysis-input.mp4",
       analysisInputStrategy: "capture_ready_video",
     }));
+  });
+
+  it("binds completion to the client reservation attempt", async () => {
+    const deps = dependencies();
+    const response = await completeUploadHandler(
+      request({ sessionId: "session-1", attemptId: "attempt-1", durationMs: 12_000 }),
+      deps,
+    );
+
+    expect(response.status).toBe(200);
+    expect(deps.markProcessing).toHaveBeenCalledWith(expect.objectContaining({ attemptId: "attempt-1" }));
+  });
+
+  it("reports a superseded attempt without starting analysis", async () => {
+    const deps = dependencies({
+      markProcessing: jest.fn(async () => {
+        throw new Error("ANALYSIS_ATTEMPT_SUPERSEDED");
+      }),
+    });
+    const response = await completeUploadHandler(
+      request({ sessionId: "session-1", attemptId: "attempt-old", durationMs: 12_000 }),
+      deps,
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: "ANALYSIS_ATTEMPT_SUPERSEDED" });
   });
 
   it("queues the legacy analyzer without creating a v49 run", async () => {
@@ -76,7 +113,7 @@ describe("completeUploadHandler", () => {
 
   it("accepts a capture-ready video larger than the old inline Gemini payload limit", async () => {
     const deps = dependencies({
-      findSession: jest.fn(async () => ({ id: "session-1", videoPath: null })),
+      findSession: jest.fn(async () => ({ id: "session-1", videoPath: null, status: "uploading", stage: null })),
       videoExists: jest.fn(async (path) => path.endsWith("/analysis-input.mp4")),
     });
 
@@ -105,6 +142,7 @@ describe("completeUploadHandler", () => {
     expect(deps.markProcessing).toHaveBeenCalledWith({
       sessionId: "session-1",
       userId: "user-1",
+      attemptId: null,
       videoPath: "user-1/session-1/original.mp4",
       durationMs: 12_500,
       analysisInputStrategy: "video",
@@ -140,6 +178,7 @@ describe("completeUploadHandler", () => {
     expect(deps.markProcessing).toHaveBeenCalledWith({
       sessionId: "session-1",
       userId: "user-1",
+      attemptId: null,
       videoPath: "user-1/session-1/original.mp4",
       durationMs: 14_000,
       analysisInputStrategy: "trimmed_crop",
@@ -169,6 +208,7 @@ describe("completeUploadHandler", () => {
     expect(deps.markProcessing).toHaveBeenCalledWith({
       sessionId: "session-1",
       userId: "user-1",
+      attemptId: null,
       videoPath: "user-1/session-1/original.mp4",
       durationMs: 14_000,
       analysisInputStrategy: "upright_video",

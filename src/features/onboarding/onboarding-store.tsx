@@ -83,6 +83,7 @@ type OnboardingContextValue = OnboardingState & {
   setStep: (step: OnboardingStep) => Promise<void>;
   requireAccount: () => Promise<void>;
   startOAuth: (intent: OAuthIntent) => Promise<void>;
+  cancelOAuth: () => Promise<void>;
   markAuthenticated: (userId: string) => Promise<void>;
   markProfileSynced: () => Promise<void>;
   completeAccess: () => Promise<void>;
@@ -159,6 +160,7 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
   const setStep = useCallback((step: OnboardingStep) => dispatch({ type: "step_viewed", step }), [dispatch]);
   const requireAccount = useCallback(() => dispatch({ type: "account_required" }), [dispatch]);
   const startOAuth = useCallback((intent: OAuthIntent) => dispatch({ type: "oauth_started", intent }), [dispatch]);
+  const cancelOAuth = useCallback(() => dispatch({ type: "oauth_cancelled" }), [dispatch]);
   const markAuthenticated = useCallback((userId: string) => dispatch({ type: "auth_succeeded", userId }), [dispatch]);
   const markProfileSynced = useCallback(() => dispatch({ type: "profile_sync_succeeded" }), [dispatch]);
   const completeAccess = useCallback(() => dispatch({ type: "access_granted", userId: userIdRef.current }), [dispatch]);
@@ -179,12 +181,13 @@ export function OnboardingProvider({ children }: PropsWithChildren) {
     setStep,
     requireAccount,
     startOAuth,
+    cancelOAuth,
     markAuthenticated,
     markProfileSynced,
     completeAccess,
     startNewAccount,
     markLoggedOut,
-  }), [completeAccess, dispatch, hydrated, markAuthenticated, markLoggedOut, markProfileSynced, requireAccount, setStep, startNewAccount, startOAuth, state, updateAnswer]);
+  }), [cancelOAuth, completeAccess, dispatch, hydrated, markAuthenticated, markLoggedOut, markProfileSynced, requireAccount, setStep, startNewAccount, startOAuth, state, updateAnswer]);
 
   return <OnboardingContext value={value}>{children}</OnboardingContext>;
 }

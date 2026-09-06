@@ -32,7 +32,7 @@ const legacyAnswersSchema = z.object({
 });
 
 const versionThreeAnswersSchema = legacyAnswersSchema.extend({
-  acquisitionSource: z.enum(["tiktok", "instagram", "youtube", "app_store_search", "google_search", "friend_trainer_coach", "other"]).nullable(),
+  acquisitionSource: z.enum(["tiktok", "instagram", "youtube", "app_store_search", "google_search", "friend_trainer_coach", "affiliated_creator", "other"]).nullable(),
   acquisitionSourceOther: z.string().max(80),
 });
 

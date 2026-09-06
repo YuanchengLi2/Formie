@@ -14,9 +14,9 @@ Deno.serve(async (request) => {
       return userId;
     },
     findSession: async (sessionId, userId) => {
-      const { data, error } = await admin.from("analysis_sessions").select("id,video_path").eq("id", sessionId).eq("user_id", userId).maybeSingle();
+      const { data, error } = await admin.from("analysis_sessions").select("id,video_path,status,stage").eq("id", sessionId).eq("user_id", userId).maybeSingle();
       if (error) throw error;
-      return data ? { id: data.id, videoPath: data.video_path } : null;
+      return data ? { id: data.id, videoPath: data.video_path, status: data.status, stage: data.stage ?? null } : null;
     },
     videoExists: async (path) => {
       const { data, error } = await admin.storage.from("analysis-videos").exists(path);
@@ -25,9 +25,14 @@ Deno.serve(async (request) => {
     },
     wait: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
     markProcessing: async (input) => {
-      const { error } = await admin.from("analysis_sessions").update({
-        status: "processing",
-        stage: "video_check",
+      const { data: startedAttemptId, error: startError } = await admin.rpc("start_analysis_attempt", {
+        p_user_id: input.userId,
+        p_session_id: input.sessionId,
+        p_attempt_id: input.attemptId,
+      });
+      if (startError) throw startError;
+      if (typeof startedAttemptId !== "string") throw new Error("Analysis attempt could not be started");
+      const { data, error } = await admin.from("analysis_sessions").update({
         video_path: input.videoPath,
         duration_ms: input.durationMs,
         analysis_input_strategy: input.analysisInputStrategy,
@@ -41,10 +46,10 @@ Deno.serve(async (request) => {
         analysis_preprocessing_confidence: input.preprocessingConfidence ?? null,
         failure_code: null,
         upload_completed_at: new Date().toISOString(),
-        analysis_started_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-      }).eq("id", input.sessionId).eq("user_id", input.userId);
+      }).eq("id", input.sessionId).eq("user_id", input.userId).eq("active_attempt_id", startedAttemptId).select("id").maybeSingle();
       if (error) throw error;
+      if (!data) throw Object.assign(new Error("Analysis attempt was superseded"), { code: "ANALYSIS_ATTEMPT_SUPERSEDED" });
     },
   });
 

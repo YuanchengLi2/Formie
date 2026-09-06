@@ -47,7 +47,16 @@ describe("Email OTP routes", () => {
     const screen = await render(wrap(<EmailRoute />));
     await fireEvent.changeText(screen.getByLabelText("Email address"), "athlete@example.com");
     await fireEvent.press(screen.getByText("Send my code"));
+    await waitFor(() => expect(mockSendEmailCode).toHaveBeenCalledWith("athlete@example.com", "create_account"));
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/(auth)/email-code?intent=onboarding&email=athlete%40example.com"));
+  });
+
+  it("does not provision an account from the login email route", async () => {
+    mockParams = { intent: "login" };
+    const screen = await render(wrap(<EmailRoute />));
+    await fireEvent.changeText(screen.getByLabelText("Email address"), "missing@example.com");
+    await fireEvent.press(screen.getByText("Send my code"));
+    await waitFor(() => expect(mockSendEmailCode).toHaveBeenCalledWith("missing@example.com", "login"));
   });
 
   it("verifies the code and routes the authenticated session through the root resolver", async () => {

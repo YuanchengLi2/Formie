@@ -8,8 +8,14 @@ const mockReplace = jest.fn();
 const mockPush = jest.fn();
 const mockCurrentAiProcessingConsent = jest.fn();
 const mockAcceptAiProcessingConsent = jest.fn();
+const mockSaveUploadRecovery = jest.fn(async () => undefined);
 
 jest.mock("@/lib/supabase", () => ({ supabase: { rpc: jest.fn() } }));
+jest.mock("@/features/auth/auth-provider", () => ({ useAuth: () => ({ phase: "authenticated", user: { id: "user-1" } }) }));
+jest.mock("@/features/capture/analysis-recovery-store", () => ({
+  createAnalysisClientRequestId: () => "upload-request-1",
+  getAnalysisRecoveryStore: () => ({ saveUpload: mockSaveUploadRecovery, clear: jest.fn(async () => undefined) }),
+}));
 
 jest.mock("@/features/privacy/ai-consent", () => ({
   AI_PROCESSING_NOTICE: "Formie sends your exercise video, exercise declaration, and relevant profile information to Formie's servers and the paid Google Gemini API to provide the analysis you request. Google may retain limited data for abuse and safety monitoring. You can withdraw consent for future analyses and delete analyses or your account.",
@@ -281,6 +287,7 @@ describe("post-recording route invariants", () => {
     expect(screen.queryByText("FINAL CHECK")).toBeNull();
 
     await fireEvent.press(screen.getByLabelText("Submit mocked set details"));
+    await act(async () => {});
     expect(useCaptureStore.getState().phase).toBe("uploading");
     expect(mockReplace).toHaveBeenCalledWith("/analysis/upload");
   });
@@ -302,7 +309,7 @@ describe("post-recording route invariants", () => {
 
     expect(screen.getByText("analyze-label:Analyze this video")).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Submit mocked set details"));
-
+    await act(async () => {});
     expect(useCaptureStore.getState().phase).toBe("uploading");
     expect(mockReplace).toHaveBeenCalledWith("/analysis/upload");
     expect(mockAcceptAiProcessingConsent).not.toHaveBeenCalled();

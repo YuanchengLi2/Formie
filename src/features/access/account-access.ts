@@ -1,4 +1,6 @@
 import type { AccessStatus } from "./types";
+import type { AuthPhase } from "@/features/auth/auth-state";
+import type { ProfileStatus } from "@/features/profile/profile-provider";
 
 export type AnalysisEntry = "record" | "analysis_pending" | "quota_exhausted" | "purchase" | "renewal_pending" | "unavailable";
 export type AccountEligibility = "eligible" | "age_restricted";
@@ -33,6 +35,19 @@ export function canOpenCompletedAccount({
 }): boolean {
   if (!authenticated || !profileComplete) return false;
   return accessStatus === "active" || accessStatus === "expired";
+}
+
+export function canOpenOnboarding({
+  phase,
+  profileStatus,
+  profileComplete,
+}: {
+  phase: AuthPhase;
+  profileStatus: ProfileStatus;
+  profileComplete: boolean;
+}): boolean {
+  if (phase === "signed_out") return true;
+  return phase === "authenticated" && profileStatus === "ready" && !profileComplete;
 }
 
 export function canOpenSubscriptionScreen({

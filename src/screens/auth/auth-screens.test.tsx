@@ -86,6 +86,7 @@ describe("account access screens", () => {
         mode="create_account"
         personalizedMessage="Save your account so Formie can keep coaching you toward your first 225 lb bench."
         onApple={jest.fn()}
+        onSignIn={jest.fn()}
         busyProvider={null}
       />,
     ));
@@ -100,11 +101,12 @@ describe("account access screens", () => {
     expect(screen.getByTestId("social-account-access")).toHaveStyle({ backgroundColor: "#050505" });
     expect(screen.getByTestId("account-access-gold-bar")).toHaveStyle({ height: 3, backgroundColor: "#E5AD32" });
     expect(screen.getByTestId("account-access-top-row")).toHaveStyle({ flexDirection: "row", gap: 14 });
-    expect(screen.getByTestId("account-access-actions")).toHaveStyle({ width: "100%", maxWidth: 296, alignSelf: "center", marginTop: 22 });
+    expect(screen.getByTestId("account-access-actions")).toHaveStyle({ width: "100%", maxWidth: 296, alignSelf: "center", marginTop: 88 });
     expect(screen.getByTestId("social-provider-buttons")).toHaveStyle({ gap: 22 });
     const legalCheckbox = screen.getByLabelText("Agree to the Terms of Use and Privacy Policy");
     const markers = renderedMarkers(screen.toJSON());
-    expect(markers.indexOf("Agree to the Terms of Use and Privacy Policy")).toBeLessThan(markers.indexOf("provider-apple"));
+    expect(markers.indexOf("provider-apple")).toBeLessThan(markers.indexOf("Agree to the Terms of Use and Privacy Policy"));
+    expect(screen.getByTestId("account-access-sign-in")).toBeTruthy();
     expect(legalCheckbox).toHaveStyle({ width: 18, height: 18, backgroundColor: "#050505" });
     await fireEvent.press(legalCheckbox);
     expect(legalCheckbox).toHaveStyle({ width: 18, height: 18, backgroundColor: "#E5AD32" });

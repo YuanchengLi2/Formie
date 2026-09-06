@@ -10,6 +10,7 @@ const mockLogIn = jest.fn<Promise<unknown>, [string]>();
 const mockLogOut = jest.fn<Promise<unknown>, []>();
 const mockAddListener = jest.fn();
 const mockRemoveListener = jest.fn();
+const mockInvalidateCustomerInfoCache = jest.fn<Promise<void>, []>();
 
 Object.defineProperty(Platform, "OS", { configurable: true, value: "ios" });
 jest.spyOn(Linking, "openURL").mockImplementation(mockOpenURL);
@@ -28,6 +29,7 @@ jest.mock("react-native-purchases", () => ({
     logOut: mockLogOut,
     addCustomerInfoUpdateListener: mockAddListener,
     removeCustomerInfoUpdateListener: mockRemoveListener,
+    invalidateCustomerInfoCache: mockInvalidateCustomerInfoCache,
   },
 }));
 
@@ -46,6 +48,7 @@ describe("native subscription management", () => {
     mockLogOut.mockReset().mockResolvedValue({});
     mockAddListener.mockReset();
     mockRemoveListener.mockReset();
+    mockInvalidateCustomerInfoCache.mockReset().mockResolvedValue(undefined);
     process.env.EXPO_OS = "ios";
     process.env.EXPO_PUBLIC_REVENUECAT_IOS_PUBLIC_KEY = "appl_test_public_key";
   });
@@ -66,6 +69,8 @@ describe("native subscription management", () => {
     const { showNativeSubscriptionManagement } = loadNativePurchases();
     await showNativeSubscriptionManagement();
     expect(mockShowManageSubscriptions).toHaveBeenCalledTimes(1);
+    expect(mockInvalidateCustomerInfoCache).toHaveBeenCalledTimes(1);
+    expect(mockShowManageSubscriptions.mock.invocationCallOrder[0]).toBeLessThan(mockInvalidateCustomerInfoCache.mock.invocationCallOrder[0]);
     expect(mockGetCustomerInfo).not.toHaveBeenCalled();
     expect(mockOpenURL).not.toHaveBeenCalled();
   });

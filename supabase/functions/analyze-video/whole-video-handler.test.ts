@@ -63,7 +63,7 @@ describe("whole-video handler failure disposition", () => {
       stage: "retry_wait",
       analysisNextRetryAt: "2026-08-12T23:00:05.000Z",
     });
-    expect(persistFailure).toHaveBeenCalledWith("session-1", "ANALYSIS_FILE_PROCESSING", expect.objectContaining({ disposition: "retry_video_file" }));
+    expect(persistFailure).toHaveBeenCalledWith("session-1", "ANALYSIS_FILE_PROCESSING", expect.objectContaining({ disposition: "retry_video_file" }), null);
   });
 
   it("keeps a transient Gemini writer failure in processing for durable retry", async () => {
@@ -88,7 +88,7 @@ describe("whole-video handler failure disposition", () => {
       stage: "retry_wait",
       analysisNextRetryAt: "2026-08-13T02:00:05.000Z",
     });
-    expect(persistFailure).toHaveBeenCalledWith("session-1", "GEMINI_HTTP_503", expect.objectContaining({ disposition: "retry_video_file" }));
+    expect(persistFailure).toHaveBeenCalledWith("session-1", "GEMINI_HTTP_503", expect.objectContaining({ disposition: "retry_video_file" }), null);
   });
 
   it("stops a transient provider failure after the bounded retry budget is exhausted", async () => {
@@ -105,7 +105,7 @@ describe("whole-video handler failure disposition", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ status: "failed", stage: "failed", failureCode: "GEMINI_HTTP_503" });
-    expect(persistFailure).toHaveBeenCalledWith("session-1", "GEMINI_HTTP_503", expect.objectContaining({ disposition: "terminal_failure", exhausted: true }));
+    expect(persistFailure).toHaveBeenCalledWith("session-1", "GEMINI_HTTP_503", expect.objectContaining({ disposition: "terminal_failure", exhausted: true }), null);
   });
 
   it("reconciles an orphaned failed stage before attempting the pipeline again", async () => {
@@ -132,6 +132,7 @@ describe("whole-video handler failure disposition", () => {
       "session-1",
       "GEMINI_PROHIBITED_CONTENT",
       expect.objectContaining({ disposition: "terminal_failure" }),
+      null,
     );
   });
 });

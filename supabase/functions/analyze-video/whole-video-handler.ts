@@ -12,6 +12,7 @@ export type WholeVideoSession = {
   analysisVideoPath: string | null;
   durationMs: number | null;
   analysisNextRetryAt: string | null;
+  activeAttemptId?: string | null;
   result: Record<string, unknown> | null;
   analysisRetryCount?: number;
   hasStoredVideoEvidence?: boolean;
@@ -30,7 +31,7 @@ export type WholeVideoHandlerDependencies = {
   authenticate: (request: Request) => Promise<string>;
   loadSession: (sessionId: string, userId: string) => Promise<WholeVideoSession | null>;
   advancePipeline: (session: WholeVideoSession) => Promise<WholeVideoPipelineResult>;
-  persistFailure: (sessionId: string, code: string, disposition: AnalysisFailureDisposition) => Promise<WholeVideoPipelineResult>;
+  persistFailure: (sessionId: string, code: string, disposition: AnalysisFailureDisposition, attemptId: string | null) => Promise<WholeVideoPipelineResult>;
   now?: () => Date;
 };
 
@@ -111,7 +112,7 @@ export async function analyzeWholeVideoHandler(request: Request, dependencies: W
         retryCount: session.analysisRetryCount ?? 0,
         maxRetries: 3,
       });
-      const reconciled = await dependencies.persistFailure(session.id, code, disposition);
+      const reconciled = await dependencies.persistFailure(session.id, code, disposition, session.activeAttemptId ?? null);
       const reconciledSession = {
         ...session,
         status: reconciled.status,
@@ -157,7 +158,7 @@ export async function analyzeWholeVideoHandler(request: Request, dependencies: W
           retryCount: session.analysisRetryCount ?? 0,
           maxRetries: 3,
         });
-        const failedState = await dependencies.persistFailure(session.id, code, disposition);
+        const failedState = await dependencies.persistFailure(session.id, code, disposition, session.activeAttemptId ?? null);
         const failedSession = {
           ...session,
           status: failedState.status,

@@ -21,7 +21,11 @@ function privateKeyBytes(privateKeyPem: string): Uint8Array {
     .replace(/-----END PRIVATE KEY-----/g, "")
     .replace(/\s/g, "");
   if (!body) throw new Error("APPLE_PRIVATE_KEY_INVALID");
-  return Uint8Array.from(atob(body), (character) => character.charCodeAt(0));
+  try {
+    return Uint8Array.from(atob(body), (character) => character.charCodeAt(0));
+  } catch {
+    throw new Error("APPLE_PRIVATE_KEY_BASE64_INVALID");
+  }
 }
 
 export async function createAppleClientSecret({
@@ -47,14 +51,25 @@ export async function createAppleClientSecret({
     sub: clientId,
   });
   const signingInput = `${header}.${payload}`;
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    privateKeyBytes(privateKeyPem),
-    { name: "ECDSA", namedCurve: "P-256" },
-    false,
-    ["sign"],
-  );
-  const signature = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, encoder.encode(signingInput)));
+  const bytes = privateKeyBytes(privateKeyPem);
+  let key: CryptoKey;
+  try {
+    key = await crypto.subtle.importKey(
+      "pkcs8",
+      bytes,
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["sign"],
+    );
+  } catch {
+    throw new Error("APPLE_PRIVATE_KEY_IMPORT_FAILED");
+  }
+  let signature: Uint8Array;
+  try {
+    signature = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, encoder.encode(signingInput)));
+  } catch {
+    throw new Error("APPLE_PRIVATE_KEY_SIGNING_FAILED");
+  }
   return `${signingInput}.${encodeBase64Url(signature)}`;
 }
 
@@ -93,7 +108,14 @@ export async function exchangeAppleAuthorizationCode({
     }),
   });
   const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
-  if (!response.ok) throw new Error("APPLE_TOKEN_EXCHANGE_FAILED");
+  if (!response.ok) {
+    const rawProviderCode = typeof payload.error === "string" ? payload.error : "";
+    const providerCode = /^[a-z_]{1,64}$/.test(rawProviderCode) ? rawProviderCode : "unknown";
+    throw Object.assign(new Error("APPLE_TOKEN_EXCHANGE_FAILED"), {
+      httpStatus: response.status,
+      providerCode,
+    });
+  }
   const refreshToken = typeof payload.refresh_token === "string" ? payload.refresh_token : "";
   const idToken = typeof payload.id_token === "string" ? payload.id_token : "";
   let claims: Record<string, unknown>;

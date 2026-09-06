@@ -4,10 +4,12 @@ import { Alert, ImageBackground, Modal, StyleSheet, Switch, Text, TextInput, Vie
 import { HapticPressable as Pressable, triggerInteractionHaptic } from "@/components/haptic-pressable";
 
 import { ResponsiveScreen } from "@/components/responsive-screen";
+import { AiProcessingConsentModal } from "@/components/ai-processing-consent-modal";
 import { SubscriptionBoundary } from "@/components/subscription-boundary";
 import type { BillingBoundaryInput } from "@/features/access/billing-boundary";
 import { defaultCapturePreferences, type CapturePreferences } from "@/features/capture/capture-preferences";
 import type { SubscriptionTestAction } from "@/features/billing/subscription-test-controls";
+import type { AccountIdentityPresentation } from "@/features/auth/account-identity";
 import { colors } from "@/theme/colors";
 import { usePhoneLayoutProfile } from "@/theme/responsive";
 
@@ -16,9 +18,9 @@ const mark = require("../../../assets/images/form-logo-mark.png");
 
 type ProfileSubscription = { plan: string; stateLabel: string; access?: BillingBoundaryInput };
 
-export function ProfileScreen({ displayName = "Formie Athlete", email = null, subscription, capturePreferences = defaultCapturePreferences, onSaveProfile = async () => undefined, onSaveCapturePreferences = async () => undefined, onSendFeedback = () => undefined, onManageSubscription = () => undefined, onSubscriptionBoundary, termsUrl, privacyUrl, privacyChoicesUrl, retentionUrl, aiConsent = null, onWithdrawAiConsent, onOpenUrl = async () => undefined, onLogOut = async () => undefined, hasManagedSubscription = false, onDeleteAccount = async () => undefined, showTestControls = false, onTestControl = async () => undefined }: {
+export function ProfileScreen({ displayName = "Formie Athlete", accountIdentity = null, subscription, capturePreferences = defaultCapturePreferences, onSaveProfile = async () => undefined, onSaveCapturePreferences = async () => undefined, onSendFeedback = () => undefined, onManageSubscription = () => undefined, onSubscriptionBoundary, termsUrl, privacyUrl, privacyChoicesUrl, retentionUrl, aiConsent = null, onAcceptAiConsent, onWithdrawAiConsent, onOpenUrl = async () => undefined, onLogOut = async () => undefined, hasManagedSubscription = false, onDeleteAccount = async () => undefined, showTestControls = false, onTestControl = async () => undefined }: {
   displayName?: string;
-  email?: string | null;
+  accountIdentity?: AccountIdentityPresentation | null;
   subscription?: ProfileSubscription;
   capturePreferences?: CapturePreferences;
   onSaveProfile?: (profile: { displayName: string }) => Promise<void>;
@@ -30,7 +32,8 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
   privacyUrl?: string;
   privacyChoicesUrl?: string;
   retentionUrl?: string;
-  aiConsent?: { current: boolean; version: string | null } | null;
+  aiConsent?: { status: "loading" | "ready" | "error"; current: boolean; version: string | null; error: string | null } | null;
+  onAcceptAiConsent?: () => Promise<void>;
   onWithdrawAiConsent?: () => Promise<void>;
   onOpenUrl?: (url: string) => Promise<void>;
   onLogOut?: () => Promise<void>;
@@ -51,13 +54,10 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const aiConsentCurrent = Boolean(aiConsent?.current);
-  const [consentCurrent, setConsentCurrent] = useState(aiConsentCurrent);
   const [consentBusy, setConsentBusy] = useState(false);
-  const [consentError, setConsentError] = useState<string | null>(null);
+  const [consentModalVisible, setConsentModalVisible] = useState(false);
   useEffect(() => { setName(displayName); setDraftName(displayName); }, [displayName]);
   useEffect(() => setCapture(capturePreferences), [capturePreferences]);
-  useEffect(() => setConsentCurrent(aiConsentCurrent), [aiConsentCurrent]);
 
   const commitCapture = async (next: CapturePreferences) => {
     setCapture(next);
@@ -108,15 +108,30 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
       setDeleteBusy(false);
     }
   };
-  const withdrawAiConsent = async () => {
-    if (!onWithdrawAiConsent || consentBusy || !consentCurrent) return;
+  const changeAiConsent = async () => {
+    if (consentBusy || aiConsent?.status === "loading") return;
+    if (!aiConsent?.current) {
+      if (onAcceptAiConsent) setConsentModalVisible(true);
+      return;
+    }
+    if (!onWithdrawAiConsent) return;
     setConsentBusy(true);
-    setConsentError(null);
     try {
       await onWithdrawAiConsent();
-      setConsentCurrent(false);
     } catch {
-      setConsentError("AI processing consent could not be withdrawn. Try again.");
+      // The shared consent hook owns the retryable error and controlled state.
+    } finally {
+      setConsentBusy(false);
+    }
+  };
+  const acceptAiConsent = async () => {
+    if (!onAcceptAiConsent || consentBusy) return;
+    setConsentBusy(true);
+    try {
+      await onAcceptAiConsent();
+      setConsentModalVisible(false);
+    } catch {
+      // Keep the disclosure open so the shared consent error can be retried.
     } finally {
       setConsentBusy(false);
     }
@@ -133,7 +148,7 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
       <Card>
         <Pressable accessibilityRole="button" accessibilityLabel="Edit account" onPress={() => setEditingName(true)} style={styles.accountRow}>
           <View style={[styles.avatar, { width: 49 * scale, height: 49 * scale, borderRadius: 25 * scale }]}><Text style={[styles.avatarText, { fontSize: 19 * scale }]}>{name.slice(0, 1).toUpperCase()}</Text></View>
-          <View style={{ flex: 1, gap: 3 }}><Text numberOfLines={1} style={[styles.accountName, { fontSize: 17 * scale }]}>{name}</Text>{email ? <Text numberOfLines={1} style={[styles.accountEmail, { fontSize: 11.5 * scale }]}>{email}</Text> : null}</View>
+          <View style={{ flex: 1, gap: 3 }}><Text numberOfLines={1} style={[styles.accountName, { fontSize: 17 * scale }]}>{name}</Text>{accountIdentity ? <Text numberOfLines={1} style={[styles.accountEmail, { fontSize: 11.5 * scale }]}>{accountIdentity.title}{accountIdentity.detail ? ` · ${accountIdentity.detail}` : ""}</Text> : null}</View>
           <Text style={[styles.chevron, { fontSize: 27 * scale }]}>›</Text>
         </Pressable>
       </Card>
@@ -163,10 +178,10 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
 
       <SettingsGroup title="AI Processing">
         <View style={{ gap: 7 }}>
-          <Text style={styles.rowTitle}>{consentCurrent ? `Agreed · Notice ${aiConsent?.version ?? "current"}` : "Not agreed"}</Text>
+          <Text style={styles.rowTitle}>{aiConsent?.status === "loading" ? "Checking" : aiConsent?.current ? `Agreed · Notice ${aiConsent.version ?? "current"}` : "Withdrawn"}</Text>
           <Text style={styles.rowDetail}>Withdrawing consent blocks new analyses and retries. It does not delete completed results; use analysis or account deletion separately.</Text>
-          {consentCurrent && onWithdrawAiConsent ? <Pressable accessibilityRole="button" accessibilityLabel="Withdraw AI processing consent" disabled={consentBusy} onPress={() => void withdrawAiConsent()} style={({ pressed }) => [styles.aiConsentButton, { opacity: pressed || consentBusy ? 0.6 : 1 }]}><Text style={styles.aiConsentButtonText}>{consentBusy ? "Withdrawing…" : "Withdraw consent"}</Text></Pressable> : null}
-          {consentError ? <Text accessibilityRole="alert" style={styles.error}>{consentError}</Text> : null}
+          {(aiConsent?.current ? onWithdrawAiConsent : onAcceptAiConsent) ? <Pressable accessibilityRole="button" accessibilityLabel={aiConsent?.current ? "Withdraw AI processing consent" : "Enable AI processing"} disabled={consentBusy || aiConsent?.status === "loading"} onPress={() => void changeAiConsent()} style={({ pressed }) => [styles.aiConsentButton, { opacity: pressed || consentBusy ? 0.6 : 1 }]}><Text style={styles.aiConsentButtonText}>{consentBusy ? (aiConsent?.current ? "Withdrawing…" : "Enabling…") : (aiConsent?.current ? "Withdraw AI processing consent" : "Enable AI processing")}</Text></Pressable> : null}
+          {aiConsent?.error ? <Text accessibilityRole="alert" style={styles.error}>{aiConsent.error}</Text> : null}
         </View>
       </SettingsGroup>
 
@@ -209,6 +224,15 @@ export function ProfileScreen({ displayName = "Formie Athlete", email = null, su
         </View>
       </View>
     </Modal>
+    <AiProcessingConsentModal
+      visible={consentModalVisible}
+      agreeing={consentBusy}
+      error={aiConsent?.error}
+      onAgree={() => void acceptAiConsent()}
+      onDismiss={() => {
+        if (!consentBusy) setConsentModalVisible(false);
+      }}
+    />
   </ImageBackground>;
 }
 

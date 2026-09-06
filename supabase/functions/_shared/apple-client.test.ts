@@ -41,6 +41,24 @@ describe("Apple OAuth client", () => {
     )).resolves.toBe(true);
   });
 
+  it("classifies malformed private-key base64 without exposing its contents", async () => {
+    await expect(createAppleClientSecret({
+      teamId: "TEAM123",
+      keyId: "KEY123",
+      clientId: "app.form.coach",
+      privateKeyPem: "-----BEGIN PRIVATE KEY-----\n@@@\n-----END PRIVATE KEY-----",
+    })).rejects.toThrow("APPLE_PRIVATE_KEY_BASE64_INVALID");
+  });
+
+  it("classifies decoded bytes that are not a PKCS8 Apple key", async () => {
+    await expect(createAppleClientSecret({
+      teamId: "TEAM123",
+      keyId: "KEY123",
+      clientId: "app.form.coach",
+      privateKeyPem: "-----BEGIN PRIVATE KEY-----\nZm9v\n-----END PRIVATE KEY-----",
+    })).rejects.toThrow("APPLE_PRIVATE_KEY_IMPORT_FAILED");
+  });
+
   it("exchanges an authorization code and verifies the returned Apple subject", async () => {
     const idToken = `x.${Buffer.from(JSON.stringify({ sub: "apple-subject" })).toString("base64url")}.x`;
     const fetcher = jest.fn().mockResolvedValue(new Response(JSON.stringify({ refresh_token: "refresh-token", id_token: idToken }), { status: 200 }));
@@ -63,6 +81,28 @@ describe("Apple OAuth client", () => {
     const fetcher = jest.fn().mockResolvedValue(new Response(JSON.stringify({ refresh_token: "refresh-token", id_token: idToken }), { status: 200 }));
 
     await expect(exchangeAppleAuthorizationCode({ authorizationCode: "code", expectedSubject: "apple-subject", clientId: "client", clientSecret: "secret", fetcher })).rejects.toThrow("APPLE_SUBJECT_MISMATCH");
+  });
+
+  it("preserves only Apple's safe error category when a token exchange fails", async () => {
+    const fetcher = jest.fn().mockResolvedValue(new Response(JSON.stringify({
+      error: "invalid_client",
+      error_description: "sensitive provider details must not escape",
+    }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    }));
+
+    await expect(exchangeAppleAuthorizationCode({
+      authorizationCode: "authorization-code",
+      expectedSubject: "apple-subject",
+      clientId: "app.form.coach",
+      clientSecret: "client-secret",
+      fetcher,
+    })).rejects.toMatchObject({
+      message: "APPLE_TOKEN_EXCHANGE_FAILED",
+      httpStatus: 400,
+      providerCode: "invalid_client",
+    });
   });
 
   it("validates the Apple token claims and nonce for a pre-authentication exchange", async () => {

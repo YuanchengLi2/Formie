@@ -13,7 +13,7 @@ export default function EmailRoute() {
   const params = useLocalSearchParams<{ intent?: string }>();
   const intent = authIntent(params.intent);
 
-  return <EmailEntryScreen intent={intent} busy={auth.emailBusy === "sending"} error={auth.error} onBack={() => router.back()} onSubmit={(email) => void auth.sendEmailCode(email).then((sent) => {
+  return <EmailEntryScreen intent={intent} busy={auth.emailBusy === "sending"} error={auth.error} onBack={() => router.back()} onSubmit={(email) => void auth.sendEmailCode(email, intent === "onboarding" ? "create_account" : "login").then((sent) => {
     if (sent) router.push(`/(auth)/email-code?intent=${intent}&email=${encodeURIComponent(email)}` as Href);
   })} />;
 }

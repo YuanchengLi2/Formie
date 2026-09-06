@@ -125,6 +125,12 @@ verify_jwt = true
 [functions.revenuecat-webhook]
 verify_jwt = false
 
+[functions.referral-context]
+verify_jwt = false
+
+[functions.record-product-analytics]
+verify_jwt = false
+
 [functions.subscription-test-controls]
 verify_jwt = true
 

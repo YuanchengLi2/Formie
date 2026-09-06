@@ -2,7 +2,6 @@ import { AppState } from "react-native";
 import { createContext, use, useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 
 import { useAuth } from "@/features/auth/auth-provider";
-import { useOnboarding } from "@/features/onboarding/onboarding-store";
 import { useAccess } from "@/features/access/access-provider";
 
 import { REVENUECAT_ENTITLEMENT_ID, REVENUECAT_LAUNCH_VERSION, REVENUECAT_OFFERING_ID } from "./constants";
@@ -61,9 +60,6 @@ export function BillingProvider({ children }: PropsWithChildren) {
   const auth = useAuth();
   const { refresh: refreshAccess, reconcileUntilChanged: reconcileAccessUntilChanged, access: serverAccess } = useAccess();
   const accessStatus = serverAccess.status;
-  const onboarding = useOnboarding();
-  const onboardingStatus = onboarding.status;
-  const completeAccess = onboarding.completeAccess;
   const [state, setState] = useState<PurchaseState>("idle");
   const [offering, setOffering] = useState<BillingOffering | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +74,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
   const accessToken = auth.phase === "authenticated" ? auth.session?.access_token ?? null : null;
 
   const configure = useCallback(async () => {
-    await purchasesClient.configure(auth.phase === "authenticated" ? auth.user?.id ?? null : null);
+    await withTimeout(purchasesClient.configure(auth.phase === "authenticated" ? auth.user?.id ?? null : null));
   }, [auth.phase, auth.user]);
 
   const reconcileEntitlement = useCallback(async (incomingCustomerInfo?: BillingCustomerInfo, purchasedProductIdentifier?: string): Promise<ReconciliationSnapshot> => {
@@ -90,25 +86,26 @@ export function BillingProvider({ children }: PropsWithChildren) {
     setEntitlementResolution("checking");
     try {
       await configure();
-      const customerInfo = incomingCustomerInfo ?? await purchasesClient.getCustomerInfo();
+      if (generation !== reconciliationGeneration.current) throw new Error("Billing account changed");
+      const customerInfo = incomingCustomerInfo ?? await withTimeout(purchasesClient.getCustomerInfo());
       if (generation !== reconciliationGeneration.current) return { providerActive: false, serverActive: false, serverLifecycleState: "unknown", customerInfo: null, providerProductIdentifier: null, serverProductIdentifier: null };
       const providerActive = customerHasEntitlement(customerInfo, REVENUECAT_ENTITLEMENT_ID);
       const providerProductIdentifier = customerInfo.subscription?.productIdentifier ?? purchasedProductIdentifier ?? null;
       setSubscription(customerInfo.subscription);
       const refreshed = await refreshEntitlement(accessToken);
       if (generation !== reconciliationGeneration.current) return { providerActive, serverActive: false, serverLifecycleState: "unknown", customerInfo, providerProductIdentifier, serverProductIdentifier: null };
-      await refreshAccess().catch(() => undefined);
+      await withTimeout(refreshAccess()).catch(() => undefined);
+      if (generation !== reconciliationGeneration.current) throw new Error("Billing account changed");
       const serverActive = refreshed.access.status === "active";
       const serverProductIdentifier = resolveServerProductIdentifier(refreshed.subscription.productIdentifier, refreshed.access.productIdentifier);
       const active = providerActive && serverActive;
       setEntitlementResolution(active ? "active" : providerActive && refreshed.access.lifecycleState === "renewal_pending" ? "checking" : "expired");
-      if (active && onboardingStatus !== "complete") await completeAccess();
       return { providerActive, serverActive, serverLifecycleState: refreshed.access.lifecycleState, customerInfo, providerProductIdentifier, serverProductIdentifier };
     } catch (failure) {
-      setEntitlementResolution("error");
+      if (generation === reconciliationGeneration.current) setEntitlementResolution("error");
       throw failure;
     }
-  }, [accessToken, completeAccess, configure, onboardingStatus, refreshAccess]);
+  }, [accessToken, configure, refreshAccess]);
 
   const finishPassiveReconciliation = useCallback((result: ReconciliationSnapshot, offeringAvailable: boolean): boolean => {
     if (purchaseOperation.current) return false;
@@ -116,7 +113,6 @@ export function BillingProvider({ children }: PropsWithChildren) {
       setState("succeeded");
       setEntitlementResolution("active");
       setError(null);
-      if (onboardingStatus !== "complete") void completeAccess();
       return true;
     }
 
@@ -130,21 +126,24 @@ export function BillingProvider({ children }: PropsWithChildren) {
       setError(null);
     }
     return false;
-  }, [completeAccess, onboardingStatus]);
+  }, []);
 
   const load = useCallback(async () => {
+    const generation = reconciliationGeneration.current;
     setState("loading");
     setError(null);
     let reconciliation: ReconciliationSnapshot | null = null;
     try {
       await configure();
+      if (generation !== reconciliationGeneration.current) return;
       if (auth.phase === "authenticated") {
         reconciliation = await reconcileEntitlement().catch((failure) => {
-          setError(friendlyPurchaseError(failure) || "Your subscription could not be confirmed right now.");
+          if (generation === reconciliationGeneration.current) setError(friendlyPurchaseError(failure) || "Your subscription could not be confirmed right now.");
           return null;
         });
       }
-      const nextOffering = await purchasesClient.getOfferings();
+      const nextOffering = await withTimeout(purchasesClient.getOfferings());
+      if (generation !== reconciliationGeneration.current) return;
       const usableOffering = nextOffering && (REVENUECAT_OFFERING_ID === "default" || nextOffering.identifier === REVENUECAT_OFFERING_ID)
         ? nextOffering
         : null;
@@ -155,6 +154,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
       else setState(offeringAvailable ? "ready" : "failed");
       if (!nextPlans.monthly && !nextPlans.annual) setError("Formie plans are not available right now.");
     } catch (failure) {
+      if (generation !== reconciliationGeneration.current) return;
       setState("failed");
       setError(friendlyPurchaseError(failure) || null);
     }
@@ -164,10 +164,12 @@ export function BillingProvider({ children }: PropsWithChildren) {
     if (!auth.session?.access_token) {
       return { value: { providerActive: false, serverActive: false, serverLifecycleState: "unknown", customerInfo: null, providerProductIdentifier: null, serverProductIdentifier: null } as ReconciliationSnapshot, satisfied: false, attempts: 0 };
     }
+    const generation = reconciliationGeneration.current;
     let firstAttempt = true;
     let knownCustomerInfo = incomingCustomerInfo ?? null;
     return reconcileWithDeadline(
       async () => {
+        if (generation !== reconciliationGeneration.current) throw new Error("Billing account changed");
         const customerInfo = firstAttempt ? incomingCustomerInfo : undefined;
         firstAttempt = false;
         try {
@@ -175,7 +177,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
           knownCustomerInfo = snapshot.customerInfo ?? knownCustomerInfo;
           return snapshot;
         } catch {
-          setEntitlementResolution("checking");
+          if (generation === reconciliationGeneration.current) setEntitlementResolution("checking");
           return {
             providerActive: knownCustomerInfo ? customerHasEntitlement(knownCustomerInfo, REVENUECAT_ENTITLEMENT_ID) : false,
             serverActive: false,
@@ -202,7 +204,6 @@ export function BillingProvider({ children }: PropsWithChildren) {
       setState("succeeded");
       setEntitlementResolution("active");
       setError(null);
-      if (onboardingStatus !== "complete") void completeAccess();
       return true;
     }
     if (result.value.providerActive) {
@@ -215,7 +216,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
       setError(null);
     }
     return false;
-  }, [completeAccess, onboardingStatus]);
+  }, []);
 
   const purchase = useCallback(async (planCode: BillingPlanCode = "monthly"): Promise<PurchaseOutcome> => {
     const selectedPackage = selectBillingPlans(offering?.packages ?? [])[planCode];
@@ -229,6 +230,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
     setRestoreMessage(null);
     try {
       await configure();
+      if (!isCurrentPurchaseOperation(purchaseOperation.current, operationId)) return "cancelled";
       const result = await withTimeout(purchasesClient.purchasePackage(selectedPackage.identifier, { currentProductIdentifier: serverAccess.productIdentifier }));
       if (!isCurrentPurchaseOperation(purchaseOperation.current, operationId)) return "cancelled";
       setSubscription(result.customerInfo.subscription);
@@ -273,7 +275,8 @@ export function BillingProvider({ children }: PropsWithChildren) {
     setError(null);
     try {
       await configure();
-      const customerInfo = await purchasesClient.getCustomerInfo();
+      if (!isCurrentPurchaseOperation(purchaseOperation.current, operationId)) return false;
+      const customerInfo = await withTimeout(purchasesClient.getCustomerInfo());
       if (!isCurrentPurchaseOperation(purchaseOperation.current, operationId)) return false;
       setSubscription(customerInfo.subscription);
       if (!customerHasEntitlement(customerInfo, REVENUECAT_ENTITLEMENT_ID)) {
@@ -299,13 +302,17 @@ export function BillingProvider({ children }: PropsWithChildren) {
   }, [auth.phase, configure, finishReconciliation, state, syncAccess]);
 
   const restore = useCallback(async () => {
-    if (state === "restoring" || state === "purchasing" || state === "reconciling") return false;
+    if (purchaseOperation.current || state === "restoring" || state === "purchasing" || state === "reconciling") return false;
+    const operationId = createPurchaseOperationId();
+    purchaseOperation.current = operationId;
     setState("restoring");
     setRestoreMessage(null);
     setError(null);
     try {
       await configure();
+      if (!isCurrentPurchaseOperation(purchaseOperation.current, operationId)) return false;
       const customerInfo = await withTimeout(purchasesClient.restorePurchases());
+      if (!isCurrentPurchaseOperation(purchaseOperation.current, operationId)) return false;
       setSubscription(customerInfo.subscription);
       if (!customerHasEntitlement(customerInfo, REVENUECAT_ENTITLEMENT_ID)) {
         setState("ready");
@@ -317,33 +324,39 @@ export function BillingProvider({ children }: PropsWithChildren) {
       const reconciliation = auth.phase === "authenticated"
         ? await syncAccess(customerInfo)
         : { value: { providerActive: true, serverActive: true, serverLifecycleState: "active_renewing", customerInfo, providerProductIdentifier: customerInfo.subscription?.productIdentifier ?? null, serverProductIdentifier: customerInfo.subscription?.productIdentifier ?? null } satisfies ReconciliationSnapshot, satisfied: true, attempts: 1 };
-      if (finishReconciliation(reconciliation)) {
+      if (!isCurrentPurchaseOperation(purchaseOperation.current, operationId)) return false;
+      if (finishReconciliation(reconciliation, operationId)) {
         setRestoreMessage("Purchase restored.");
         return true;
       }
       setRestoreMessage("Purchase found. Formie is still confirming access.");
       return false;
     } catch (failure) {
+      if (!isCurrentPurchaseOperation(purchaseOperation.current, operationId)) return false;
       setState("failed");
       setError(friendlyPurchaseError(failure) || "");
       return false;
+    } finally {
+      if (isCurrentPurchaseOperation(purchaseOperation.current, operationId)) purchaseOperation.current = null;
     }
   }, [auth.phase, configure, finishReconciliation, state, syncAccess]);
 
   const manageSubscription = useCallback(async () => {
+    const generation = reconciliationGeneration.current;
     setError(null);
     try {
       await presentSubscriptionManagement({
         configure,
         present: purchasesClient.showManageSubscriptions,
         reconcile: async () => {
-          await reconcileAccessUntilChanged();
+          if (generation !== reconciliationGeneration.current) return;
+          await withTimeout(reconcileAccessUntilChanged(), 90_000);
           const reconciliation = await syncAccess();
-          finishPassiveReconciliation(reconciliation.value, Boolean(offering));
+          if (generation === reconciliationGeneration.current) finishPassiveReconciliation(reconciliation.value, Boolean(offering));
         },
       });
     } catch (failure) {
-      setError(friendlyPurchaseError(failure) || "Subscription management could not be opened. Try again from Settings.");
+      if (generation === reconciliationGeneration.current) setError(friendlyPurchaseError(failure) || "Subscription management could not be opened. Try again from Settings.");
       throw failure;
     }
   }, [configure, finishPassiveReconciliation, offering, reconcileAccessUntilChanged, syncAccess]);
@@ -351,28 +364,28 @@ export function BillingProvider({ children }: PropsWithChildren) {
   const logOut = useCallback(async () => {
     reconciliationGeneration.current += 1;
     purchaseOperation.current = null;
-    try {
-      await purchasesClient.logOut();
-    } catch {
-      // Auth logout remains authoritative; RevenueCat will be re-identified next login.
-    }
     setOffering(null);
     setSubscription(null);
     setState("idle");
     setEntitlementResolution("idle");
     setError(null);
     setRestoreMessage(null);
+    try {
+      await withTimeout(purchasesClient.logOut());
+    } catch {
+      // Auth logout remains authoritative; RevenueCat will be re-identified next login.
+    }
   }, []);
   const prepareAccountDeletion = useCallback(async () => {
     if (!authenticatedUserId) throw new Error("Sign in again before deleting your account.");
     reconciliationGeneration.current += 1;
     purchaseOperation.current = null;
-    await purchasesClient.prepareForAccountDeletion(authenticatedUserId);
+    await withTimeout(purchasesClient.prepareForAccountDeletion(authenticatedUserId));
     setDeletionListenerGeneration((value) => value + 1);
   }, [authenticatedUserId]);
   const restoreAfterFailedAccountDeletion = useCallback(async () => {
     if (!authenticatedUserId) return;
-    await purchasesClient.restoreAfterFailedAccountDeletion(authenticatedUserId);
+    await withTimeout(purchasesClient.restoreAfterFailedAccountDeletion(authenticatedUserId));
     setDeletionListenerGeneration((value) => value + 1);
   }, [authenticatedUserId]);
 
@@ -395,7 +408,10 @@ export function BillingProvider({ children }: PropsWithChildren) {
     if (auth.phase !== "authenticated") return;
     const listener = AppState.addEventListener("change", (next) => {
       if (next === "active") {
-        void syncAccess().then((result) => finishPassiveReconciliation(result.value, Boolean(offering))).catch(() => undefined);
+        const generation = reconciliationGeneration.current;
+        void syncAccess().then((result) => {
+          if (generation === reconciliationGeneration.current) finishPassiveReconciliation(result.value, Boolean(offering));
+        }).catch(() => undefined);
       }
     });
     return () => listener.remove();
@@ -407,7 +423,9 @@ export function BillingProvider({ children }: PropsWithChildren) {
     return purchasesClient.subscribeCustomerInfo((customerInfo) => {
       if (generation !== reconciliationGeneration.current) return;
       setSubscription(customerInfo.subscription);
-      void syncAccess(customerInfo).then((result) => finishPassiveReconciliation(result.value, Boolean(offering))).catch(() => undefined);
+      void syncAccess(customerInfo).then((result) => {
+        if (generation === reconciliationGeneration.current) finishPassiveReconciliation(result.value, Boolean(offering));
+      }).catch(() => undefined);
     });
   }, [authenticatedUserId, deletionListenerGeneration, finishPassiveReconciliation, offering, syncAccess]);
 
@@ -416,15 +434,16 @@ export function BillingProvider({ children }: PropsWithChildren) {
       setState("succeeded");
       setEntitlementResolution("active");
       setError(null);
-      if (onboardingStatus !== "complete") void completeAccess();
     }
-  }, [accessStatus, completeAccess, onboardingStatus, state]);
+  }, [accessStatus, state]);
 
   useEffect(() => {
     const prior = previousAccessStatus.current;
     previousAccessStatus.current = accessStatus;
     if (auth.phase === "authenticated" && accessStatus === "expired" && prior !== "expired") {
+      const generation = reconciliationGeneration.current;
       void reconcileEntitlement().then((result) => {
+        if (generation !== reconciliationGeneration.current) return;
         finishPassiveReconciliation(result, Boolean(offering));
       }).catch(() => undefined);
     }

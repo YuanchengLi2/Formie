@@ -9,7 +9,7 @@ type CreatedSession = {
 
 type CreditReservation = {
   reservationId: string | null;
-  status: "reserved" | "already_reserved" | "analysis_pending";
+  status: "reserved" | "already_reserved" | "analysis_pending" | "request_terminal";
   remaining: number | null;
   periodEndsAt: string | null;
   blockingSessionId?: string | null;
@@ -21,7 +21,7 @@ export type CreateAnalysisDependencies = {
   findCatalogExercise: (exerciseId: number) => Promise<{ id: number; name: string } | null>;
   createSession: (input: { userId: string; previousSessionId: string | null; clientRequestId: string | null; declaration: SetDeclaration }) => Promise<CreatedSession>;
   reserveCredit?: (input: { userId: string; clientRequestId: string; kind: "analysis" }) => Promise<CreditReservation>;
-  attachCredit?: (reservationId: string, sessionId: string) => Promise<void>;
+  attachCredit?: (reservationId: string, sessionId: string) => Promise<string>;
   cancelCredit?: (userId: string, reservationId: string) => Promise<void>;
   createSignedUpload: (path: string, options: { upsert: boolean }) => Promise<{ signedUrl: string; token: string; path: string }>;
 };
@@ -105,18 +105,21 @@ export async function createAnalysisHandler(request: Request, dependencies: Crea
       if (reservation?.status === "analysis_pending") {
         return json({ message: "An analysis is already in progress", code: "ANALYSIS_PENDING", sessionId: reservation.blockingSessionId, remaining: reservation.remaining, periodEndsAt: reservation.periodEndsAt }, 409);
       }
+      if (reservation?.status === "request_terminal") return json({ message: "This analysis request has already finished. Start a new request.", code: "ANALYSIS_REQUEST_TERMINAL", sessionId: reservation.blockingSessionId }, 409);
       const session = await dependencies.createSession({
         userId,
         previousSessionId: normalizedPreviousId,
         clientRequestId: typeof clientRequestId === "string" ? clientRequestId.trim() : dependencies.reserveCredit ? requestKey : null,
         declaration,
       });
-      if (reservation?.reservationId && dependencies.attachCredit) await dependencies.attachCredit(reservation.reservationId, session.id);
+      const attemptId = reservation?.reservationId && dependencies.attachCredit
+        ? await dependencies.attachCredit(reservation.reservationId, session.id)
+        : undefined;
       const shouldCreateFallback = privacySafeFallback === true
         && supportsUpperBodyPrivacyFallback(declaration.exercise.label);
       if (uploadProfile === "single_analysis_v1") {
         const analysisUpload = await dependencies.createSignedUpload(`${userId}/${session.id}/analysis-input.mp4`, { upsert: false });
-        return json({ sessionId: session.id, reservationId: reservation?.reservationId, remaining: reservation?.remaining, periodEndsAt: reservation?.periodEndsAt, analysisUpload }, 201);
+        return json({ sessionId: session.id, reservationId: reservation?.reservationId, attemptId, remaining: reservation?.remaining, periodEndsAt: reservation?.periodEndsAt, analysisUpload }, 201);
       }
       const [upload, analysisUpload, privacySafeUpload] = await Promise.all([
         dependencies.createSignedUpload(`${userId}/${session.id}/original.mp4`, { upsert: false }),
@@ -128,6 +131,7 @@ export async function createAnalysisHandler(request: Request, dependencies: Crea
       return json({
         sessionId: session.id,
         reservationId: reservation?.reservationId,
+        attemptId,
         remaining: reservation?.remaining,
         periodEndsAt: reservation?.periodEndsAt,
         upload,

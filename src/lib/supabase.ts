@@ -1,5 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 import { createClient, type SupportedStorage } from "@supabase/supabase-js";
+import { fetchWithDeadline } from "./request-deadline";
 
 const isTestRuntime = process.env.NODE_ENV === "test";
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? (isTestRuntime ? "https://test.supabase.local" : undefined);
@@ -37,6 +38,7 @@ const secureSessionStorage: SupportedStorage = {
 };
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: { fetch: fetchWithDeadline },
   auth: {
     storage: secureSessionStorage,
     flowType: "pkce",

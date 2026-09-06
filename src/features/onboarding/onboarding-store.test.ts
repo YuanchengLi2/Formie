@@ -20,7 +20,7 @@ describe("approved onboarding state", () => {
     expect(nextOnboardingStep("create-account")).toBe("premium");
     expect(previousOnboardingStep("premium")).toBe("create-account");
     expect(previousOnboardingStep("welcome")).toBeNull();
-    expect(onboardingSteps).toHaveLength(18);
+    expect(onboardingSteps).toHaveLength(19);
   });
 
   it("starts with an unanswered acquisition source", () => {
@@ -108,6 +108,18 @@ describe("approved onboarding state", () => {
     expect(synced).toMatchObject({
       currentStep: "premium",
       status: "premium_required",
+    });
+  });
+
+  it("clears a cancelled OAuth attempt without resetting onboarding progress", () => {
+    const collecting = reduceOnboardingState(initialOnboardingState, { type: "step_viewed", step: "training-frequency" });
+    const started = reduceOnboardingState(collecting, { type: "oauth_started", intent: "login" });
+    const cancelled = reduceOnboardingState(started, { type: "oauth_cancelled" });
+
+    expect(cancelled).toMatchObject({
+      currentStep: "training-frequency",
+      status: "collecting",
+      oauthIntent: null,
     });
   });
 

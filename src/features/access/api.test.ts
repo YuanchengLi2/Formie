@@ -5,11 +5,12 @@ import { subscribeAccessMutations } from "./access-events";
 import type { AccessStatus } from "./types";
 
 const mockInvoke = jest.fn();
+const mockRpc = jest.fn();
 
 jest.mock("@/lib/supabase", () => ({
   supabase: {
     functions: { invoke: (...args: unknown[]) => mockInvoke(...args) },
-    rpc: jest.fn(),
+    rpc: (...args: unknown[]) => mockRpc(...args),
   },
 }));
 
@@ -44,11 +45,15 @@ describe("asAccess", () => {
 });
 
 describe("provider access refresh", () => {
-  beforeEach(() => mockInvoke.mockReset());
+  beforeEach(() => { mockInvoke.mockReset(); mockRpc.mockReset(); });
 
   it("uses the authenticated user refresh endpoint instead of the cron reconciler", async () => {
     mockInvoke.mockResolvedValue({
       data: { access: { status: "expired", lifecycleState: "expired", remaining: 0, source: "revenuecat" } },
+      error: null,
+    });
+    mockRpc.mockResolvedValue({
+      data: { access: { status: "expired", lifecycleState: "expired", remaining: 0, source: "revenuecat" }, referralBonus: { state: "none", baseLimit: 10, baseUsed: 0, bonusGranted: 0, bonusUsed: 0, bonusReserved: 0, bonusRemaining: 0, bonusExpiresAt: null } },
       error: null,
     });
 

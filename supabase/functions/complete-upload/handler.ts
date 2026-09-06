@@ -6,6 +6,8 @@ import {
 export type CompleteUploadSession = {
   id: string;
   videoPath: string | null;
+  status: string;
+  stage: string | null;
 };
 
 export type CompleteUploadDependencies = {
@@ -15,6 +17,7 @@ export type CompleteUploadDependencies = {
   markProcessing: (input: {
     sessionId: string;
     userId: string;
+    attemptId: string | null;
     videoPath: string;
     durationMs: number;
     analysisInputStrategy: "video" | "trimmed_crop" | "upright_video" | "capture_ready_video";
@@ -107,8 +110,9 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
   const keys = Object.keys(body);
   const { sessionId, durationMs } = body;
   if (
-    keys.some((key) => key !== "sessionId" && key !== "durationMs" && key !== "preprocessing" && key !== "analysisInput" && key !== "privacySafeFallback") ||
+    keys.some((key) => key !== "sessionId" && key !== "attemptId" && key !== "durationMs" && key !== "preprocessing" && key !== "analysisInput" && key !== "privacySafeFallback") ||
     typeof sessionId !== "string" || !sessionId ||
+    (body.attemptId !== undefined && (typeof body.attemptId !== "string" || body.attemptId.length < 1)) ||
     typeof durationMs !== "number" || !Number.isInteger(durationMs) || durationMs < MIN_ANALYSIS_VIDEO_DURATION_MS || durationMs > MAX_ANALYSIS_VIDEO_DURATION_MS
   ) {
     return json({ message: "Invalid upload metadata", code: "INVALID_BODY" }, 400);
@@ -157,6 +161,9 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
     const userId = await dependencies.authenticate(request);
     const session = await dependencies.findSession(sessionId, userId);
     if (!session) return json({ message: "Analysis not found", code: "NOT_FOUND" }, 404);
+    if (["queued", "processing", "complete", "partial", "unable"].includes(session.status)) {
+      return json({ processing: true }, 200);
+    }
     const analysisPath = `${userId}/${sessionId}/analysis-input.mp4`;
     const videoPath = captureReadyVideo ? analysisPath : (session.videoPath ?? `${userId}/${sessionId}/original.mp4`);
     if (!(await uploadedVideoIsVisible(videoPath, dependencies.videoExists, dependencies.wait))) {
@@ -175,6 +182,7 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
     await dependencies.markProcessing({
       sessionId,
       userId,
+      attemptId: typeof body.attemptId === "string" ? body.attemptId : null,
       videoPath,
       durationMs,
       analysisInputStrategy: captureReadyVideo ? "capture_ready_video" : uprightVideo ? "upright_video" : preprocessing.applied ? "trimmed_crop" : "video",
@@ -200,6 +208,10 @@ export async function completeUploadHandler(request: Request, dependencies: Comp
     const eligibility = aiEligibilityErrorResponse(error);
     if (eligibility) return eligibility;
     if (error instanceof Error && error.message === "UNAUTHORIZED") return json({ message: "Sign in again", code: "UNAUTHORIZED" }, 401);
+    const attemptCode = error && typeof error === "object" && "message" in error
+      ? String((error as { message?: unknown }).message).match(/ANALYSIS_(?:ATTEMPT|RESERVATION|BONUS|SESSION)_[A-Z_]+/)?.[0]
+      : null;
+    if (attemptCode) return json({ message: "This analysis attempt is no longer active", code: attemptCode }, 409);
     return json({ message: "Upload could not be completed", code: "COMPLETE_FAILED" }, 500);
   }
 }

@@ -1,4 +1,4 @@
-import { activeRevenueCatEntitlement, deleteRevenueCatCustomer, parseRevenueCatSubscriber, resolveRevenueCatEntitlement, resolveSubscriptionState } from "./revenuecat";
+import { activeRevenueCatEntitlement, deleteRevenueCatCustomer, fetchRevenueCatCustomerEvents, parseRevenueCatSubscriber, RevenueCatApiError, resolveRevenueCatEntitlement, resolveSubscriptionState } from "./revenuecat";
 
 describe("RevenueCat entitlement mapping", () => {
   it("only treats the configured entitlement as active before its expiry", () => {
@@ -37,6 +37,38 @@ describe("RevenueCat customer deletion", () => {
     await expect(deleteRevenueCatCustomer("user/1", "secret", fetcher)).resolves.toBeUndefined();
     await expect(deleteRevenueCatCustomer("user/1", "secret", fetcher)).resolves.toBeUndefined();
     expect(fetcher).toHaveBeenCalledWith("https://api.revenuecat.com/v1/subscribers/user%2F1", expect.objectContaining({ method: "DELETE", headers: expect.objectContaining({ Authorization: "Bearer secret" }) }));
+  });
+});
+
+describe("RevenueCat customer event history", () => {
+  it("paginates verified provider events and preserves immutable event bodies", async () => {
+    const fetcher = jest.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        items: [{ id: "evt-2", type: "PURCHASES_RENEWAL", occurred_at: 2000, body: { transaction_id: "tx-2" } }],
+        next_page: "/v2/projects/project-1/customers/user%2F1/events?limit=100&starting_after=evt-2",
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        items: [{ id: "evt-1", type: "PURCHASES_INITIAL_PURCHASE", occurred_at: 1000, body: { transaction_id: "tx-1" } }],
+        next_page: null,
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    await expect(fetchRevenueCatCustomerEvents("user/1", "project-1", "secret", fetcher)).resolves.toEqual([
+      expect.objectContaining({ id: "evt-2", type: "PURCHASES_RENEWAL", body: { transaction_id: "tx-2" } }),
+      expect.objectContaining({ id: "evt-1", type: "PURCHASES_INITIAL_PURCHASE", body: { transaction_id: "tx-1" } }),
+    ]);
+    expect(fetcher).toHaveBeenNthCalledWith(1, "https://api.revenuecat.com/v2/projects/project-1/customers/user%2F1/events?limit=100", expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer secret" }) }));
+    expect(fetcher).toHaveBeenNthCalledWith(2, "https://api.revenuecat.com/v2/projects/project-1/customers/user%2F1/events?limit=100&starting_after=evt-2", expect.any(Object));
+  });
+
+  it("rejects provider cursors that leave the expected customer endpoint", async () => {
+    const fetcher = jest.fn().mockResolvedValue(new Response(JSON.stringify({ items: [], next_page: "https://example.com/steal" }), { status: 200 }));
+    await expect(fetchRevenueCatCustomerEvents("user", "project", "secret", fetcher)).rejects.toThrow("invalid cursor");
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks provider throttling as retryable", async () => {
+    const fetcher = jest.fn().mockResolvedValue(new Response(null, { status: 429 }));
+    await expect(fetchRevenueCatCustomerEvents("user", "project", "secret", fetcher)).rejects.toMatchObject<RevenueCatApiError>({ status: 429, retryable: true });
   });
 });
 

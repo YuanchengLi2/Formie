@@ -37,6 +37,7 @@ type ResultsScreenProps = {
   analysisRating?: boolean | null;
   ratingPending?: boolean;
   ratingError?: string | null;
+  onCoachingSectionViewed?: (section: ReviewPurpose) => void;
 };
 
 const summaryTextStyle = { fontSize: 16, lineHeight: 23, fontWeight: "400" as const };
@@ -102,7 +103,7 @@ function declaredAmountLabel(result: AnalysisResult): string | null {
     : `${amount.value} reps${amount.countScope === "per_side" ? " per side" : ""}`;
 }
 
-export function ResultsScreen({ result, videoUrl = null, durationMs = null, playbackWindow = null, onRecordAnother, onAskCoach = () => undefined, onReanalyze, reanalyzing = false, reanalysisError = null, tutorial = null, exampleState = "loading", onWatchExample, onRateAnalysis, analysisRating = null, ratingPending = false, ratingError = null }: ResultsScreenProps) {
+export function ResultsScreen({ result, videoUrl = null, durationMs = null, playbackWindow = null, onRecordAnother, onAskCoach = () => undefined, onReanalyze, reanalyzing = false, reanalysisError = null, tutorial = null, exampleState = "loading", onWatchExample, onRateAnalysis, analysisRating = null, ratingPending = false, ratingError = null, onCoachingSectionViewed }: ResultsScreenProps) {
   const insets = useSafeAreaInsets();
   const window = useWindowDimensions();
   const layout = getPhoneLayoutProfile({ ...window, insets });
@@ -229,7 +230,7 @@ export function ResultsScreen({ result, videoUrl = null, durationMs = null, play
             ["why", "Why it matters"],
             ["next", "What to do next"],
           ] as [ReviewPurpose, string][]).map(([value, label]) => (
-            <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: purpose === value }} accessibilityLabel={label} onPress={() => setPurpose(value)} style={{ flex: 1, minHeight: 54, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.xs, borderBottomWidth: 2, borderBottomColor: purpose === value ? colors.gold : "transparent" }}>
+            <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: purpose === value }} accessibilityLabel={label} onPress={() => { setPurpose(value); onCoachingSectionViewed?.(value); }} style={{ flex: 1, minHeight: 54, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.xs, borderBottomWidth: 2, borderBottomColor: purpose === value ? colors.gold : "transparent" }}>
               <Text style={[typography.caption, { color: purpose === value ? colors.gold : colors.textMuted, textAlign: "center" }]}>{label}</Text>
             </Pressable>
           ))}

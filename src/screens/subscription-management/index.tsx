@@ -10,6 +10,7 @@ import { useAccess, useBillingSurfaceRefresh } from "@/features/access/access-pr
 import { useBilling } from "@/features/billing/billing-provider";
 import { createSubscriptionPresentation } from "@/features/billing/subscription-management-presentation";
 import { colors } from "@/theme/colors";
+import { trackProductEvent } from "@/features/analytics/product-analytics";
 import { usePhoneLayoutProfile } from "@/theme/responsive";
 
 const background = require("../../../assets/production/subscription/subscription-background.png");
@@ -21,7 +22,7 @@ export function SubscriptionManagementScreen() {
   const accessState = useAccess();
   const billing = useBilling();
   const access = accessState.access;
-  const presentation = createSubscriptionPresentation(access);
+  const presentation = createSubscriptionPresentation(access, billing.subscription);
   const scale = Math.min(1.08, Math.max(0.82, layout.contentWidth / 426.5));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +34,9 @@ export function SubscriptionManagementScreen() {
     setBusy(true);
     setError(null);
     try {
+      await trackProductEvent("subscription_management_intent", { source: "subscription_management" });
       await billing.manageSubscription();
+      await trackProductEvent("subscription_management_opened", { source: "subscription_management" });
     } catch {
       setError(`The ${provider} subscription screen could not be opened. Check the account on this device and try again.`);
     } finally {

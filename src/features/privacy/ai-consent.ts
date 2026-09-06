@@ -19,7 +19,7 @@ type ConsentRow = {
 };
 
 type RpcResult = Promise<{
-  data: ConsentRow | ConsentRow[] | null;
+  data: ConsentRow | ConsentRow[] | string | null;
   error: { message?: string } | null;
 }>;
 
@@ -54,20 +54,25 @@ export function isCurrentAiProcessingConsent(consent: AiProcessingConsent | null
 export async function currentAiProcessingConsent(client: AiConsentClient): Promise<AiProcessingConsent | null> {
   const { data, error } = await client.rpc("current_ai_processing_consent");
   throwRpcError(error, "AI processing consent could not be loaded.");
-  return normalizeConsent(data);
+  return normalizeConsent(typeof data === "string" ? null : data);
 }
 
-export async function acceptAiProcessingConsent(client: AiConsentClient): Promise<void> {
-  const { error } = await client.rpc("record_ai_processing_consent", {
+export async function acceptAiProcessingConsent(client: AiConsentClient): Promise<AiProcessingConsent> {
+  const { data, error } = await client.rpc("record_ai_processing_consent", {
     p_version: AI_PROCESSING_NOTICE_VERSION,
     p_notice_sha256: AI_PROCESSING_NOTICE_SHA256,
   });
   throwRpcError(error, "AI processing consent could not be saved.");
+  const consent = normalizeConsent(typeof data === "string" ? null : data);
+  if (!consent) throw new Error("AI processing consent could not be saved.");
+  return consent;
 }
 
-export async function revokeAiProcessingConsent(client: AiConsentClient): Promise<void> {
-  const { error } = await client.rpc("revoke_ai_processing_consent", {
+export async function revokeAiProcessingConsent(client: AiConsentClient): Promise<string> {
+  const { data, error } = await client.rpc("revoke_ai_processing_consent", {
     p_version: AI_PROCESSING_NOTICE_VERSION,
   });
   throwRpcError(error, "AI processing consent could not be withdrawn.");
+  if (typeof data !== "string" || !data) throw new Error("AI processing consent could not be withdrawn.");
+  return data;
 }
