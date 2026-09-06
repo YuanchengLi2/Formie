@@ -40,12 +40,13 @@ function MetricTile({
       accessibilityLabel={`${label}: ${spokenValue}`}
       testID={`progress-metric-${kind}`}
       style={{
-        width: compactEmpty ? 156 : compact ? 176 : "48.5%",
-        minHeight: compactEmpty ? 58 : compact ? 72 : 112,
+        width: compactEmpty ? 196 : compact ? 176 : "48.5%",
+        height: compactEmpty ? 54 : undefined,
+        minHeight: compactEmpty ? 54 : compact ? 72 : 112,
         justifyContent: "center",
         gap: compactEmpty ? 0 : compact ? 2 : spacing.xs,
         paddingHorizontal: spacing.md,
-        paddingVertical: compactEmpty ? 4 : compact ? spacing.xs : spacing.sm,
+        paddingVertical: compactEmpty ? 2 : compact ? spacing.xs : spacing.sm,
         borderRadius: radii.md,
         borderWidth: 1,
         borderColor: colors.border,
@@ -53,11 +54,11 @@ function MetricTile({
         opacity: loading ? 0.5 : 1,
       }}
     >
-      <DashboardIcon label={`${label} icon`} name={iconName} size={compactEmpty ? 22 : compact ? 26 : 32} />
-      <Text selectable style={[typography.caption, { color: colors.textMuted }]}>
+      <DashboardIcon label={`${label} icon`} name={iconName} size={compactEmpty ? 20 : compact ? 26 : 32} />
+      <Text selectable style={[typography.caption, { color: colors.textMuted }, compactEmpty && { fontSize: 10, lineHeight: 12 }]}>
         {label}
       </Text>
-      <Text selectable numberOfLines={1} style={[typography.label, { color: colors.text }]}>
+      <Text selectable numberOfLines={1} style={[typography.label, { color: colors.text }, compactEmpty && { fontSize: 12, lineHeight: 14 }]}>
         {loading ? "Loading…" : value}
       </Text>
     </View>

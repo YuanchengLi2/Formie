@@ -526,6 +526,7 @@ describe("approved onboarding screen", () => {
   it("disables the native purchase surface while it is reconciling", async () => {
     const reconciling = await renderStep("premium", { purchaseState: "reconciling", busy: true });
     expect(reconciling.screen.getByTestId("onboarding-bottom-cta").props.accessibilityState.disabled).toBe(true);
+    expect(reconciling.screen.getByRole("button", { name: "Confirming purchase..." })).toBeTruthy();
   });
 
   it("always purchases the monthly package", async () => {

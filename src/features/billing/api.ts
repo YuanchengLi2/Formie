@@ -10,6 +10,7 @@ export type EntitlementRefreshResponse = {
 
 export async function refreshEntitlement(accessToken: string): Promise<EntitlementRefreshResponse> {
   const { data, error } = await supabase.functions.invoke("refresh-entitlement", {
+    body: {},
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (error) throw error;

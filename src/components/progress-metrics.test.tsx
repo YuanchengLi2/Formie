@@ -36,7 +36,8 @@ describe("ProgressMetricsPanel", () => {
 
   it("uses shorter metric tiles before the first analysis", async () => {
     const screen = await render(<ProgressMetricsPanel emptyState layout="horizontal" metrics={null} />);
-    expect(screen.getByTestId("progress-metric-streak")).toHaveStyle({ minHeight: 58, width: 156 });
-    expect(screen.getByLabelText("Current streak icon")).toHaveStyle({ width: 22, height: 22 });
+    expect(screen.getByTestId("progress-metric-streak")).toHaveStyle({ height: 54, width: 196, paddingVertical: 2 });
+    expect(screen.getByLabelText("Current streak icon")).toHaveStyle({ width: 20, height: 20 });
+    expect(screen.getByText("Current streak")).toHaveStyle({ fontSize: 10, lineHeight: 12 });
   });
 });

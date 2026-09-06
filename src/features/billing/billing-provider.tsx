@@ -16,6 +16,8 @@ import { createPurchaseOperationId, isCurrentPurchaseOperation, resolvePassiveBi
 import { presentSubscriptionManagement } from "./subscription-management-presentation";
 
 const STORE_OPERATION_TIMEOUT_MS = 45_000;
+const ENTITLEMENT_REFRESH_TIMEOUT_MS = 12_000;
+const FOREGROUND_RECONCILIATION_DELAYS = [0];
 
 export type BillingContextValue = {
   state: PurchaseState;
@@ -92,7 +94,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
       const providerActive = customerHasEntitlement(customerInfo, REVENUECAT_ENTITLEMENT_ID);
       const providerProductIdentifier = customerInfo.subscription?.productIdentifier ?? purchasedProductIdentifier ?? null;
       setSubscription(customerInfo.subscription);
-      const refreshed = await refreshEntitlement(accessToken);
+      const refreshed = await withTimeout(refreshEntitlement(accessToken), ENTITLEMENT_REFRESH_TIMEOUT_MS);
       if (generation !== reconciliationGeneration.current) return { providerActive, serverActive: false, serverLifecycleState: "unknown", customerInfo, providerProductIdentifier, serverProductIdentifier: null };
       await withTimeout(refreshAccess()).catch(() => undefined);
       if (generation !== reconciliationGeneration.current) throw new Error("Billing account changed");
@@ -160,7 +162,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
     }
   }, [auth.phase, configure, finishPassiveReconciliation, reconcileEntitlement]);
 
-  const syncAccess = useCallback(async (incomingCustomerInfo?: BillingCustomerInfo, expectedProductIdentifier?: string, purchasedProductIdentifier?: string) => {
+  const syncAccess = useCallback(async (incomingCustomerInfo?: BillingCustomerInfo, expectedProductIdentifier?: string, purchasedProductIdentifier?: string, delays?: number[]) => {
     if (!auth.session?.access_token) {
       return { value: { providerActive: false, serverActive: false, serverLifecycleState: "unknown", customerInfo: null, providerProductIdentifier: null, serverProductIdentifier: null } as ReconciliationSnapshot, satisfied: false, attempts: 0 };
     }
@@ -191,6 +193,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
       (snapshot) => snapshot.providerActive
         && snapshot.serverActive
         && (!expectedProductIdentifier || (snapshot.providerProductIdentifier === expectedProductIdentifier && snapshot.serverProductIdentifier === expectedProductIdentifier)),
+      delays,
     );
   }, [auth.session?.access_token, reconcileEntitlement]);
 
@@ -241,7 +244,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
       }
       setState("reconciling");
       const reconciliation = auth.phase === "authenticated"
-        ? await syncAccess(result.customerInfo, selectedPackage.productIdentifier, result.productIdentifier)
+        ? await syncAccess(result.customerInfo, selectedPackage.productIdentifier, result.productIdentifier, FOREGROUND_RECONCILIATION_DELAYS)
         : { value: { providerActive: true, serverActive: true, serverLifecycleState: "active_renewing", customerInfo: result.customerInfo, providerProductIdentifier: result.productIdentifier, serverProductIdentifier: result.productIdentifier } satisfies ReconciliationSnapshot, satisfied: true, attempts: 1 };
       const active = finishReconciliation(reconciliation, operationId, selectedPackage.productIdentifier);
       return active ? "active" : "sync_required";
@@ -286,7 +289,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
         return false;
       }
       const reconciliation = auth.phase === "authenticated"
-        ? await syncAccess(customerInfo)
+        ? await syncAccess(customerInfo, undefined, undefined, FOREGROUND_RECONCILIATION_DELAYS)
         : { value: { providerActive: true, serverActive: true, serverLifecycleState: "active_renewing", customerInfo, providerProductIdentifier: customerInfo.subscription?.productIdentifier ?? null, serverProductIdentifier: customerInfo.subscription?.productIdentifier ?? null } satisfies ReconciliationSnapshot, satisfied: true, attempts: 1 };
       return finishReconciliation(reconciliation, operationId);
     } catch (failure) {
@@ -322,7 +325,7 @@ export function BillingProvider({ children }: PropsWithChildren) {
       }
       setState("reconciling");
       const reconciliation = auth.phase === "authenticated"
-        ? await syncAccess(customerInfo)
+        ? await syncAccess(customerInfo, undefined, undefined, FOREGROUND_RECONCILIATION_DELAYS)
         : { value: { providerActive: true, serverActive: true, serverLifecycleState: "active_renewing", customerInfo, providerProductIdentifier: customerInfo.subscription?.productIdentifier ?? null, serverProductIdentifier: customerInfo.subscription?.productIdentifier ?? null } satisfies ReconciliationSnapshot, satisfied: true, attempts: 1 };
       if (!isCurrentPurchaseOperation(purchaseOperation.current, operationId)) return false;
       if (finishReconciliation(reconciliation, operationId)) {

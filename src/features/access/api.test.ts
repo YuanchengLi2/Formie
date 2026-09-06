@@ -58,7 +58,7 @@ describe("provider access refresh", () => {
     });
 
     await expect(refreshProviderAccess("jwt")).resolves.toMatchObject({ status: "expired", lifecycleState: "expired" });
-    expect(mockInvoke).toHaveBeenCalledWith("refresh-entitlement", { headers: { Authorization: "Bearer jwt" } });
+    expect(mockInvoke).toHaveBeenCalledWith("refresh-entitlement", { body: {}, headers: { Authorization: "Bearer jwt" } });
     expect(mockInvoke).not.toHaveBeenCalledWith("reconcile-entitlements", expect.anything());
   });
 

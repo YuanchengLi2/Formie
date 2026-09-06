@@ -16,3 +16,11 @@ test("admin access fails closed when the allowlist is missing", () => {
   assert.equal(isAdminEmail("yuanchengli612@gmail.com", undefined), false);
   assert.equal(isAdminEmail("yuanchengli612@gmail.com", ""), false);
 });
+
+test("adding a founder preserves every existing configured dashboard login", () => {
+  const configured = "existing-founder@example.com, yuanchengli612@gmail.com";
+
+  assert.equal(isAdminEmail("existing-founder@example.com", configured), true);
+  assert.equal(isAdminEmail("yuanchengli612@gmail.com", configured), true);
+  assert.equal(isAdminEmail("someone@example.com", configured), false);
+});

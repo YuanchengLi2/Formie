@@ -57,6 +57,7 @@ export async function getAccessStatus(): Promise<AccessStatus> {
 
 export async function refreshProviderAccess(accessToken: string): Promise<AccessStatus> {
   const { data, error } = await supabase.functions.invoke("refresh-entitlement", {
+    body: {},
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (error) throw error;

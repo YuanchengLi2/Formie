@@ -16,6 +16,7 @@ describe("billing entitlement refresh", () => {
     await refreshEntitlement("jwt");
 
     expect(mockInvoke).toHaveBeenCalledWith("refresh-entitlement", {
+      body: {},
       headers: { Authorization: "Bearer jwt" },
     });
   });

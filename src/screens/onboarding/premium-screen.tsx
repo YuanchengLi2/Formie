@@ -91,9 +91,10 @@ export function PremiumScreen({
 }: PremiumScreenProps) {
   const { width, height } = useWindowDimensions();
   const layout = getPremiumArtworkLayout(width, height);
-  const reconciling = busy || state === "purchasing" || state === "reconciling";
+  const reconciling = state === "reconciling";
+  const purchasing = state === "purchasing" || (busy && !reconciling && state !== "restoring");
   const restoring = state === "restoring";
-  const storeBusy = reconciling || restoring;
+  const storeBusy = busy || purchasing || reconciling || restoring;
   const syncRequired = state === "sync_required";
   const ctaLabel = restoredSubscription
     ? "Continue to Formie"
@@ -102,6 +103,8 @@ export function PremiumScreen({
     : syncRequired
       ? "Check purchase"
       : reconciling
+        ? "Confirming purchase..."
+      : purchasing
         ? "Starting..."
         : `Start monthly - ${price}/mo`;
   const visibleCtaLabel = restoredSubscription
@@ -111,6 +114,8 @@ export function PremiumScreen({
     : syncRequired
       ? "Check purchase"
       : reconciling
+        ? "Confirming purchase..."
+      : purchasing
         ? "Starting..."
         : "Continue with Pro";
   const ctaDisabled = storeBusy || (!restoredSubscription && !purchaseAvailable && !syncRequired);
@@ -188,7 +193,7 @@ export function PremiumScreen({
             <Image accessibilityElementsHidden pointerEvents="none" source={goldGradient} contentFit="fill" style={StyleSheet.absoluteFill} />
             <View style={styles.ctaContent}>
               <Text style={styles.ctaText}>{visibleCtaLabel}</Text>
-              {reconciling ? <ActivityIndicator accessibilityLabel="Starting purchase" color="#080808" /> : <Text style={styles.ctaArrow}>→</Text>}
+              {purchasing || reconciling ? <ActivityIndicator accessibilityLabel={reconciling ? "Confirming purchase" : "Starting purchase"} color="#080808" /> : <Text style={styles.ctaArrow}>→</Text>}
             </View>
           </Pressable>
         </View>
