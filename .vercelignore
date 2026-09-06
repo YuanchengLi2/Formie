@@ -12,7 +12,7 @@
 .worktrees/
 android/
 artifacts/
-assets/
+/assets/
 benchmarks/
 dist*/
 docs/

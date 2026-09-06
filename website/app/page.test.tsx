@@ -4,6 +4,13 @@ import test from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import HomePage from "./page";
 
+test("Vercel keeps the website's public image directory in production uploads", () => {
+  const vercelIgnore = readFileSync(new URL("../../.vercelignore", import.meta.url), "utf8");
+  const rules = vercelIgnore.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  assert.ok(rules.includes("/assets/"), "the app asset folder should be ignored only at the repository root");
+  assert.ok(!rules.includes("assets/"), "an unanchored assets rule also removes website/public/assets");
+});
+
 test("homepage preserves section order and shows monthly pricing", () => {
   const html = renderToStaticMarkup(<HomePage />);
   const ids = ["hero", "how-it-works", "coaching", "pricing"];

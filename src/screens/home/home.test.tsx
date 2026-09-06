@@ -127,6 +127,7 @@ describe("HomeScreen", () => {
     expect(screen.getByTestId("progress-metrics-horizontal")).toBeTruthy();
     expect(screen.getByText("Start today")).toBeTruthy();
     expect(screen.getByText("Need 2 scores")).toBeTruthy();
+    expect(screen.getByTestId("progress-metric-streak")).toHaveStyle({ minHeight: 58 });
   });
 
   it("keeps the latest failed recording on Home with a retry destination", async () => {

@@ -108,7 +108,7 @@ export function HomeScreen({
           <Text selectable style={[typography.title, { color: colors.text }]}>Ready to move better?</Text>
           <Text selectable style={[typography.body, { maxWidth: 330, color: colors.textSecondary }]}>Record a set. Get clear coaching on what changed.</Text>
         </Animated.View>
-        <ProgressMetricsPanel layout="horizontal" metrics={metrics} loading={metricsLoading} />
+        <ProgressMetricsPanel emptyState layout="horizontal" metrics={metrics} loading={metricsLoading} />
         <Animated.View entering={FadeInDown.duration(260).delay(45)}>
           <RecordingArtwork height={Math.min(layout.artworkMaxHeight, emptyHomeHeroHeight(layout.width, layout.height))} />
         </Animated.View>

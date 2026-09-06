@@ -14,6 +14,7 @@ type ProgressMetricsPanelProps = {
   layout: "grid" | "horizontal";
   metrics: ProgressMetrics | null;
   loading?: boolean;
+  emptyState?: boolean;
 };
 
 function MetricTile({
@@ -21,27 +22,30 @@ function MetricTile({
   label,
   value,
   compact,
+  emptyState,
   loading,
 }: {
   kind: "streak" | "average" | "best" | "improvement";
   label: string;
   value: string;
   compact: boolean;
+  emptyState: boolean;
   loading: boolean;
 }) {
   const spokenValue = loading ? "Loading" : value;
   const iconName: DashboardIconName = kind;
+  const compactEmpty = compact && emptyState;
   return (
     <View
       accessibilityLabel={`${label}: ${spokenValue}`}
       testID={`progress-metric-${kind}`}
       style={{
-        width: compact ? 176 : "48.5%",
-        minHeight: compact ? 72 : 112,
+        width: compactEmpty ? 156 : compact ? 176 : "48.5%",
+        minHeight: compactEmpty ? 58 : compact ? 72 : 112,
         justifyContent: "center",
-        gap: compact ? 2 : spacing.xs,
+        gap: compactEmpty ? 0 : compact ? 2 : spacing.xs,
         paddingHorizontal: spacing.md,
-        paddingVertical: compact ? spacing.xs : spacing.sm,
+        paddingVertical: compactEmpty ? 4 : compact ? spacing.xs : spacing.sm,
         borderRadius: radii.md,
         borderWidth: 1,
         borderColor: colors.border,
@@ -49,7 +53,7 @@ function MetricTile({
         opacity: loading ? 0.5 : 1,
       }}
     >
-      <DashboardIcon label={`${label} icon`} name={iconName} size={compact ? 26 : 32} />
+      <DashboardIcon label={`${label} icon`} name={iconName} size={compactEmpty ? 22 : compact ? 26 : 32} />
       <Text selectable style={[typography.caption, { color: colors.textMuted }]}>
         {label}
       </Text>
@@ -60,10 +64,11 @@ function MetricTile({
   );
 }
 
-export function ProgressMetricsPanel({ layout, metrics, loading = false }: ProgressMetricsPanelProps) {
+export function ProgressMetricsPanel({ layout, metrics, loading = false, emptyState = false }: ProgressMetricsPanelProps) {
   const tiles = progressMetricDefinitions.map(({ kind, label }) => (
     <MetricTile
       compact={layout === "horizontal"}
+      emptyState={emptyState}
       key={kind}
       kind={kind}
       label={label}

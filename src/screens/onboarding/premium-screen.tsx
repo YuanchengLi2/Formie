@@ -29,9 +29,10 @@ const goldGradient = require("../../../assets/production/onboarding/gold-gradien
 
 const PAYWALL_SOURCE_WIDTH = 852;
 const PAYWALL_SOURCE_HEIGHT = 1846;
+const PAYWALL_CROP_SOURCE_END_Y = 1605;
 const PAYWALL_SCROLL_BREATHING_ROOM = 24;
 const STATUS_BAR_SOURCE_HEIGHT = 76;
-const CTA_SOURCE_FRAME = { x: 74, y: 1640, width: 704, height: 105 };
+const CTA_SOURCE_FRAME = { x: 74, y: 1328, width: 704, height: 105 };
 const PRICE_SOURCE_FRAME = { x: 73, y: 557, width: 405, height: 112 };
 const BACK_SOURCE_FRAME = { x: 36, y: 108, size: 82 };
 
@@ -40,14 +41,14 @@ export function getPremiumArtworkLayout(windowWidth: number, windowHeight: numbe
   const sourceScale = contentWidth / PAYWALL_SOURCE_WIDTH;
   const imageWidth = contentWidth;
   const imageHeight = PAYWALL_SOURCE_HEIGHT * sourceScale;
-  const cropHeight = Math.max(windowHeight, imageHeight);
+  const cropHeight = PAYWALL_CROP_SOURCE_END_Y * sourceScale;
 
   return {
     contentWidth,
     imageWidth,
     imageHeight,
     cropHeight,
-    cropSourceEndY: PAYWALL_SOURCE_HEIGHT,
+    cropSourceEndY: PAYWALL_CROP_SOURCE_END_Y,
     contentMinHeight: cropHeight + PAYWALL_SCROLL_BREATHING_ROOM,
     statusMaskHeight: STATUS_BAR_SOURCE_HEIGHT * sourceScale,
     cta: {

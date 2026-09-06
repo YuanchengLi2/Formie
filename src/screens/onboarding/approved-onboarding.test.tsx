@@ -495,13 +495,14 @@ describe("approved onboarding screen", () => {
     expect(valid.screen.getByTestId("onboarding-bottom-cta").props.accessibilityState.disabled).toBe(false);
   });
 
-  it.each([320, 375, 390, 430])("keeps reference geometry exact at %d px", (width) => {
+  it.each([320, 375, 390, 430])("keeps the purchase action inside the Pro panel and removes the empty lower artwork at %d px", (width) => {
     const layout = getPremiumArtworkLayout(width, 844);
     expect(layout.contentWidth).toBe(width);
     expect(layout.imageWidth).toBe(width);
-    expect(layout.cropSourceEndY).toBe(1846);
+    expect(layout.cropSourceEndY).toBe(1605);
     expect(layout.contentMinHeight - layout.cropHeight).toBe(24);
     expect(layout.cta.height).toBe(60);
+    expect(layout.cta.top + layout.cta.height).toBeLessThan(layout.cropHeight - 24);
     expect(layout.statusMaskHeight).toBeGreaterThan(0);
   });
 
