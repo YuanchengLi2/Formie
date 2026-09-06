@@ -51,15 +51,17 @@ describe("HomeScreen", () => {
   });
 
   it("keeps the first-recording hero compact on short phones", () => {
-    expect(emptyHomeHeroHeight(320, 568)).toBe(220);
-    expect(emptyHomeHeroHeight(375, 667)).toBe(226);
-    expect(emptyHomeHeroHeight(430, 932)).toBe(300);
+    expect(emptyHomeHeroHeight(320, 568)).toBe(204);
+    expect(emptyHomeHeroHeight(375, 667)).toBe(213);
+    expect(emptyHomeHeroHeight(430, 932)).toBe(272);
   });
 
   it("keeps the first-recording artwork without a duplicate recording button", async () => {
     const screen = await render(<HomeScreen />);
     const artwork = screen.getByTestId("first-recording-artwork");
     expect(artwork).toBeTruthy();
+    expect(screen.getByTestId("first-recording-image")).toHaveStyle({ width: "108%", height: "108%" });
+    expect(screen.getByTestId("first-recording-image").props.contentPosition).toEqual({ left: "50%", top: 0 });
     expect(screen.queryByTestId("first-recording-cta")).toBeNull();
   });
 
@@ -127,7 +129,7 @@ describe("HomeScreen", () => {
     expect(screen.getByTestId("progress-metrics-horizontal")).toBeTruthy();
     expect(screen.getByText("Start today")).toBeTruthy();
     expect(screen.getByText("Need 2 scores")).toBeTruthy();
-    expect(screen.getByTestId("progress-metric-streak")).toHaveStyle({ height: 54, width: 196 });
+    expect(screen.getByTestId("progress-metric-streak")).toHaveStyle({ height: 64, width: 196 });
   });
 
   it("keeps the latest failed recording on Home with a retry destination", async () => {

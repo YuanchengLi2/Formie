@@ -21,7 +21,7 @@ import { usePhoneLayoutProfile } from "@/theme/responsive";
 const recordCard = require("../../../assets/production/home-record-card.png");
 
 export function emptyHomeHeroHeight(viewportWidth: number, viewportHeight: number): number {
-  return Math.min(300, Math.max(220, Math.floor(Math.min(viewportHeight * 0.34, viewportWidth * 0.78))));
+  return Math.min(272, Math.max(204, Math.floor(Math.min(viewportHeight * 0.32, viewportWidth * 0.75))));
 }
 
 type HomeAnalysis = {
@@ -67,7 +67,14 @@ function HomeHeader({ onOpenProfile, analysisRemaining, analysisLimit, analysisS
 function RecordingArtwork({ height }: { height: number }) {
   return (
     <View testID="first-recording-artwork" style={{ height, overflow: "hidden", borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border }}>
-      <Image accessibilityLabel="Person squatting inside the Formie camera frame" source={recordCard} contentFit="cover" style={{ width: "100%", height: "100%" }} />
+      <Image
+        testID="first-recording-image"
+        accessibilityLabel="Person squatting inside the Formie camera frame"
+        source={recordCard}
+        contentFit="cover"
+        contentPosition="top"
+        style={{ width: "108%", height: "108%", alignSelf: "center" }}
+      />
     </View>
   );
 }
